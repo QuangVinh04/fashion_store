@@ -1,0 +1,12 @@
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: update          # ← Tự tạo/cập nhật bảng khi dev
+    show-sql: true              # ← Hiện SQL để debug
+    properties:
+      hibernate:
+        format_sql: true        # ← SQL đẹp hơn trong console
+logging:
+  level:
+    com.fashionstore: DEBUG     # ← Log chi tiết khi dev
+    org.hibernate.SQL: DEBUG
