@@ -30,8 +30,7 @@ public class Product extends BaseEntity {
     @Column(columnDefinition="TEXT")
     String description;
 
-    @NonNull
-    @Min(0)
+    @Column(nullable = false)
     BigDecimal price;
 
     @ManyToOne
