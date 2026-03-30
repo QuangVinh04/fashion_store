@@ -76,7 +76,7 @@ public class CategoryServiceImpl implements CategoryService {
         if(request.getParentId() != null && !request.getParentId().isBlank()){
             Category parent = categoryRepository.findById(request.getParentId())
                     .orElseThrow(() -> new AppException(ErrorCode.CATEGORY_NOT_FOUND));
-            parent.addChildren(category);
+            category.setParent(parent);
         }
         category = categoryRepository.save(category);
         CategoryResponse response = categoryMapper.toCategoryResponse(category);
@@ -100,7 +100,7 @@ public class CategoryServiceImpl implements CategoryService {
             if (category.getParent() == null || !category.getParent().getId().equals(newParentId)) {
                 Category newParent = categoryRepository.findById(newParentId)
                         .orElseThrow(() -> new AppException(ErrorCode.CATEGORY_NOT_FOUND));
-                newParent.addChildren(category);
+                category.setParent(newParent);
             }
         } else {
             category.setParent(null);

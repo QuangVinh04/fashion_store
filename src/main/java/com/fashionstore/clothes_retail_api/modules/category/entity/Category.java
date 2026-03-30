@@ -36,9 +36,4 @@ public class Category extends BaseEntity {
 
     @OneToMany(mappedBy = "parent", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     List<Category> children;
-
-    public void addChildren(Category child) {
-        this.children.add(child);
-        child.setParent(this);
-    }
 }
