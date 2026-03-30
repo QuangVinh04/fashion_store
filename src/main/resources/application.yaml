@@ -23,5 +23,10 @@ spring:
       ddl-auto: none
     show-sql: true
 
-
+openapi:
+  service:
+    api-docs: fashion-api-service
+    server: http://localhost:8081/vinh
+    title: API Service
+    version: v1.0.0
 
