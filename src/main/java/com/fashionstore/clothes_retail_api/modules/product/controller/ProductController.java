@@ -91,6 +91,19 @@ public class ProductController {
 
     }
 
+    @GetMapping("/advance-search")
+    public ApiResponse<PageResponse> advanceSearch(
+            @RequestParam(value = "search", required = false) String[] product,
+            @PageableDefault(page = 0, size = 10, sort = "createdAt", direction = Sort.Direction.DESC)
+            Pageable pageable) {
+        PageResponse response = productService.advanceSearchWithSpecifications(pageable, product);
+        return ApiResponse.<PageResponse>builder()
+                .message("Search product successfully")
+                .data(response)
+                .build();
+
+    }
+
     @DeleteMapping("/{id}")
     public ApiResponse<Void> delete(@PathVariable String id) {
         productService.deleteProduct(id);

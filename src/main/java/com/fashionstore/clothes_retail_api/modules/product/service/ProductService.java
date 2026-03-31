@@ -21,4 +21,5 @@ public interface ProductService {
     ProductResponse addProductVariant(String productId, ProductVariantRequest request );
     ProductResponse updateProductVariant(String productId, String variantId, ProductVariantRequest request);
     ProductResponse deleteProductVariant(String productId, String variantId);
+    PageResponse<List<ProductSummaryResponse>> advanceSearchWithSpecifications (Pageable pageable, String[] product);
 }

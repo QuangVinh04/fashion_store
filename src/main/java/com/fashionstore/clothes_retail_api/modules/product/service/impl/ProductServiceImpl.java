@@ -169,7 +169,30 @@ public class ProductServiceImpl implements ProductService {
     }
 
 
+    @Override
+    public PageResponse<List<ProductSummaryResponse>> advanceSearchWithSpecifications (Pageable pageable, String[] product) {
+        log.info("Search product by specifications");
 
+        if (product != null) {
+
+            ProductSpecificationsBuilder builder = new ProductSpecificationsBuilder();
+
+            Pattern pattern = Pattern.compile("(\\w+?)([<:>~!])(\\p{Punct}?)(.*)(\\p{Punct}?)");
+            for (String s : product) {
+                Matcher matcher = pattern.matcher(s);
+                if (matcher.find()) {
+                    builder.with(matcher.group(1), matcher.group(2), matcher.group(4), matcher.group(3), matcher.group(5));
+                }
+            }
+            // builder.build(): trả về Specification<User> dựa trên các điều kiện tìm kiếm đã được thêm vào builder trước đó.
+            Page<Product> products = productRepository.findAll(Objects.requireNonNull(builder.build()), pageable);
+            return getPageResponse(pageable, products);
+        }
+
+        Page<Product> products = productRepository.findAll(pageable);
+        return getPageResponse(pageable, products);
+
+    }
 
     private PageResponse<List<ProductSummaryResponse>> getPageResponse(Pageable pageable, Page<Product> products) {
         List<ProductSummaryResponse> responses = products.stream()
