@@ -12,10 +12,12 @@ import com.fashionstore.clothes_retail_api.modules.product.mapper.ProductMapper;
 import com.fashionstore.clothes_retail_api.modules.product.mapper.ProductVariantMapper;
 import com.fashionstore.clothes_retail_api.modules.product.repository.ProductRepository;
 import com.fashionstore.clothes_retail_api.modules.product.repository.ProductVariantRepository;
+import com.fashionstore.clothes_retail_api.modules.product.repository.specification.ProductSpecificationsBuilder;
 import com.fashionstore.clothes_retail_api.modules.product.service.ProductService;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -23,8 +25,12 @@ import org.springframework.transaction.annotation.Transactional;
 
 
 import java.util.List;
+import java.util.Objects;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
@@ -40,16 +46,7 @@ public class ProductServiceImpl implements ProductService {
     public PageResponse<List<ProductSummaryResponse>> getAllProducts(Pageable pageable) {
         Page<Product> page = productRepository.findAll(pageable);
 
-        List<ProductSummaryResponse> products = page.stream()
-                .map(productMapper::toProductSummaryResponse)
-                .toList();
-
-        return PageResponse.<List<ProductSummaryResponse>>builder()
-                .pageNo(page.getNumber())
-                .pageSize(page.getTotalPages())
-                .totalPage(page.getTotalPages())
-                .items(products)
-                .build();
+        return getPageResponse(pageable, page);
     }
 
     @Override
@@ -63,16 +60,7 @@ public class ProductServiceImpl implements ProductService {
     @Override
     public PageResponse<List<ProductSummaryResponse>> searchProducts(Pageable pageable, String keyword) {
         Page<Product> page = productRepository.findAllByNameContaining(keyword, pageable);
-        List<ProductSummaryResponse> products = page.stream()
-                .map(productMapper::toProductSummaryResponse)
-                .toList();
-
-        return PageResponse.<List<ProductSummaryResponse>>builder()
-                .pageNo(page.getNumber())
-                .pageSize(page.getTotalPages())
-                .totalPage(page.getTotalPages())
-                .items(products)
-                .build();
+        return getPageResponse(pageable, page);
     }
 
     @Override
@@ -81,16 +69,7 @@ public class ProductServiceImpl implements ProductService {
                 .orElseThrow(() -> new AppException(ErrorCode.CATEGORY_NOT_FOUND));
 
         Page<Product> page = productRepository.findAllByCategory(category, pageable);
-        List<ProductSummaryResponse> products = page.stream()
-                .map(productMapper::toProductSummaryResponse)
-                .toList();
-
-        return PageResponse.<List<ProductSummaryResponse>>builder()
-                .pageNo(page.getNumber())
-                .pageSize(page.getTotalPages())
-                .totalPage(page.getTotalPages())
-                .items(products)
-                .build();
+        return getPageResponse(pageable, page);
     }
 
     @Override
@@ -188,4 +167,22 @@ public class ProductServiceImpl implements ProductService {
 
         return productMapper.toProductResponse(product);
     }
+
+
+
+
+    private PageResponse<List<ProductSummaryResponse>> getPageResponse(Pageable pageable, Page<Product> products) {
+        List<ProductSummaryResponse> responses = products.stream()
+                .map(productMapper::toProductSummaryResponse)
+                .toList();
+
+        return PageResponse.<List<ProductSummaryResponse>>builder()
+                .pageNo(pageable.getPageNumber())
+                .pageSize(pageable.getPageSize())
+                .totalPage(products.getTotalPages())
+                .items(responses)
+                .build();
+    }
+
+
 }
