@@ -2,14 +2,12 @@ package com.fashionstore.clothes_retail_api.modules.product.dto;
 
 
 
-import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 @Getter
 @Setter
@@ -30,4 +28,7 @@ public class ProductRequest {
 
     @NotNull(message = "Category ID is required")
     String categoryId;
+
+    @NotEmpty(message = "Product must have at least one variant")
+    List<ProductVariantRequest> variants;
 }

@@ -14,7 +14,8 @@ public enum ErrorCode {
     //Product
     CATEGORY_NOT_FOUND(1001, "category not found", HttpStatus.NOT_FOUND),
     CATEGORY_ALREADY_EXIST(1002, "category already exist", HttpStatus.CONFLICT),
-
+    PRODUCT_NOT_FOUND(1003, "prouct not found", HttpStatus.NOT_FOUND),
+    PRODUCT_VARIANT_NOT_FOUND(1004, "product variant not found", HttpStatus.NOT_FOUND),
     ;
 
     private int code;
