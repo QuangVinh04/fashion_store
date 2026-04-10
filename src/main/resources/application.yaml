@@ -7,6 +7,9 @@ server:
 spring:
   application:
     name: clothes-retail-api
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+
   main:
     allow-bean-definition-overriding: true
   datasource:
@@ -22,6 +25,11 @@ spring:
     hibernate:
       ddl-auto: none
     show-sql: true
+
+jwt:
+  signerKey: ${JWT_SIGNER_KEY}
+  valid-duration: ${JWT_VALID_DURATION:3600}       # in seconds
+  refreshable-duration: ${JWT_REFRESH_DURATION:14} # in days
 
 openapi:
   service:
