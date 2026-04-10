@@ -16,6 +16,13 @@ public enum ErrorCode {
     CATEGORY_ALREADY_EXIST(1002, "category already exist", HttpStatus.CONFLICT),
     PRODUCT_NOT_FOUND(1003, "prouct not found", HttpStatus.NOT_FOUND),
     PRODUCT_VARIANT_NOT_FOUND(1004, "product variant not found", HttpStatus.NOT_FOUND),
+
+
+    // Auth
+    AUTH_UNAUTHORIZED(2001, "Unauthorized", HttpStatus.UNAUTHORIZED),
+    USER_NOT_FOUND(2002, "user not found", HttpStatus.NOT_FOUND),
+
+
     ;
 
     private int code;

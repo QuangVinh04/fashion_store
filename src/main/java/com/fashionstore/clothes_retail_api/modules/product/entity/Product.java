@@ -4,9 +4,7 @@ package com.fashionstore.clothes_retail_api.modules.product.entity;
 import com.fashionstore.clothes_retail_api.common.entity.BaseEntity;
 import com.fashionstore.clothes_retail_api.modules.category.entity.Category;
 import jakarta.persistence.*;
-import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Size;
+
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 
