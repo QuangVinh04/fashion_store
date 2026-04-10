@@ -11,7 +11,7 @@ import java.util.Set;
 @Setter
 @Builder
 @Entity
-@Table(name = "role")
+@Table(name = "roles")
 @AllArgsConstructor
 @NoArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)

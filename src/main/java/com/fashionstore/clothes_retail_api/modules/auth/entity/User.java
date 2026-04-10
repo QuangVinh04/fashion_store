@@ -13,7 +13,7 @@ import java.util.Set;
 @Setter
 @Builder
 @Entity
-@Table(name = "user")
+@Table(name = "users")
 @AllArgsConstructor
 @NoArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
