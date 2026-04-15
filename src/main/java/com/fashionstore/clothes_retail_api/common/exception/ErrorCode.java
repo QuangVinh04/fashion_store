@@ -19,10 +19,11 @@ public enum ErrorCode {
 
 
     // Auth
-    AUTH_UNAUTHORIZED(2001, "Unauthorized", HttpStatus.UNAUTHORIZED),
-    USER_NOT_FOUND(2002, "user not found", HttpStatus.NOT_FOUND),
-
-
+    USER_NOT_FOUND(2001, "User not found", HttpStatus.NOT_FOUND),
+    EMAIL_ALREADY_EXISTS(2002, "Email already exists", HttpStatus.CONFLICT),
+    INVALID_CREDENTIALS(2003, "Invalid email or password", HttpStatus.UNAUTHORIZED),
+    ACCOUNT_DISABLED(2004, "Account is disabled", HttpStatus.FORBIDDEN),
+    UNAUTHENTICATED(2005, "Unauthenticated", HttpStatus.UNAUTHORIZED),
     ;
 
     private int code;

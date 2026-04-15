@@ -14,6 +14,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -28,6 +29,7 @@ public class CategoryController {
     CategoryService categoryService;
 
     @PostMapping("/")
+    @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<CategoryResponse> create(@Valid @RequestBody CategoryRequest request) {
         CategoryResponse response = categoryService.createCategory(request);
 

@@ -18,14 +18,14 @@ import java.util.Objects;
 public class CustomeJwtDecoder implements JwtDecoder {
 
     @Value("${jwt.signerKey}")
-    private String signingKey;
+    private String signerKey;
 
     private NimbusJwtDecoder nimbusJwtDecoder = null;
 
     @Override
     public Jwt decode(String token) throws JwtException {
         if(Objects.isNull(nimbusJwtDecoder)) {
-            SecretKeySpec secretKeySpec = new SecretKeySpec(signingKey.getBytes(), "AES");
+            SecretKeySpec secretKeySpec = new SecretKeySpec(signerKey.getBytes(), "HmacSHA512");
             nimbusJwtDecoder = NimbusJwtDecoder
                     .withSecretKey(secretKeySpec)
                     .macAlgorithm(MacAlgorithm.HS512)

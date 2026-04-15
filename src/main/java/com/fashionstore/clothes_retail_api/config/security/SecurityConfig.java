@@ -49,16 +49,17 @@ public class SecurityConfig {
         http.authorizeHttpRequests(requests -> requests
                 .requestMatchers(PUBLIC_ENDPOINTS).permitAll()
                 // GET product/category: public
-                .requestMatchers(HttpMethod.GET, "/api/products/**").permitAll()
-                .requestMatchers(HttpMethod.GET, "/api/categories/**").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/v1/product/**").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/v1/category/**").permitAll()
                 // Còn lại: phải đăng nhập
                 .anyRequest().authenticated()
         );
         http.oauth2ResourceServer(oauth2 -> oauth2
-                .jwt(jwt -> jwt
-                        .decoder(jwtDecoder)
-                        .jwtAuthenticationConverter(jwtConverter()))
-                        .authenticationEntryPoint(new JwtAuthenticationEntryPoint())
+        .jwt(jwt -> jwt
+                .decoder(jwtDecoder)
+                .jwtAuthenticationConverter(jwtConverter())
+        )
+        .authenticationEntryPoint(new JwtAuthenticationEntryPoint())
         );
         http.csrf(AbstractHttpConfigurer::disable);
         http.cors(cors -> cors.configurationSource(corsConfigurationSource()));
