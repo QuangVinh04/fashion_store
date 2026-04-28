@@ -29,10 +29,10 @@ import java.util.Arrays;
 @EnableMethodSecurity
 public class SecurityConfig {
 
-    private final CustomeJwtDecoder jwtDecoder;
+    private final CustomJwtDecoder jwtDecoder;
     private final CustomerUserDetailsService customUserDetailsService;
 
-    public SecurityConfig(CustomeJwtDecoder jwtDecoder,
+    public SecurityConfig(CustomJwtDecoder jwtDecoder,
                           CustomerUserDetailsService customUserDetailsService) {
         this.jwtDecoder = jwtDecoder;
         this.customUserDetailsService = customUserDetailsService;
