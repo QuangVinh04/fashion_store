@@ -6,6 +6,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.validation.BindingResult;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -52,6 +53,25 @@ public class GlobalExceptionHandler {
 
         return ResponseEntity
                 .status(errorCode.getStatusCode())
+                .body(errorResponse);
+    }
+
+    @ExceptionHandler(BadCredentialsException.class)
+    ResponseEntity<ErrorResponse> handleBadCredentials(BadCredentialsException ex,
+                                                       HttpServletRequest request) {
+
+
+        log.warn("Business logic error: {}", ex.getMessage());
+
+        ErrorResponse errorResponse = ErrorResponse.builder()
+                .status(ErrorCode.INVALID_CREDENTIALS.getCode())
+                .message(ErrorCode.INVALID_CREDENTIALS.getMessage())
+                .path(request.getRequestURI())
+                .timestamp(LocalDateTime.now())
+                .build();
+
+        return ResponseEntity
+                .status(HttpStatus.UNAUTHORIZED)
                 .body(errorResponse);
     }
 
