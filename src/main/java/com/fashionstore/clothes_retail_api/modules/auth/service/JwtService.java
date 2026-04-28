@@ -1,18 +1,21 @@
 package com.fashionstore.clothes_retail_api.modules.auth.service;
 
 import com.fashionstore.clothes_retail_api.modules.auth.entity.User;
-import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.security.Keys;
+import com.nimbusds.jose.*;
+import com.nimbusds.jose.crypto.MACSigner;
+import com.nimbusds.jwt.JWTClaimsSet;
+
 import lombok.experimental.NonFinal;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
 
-import javax.crypto.SecretKey;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Date;
 import java.util.StringJoiner;
+import java.util.UUID;
 
 @Service
 @Slf4j
@@ -26,35 +29,26 @@ public class JwtService {
     @Value("${jwt.valid-duration}")
     private long validDuration; // seconds
 
-    private SecretKey getSigningKey() {
-        return Keys.hmacShaKeyFor(signerKey.getBytes());
-    }
 
     public String generateAccessToken(User user) {
-        return Jwts.builder()
+        JWSHeader jwsHeader = new JWSHeader(JWSAlgorithm.HS512);
+        JWTClaimsSet jwtClaimsSet = new JWTClaimsSet.Builder()
                 .subject(user.getEmail())
-                .claim("scope", buildScope(user)) //  "ROLE_ADMIN product:write ..."
-                .claim("userId", user.getId())
-                .issuedAt(new Date())
-                .expiration(new Date(System.currentTimeMillis() + validDuration * 1000))
-                .signWith(getSigningKey(), Jwts.SIG.HS512)
-                .compact();
-    }
-
-    public String extractEmail(String token) {
-        return extractClaims(token).getSubject();
-    }
-
-    public long getValidDuration() {
-        return validDuration;
-    }
-
-    private Claims extractClaims(String token) {
-        return Jwts.parser()
-                .verifyWith(getSigningKey())
-                .build()
-                .parseSignedClaims(token)
-                .getPayload();
+                .issuer("vinh.com")
+                .issueTime(new Date())
+                .expirationTime(new Date(Instant.now().plus(validDuration, ChronoUnit.SECONDS).toEpochMilli()))
+                .jwtID(UUID.randomUUID().toString())
+                .claim("scope", buildScope(user))
+                .build();
+        Payload payload = new Payload(jwtClaimsSet.toJSONObject());
+        JWSObject jwsObject = new JWSObject(jwsHeader, payload);
+        try {
+            jwsObject.sign(new MACSigner(signerKey.getBytes()));
+            return jwsObject.serialize();
+        } catch (JOSEException e) {
+            log.error("Cannot create JWT token", e);
+            throw new RuntimeException(e);
+        }
     }
 
     // Gom roles + permissions, space-separated (chuẩn OAuth2 scope)
