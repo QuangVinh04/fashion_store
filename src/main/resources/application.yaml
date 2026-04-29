@@ -3,6 +3,8 @@ server:
   servlet:
     context-path: /vinh
 
+app:
+  frontend-url: ${FRONTEND_URL:http://localhost:3000}
 
 spring:
   application:
@@ -25,6 +27,18 @@ spring:
     hibernate:
       ddl-auto: none
     show-sql: true
+
+
+  mail:
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME}
+    password: ${MAIL_PASSWORD}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls.enable: true
 
 jwt:
   signerKey: ${JWT_SIGNER_KEY}
