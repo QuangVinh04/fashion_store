@@ -2,18 +2,21 @@ package com.fashionstore.clothes_retail_api.modules.auth.service;
 
 import com.fashionstore.clothes_retail_api.modules.auth.entity.User;
 import com.nimbusds.jose.*;
-import com.nimbusds.jose.crypto.MACSigner;
-import com.nimbusds.jwt.JWTClaimsSet;
+import com.nimbusds.jose.jwk.source.ImmutableSecret;
+import com.nimbusds.jose.jwk.source.JWKSource;
 
+import com.nimbusds.jose.proc.SecurityContext;
+import jakarta.annotation.PostConstruct;
 import lombok.experimental.NonFinal;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
+import org.springframework.security.oauth2.jwt.*;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
 
+import javax.crypto.spec.SecretKeySpec;
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
-import java.util.Date;
 import java.util.StringJoiner;
 import java.util.UUID;
 
@@ -29,26 +32,26 @@ public class JwtService {
     @Value("${jwt.valid-duration}")
     private long validDuration; // seconds
 
+    private JwtEncoder jwtEncoder;
 
+    @PostConstruct
+    public void init() {
+        SecretKeySpec key = new SecretKeySpec(signerKey.getBytes(), "HmacSHA512");
+        JWKSource<SecurityContext> jwkSource = new ImmutableSecret<>(key);
+        this.jwtEncoder = new NimbusJwtEncoder(jwkSource);
+    }
     public String generateAccessToken(User user) {
-        JWSHeader jwsHeader = new JWSHeader(JWSAlgorithm.HS512);
-        JWTClaimsSet jwtClaimsSet = new JWTClaimsSet.Builder()
+        JwtClaimsSet claims = JwtClaimsSet.builder()
                 .subject(user.getEmail())
-                .issuer("vinh.com")
-                .issueTime(new Date())
-                .expirationTime(new Date(Instant.now().plus(validDuration, ChronoUnit.SECONDS).toEpochMilli()))
-                .jwtID(UUID.randomUUID().toString())
                 .claim("scope", buildScope(user))
+                .claim("userId", user.getId())
+                .issuedAt(Instant.now())
+                .id(UUID.randomUUID().toString())
+                .expiresAt(Instant.now().plusSeconds(validDuration))
                 .build();
-        Payload payload = new Payload(jwtClaimsSet.toJSONObject());
-        JWSObject jwsObject = new JWSObject(jwsHeader, payload);
-        try {
-            jwsObject.sign(new MACSigner(signerKey.getBytes()));
-            return jwsObject.serialize();
-        } catch (JOSEException e) {
-            log.error("Cannot create JWT token", e);
-            throw new RuntimeException(e);
-        }
+        JwsHeader header = JwsHeader.with(MacAlgorithm.HS512).build();
+        return jwtEncoder.encode(JwtEncoderParameters.from(header, claims))
+                .getTokenValue();
     }
 
     // Gom roles + permissions, space-separated (chuẩn OAuth2 scope)
