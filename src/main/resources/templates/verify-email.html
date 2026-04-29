@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <title th:remove="all">Please confirm your account</title>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+</head>
+<body>
+<table width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px" align="center">
+    <tbody>
+    <tr>
+        <td role="modules-container" style="padding:0;color:#626262;text-align:left" bgcolor="#ffffff" width="100%" align="left">
+            <table role="module" border="0" cellpadding="0" cellspacing="0" width="100%" style="table-layout:fixed">
+                <tbody>
+                <tr>
+                    <td role="module-content" valign="top" style="padding:64px 34px 0 34px" bgcolor="#ffffff">
+                        <div style="color:#626262;font-family:helvetica,arial,sans-serif">
+                            <div style="font-size:22px;color:#000000">
+                                Please confirm your account
+                            </div>
+                            <div style="margin-top:20px;font-size:14px;color:#333333">
+                                Your verification code is:
+                            </div>
+                            <div style="margin-top:12px; font-size:28px; font-weight:bold; color:#173849;">
+                                <span th:text="${verifyCode}">123456</span>
+                            </div>
+                            <div style="margin-top:20px;font-size:13px;color:#666666">
+                                Please enter this code in the confirmation screen to activate your account. This code will expire in 10 minutes.
+                            </div>
+                        </div>
+                    </td>
+                </tr>
+                </tbody>
+            </table>
+            <table border="0" cellpadding="0" cellspacing="0" align="center" width="100%" role="module" style="table-layout:fixed">
+                <tbody>
+                <tr>
+                    <td style="padding:10px 34px 34px 34px" valign="top" align="center">
+                        <div style="font-size:12px;color:#999999;text-align:center">
+                             Learning Platform
+                        </div>
+                    </td>
+                </tr>
+                </tbody>
+            </table>
+        </td>
+    </tr>
+    </tbody>
+</table>
+</body>
+</html>
