@@ -17,5 +17,4 @@ public class AuthResponse {
     String email;
     String fullName;
     Set<String> roles;
-    long expiresIn;
 }

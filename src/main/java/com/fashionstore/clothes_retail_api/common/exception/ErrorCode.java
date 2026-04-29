@@ -24,6 +24,10 @@ public enum ErrorCode {
     INVALID_CREDENTIALS(2003, "Invalid email or password", HttpStatus.UNAUTHORIZED),
     ACCOUNT_DISABLED(2004, "Account is disabled", HttpStatus.FORBIDDEN),
     UNAUTHENTICATED(2005, "Unauthenticated", HttpStatus.UNAUTHORIZED),
+    ROLE_NOT_FOUND(2006, "Role not found", HttpStatus.NOT_FOUND),
+    EMAIL_NOT_VERIFIED(2007, "Email not verified", HttpStatus.FORBIDDEN),
+    VERIFICATION_TOKEN_EXPIRED(2008, "Link xác nhận đã hết hạn", HttpStatus.BAD_REQUEST),
+    VERIFICATION_TOKEN_INVALID(2009, "Link xác nhận không hợp lệ", HttpStatus.BAD_REQUEST),
     ;
 
     private int code;

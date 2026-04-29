@@ -11,7 +11,7 @@ import lombok.experimental.FieldDefaults;
 @AllArgsConstructor
 @Builder
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class LoginResquest {
+public class LoginRequest {
 
     @Email(message = "Email không hợp lệ")
     @NotBlank(message = "Email không được trống")
