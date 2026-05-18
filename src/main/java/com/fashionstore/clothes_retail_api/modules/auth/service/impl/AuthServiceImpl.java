@@ -92,7 +92,7 @@ public class AuthServiceImpl implements AuthService {
         User user = userRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
 
-        if(Boolean.TRUE.equals(user.getIsEmailVerified())) {
+        if(!Boolean.TRUE.equals(user.getIsEmailVerified())) {
             throw new AppException(ErrorCode.EMAIL_NOT_VERIFIED);
         }
 

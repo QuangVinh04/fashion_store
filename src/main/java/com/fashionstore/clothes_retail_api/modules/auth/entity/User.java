@@ -1,7 +1,9 @@
 package com.fashionstore.clothes_retail_api.modules.auth.entity;
 
 
+
 import com.fashionstore.clothes_retail_api.common.entity.BaseEntity;
+import com.fashionstore.clothes_retail_api.modules.cart.entity.Cart;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
@@ -18,7 +20,6 @@ import java.util.Set;
 @NoArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class User extends BaseEntity {
-
     @Column(unique = true, nullable = false)
     String email;
 
@@ -48,5 +49,8 @@ public class User extends BaseEntity {
     )
     @Builder.Default
     Set<Role> roles = new HashSet<>();
+
+    @OneToOne(mappedBy = "user", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
+    Cart cart;
 
 }

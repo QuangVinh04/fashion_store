@@ -16,6 +16,7 @@ public enum ErrorCode {
     CATEGORY_ALREADY_EXIST(1002, "category already exist", HttpStatus.CONFLICT),
     PRODUCT_NOT_FOUND(1003, "prouct not found", HttpStatus.NOT_FOUND),
     PRODUCT_VARIANT_NOT_FOUND(1004, "product variant not found", HttpStatus.NOT_FOUND),
+    STOCK_INSUFFICIENT(1005, "stock is insufficient", HttpStatus.BAD_REQUEST),
 
 
     // Auth
@@ -28,6 +29,9 @@ public enum ErrorCode {
     EMAIL_NOT_VERIFIED(2007, "Email not verified", HttpStatus.FORBIDDEN),
     VERIFICATION_TOKEN_EXPIRED(2008, "Link xác nhận đã hết hạn", HttpStatus.BAD_REQUEST),
     VERIFICATION_TOKEN_INVALID(2009, "Link xác nhận không hợp lệ", HttpStatus.BAD_REQUEST),
+
+    // Cart
+    CART_ITEM_NOT_FOUND(3001, "Cart item not found", HttpStatus.NOT_FOUND),
     ;
 
     private int code;

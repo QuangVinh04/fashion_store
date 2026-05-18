@@ -168,6 +168,13 @@ public class ProductServiceImpl implements ProductService {
         return productMapper.toProductResponse(product);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public ProductVariant getProductVariantById(String variantId) {
+        return productVariantRepository.findById(variantId)
+                .orElseThrow(() -> new AppException(ErrorCode.PRODUCT_VARIANT_NOT_FOUND));
+    }
+
 
     @Override
     public PageResponse<List<ProductSummaryResponse>> advanceSearchWithSpecifications (Pageable pageable, String[] product) {

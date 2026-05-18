@@ -3,6 +3,7 @@ package com.fashionstore.clothes_retail_api.modules.product.service;
 
 import com.fashionstore.clothes_retail_api.common.dto.PageResponse;
 import com.fashionstore.clothes_retail_api.modules.product.dto.*;
+import com.fashionstore.clothes_retail_api.modules.product.entity.ProductVariant;
 import org.springframework.data.domain.Pageable;
 
 import java.util.List;
@@ -22,4 +23,5 @@ public interface ProductService {
     ProductResponse updateProductVariant(String productId, String variantId, ProductVariantRequest request);
     ProductResponse deleteProductVariant(String productId, String variantId);
     PageResponse<List<ProductSummaryResponse>> advanceSearchWithSpecifications (Pageable pageable, String[] product);
+    ProductVariant getProductVariantById(String variantId);
 }
