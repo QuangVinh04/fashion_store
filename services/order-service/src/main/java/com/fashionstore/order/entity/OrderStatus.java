@@ -1,0 +1,19 @@
+package com.fashionstore.order.entity;
+
+public enum OrderStatus {
+    PENDING_INVENTORY,
+    PENDING_PAYMENT,
+    CONFIRMING_INVENTORY,
+    CANCELLING_PAYMENT,
+    RELEASING_INVENTORY,
+    CONFIRMED,
+    PROCESSING,
+    PACKED,
+    SHIPPING,
+    DELIVERED,
+    COMPLETED,
+    CANCELLED,
+    PAYMENT_FAILED,
+    RETURNED,
+    REFUNDED
+}

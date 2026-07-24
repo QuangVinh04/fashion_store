@@ -1,0 +1,38 @@
+server:
+  port: ${SERVER_PORT:8087}
+
+spring:
+  application:
+    name: product-service
+  datasource:
+    url: jdbc:postgresql://${PRODUCT_POSTGRES_HOST:localhost}:${PRODUCT_POSTGRES_PORT:5435}/${PRODUCT_POSTGRES_DB:product_database}?options=-c%20timezone=Asia/Ho_Chi_Minh
+    username: ${PRODUCT_POSTGRES_USER:root}
+    password: ${PRODUCT_POSTGRES_PASSWORD:root}
+    driver-class-name: org.postgresql.Driver
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${JWT_ISSUER:http://localhost:8082}
+          jwk-set-uri: ${JWT_JWK_SET_URI:http://localhost:8082/api/v1/auth/jwks}
+  jpa:
+    database: postgresql
+    hibernate:
+      ddl-auto: none
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+logging:
+  pattern:
+    level: "%5p [${spring.application.name:},%X{correlationId:-}]"

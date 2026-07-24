@@ -1,0 +1,61 @@
+server:
+  port: ${SERVER_PORT:8089}
+
+spring:
+  application:
+    name: order-service
+  datasource:
+    url: jdbc:postgresql://${ORDER_POSTGRES_HOST:localhost}:${ORDER_POSTGRES_PORT:5437}/${ORDER_POSTGRES_DB:order_database}?options=-c%20timezone=Asia/Ho_Chi_Minh
+    username: ${ORDER_POSTGRES_USER:root}
+    password: ${ORDER_POSTGRES_PASSWORD:root}
+    driver-class-name: org.postgresql.Driver
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
+    listener:
+      simple:
+        retry:
+          enabled: true
+          initial-interval: 1000
+          max-attempts: 3
+          multiplier: 2
+  jpa:
+    database: postgresql
+    hibernate:
+      ddl-auto: none
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${JWT_ISSUER:http://localhost:8082}
+          jwk-set-uri: ${JWT_JWK_SET_URI:http://localhost:8082/api/v1/auth/jwks}
+
+app:
+  clients:
+    cart-base-url: ${CART_BASE_URL:http://localhost:8088}
+    inventory-base-url: ${INVENTORY_BASE_URL:http://localhost:8086}
+  outbox:
+    relay-delay-ms: ${OUTBOX_RELAY_DELAY_MS:5000}
+  saga:
+    timeout-scan-delay-ms: ${SAGA_TIMEOUT_SCAN_DELAY_MS:60000}
+    inventory-timeout-seconds: ${SAGA_INVENTORY_TIMEOUT_SECONDS:300}
+    payment-timeout-seconds: ${SAGA_PAYMENT_TIMEOUT_SECONDS:900}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+logging:
+  pattern:
+    level: "%5p [${spring.application.name:},%X{correlationId:-}]"

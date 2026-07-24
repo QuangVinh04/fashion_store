@@ -1,0 +1,53 @@
+server:
+  port: ${SERVER_PORT:8090}
+
+spring:
+  application:
+    name: notification-service
+  datasource:
+    url: jdbc:postgresql://${NOTIFICATION_POSTGRES_HOST:localhost}:${NOTIFICATION_POSTGRES_PORT:5439}/${NOTIFICATION_POSTGRES_DB:notification_database}
+    username: ${NOTIFICATION_POSTGRES_USER:root}
+    password: ${NOTIFICATION_POSTGRES_PASSWORD:root}
+  jpa:
+    hibernate:
+      ddl-auto: none
+    open-in-view: false
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
+    listener:
+      simple:
+        retry:
+          enabled: true
+          initial-interval: 1000
+          max-attempts: 3
+          multiplier: 2
+  mail:
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls.enable: true
+
+app:
+  frontend-url: ${FRONTEND_URL:http://localhost:3000}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+logging:
+  pattern:
+    level: "%5p [${spring.application.name:},%X{correlationId:-}]"

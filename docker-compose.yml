@@ -1,0 +1,365 @@
+name: fashion-store
+
+x-service-environment: &service-environment
+  JWT_ISSUER: http://localhost:8080
+  JWT_JWK_SET_URI: http://identity-service:8082/api/v1/auth/jwks
+  RABBITMQ_HOST: rabbitmq
+  RABBITMQ_PORT: 5672
+  RABBITMQ_USERNAME: guest
+  RABBITMQ_PASSWORD: guest
+
+services:
+  api-gateway:
+    build:
+      context: .
+      dockerfile: platform/gateway/Dockerfile
+    environment:
+      SERVER_PORT: 8080
+      JWT_ISSUER: http://localhost:8080
+      JWT_JWK_SET_URI: http://identity-service:8082/api/v1/auth/jwks
+      IDENTITY_BASE_URL: http://identity-service:8082
+      PRODUCT_BASE_URL: http://product-service:8087
+      FILE_BASE_URL: http://file-service:8091
+      INVENTORY_BASE_URL: http://inventory-service:8086
+      CART_BASE_URL: http://cart-service:8088
+      ORDER_BASE_URL: http://order-service:8089
+      PAYMENT_BASE_URL: http://payment-service:8085
+    depends_on:
+      - identity-service
+      - product-service
+      - file-service
+      - inventory-service
+      - cart-service
+      - order-service
+      - payment-service
+    ports:
+      - "8080:8080"
+    networks:
+      - fashion-network
+
+  identity-service:
+    build:
+      context: .
+      dockerfile: services/identity-service/Dockerfile
+    environment:
+      <<: *service-environment
+      SERVER_PORT: 8082
+      IDENTITY_POSTGRES_HOST: identity-postgres
+      IDENTITY_POSTGRES_DB: identity_database
+      IDENTITY_POSTGRES_USER: root
+      IDENTITY_POSTGRES_PASSWORD: root
+      JWT_PRIVATE_KEY_FILE: /var/lib/identity/identity-private.pem
+      JWT_PUBLIC_KEY_FILE: /var/lib/identity/identity-public.pem
+      JWT_LEGACY_JWK_FILE: /var/lib/identity/identity-rsa.jwk
+    depends_on:
+      identity-postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    expose:
+      - "8082"
+    volumes:
+      - identity-key:/var/lib/identity
+    networks:
+      - fashion-network
+
+  notification-service:
+    build:
+      context: .
+      dockerfile: services/notification-service/Dockerfile
+    environment:
+      <<: *service-environment
+      SERVER_PORT: 8090
+      NOTIFICATION_POSTGRES_HOST: notification-postgres
+      NOTIFICATION_POSTGRES_DB: notification_database
+      NOTIFICATION_POSTGRES_USER: root
+      NOTIFICATION_POSTGRES_PASSWORD: root
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+      MAIL_HOST: ${MAIL_HOST:-smtp.gmail.com}
+      MAIL_PORT: ${MAIL_PORT:-587}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+    depends_on:
+      notification-postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    expose:
+      - "8090"
+    networks:
+      - fashion-network
+
+  product-service:
+    build:
+      context: .
+      dockerfile: services/product-service/Dockerfile
+    environment:
+      <<: *service-environment
+      SERVER_PORT: 8087
+      PRODUCT_POSTGRES_HOST: product-postgres
+      PRODUCT_POSTGRES_DB: product_database
+      PRODUCT_POSTGRES_USER: root
+      PRODUCT_POSTGRES_PASSWORD: root
+    depends_on:
+      product-postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    expose:
+      - "8087"
+    networks:
+      - fashion-network
+
+  file-service:
+    build:
+      context: .
+      dockerfile: services/file-service/Dockerfile
+    environment:
+      <<: *service-environment
+      SERVER_PORT: 8091
+      FILE_POSTGRES_HOST: file-postgres
+      FILE_POSTGRES_DB: file_database
+      FILE_POSTGRES_USER: root
+      FILE_POSTGRES_PASSWORD: root
+      FILE_STORAGE_LOCATION: /var/lib/file-service/media
+      FILE_PUBLIC_BASE_URL: http://localhost:8080
+    depends_on:
+      file-postgres:
+        condition: service_healthy
+    expose:
+      - "8091"
+    volumes:
+      - file_media_data:/var/lib/file-service/media
+    networks:
+      - fashion-network
+
+  inventory-service:
+    build:
+      context: .
+      dockerfile: services/inventory-service/Dockerfile
+    environment:
+      <<: *service-environment
+      SERVER_PORT: 8086
+      INVENTORY_POSTGRES_HOST: inventory-postgres
+      INVENTORY_POSTGRES_DB: inventory_database
+      INVENTORY_POSTGRES_USER: root
+      INVENTORY_POSTGRES_PASSWORD: root
+    depends_on:
+      inventory-postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    expose:
+      - "8086"
+    networks:
+      - fashion-network
+
+  cart-service:
+    build:
+      context: .
+      dockerfile: services/cart-service/Dockerfile
+    environment:
+      <<: *service-environment
+      SERVER_PORT: 8088
+      CART_POSTGRES_HOST: cart-postgres
+      CART_POSTGRES_DB: cart_database
+      CART_POSTGRES_USER: root
+      CART_POSTGRES_PASSWORD: root
+      PRODUCT_BASE_URL: http://product-service:8087
+      INVENTORY_BASE_URL: http://inventory-service:8086
+    depends_on:
+      cart-postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      product-service:
+        condition: service_started
+      inventory-service:
+        condition: service_started
+    expose:
+      - "8088"
+    networks:
+      - fashion-network
+
+  order-service:
+    build:
+      context: .
+      dockerfile: services/order-service/Dockerfile
+    environment:
+      <<: *service-environment
+      SERVER_PORT: 8089
+      ORDER_POSTGRES_HOST: order-postgres
+      ORDER_POSTGRES_DB: order_database
+      ORDER_POSTGRES_USER: root
+      ORDER_POSTGRES_PASSWORD: root
+      CART_BASE_URL: http://cart-service:8088
+      INVENTORY_BASE_URL: http://inventory-service:8086
+    depends_on:
+      order-postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      cart-service:
+        condition: service_started
+    expose:
+      - "8089"
+    networks:
+      - fashion-network
+
+  payment-service:
+    build:
+      context: .
+      dockerfile: services/payment-service/Dockerfile
+    environment:
+      <<: *service-environment
+      SERVER_PORT: 8085
+      PAYMENT_POSTGRES_HOST: payment-postgres
+      PAYMENT_POSTGRES_DB: payment_database
+      PAYMENT_POSTGRES_USER: root
+      PAYMENT_POSTGRES_PASSWORD: root
+      VNPAY_RETURN_URL: ${VNPAY_RETURN_URL:-http://localhost:8080/api/v1/payments/vnpay/return}
+      VNPAY_TMN_CODE: ${VNPAY_TMN_CODE:-}
+      VNPAY_HASH_SECRET: ${VNPAY_HASH_SECRET:-}
+      PAYPAL_CLIENT_ID: ${PAYPAL_CLIENT_ID:-}
+      PAYPAL_CLIENT_SECRET: ${PAYPAL_CLIENT_SECRET:-}
+    depends_on:
+      payment-postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    expose:
+      - "8085"
+    networks:
+      - fashion-network
+
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - fashion-network
+
+  identity-postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: identity_database
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: root
+    healthcheck: &postgres-healthcheck
+      test: ["CMD-SHELL", "pg_isready -U root"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - identity_postgres_data:/var/lib/postgresql/data
+    networks:
+      - fashion-network
+
+  notification-postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: notification_database
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: root
+    healthcheck: *postgres-healthcheck
+    volumes:
+      - notification_postgres_data:/var/lib/postgresql/data
+    networks:
+      - fashion-network
+
+  product-postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: product_database
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: root
+    healthcheck: *postgres-healthcheck
+    volumes:
+      - product_postgres_data:/var/lib/postgresql/data
+    networks:
+      - fashion-network
+
+  file-postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: file_database
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: root
+    healthcheck: *postgres-healthcheck
+    volumes:
+      - file_postgres_data:/var/lib/postgresql/data
+    networks:
+      - fashion-network
+
+  inventory-postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: inventory_database
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: root
+    healthcheck: *postgres-healthcheck
+    volumes:
+      - inventory_postgres_data:/var/lib/postgresql/data
+    networks:
+      - fashion-network
+
+  cart-postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: cart_database
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: root
+    healthcheck: *postgres-healthcheck
+    volumes:
+      - cart_postgres_data:/var/lib/postgresql/data
+    networks:
+      - fashion-network
+
+  order-postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: order_database
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: root
+    healthcheck: *postgres-healthcheck
+    volumes:
+      - order_postgres_data:/var/lib/postgresql/data
+    networks:
+      - fashion-network
+
+  payment-postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: payment_database
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: root
+    healthcheck: *postgres-healthcheck
+    volumes:
+      - payment_postgres_data:/var/lib/postgresql/data
+    networks:
+      - fashion-network
+
+networks:
+  fashion-network:
+    driver: bridge
+
+volumes:
+  identity-key:
+  rabbitmq_data:
+  identity_postgres_data:
+  notification_postgres_data:
+  product_postgres_data:
+  file_postgres_data:
+  file_media_data:
+  inventory_postgres_data:
+  cart_postgres_data:
+  order_postgres_data:
+  payment_postgres_data:

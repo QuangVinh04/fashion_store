@@ -1,0 +1,9 @@
+<!doctype html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+<body>
+<h2>Xin chào <span th:text="${fullName}">bạn</span>,</h2>
+<p>Mã xác nhận của bạn là <strong th:text="${verifyCode}">000000</strong>.</p>
+<p>Liên kết có hiệu lực trong <span th:text="${expireHours}">24</span> giờ.</p>
+<p><a th:href="${verifyLink}">Xác nhận email</a></p>
+</body>
+</html>

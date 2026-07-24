@@ -1,0 +1,45 @@
+server:
+  port: ${SERVER_PORT:8082}
+
+spring:
+  application:
+    name: identity-service
+  datasource:
+    url: jdbc:postgresql://${IDENTITY_POSTGRES_HOST:localhost}:${IDENTITY_POSTGRES_PORT:5438}/${IDENTITY_POSTGRES_DB:identity_database}
+    username: ${IDENTITY_POSTGRES_USER:root}
+    password: ${IDENTITY_POSTGRES_PASSWORD:root}
+  jpa:
+    hibernate:
+      ddl-auto: none
+    open-in-view: false
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
+
+security:
+  jwt:
+    issuer: ${JWT_ISSUER:http://localhost:8082}
+    access-token-ttl-seconds: ${JWT_ACCESS_TOKEN_TTL_SECONDS:3600}
+    private-key-file: ${JWT_PRIVATE_KEY_FILE:.data/identity-private.pem}
+    public-key-file: ${JWT_PUBLIC_KEY_FILE:.data/identity-public.pem}
+    legacy-jwk-file: ${JWT_LEGACY_JWK_FILE:.data/identity-rsa.jwk}
+
+app:
+  outbox:
+    relay-delay-ms: ${OUTBOX_RELAY_DELAY_MS:3000}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+logging:
+  pattern:
+    level: "%5p [${spring.application.name:},%X{correlationId:-}]"

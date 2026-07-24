@@ -1,0 +1,13 @@
+package com.fashionstore.product.mapper;
+
+import com.fashionstore.product.dto.*;
+import com.fashionstore.product.model.attribute.ProductAttributeOption;
+import org.mapstruct.Mapper;
+
+@Mapper(componentModel = "spring")
+public interface ProductAttributeOptionMapper {
+    ProductAttributeOption toOption (ProductAttributeOptionRequest request);
+
+    ProductAttributeOptionResponse toOptionResponse (ProductAttributeOption request);
+
+}

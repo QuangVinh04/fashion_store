@@ -1,0 +1,54 @@
+server:
+  port: ${SERVER_PORT:8080}
+
+spring:
+  application:
+    name: api-gateway
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${JWT_ISSUER:http://identity-service:8082}
+          jwk-set-uri: ${JWT_JWK_SET_URI:http://identity-service:8082/api/v1/auth/jwks}
+  cloud:
+    gateway:
+      server:
+        webflux:
+          routes:
+            - id: identity-auth
+              uri: ${IDENTITY_BASE_URL:http://identity-service:8082}
+              predicates:
+                - Path=/api/v1/auth/**,/api/v1/users/**
+            - id: product
+              uri: ${PRODUCT_BASE_URL:http://product-service:8087}
+              predicates:
+                - Path=/api/v1/product/**,/api/v1/products/**,/api/v1/category/**,/api/v1/categories/**,/admin/products,/admin/products/**
+            - id: file
+              uri: ${FILE_BASE_URL:http://file-service:8091}
+              predicates:
+                - Path=/api/v1/files/**
+            - id: cart
+              uri: ${CART_BASE_URL:http://cart-service:8088}
+              predicates:
+                - Path=/api/v1/cart/**
+            - id: order
+              uri: ${ORDER_BASE_URL:http://order-service:8089}
+              predicates:
+                - Path=/api/v1/orders/**,/api/v1/checkouts/**
+            - id: payment
+              uri: ${PAYMENT_BASE_URL:http://payment-service:8085}
+              predicates:
+                - Path=/api/v1/payments/**
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,gateway,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+logging:
+  pattern:
+    level: "%5p [${spring.application.name:},%X{traceId:-},%X{spanId:-}]"
