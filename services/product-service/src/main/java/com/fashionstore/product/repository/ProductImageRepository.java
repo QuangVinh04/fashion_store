@@ -9,7 +9,7 @@ import java.util.List;
 @Repository
 public interface ProductImageRepository extends JpaRepository<ProductImage, String> {
     List<ProductImage> findByProductIdOrderBySortOrderAsc(String productId);
-    boolean existsByProductIdAndColorIsNullAndPrimaryTrue(String productId);
+    boolean existsByProductIdAndColorIsNullAndIsPrimaryTrue(String productId);
 
     void deleteByProductId(String productId);
 }

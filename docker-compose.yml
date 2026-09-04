@@ -364,6 +364,7 @@ networks:
 volumes:
   identity-key:
   rabbitmq_data:
+  redis_data:
   identity_postgres_data:
   notification_postgres_data:
   product_postgres_data:

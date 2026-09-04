@@ -4,7 +4,7 @@ Mục tiêu: giảm chi phí vận hành và độ phức tạp phân tán xuố
 một người phát triển, **không** đánh mất các pattern cần thể hiện (gateway,
 database-per-service, gọi đồng bộ, event bất đồng bộ, saga + outbox).
 
-Đích đến: **5 service + gateway**, ~6 container thay vì 11.
+Đích đến: **5 service + gateway**, mỗi service vẫn giữ database riêng của mình.
 
 | Hiện tại (8 service) | Sau khi gộp (5 service) |
 |---|---|
@@ -94,34 +94,58 @@ viết lại lần nữa.
       "publishes `product.variant.stock`" (không có producer nào) và inventory-service
       được ghi là có consumer idempotent cho saga (consumer đó chưa tồn tại)
 
-## P2 — Cắt chi phí hạ tầng (1 ngày, đổi lấy nhiều nhất)
+## P2 — Gộp hạ tầng database — ĐÃ BỎ (quyết định ngày 2026-09-04)
 
-**Đây là mốc có tỉ lệ lợi ích/công sức cao nhất.** Không dịch chuyển một dòng
-code nghiệp vụ nào, nhưng bỏ được 7 container. Làm trước khi gộp service để
-bước gộp sau đó dễ hơn (các schema đã nằm chung một instance).
+**Không làm.** Chủ dự án chọn giữ mỗi service một container Postgres riêng, đúng
+mô hình database-per-service ở cả mức tiến trình lẫn mức logic.
 
-- [ ] Gộp 8 container Postgres thành 1, mỗi service một schema riêng
-  - [ ] Sửa `docker-compose.yml`: xoá `identity-postgres`, `notification-postgres`,
-        `product-postgres`, `file-postgres`, `inventory-postgres`, `cart-postgres`,
-        `order-postgres`, `payment-postgres` → thay bằng một `postgres` duy nhất
-  - [ ] Thêm init script tạo 8 schema
-  - [ ] Mỗi service: thêm `?currentSchema=<tên>` vào JDBC URL và đặt
-        `spring.flyway.schemas` / `default-schema` tương ứng
-  - [ ] Xoá 8 named volume, thay bằng 1
-- [ ] `notification-service` bỏ Postgres hoàn toàn
-  - [ ] Thay bảng `ProcessedMessage` bằng khoá idempotency trên Redis (SETNX + TTL)
-  - [ ] Xoá `ProcessedMessageRepository`, `ProcessedMessage`, migration `V1`
-  - [ ] Gỡ dependency Flyway + JPA khỏi `pom.xml`
-- [ ] `docker compose up -d` chạy được, smoke test luồng đăng ký → đặt hàng
+Phương án đã thử rồi revert: một Postgres instance, 8 schema (`identity`,
+`product`, `orders`, …), mỗi service ghim `currentSchema` trong JDBC URL.
+Đã chạy được: Flyway tạo bảng lịch sử riêng cho từng schema
+(`"product"."flyway_schema_history"`, `"orders"."flyway_schema_history"`),
+product-service áp 10 migration và order-service áp 5 migration đúng schema
+của mình, cả hai khởi động bình thường.
 
-> Nguyên tắc database-per-service vẫn được giữ về mặt logic: không service nào
-> đọc schema của service khác. Chỉ có process Postgres là dùng chung.
+Lý do vẫn bỏ: đánh đổi không đáng.
+
+- một Postgres chết là cả hệ thống chết, thay vì chỉ một service
+- không tách được tài nguyên CPU/disk theo service
+- với đồ án về kiến trúc microservice, việc *thể hiện đúng* nguyên tắc
+  database-per-service có giá trị hơn khoản tiết kiệm 7 container
+
+Nếu sau này máy dev không tải nổi 19 container, phương án trung gian đáng cân
+nhắc trước khi quay lại schema: **8 database riêng trong 1 Postgres instance**.
+Trong Postgres hai database cùng cluster cô lập tuyệt đối — không câu SQL nào
+query chéo được, chặt hơn schema — mà vẫn chỉ tốn 1 container.
+
+Không có migration hay entity nào ghi cứng tên schema, nên mọi phương án ở trên
+đều chỉ là đổi cấu hình, không đụng code.
+
+### Việc P2 để lại (đã giữ)
+
+Smoke test khi thử P2 phát hiện hai lỗi runtime có sẵn, đều làm service chết
+ngay lúc khởi động dù build xanh. Đã sửa và giữ lại:
+
+- `ProductImageRepository.existsByProductIdAndColorIsNullAndPrimaryTrue` —
+  entity `ProductImage` có trường `isPrimary`, không có `primary`
+- `OutboxPublisher.handleOutboxCreated` — `@TransactionalEventListener`
+  ở phase `AFTER_COMMIT` kèm `@Transactional` mặc định; Spring từ chối trừ khi
+  `REQUIRES_NEW` hoặc `NOT_SUPPORTED`
+- `docker-compose.yml` khai báo `redis` dùng volume `redis_data` nhưng không
+  định nghĩa volume đó — file compose không hợp lệ, và CI có bước
+  `docker compose config --quiet` nên sẽ đỏ ngay khi build Maven xanh
+
+**Bài học cho các mốc sau: build xanh không có nghĩa là service chạy được.**
+P3 nên bổ sung một smoke test khởi động thật cho từng service.
 
 ## P3 — Lưới an toàn trước khi gộp (1–2 ngày)
 
 Toàn repo hiện chỉ có **17 file test cho ~19.000 LOC**. Gộp service mà không
 có test là refactor mù.
 
+- [ ] Smoke test khởi động: mỗi service phải lên được context Spring thật.
+      P2 cho thấy build xanh không đảm bảo service chạy — hai lỗi chết-lúc-khởi-động
+      lọt qua toàn bộ 81 unit test
 - [ ] Viết characterization test cho các luồng sẽ bị đụng vào ở P4/P5:
   - [ ] Checkout: giỏ hàng → tạo đơn → saga chạy hết → đơn `CONFIRMED`
   - [ ] Saga bồi hoàn: thanh toán fail → `RELEASE_INVENTORY` → đơn `CANCELLED`
@@ -197,5 +221,5 @@ vốn thuộc aggregate `ProductVariant`.
 
 ## Phương án tối thiểu
 
-Nếu đề tài yêu cầu giữ đúng 8 service, chỉ làm **P0 + P1 + P2**. Riêng P2 đã
-đưa 11 container xuống 4 mà không dịch chuyển dòng code nghiệp vụ nào.
+Nếu đề tài yêu cầu giữ đúng 8 service thì P0 + P1 đã xong là đủ để repo sạch và
+CI xanh; phần còn lại có thể dừng.

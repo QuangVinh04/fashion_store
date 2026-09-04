@@ -12,6 +12,7 @@ import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
@@ -34,7 +35,9 @@ public class OutboxPublisher {
      * Đường nhanh: gửi ngay sau khi transaction nghiệp vụ commit.
      */
     @Async
-    @Transactional
+    // AFTER_COMMIT nghia la transaction nghiep vu da dong, nen viec cap nhat trang thai
+    // outbox phai chay trong transaction moi. Spring tu choi @Transactional mac dinh o day.
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void handleOutboxCreated(OutboxCreatedEvent springEvent) {
         outboxEventRepository.findById(springEvent.outboxEventId())
