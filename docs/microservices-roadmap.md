@@ -8,8 +8,7 @@ describes architecture, service ownership, and required patterns.
 - `identity-service`: authentication, users, roles, permissions, and self-issued JWT.
 - `product-service`: products, variants, categories, product search.
 - `inventory-service`: stock, reservation, stock deduction, stock release.
-- `cart-service`: user carts and cart items.
-- `order-service`: checkout, orders, order status workflow.
+- `order-service`: cart, checkout, orders, order status workflow.
 - `payment-service`: payment records, VNPAY, PayPal, COD, callbacks.
 - `notification-service`: email verification and order/payment notifications.
 
@@ -21,8 +20,7 @@ describes architecture, service ownership, and required patterns.
 - `services/payment-service`: owns payment tables and serializes payment create/cancel commands for each order through RabbitMQ.
 - `services/inventory-service`: standalone service scaffold. It owns inventory tables. The saga reservation consumer is currently missing — see the P0 debt note in [refactor-plan.md](refactor-plan.md).
 - `services/product-service`: standalone service scaffold. It owns product/category/variant tables. Note: it does **not** currently publish `product.variant.stock` — the inventory-side consumer exists but has no producer.
-- `services/cart-service`: standalone service scaffold. It owns cart tables, calls product/inventory through HTTP clients, and uses JWT `userId` for ownership.
-- `services/order-service`: owns checkout/order tables and orchestrates inventory, payment, compensation, and cart cleanup through saga events.
+- `services/order-service`: owns cart, checkout and order tables, and orchestrates inventory, payment and compensation through saga events. Cart cleanup after confirmation is a direct write in the same transaction, not a saga message.
 
 ## Current architecture
 

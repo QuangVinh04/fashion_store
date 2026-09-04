@@ -27,7 +27,6 @@
         <module>services/product-service</module>
         <module>services/file-service</module>
         <module>services/inventory-service</module>
-        <module>services/cart-service</module>
         <module>services/order-service</module>
         <module>services/payment-service</module>
     </modules>

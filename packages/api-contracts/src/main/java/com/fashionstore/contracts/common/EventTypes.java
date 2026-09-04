@@ -20,7 +20,6 @@ public final class EventTypes {
     public static final String PAYMENT_REFUND_REJECTED = "payment.refund.rejected";
     public static final String ORDER_CONFIRMED = "order.confirmed";
     public static final String ORDER_CANCELLED = "order.cancelled";
-    public static final String CART_ITEMS_REMOVAL_REQUESTED = "cart.items-removal.requested";
     public static final String NOTIFICATION_EMAIL_REQUESTED = "notification.email.requested";
 
     private EventTypes() {

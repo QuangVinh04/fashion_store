@@ -4,7 +4,7 @@ import com.fashionstore.common.exception.AppException;
 import com.fashionstore.common.payment.PaymentMethod;
 import com.fashionstore.common.payment.PaymentProvider;
 import com.fashionstore.common.security.CurrentUserProvider;
-import com.fashionstore.order.client.CartServiceClient;
+import com.fashionstore.order.cart.service.CartService;
 import com.fashionstore.order.config.ErrorCode;
 import com.fashionstore.order.dto.CheckoutResponse;
 import com.fashionstore.order.model.Checkout;
@@ -38,7 +38,7 @@ class CheckoutServiceImplTest {
     private CheckoutRepository checkoutRepository;
 
     @Mock
-    private CartServiceClient cartServiceClient;
+    private CartService cartService;
 
     @Mock
     private CurrentUserProvider currentUserProvider;
@@ -47,7 +47,7 @@ class CheckoutServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = new CheckoutServiceImpl(checkoutRepository, cartServiceClient, currentUserProvider);
+        service = new CheckoutServiceImpl(checkoutRepository, cartService, currentUserProvider);
         when(currentUserProvider.getCurrentUserId()).thenReturn("user-1");
         when(checkoutRepository.save(any(Checkout.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));

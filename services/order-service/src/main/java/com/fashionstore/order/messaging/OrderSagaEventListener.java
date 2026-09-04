@@ -9,8 +9,10 @@ import com.fashionstore.contracts.payment.event.PaymentCancellationRejectedEvent
 import com.fashionstore.contracts.payment.event.PaymentCancelledEvent;
 import com.fashionstore.contracts.payment.event.PaymentFailedEvent;
 import com.fashionstore.contracts.payment.event.PaymentSuccessEvent;
+import com.fashionstore.order.cart.repository.CartItemRepository;
 import com.fashionstore.order.config.messaging.RabbitMQNames;
 import com.fashionstore.order.model.Order;
+import com.fashionstore.order.model.OrderItem;
 import com.fashionstore.order.model.OrderSaga;
 import com.fashionstore.order.model.enumeration.OrderSagaStep;
 import com.fashionstore.order.repository.OrderRepository;
@@ -32,6 +34,7 @@ public class OrderSagaEventListener {
 
     private final SagaReplyProcessor sagaReplies;
     private final OrderRepository orderRepository;
+    private final CartItemRepository cartItemRepository;
 
     // 1. Giữ kho xong -> xin thanh toán
     @Transactional
@@ -188,13 +191,24 @@ public class OrderSagaEventListener {
                     order.confirm(saga.getPaymentId());
                     orderRepository.save(order);
 
-                    // Việc phụ, phát cùng transaction nhưng nằm ngoài saga: hỏng cũng không rollback đơn.
-                    return List.of(
-                            SagaCommands.orderConfirmed(order),
-                            SagaCommands.removeCartItems(order)
-                    );
+                    // Giỏ hàng giờ nằm cùng database nên xoá thẳng trong transaction này,
+                    // không cần đi vòng qua message. Đổi lại: xoá hỏng thì đơn rollback theo —
+                    // trước đây phát event nên hỏng cũng không ảnh hưởng đơn.
+                    removeOrderedCartItems(order);
+
+                    return List.of(SagaCommands.orderConfirmed(order));
                 })
                 .build());
+    }
+
+    private void removeOrderedCartItems(Order order) {
+        List<String> cartItemIds = order.getItems().stream()
+                .map(OrderItem::getCartItemId)
+                .filter(id -> id != null && !id.isBlank())
+                .toList();
+        if (!cartItemIds.isEmpty()) {
+            cartItemRepository.deleteOwnedItems(order.getUserId(), cartItemIds);
+        }
     }
 
     // 8. Nhả kho xong -> bù trừ hoàn tất, đơn CANCELLED

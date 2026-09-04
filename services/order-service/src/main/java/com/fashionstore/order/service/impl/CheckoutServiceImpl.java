@@ -3,9 +3,9 @@ package com.fashionstore.order.service.impl;
 import com.fashionstore.common.exception.AppException;
 import com.fashionstore.order.config.ErrorCode;
 import com.fashionstore.common.security.CurrentUserProvider;
-import com.fashionstore.order.client.CartServiceClient;
-import com.fashionstore.order.client.dto.CartItemServiceResponse;
-import com.fashionstore.order.client.dto.CartServiceResponse;
+import com.fashionstore.order.cart.dto.cart.CartItemResponse;
+import com.fashionstore.order.cart.dto.cart.CartResponse;
+import com.fashionstore.order.cart.service.CartService;
 import com.fashionstore.order.dto.CheckoutItemResponse;
 import com.fashionstore.order.dto.CheckoutResponse;
 import com.fashionstore.order.dto.CreateCheckoutRequest;
@@ -35,14 +35,14 @@ import java.util.List;
 public class CheckoutServiceImpl implements CheckoutService {
 
     CheckoutRepository checkoutRepository;
-    CartServiceClient cartServiceClient;
+    CartService cartService;
     CurrentUserProvider currentUserProvider;
 
     @Override
     @Transactional
     public CheckoutResponse createCheckout(CreateCheckoutRequest request) {
         String userId = currentUserProvider.getCurrentUserId();
-        CartServiceResponse cart = cartServiceClient.getMyCart();
+        CartResponse cart = cartService.getMyCart();
 
         if (cart.getItems() == null || cart.getItems().isEmpty()) {
             throw new AppException(ErrorCode.CART_EMPTY);
@@ -155,7 +155,7 @@ public class CheckoutServiceImpl implements CheckoutService {
         return toResponse(checkoutRepository.save(checkout));
     }
 
-    private BigDecimal toLineTotal(CartItemServiceResponse item) {
+    private BigDecimal toLineTotal(CartItemResponse item) {
         BigDecimal unitPrice = item.getUnitPrice() == null ? BigDecimal.ZERO : item.getUnitPrice();
         return unitPrice.multiply(BigDecimal.valueOf(item.getQuantity()));
     }
@@ -190,7 +190,7 @@ public class CheckoutServiceImpl implements CheckoutService {
                 .build();
     }
 
-    private CheckoutItem toCheckoutItem(Checkout checkout, CartItemServiceResponse cartItem) {
+    private CheckoutItem toCheckoutItem(Checkout checkout, CartItemResponse cartItem) {
         BigDecimal lineTotal = cartItem.getUnitPrice().multiply(BigDecimal.valueOf(cartItem.getQuantity()));
         return CheckoutItem.builder()
                 .checkout(checkout)

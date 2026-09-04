@@ -20,7 +20,6 @@ Active backend modules:
 - `services/identity-service`
 - `services/product-service`
 - `services/inventory-service`
-- `services/cart-service`
 - `services/order-service`
 - `services/payment-service`
 - `services/notification-service`

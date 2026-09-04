@@ -138,40 +138,71 @@ ngay lúc khởi động dù build xanh. Đã sửa và giữ lại:
 **Bài học cho các mốc sau: build xanh không có nghĩa là service chạy được.**
 P3 nên bổ sung một smoke test khởi động thật cho từng service.
 
-## P3 — Lưới an toàn trước khi gộp (1–2 ngày)
+## P3 — Lưới an toàn trước khi gộp — ĐÃ BỎ (quyết định ngày 2026-09-04)
 
-Toàn repo hiện chỉ có **17 file test cho ~19.000 LOC**. Gộp service mà không
-có test là refactor mù.
+**Không viết test.** Chủ dự án chọn bỏ qua phần viết characterization test.
 
-- [ ] Smoke test khởi động: mỗi service phải lên được context Spring thật.
-      P2 cho thấy build xanh không đảm bảo service chạy — hai lỗi chết-lúc-khởi-động
-      lọt qua toàn bộ 81 unit test
-- [ ] Viết characterization test cho các luồng sẽ bị đụng vào ở P4/P5:
-  - [ ] Checkout: giỏ hàng → tạo đơn → saga chạy hết → đơn `CONFIRMED`
-  - [ ] Saga bồi hoàn: thanh toán fail → `RELEASE_INVENTORY` → đơn `CANCELLED`
-  - [ ] Saga timeout: `OrderSagaTimeoutScanner` phát lại command
-  - [ ] Product: tạo sản phẩm có variant → tồn kho được khởi tạo
-- [ ] Ghi lại response JSON hiện tại của các endpoint public làm mốc so sánh
-      (sau khi gộp, hợp đồng API với `apps/storefront` và `apps/backoffice` phải giữ nguyên)
+Hệ quả cần biết khi làm P4/P5: repo có 81 unit test cho ~19.000 LOC, và không
+test nào chạm tới luồng checkout hay saga đầu-cuối. Gộp cart vào order rồi gộp
+inventory vào catalog sẽ dịch chuyển đúng những phần đó mà không có gì báo động
+nếu hành vi đổi. Cụ thể là bốn luồng không được bảo vệ:
 
-## P4 — Gộp cart vào order-service (2–3 ngày)
+- checkout: giỏ hàng → tạo đơn → saga chạy hết → đơn `CONFIRMED`
+- bồi hoàn: thanh toán fail → `RELEASE_INVENTORY` → đơn `CANCELLED`
+- timeout: `OrderSagaTimeoutScanner` phát lại command
+- tạo sản phẩm có variant → khởi tạo tồn kho
 
-Xoá được mắt xích đồng bộ `order → cart` trong luồng checkout.
+Thay thế bằng **kiểm tra thủ công** (không phải viết test, không tốn công bảo trì):
 
-- [ ] Chuyển `Cart`, `CartItem`, `CartStatus`, repository, service, controller
-      sang `com.fashionstore.order.cart`
-- [ ] Xoá `order-service/.../client/CartFeignClient.java`,
-      `CartServiceClient.java`, `client/dto/CartServiceResponse.java`,
-      `CartItemServiceResponse.java` → `CheckoutServiceImpl` gọi thẳng `CartService`
-- [ ] Gộp migration: `cart-service` V1–V3 → đánh số tiếp vào order-service
-      (V6, V7, V8) hoặc giữ schema `cart` riêng trong DB của order
-- [ ] Chuyển 2 Feign client của cart (`ProductFeignClient`, `InventoryFeignClient`)
-      sang order-service — tạm thời, P5 sẽ gộp chúng làm một
-- [ ] Bỏ sự kiện `CartItemsRemovalRequested` khỏi luồng saga: xoá giỏ hàng giờ
-      nằm trong cùng transaction với tạo đơn
-- [ ] Gateway: gộp route `cart` vào route `order`
-- [ ] Xoá module `services/cart-service` khỏi `pom.xml` và `docker-compose.yml`
-- [ ] Test ở P3 vẫn xanh
+- [ ] Trước và sau mỗi mốc gộp, chạy từng service bằng jar đã build và xác nhận
+      Spring context lên được — chính cách này đã bắt ra 3 lỗi chết-lúc-khởi-động
+      mà 81 unit test không thấy
+- [ ] Ghi lại response JSON của các endpoint public trước khi gộp, so sánh lại
+      sau khi gộp — hợp đồng API với `apps/storefront` và `apps/backoffice`
+      phải giữ nguyên
+
+## P4 — Gộp cart vào order-service — ĐÃ XONG
+
+`./mvnw -B verify` xanh trên 12 module, 81 test pass. order-service khởi động
+thật và áp đủ 7 migration; `cart`, `cart_item` nằm cùng database với `orders`,
+`checkout`, `order_saga`.
+
+- [x] Chuyển toàn bộ `com.fashionstore.cart` sang `com.fashionstore.order.cart`,
+      giữ nguyên cấu trúc bên trong (model, repository, service, controller,
+      mapper, dto, client, exception)
+- [x] Xoá `CartFeignClient`, `CartServiceClient`, `CartServiceResponse`,
+      `CartItemServiceResponse` — `CheckoutServiceImpl` gọi thẳng `CartService`
+- [x] Bỏ `CartItemsRemovalRequested` khỏi saga: `OrderSagaEventListener` xoá
+      dòng giỏ hàng trực tiếp trong transaction xác nhận đơn.
+      Xoá luôn contract và hằng số `EventTypes.CART_ITEMS_REMOVAL_REQUESTED`
+- [x] Chuyển `ProductFeignClient` và `InventoryFeignClient` sang order-service
+      (P5 sẽ gộp hai cái này làm một khi product + inventory thành catalog)
+- [x] Migration: cart V1 → order V6, cart V3 → order V7. **Bỏ cart V2** vì nó
+      tạo `processed_message`, bảng order đã tạo ở `V2__add_saga_support.sql`
+- [x] Gộp route `cart` vào route `order` ở gateway
+- [x] `pom.xml`: bỏ module cart-service, thêm mapstruct + resilience4j + aop
+      vào order-service
+- [x] `docker-compose.yml`: bỏ `cart-service` và `cart-postgres`;
+      order-service nhận thêm `PRODUCT_BASE_URL` và depends_on product/inventory
+- [x] Smoke test khởi động: order-service lên được context
+
+### Thay đổi ngữ nghĩa cần biết
+
+Trước đây xoá giỏ hàng là một message phát ra sau khi saga đóng, kèm comment
+"hỏng cũng không rollback đơn". Giờ nó là một lệnh xoá trong cùng transaction
+với `order.confirm()`. Đổi lại: **xoá giỏ hàng hỏng thì việc xác nhận đơn
+rollback theo**. Đây là hệ quả trực tiếp và có chủ đích của việc gộp — mất tính
+"việc phụ hỏng không ảnh hưởng đơn", đổi lấy tính nguyên tử.
+
+### Lỗi có sẵn phát hiện khi smoke test
+
+`cart-service` khai báo `resilience4j-spring-boot3` ghim cứng version 2.4.0,
+trong khi Spring Boot BOM kéo mọi module resilience4j khác về 2.2.0. Starter
+2.4.0 gọi `RxJava3FallbackDecorator` — class chỉ có ở 2.2.0 trở lên của
+`resilience4j-spring6` phiên bản tương ứng — nên context chết ngay lúc khởi
+động. cart-service cũ chắc chắn cũng chết y hệt nếu từng được chạy thật; build
+và unit test không phát hiện được vì lỗi chỉ xảy ra lúc Spring quét
+autoconfiguration. Đã bỏ version ghim cứng, để BOM quản lý.
 
 ## P5 — Gộp inventory + file vào catalog-service (3–4 ngày)
 
@@ -194,7 +225,7 @@ vốn thuộc aggregate `ProductVariant`.
 - [ ] Gộp 2 Feign client còn lại của order-service thành 1 `CatalogFeignClient`
 - [ ] Gateway: gộp route `product` + `file` thành route `catalog`
 - [ ] Xoá `services/inventory-service`, `services/file-service` khỏi reactor và compose
-- [ ] Test ở P3 vẫn xanh
+- [ ] Chạy lại smoke test khởi động, so lại response JSON đã ghi
 
 **Kết quả sau P4 + P5:** 3 Feign client → 1. Saga còn 2 participant
 (catalog + payment) thay vì 3.

@@ -21,7 +21,6 @@ services:
       PRODUCT_BASE_URL: http://product-service:8087
       FILE_BASE_URL: http://file-service:8091
       INVENTORY_BASE_URL: http://inventory-service:8086
-      CART_BASE_URL: http://cart-service:8088
       ORDER_BASE_URL: http://order-service:8089
       PAYMENT_BASE_URL: http://payment-service:8085
     depends_on:
@@ -29,7 +28,6 @@ services:
       - product-service
       - file-service
       - inventory-service
-      - cart-service
       - order-service
       - payment-service
     ports:
@@ -154,33 +152,6 @@ services:
     networks:
       - fashion-network
 
-  cart-service:
-    build:
-      context: .
-      dockerfile: services/cart-service/Dockerfile
-    environment:
-      <<: *service-environment
-      SERVER_PORT: 8088
-      CART_POSTGRES_HOST: cart-postgres
-      CART_POSTGRES_DB: cart_database
-      CART_POSTGRES_USER: root
-      CART_POSTGRES_PASSWORD: root
-      PRODUCT_BASE_URL: http://product-service:8087
-      INVENTORY_BASE_URL: http://inventory-service:8086
-    depends_on:
-      cart-postgres:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-      product-service:
-        condition: service_started
-      inventory-service:
-        condition: service_started
-    expose:
-      - "8088"
-    networks:
-      - fashion-network
-
   order-service:
     build:
       context: .
@@ -192,14 +163,16 @@ services:
       ORDER_POSTGRES_DB: order_database
       ORDER_POSTGRES_USER: root
       ORDER_POSTGRES_PASSWORD: root
-      CART_BASE_URL: http://cart-service:8088
+      PRODUCT_BASE_URL: http://product-service:8087
       INVENTORY_BASE_URL: http://inventory-service:8086
     depends_on:
       order-postgres:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
-      cart-service:
+      product-service:
+        condition: service_started
+      inventory-service:
         condition: service_started
     expose:
       - "8089"
@@ -321,18 +294,6 @@ services:
     networks:
       - fashion-network
 
-  cart-postgres:
-    image: postgres:16
-    environment:
-      POSTGRES_DB: cart_database
-      POSTGRES_USER: root
-      POSTGRES_PASSWORD: root
-    healthcheck: *postgres-healthcheck
-    volumes:
-      - cart_postgres_data:/var/lib/postgresql/data
-    networks:
-      - fashion-network
-
   order-postgres:
     image: postgres:16
     environment:
@@ -371,6 +332,5 @@ volumes:
   file_postgres_data:
   file_media_data:
   inventory_postgres_data:
-  cart_postgres_data:
   order_postgres_data:
   payment_postgres_data:

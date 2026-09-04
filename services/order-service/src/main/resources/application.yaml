@@ -43,7 +43,7 @@ spring:
 
 app:
   clients:
-    cart-base-url: ${CART_BASE_URL:http://localhost:8088}
+    product-base-url: ${PRODUCT_BASE_URL:http://localhost:8087}
     inventory-base-url: ${INVENTORY_BASE_URL:http://localhost:8086}
   outbox:
     publisher-delay-ms: ${OUTBOX_PUBLISHER_DELAY_MS:15000}
@@ -54,6 +54,28 @@ app:
     # Hạn sống của một bản chụp giá, tính từ lúc tạo checkout.
     ttl-minutes: ${CHECKOUT_TTL_MINUTES:30}
     expiry-scan-delay-ms: ${CHECKOUT_EXPIRY_SCAN_DELAY_MS:300000}
+
+resilience4j:
+  retry:
+    instances:
+      productService:
+        max-attempts: 3
+        wait-duration: 500ms
+      inventoryService:
+        max-attempts: 3
+        wait-duration: 500ms
+  circuitbreaker:
+    instances:
+      productService:
+        sliding-window-size: 20
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+        permitted-number-of-calls-in-half-open-state: 5
+      inventoryService:
+        sliding-window-size: 20
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+        permitted-number-of-calls-in-half-open-state: 5
 
 management:
   endpoints:

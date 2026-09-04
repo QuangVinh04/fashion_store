@@ -27,14 +27,10 @@ spring:
               uri: ${FILE_BASE_URL:http://file-service:8091}
               predicates:
                 - Path=/api/v1/files/**
-            - id: cart
-              uri: ${CART_BASE_URL:http://cart-service:8088}
-              predicates:
-                - Path=/api/v1/cart/**
             - id: order
               uri: ${ORDER_BASE_URL:http://order-service:8089}
               predicates:
-                - Path=/api/v1/orders/**,/api/v1/checkouts/**,/api/v1/admin/orders/**
+                - Path=/api/v1/orders/**,/api/v1/checkouts/**,/api/v1/admin/orders/**,/api/v1/cart/**
             - id: payment
               uri: ${PAYMENT_BASE_URL:http://payment-service:8085}
               predicates:

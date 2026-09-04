@@ -11,10 +11,12 @@ import com.fashionstore.contracts.payment.event.PaymentCancellationRejectedEvent
 import com.fashionstore.contracts.payment.event.PaymentFailedEvent;
 import com.fashionstore.contracts.payment.event.PaymentSuccessEvent;
 import com.fashionstore.order.model.Order;
+import com.fashionstore.order.model.OrderItem;
 import com.fashionstore.order.model.OrderSaga;
 import com.fashionstore.order.model.enumeration.OrderSagaStatus;
 import com.fashionstore.order.model.enumeration.OrderSagaStep;
 import com.fashionstore.order.model.enumeration.OrderStatus;
+import com.fashionstore.order.cart.repository.CartItemRepository;
 import com.fashionstore.order.repository.OrderRepository;
 import com.fashionstore.order.repository.OrderSagaRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -36,6 +38,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.never;
@@ -62,6 +65,9 @@ class OrderSagaEventListenerTest {
     @Mock
     private SagaOutbox sagaOutbox;
 
+    @Mock
+    private CartItemRepository cartItemRepository;
+
     private OrderSagaEventListener listener;
 
     @BeforeEach
@@ -77,7 +83,7 @@ class OrderSagaEventListenerTest {
                 sagaOutbox,
                 new ObjectMapper()
         );
-        listener = new OrderSagaEventListener(processor, orderRepository);
+        listener = new OrderSagaEventListener(processor, orderRepository, cartItemRepository);
     }
 
     @Test
@@ -152,6 +158,16 @@ class OrderSagaEventListenerTest {
         saga.inventoryReserved("res-1");
         saga.paymentAuthorized("pay-1");
         Order order = order();
+        // Sau P4 gio hang nam cung DB, buoc xac nhan don xoa thang cac dong gio hang
+        // da dat -> can mot item co cartItemId de kiem chung.
+        order.getItems().add(OrderItem.builder()
+                .order(order)
+                .cartItemId("cart-item-1")
+                .variantId("variant-1")
+                .quantity(1)
+                .unitPrice(BigDecimal.TEN)
+                .lineTotal(BigDecimal.TEN)
+                .build());
         registerSaga(saga, order);
 
         listener.inventoryConfirmed(
@@ -164,7 +180,8 @@ class OrderSagaEventListenerTest {
         assertEquals("pay-1", order.getPaymentId());
 
         List<String> emitted = emittedCommands().stream().map(SagaCommand::eventType).toList();
-        assertEquals(List.of(EventTypes.ORDER_CONFIRMED, EventTypes.CART_ITEMS_REMOVAL_REQUESTED), emitted);
+        assertEquals(List.of(EventTypes.ORDER_CONFIRMED), emitted);
+        verify(cartItemRepository).deleteOwnedItems(eq("user-1"), eq(List.of("cart-item-1")));
     }
 
     @Test

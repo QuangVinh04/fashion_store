@@ -1,6 +1,5 @@
 package com.fashionstore.order.messaging;
 
-import com.fashionstore.contracts.cart.CartItemsRemovalRequested;
 import com.fashionstore.contracts.common.EventTypes;
 import com.fashionstore.contracts.inventory.command.ConfirmInventoryCommand;
 import com.fashionstore.contracts.inventory.command.ReleaseInventoryCommand;
@@ -10,7 +9,6 @@ import com.fashionstore.contracts.payment.command.AuthorizePaymentCommand;
 import com.fashionstore.contracts.payment.command.CancelPaymentCommand;
 import com.fashionstore.contracts.payment.command.RefundPaymentCommand;
 import com.fashionstore.order.model.Order;
-import com.fashionstore.order.model.OrderItem;
 import com.fashionstore.order.model.OrderSaga;
 
 import java.math.BigDecimal;
@@ -91,14 +89,5 @@ public final class SagaCommands {
         );
     }
 
-    public static SagaCommand removeCartItems(Order order) {
-        List<String> cartItemIds = order.getItems().stream()
-                .map(OrderItem::getCartItemId)
-                .filter(id -> id != null && !id.isBlank())
-                .toList();
-        return SagaCommand.of(
-                EventTypes.CART_ITEMS_REMOVAL_REQUESTED,
-                new CartItemsRemovalRequested(order.getUserId(), cartItemIds)
-        );
-    }
+
 }
