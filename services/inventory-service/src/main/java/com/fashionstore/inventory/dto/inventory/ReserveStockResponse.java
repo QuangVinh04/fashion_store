@@ -1,0 +1,16 @@
+package com.fashionstore.inventory.dto.inventory;
+
+import lombok.Builder;
+import lombok.Data;
+
+import java.util.List;
+
+@Data
+@Builder
+public class ReserveStockResponse {
+    private boolean      success;
+    private String       orderId;
+    private List<String> reservedVariantIds;
+    private List<String> failedVariantIds;
+    private String       message;
+}
