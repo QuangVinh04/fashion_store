@@ -242,6 +242,27 @@ public class InventoryServiceImpl implements InventoryService {
     }
 
     @Override
+    @Transactional
+    public void upsertStock(String variantId, Integer quantity) {
+        if (quantity == null || quantity < 0) {
+            throw new AppException(InventoryErrorCode.INVALID_STOCK_QUANTITY);
+        }
+        inventoryRepository.findByVariantId(variantId).ifPresentOrElse(
+                inventory -> {
+                    inventory.setQuantity(quantity);
+                    inventoryRepository.save(inventory);
+                },
+                // TODO(P4/P5): can productId trong ProductVariantStockEvent moi tao duoc dong moi.
+                () -> log.warn("[Inventory] upsertStock — chua co ton kho cho variant {}, bo qua", variantId));
+    }
+
+    @Override
+    @Transactional
+    public void deleteStock(String variantId) {
+        inventoryRepository.findByVariantId(variantId).ifPresent(inventoryRepository::delete);
+    }
+
+    @Override
     public List<InventoryResponse> getByVariantIds(List<String> variantIds) {
         return inventoryRepository.findByVariantIdIn(variantIds)
                 .stream()

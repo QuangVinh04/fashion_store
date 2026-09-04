@@ -1,4 +1,4 @@
-package com.fashionstore.product.config.messaging;
+package com.fashionstore.clothes_retail_api.config.messaging;
 
 import org.springframework.amqp.core.Binding;
 import org.springframework.amqp.core.BindingBuilder;

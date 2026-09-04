@@ -19,12 +19,10 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.coyote.BadRequestException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.CollectionUtils;
 
 
 import java.math.BigDecimal;
@@ -117,12 +115,14 @@ public class ProductServiceImpl implements ProductService {
     @Override
     @Transactional
     public ProductResponse createProduct(ProductRequest request) {
-        validateProduct(request);
-
+        ProductValidation validation = validateProduct(request);
 
         Product product = buildProduct(request);
-        setBrand(request.getBrandId(), product);
-        assignCategories(product, request.categories());
+        product.setSlug(validation.slug());
+        product.setBasePrice(validation.basePrice());
+        product.setBrand(validateBrand(request.getBrandId()));
+        product.setSizeChartId(resolveSizeChartId(request.getSizeChartId()));
+        assignCategories(product, validation.categories());
         assignImages(product, request.getImages());
         synchronizeVariants(product, request.getVariants(), validation.variantOptions());
         assignAttributes(product, request.getAttributes(), validation.attributesById());
@@ -135,7 +135,7 @@ public class ProductServiceImpl implements ProductService {
         return productMapper.toProductResponse(savedProduct);
     }
 
-    private void validateProduct(ProductRequest request) {
+    private ProductValidation validateProduct(ProductRequest request) {
         // validate slug
         String slug = StringUtils.normalizeSlug(request.getSlug(), request.getName());
         if (productRepository.existsBySlug(slug)) {
@@ -146,19 +146,58 @@ public class ProductServiceImpl implements ProductService {
         BigDecimal basePrice = request.getBasePrice() != null ? request.getBasePrice() : request.getPrice();
         validatePrices(basePrice, request.getSalePrice());
 
+        // validate category
+        List<Category> categories = validateRequiredCategoryIds(
+                request.getCategoryIds() == null ? List.of() : request.getCategoryIds());
+
         // validate variant
-        validateVariantRequestDuplicates(request.getVariants());
-        validateVariantOptions(request.getVariants());
+        List<ProductVariantRequest> variants =
+                request.getVariants() == null ? List.of() : request.getVariants();
+        validateVariantRequestDuplicates(variants);
+        VariantOptionsValidation variantOptions = validateVariantOptions(variants, null);
 
         // validate attribute
-        validateAttributes(request.getAttributes());
+        Map<String, ProductAttribute> attributesById = validateAttributes(request.getAttributes());
+
+        boolean publishImmediately = request.getStatus() == ProductStatus.PUBLISHED
+                || Boolean.TRUE.equals(request.getPublished());
+
+        return new ProductValidation(slug, basePrice, categories, variantOptions, attributesById, publishImmediately);
     }
 
-    private void setBrand(String brandId, Product product) {
-        if (brandId != null && (product.getBrand() == null || !(brandId.equals(product.getBrand().getId())))) {
-            Brand brand = brandRepository.findById(brandId).orElseThrow(()
-                    -> new AppException(ProductErrorCode.BRAND_NOT_FOUND));
-            product.setBrand(brand);
+    private Brand validateBrand(String brandId) {
+        if (brandId == null || brandId.isBlank()) {
+            return null;
+        }
+        return brandRepository.findById(brandId)
+                .orElseThrow(() -> new AppException(ProductErrorCode.BRAND_NOT_FOUND));
+    }
+
+    private List<Category> validateRequiredCategoryIds(List<String> categoryIds) {
+        List<Category> categories = categoryRepository.findAllById(categoryIds);
+        if (categories.isEmpty() || categories.size() != categoryIds.size()) {
+            throw new AppException(ProductErrorCode.CATEGORY_NOT_FOUND);
+        }
+        return categories;
+    }
+
+    private String resolveSizeChartId(String sizeChartId) {
+        if (sizeChartId == null || sizeChartId.isBlank()) {
+            return null;
+        }
+        if (!sizeChartRepository.existsById(sizeChartId)) {
+            throw new AppException(ProductErrorCode.SIZE_CHART_NOT_FOUND);
+        }
+        return sizeChartId;
+    }
+
+    private void assignCategories(Product product, List<Category> categories) {
+        product.getProductCategories().clear();
+        for (Category category : categories) {
+            product.getProductCategories().add(ProductCategory.builder()
+                    .product(product)
+                    .category(category)
+                    .build());
         }
     }
 
@@ -484,24 +523,42 @@ public class ProductServiceImpl implements ProductService {
         synchronizeVariants(product, variantRequests, validateVariantOptions(variantRequests, product));
     }
 
-    private void validateVariantOptions(
-            List<ProductVariantRequest> variantRequests) {
+    /**
+     * Tra ve san cac option da tra cuu de buoc ghi khong phai query lai.
+     * {@code product} la null khi tao moi; khi sua thi SKU cua chinh san pham do khong tinh la trung.
+     */
+    private VariantOptionsValidation validateVariantOptions(
+            List<ProductVariantRequest> variantRequests,
+            Product product) {
+        List<ProductVariantRequest> requests = variantRequests == null ? List.of() : variantRequests;
+        Set<String> ownVariantIds = product == null
+                ? Set.of()
+                : product.getVariants().stream()
+                        .map(ProductVariant::getId)
+                        .filter(Objects::nonNull)
+                        .collect(Collectors.toSet());
+
         // validate price and sku
-        for(ProductVariantRequest request : variantRequests) {
-            if(productVariantRepository.existsBySkuAndActiveIsTrue(request.getSku())){
-                throw new  AppException(ProductErrorCode.SKU_ALREADY_EXISTED_OR_DUPLICATED);
+        for (ProductVariantRequest request : requests) {
+            String sku = StringUtils.cleanText(request.getSku());
+            // uk_product_variant_sku ap dung cho moi dong, ke ca variant da tat,
+            // nen phai tra theo sku thay vi chi tim trong cac variant dang active.
+            if (sku != null) {
+                Optional<ProductVariant> holder = productVariantRepository.findBySku(sku);
+                if (holder.isPresent() && !ownVariantIds.contains(holder.get().getId())) {
+                    throw new AppException(ProductErrorCode.SKU_ALREADY_EXISTED_OR_DUPLICATED);
+                }
             }
             validatePrices(request.getPrice(), request.getSalePrice());
-
         }
         // validate colorOption and sizeOption
-        List<String> colorOptionIds = variantRequests.stream()
+        List<String> colorOptionIds = requests.stream()
                 .map(ProductVariantRequest::getColorOptionId)
                 .map(StringUtils::cleanText)
                 .filter(Objects::nonNull)
                 .distinct()
                 .toList();
-        List<String> sizeOptionIds = variantRequests.stream()
+        List<String> sizeOptionIds = requests.stream()
                 .map(ProductVariantRequest::getSizeOptionId)
                 .map(StringUtils::cleanText)
                 .filter(Objects::nonNull)
@@ -515,6 +572,7 @@ public class ProductServiceImpl implements ProductService {
         if (colorsById.size() != colorOptionIds.size() || sizesById.size() != sizeOptionIds.size()) {
             throw new AppException(ProductErrorCode.OPTION_NOT_FOUND);
         }
+        return new VariantOptionsValidation(colorsById, sizesById);
     }
 
     private void synchronizeVariants(
@@ -566,7 +624,7 @@ public class ProductServiceImpl implements ProductService {
                 variant.setActive(Boolean.TRUE.equals(request.getActive()));
             }
             variant.setThumbnailMediaId(firstNonBlank(request.getThumbnailMediaId(), request.getMediaId()));
-            variant.setThumbnailUrl(firstNonBlank(request.getThumbnailUrl(), request.getImageUrl()));
+            variant.setThumbnailUrl(StringUtils.cleanText(request.getThumbnailUrl()));
         }
 
         product.getVariants().stream()
@@ -583,7 +641,16 @@ public class ProductServiceImpl implements ProductService {
         assignAttributes(product, requests, validateAttributes(requests));
     }
 
-    private void validateAttributes(List<ProductAttributeValueRequest> requests) {
+    private Map<String, ProductAttribute> validateAttributes(List<ProductAttributeValueRequest> rawRequests) {
+        List<ProductAttributeValueRequest> requests = rawRequests == null ? List.of() : rawRequests;
+
+        for (ProductAttributeValueRequest request : requests) {
+            if (request == null
+                    || StringUtils.cleanText(request.getAttributeId()) == null
+                    || StringUtils.cleanText(request.getValue()) == null) {
+                throw new AppException(ProductErrorCode.PRODUCT_OPTION_INVALID);
+            }
+        }
 
         List<String> attributeIds = requests.stream()
                 .map(ProductAttributeValueRequest::getAttributeId)
@@ -597,14 +664,7 @@ public class ProductServiceImpl implements ProductService {
         if (attributesById.size() != attributeIds.size()) {
             throw new AppException(ProductErrorCode.PRODUCT_ATTRIBUTE_NOT_FOUND);
         }
-
-        for (ProductAttributeValueRequest request : requests) {
-            if (request == null
-                    || StringUtils.cleanText(request.getAttributeId()) == null
-                    || StringUtils.cleanText(request.getValue()) == null) {
-                throw new AppException(ProductErrorCode.PRODUCT_OPTION_INVALID);
-            }
-        }
+        return attributesById;
     }
 
     private void assignAttributes(
@@ -742,6 +802,22 @@ public class ProductServiceImpl implements ProductService {
         } catch (NumberFormatException exception) {
             throw new AppException(ProductErrorCode.INVALID_SEARCH_CRITERIA);
         }
+    }
+
+    /** Option cua variant da tra cuu mot lan, dung lai o buoc ghi. */
+    private record VariantOptionsValidation(
+            Map<String, ColorOption> colorsById,
+            Map<String, SizeOption> sizesById) {
+    }
+
+    /** Gom toan bo ket qua validate cua createProduct de buoc dung aggregate khong query lai. */
+    private record ProductValidation(
+            String slug,
+            BigDecimal basePrice,
+            List<Category> categories,
+            VariantOptionsValidation variantOptions,
+            Map<String, ProductAttribute> attributesById,
+            boolean publishImmediately) {
     }
 
 }

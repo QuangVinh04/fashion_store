@@ -1,4 +1,4 @@
-package com.fashionstore.product.common.outbox;
+package com.fashionstore.clothes_retail_api.common.outbox;
 
 import com.fashionstore.common.messaging.outbox.OutboxEventStatus;
 

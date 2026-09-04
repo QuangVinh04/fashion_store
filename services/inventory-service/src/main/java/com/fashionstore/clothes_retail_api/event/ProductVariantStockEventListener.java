@@ -1,9 +1,8 @@
-package com.fashionstore.product.modules.inventory.event;
+package com.fashionstore.clothes_retail_api.event;
 
 import com.fashionstore.common.messaging.processed.ProcessedMessageService;
-import com.fashionstore.product.config.messaging.RabbitMQNames;
-import com.fashionstore.product.modules.inventory.service.InventoryService;
-import com.fashionstore.product.modules.product.event.ProductVariantStockEvent;
+import com.fashionstore.clothes_retail_api.config.messaging.RabbitMQNames;
+import com.fashionstore.clothes_retail_api.service.InventoryService;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;

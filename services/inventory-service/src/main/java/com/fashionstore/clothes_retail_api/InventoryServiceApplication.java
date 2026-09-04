@@ -1,4 +1,4 @@
-package com.fashionstore.product;
+package com.fashionstore.clothes_retail_api;
 
 import com.fashionstore.common.messaging.processed.EnableProcessedMessages;
 import org.springframework.boot.SpringApplication;

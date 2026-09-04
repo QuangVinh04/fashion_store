@@ -1,8 +1,8 @@
-package com.fashionstore.product.common.outbox;
+package com.fashionstore.clothes_retail_api.common.outbox;
 
 import com.fashionstore.common.messaging.outbox.OutboxEventStatus;
 
-import com.fashionstore.product.config.messaging.RabbitMQNames;
+import com.fashionstore.clothes_retail_api.config.messaging.RabbitMQNames;
 import lombok.RequiredArgsConstructor;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.core.MessageProperties;

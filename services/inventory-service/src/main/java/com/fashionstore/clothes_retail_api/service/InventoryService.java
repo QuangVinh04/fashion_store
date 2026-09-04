@@ -39,4 +39,14 @@ public interface InventoryService {
     /** GET — lấy inventory của nhiều variant (batch, dùng trong product-service) */
     List<InventoryResponse> getByVariantIds(List<String> variantIds);
 
+    /**
+     * Đồng bộ tồn kho khi product-service báo variant thay đổi.
+     * Chỉ cập nhật dòng đã có: ProductVariantStockEvent không mang productId nên
+     * không tạo được dòng mới (productId là NOT NULL).
+     */
+    void upsertStock(String variantId, Integer quantity);
+
+    /** Xoá tồn kho khi variant bị xoá ở product-service. */
+    void deleteStock(String variantId);
+
 }

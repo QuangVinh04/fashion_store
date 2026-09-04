@@ -1,4 +1,4 @@
-package com.fashionstore.product.common.outbox;
+package com.fashionstore.clothes_retail_api.common.outbox;
 
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
