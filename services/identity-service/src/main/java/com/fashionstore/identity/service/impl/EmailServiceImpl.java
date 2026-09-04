@@ -35,27 +35,5 @@ public class EmailServiceImpl implements EmailService {
                 MDC.get("correlationId"),
                 payload
         ));
-        /*
-        try {
-            // Render Thymeleaf template → HTML string
-            Context context = new Context();
-            context.setVariable("fullName", fullName);
-            context.setVariable("verifyLink", frontendUrl + "/verify-email?token=" + token);
-            context.setVariable("verifyCode", token);
-            context.setVariable("expireHours", 24);
-            String htmlContent = templateEngine.process("verify-email", context);
-            // Gửi MimeMessage (HTML)
-            MimeMessage message = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
-            helper.setTo(to);
-            helper.setSubject("Xác nhận email - Fashion Store");
-            helper.setText(htmlContent, true); // true = HTML
-            mailSender.send(message);
-            log.info("Verification email sent to: {}", to);
-        } catch (MessagingException e) {
-            log.error("Failed to send verification email to: {}", to, e);
-            throw new RuntimeException("Không thể gửi email xác nhận", e);
-        }
-        */
     }
 }

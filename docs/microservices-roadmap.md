@@ -1,8 +1,7 @@
 # Fashion Store Microservices Roadmap
 
-Implementation status, verification evidence, and the active backlog are tracked
-in [project-progress.md](project-progress.md). This file describes architecture,
-service ownership, and required patterns.
+The active backlog is tracked in [refactor-plan.md](refactor-plan.md). This file
+describes architecture, service ownership, and required patterns.
 
 ## Target services
 
@@ -20,8 +19,8 @@ service ownership, and required patterns.
 - `services/identity-service`: users, credentials, JWT signing with a private RSA key, and a public JWKS endpoint.
 - `services/notification-service`: asynchronous email delivery.
 - `services/payment-service`: owns payment tables and serializes payment create/cancel commands for each order through RabbitMQ.
-- `services/inventory-service`: standalone service scaffold. It owns inventory tables and consumes `product.variant.stock` through RabbitMQ with idempotent consumers.
-- `services/product-service`: standalone service scaffold. It owns product/category/variant tables and publishes `product.variant.stock` through outbox + RabbitMQ.
+- `services/inventory-service`: standalone service scaffold. It owns inventory tables. The saga reservation consumer is currently missing — see the P0 debt note in [refactor-plan.md](refactor-plan.md).
+- `services/product-service`: standalone service scaffold. It owns product/category/variant tables. Note: it does **not** currently publish `product.variant.stock` — the inventory-side consumer exists but has no producer.
 - `services/cart-service`: standalone service scaffold. It owns cart tables, calls product/inventory through HTTP clients, and uses JWT `userId` for ownership.
 - `services/order-service`: owns checkout/order tables and orchestrates inventory, payment, compensation, and cart cleanup through saga events.
 
@@ -68,9 +67,21 @@ RabbitMQ management UI:
 
 ## Next service boundaries
 
-1. `customer-service`: profile, address, and preferences; credentials stay in identity.
-2. `search-service`: read model fed by product events.
-3. `recommendation-service`: independently deployable recommendation API.
+Planned boundaries only. They have no code and are not part of the Maven reactor.
+The placeholder directories under `services/` were removed; their intent is
+recorded here instead.
+
+1. `customer-service`: planned owner of customer profiles, addresses, preferences,
+   and customer lifecycle data. Authentication credentials remain owned by
+   `identity-service`.
+2. `search-service`: planned read-optimized product search boundary. It should
+   consume product events rather than query the product database directly.
+3. `recommendation-service`: planned recommendation boundary. It may use Python,
+   but its public API and events must be versioned in `packages/api-contracts`.
+
+See [refactor-plan.md](refactor-plan.md) before adding any of these: the current
+decomposition is being consolidated from 8 services down to 5, so a new boundary
+needs to justify its operational cost first.
 
 ## Required patterns
 

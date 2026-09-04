@@ -27,7 +27,11 @@ Active backend modules:
 - `packages/api-contracts`
 
 `customer-service`, `search-service`, and `recommendation-service` are planned
-boundaries and are not part of the Maven reactor yet.
+boundaries with no code yet; they are described in
+[docs/microservices-roadmap.md](docs/microservices-roadmap.md).
+
+The service decomposition is being consolidated from 8 services down to 5 — see
+[docs/refactor-plan.md](docs/refactor-plan.md) for the prioritised plan.
 
 ## Build
 
@@ -55,7 +59,7 @@ All public HTTP traffic enters through the gateway at `http://localhost:8080`.
 ## Project documentation
 
 - [Architecture roadmap](docs/microservices-roadmap.md)
-- [Implementation progress and completion log](docs/project-progress.md)
+- [Service consolidation plan](docs/refactor-plan.md)
 
 ## Service conventions
 
