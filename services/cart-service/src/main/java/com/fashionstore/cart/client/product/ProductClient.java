@@ -20,16 +20,16 @@ public class ProductClient {
     ProductFeignClient productFeignClient;
 
 
-    @CircuitBreaker(name = "product-service", fallbackMethod = "getVariantFallback")
+    @CircuitBreaker(name = "productService", fallbackMethod = "getVariantFallback")
     @Retry(name = "productService")
     public ProductVariantDto getVariant(String variantId) {
-        return productFeignClient.getVariant(variantId);
+        return productFeignClient.getVariant(variantId).getData();
     }
 
-    @CircuitBreaker(name = "product-service", fallbackMethod = "getVariantsBatchFallback")
+    @CircuitBreaker(name = "productService", fallbackMethod = "getVariantsBatchFallback")
     @Retry(name = "productService")
     public List<ProductVariantDto> getVariantsBatch(List<String> variantIds) {
-        return productFeignClient.getVariantsBatch(variantIds);
+        return productFeignClient.getVariantsBatch(variantIds).getData();
     }
 
 

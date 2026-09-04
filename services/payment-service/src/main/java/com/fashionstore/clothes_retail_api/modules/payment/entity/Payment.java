@@ -26,6 +26,10 @@ public class Payment extends AuditedEntity {
     @Column(name = "user_id", nullable = false)
     String userId;
 
+    /** correlationId của saga đã yêu cầu thanh toán, để mọi event trả về đúng saga instance. */
+    @Column(name = "saga_id", length = 36)
+    String sagaId;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "method", nullable = false, length = 20)
     PaymentMethod method;
@@ -41,6 +45,10 @@ public class Payment extends AuditedEntity {
 
     @Column(name = "amount", nullable = false, precision = 19, scale = 2)
     BigDecimal amount;
+
+    /** Đơn vị tiền tệ của {@code amount}, echo lại từ AuthorizePaymentCommand. */
+    @Column(name = "currency", length = 3)
+    String currency;
 
     @Column(name = "provider_amount", precision = 19, scale = 2)
     BigDecimal providerAmount;

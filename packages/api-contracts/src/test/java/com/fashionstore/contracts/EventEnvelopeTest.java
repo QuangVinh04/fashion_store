@@ -1,5 +1,6 @@
 package com.fashionstore.contracts;
 
+import com.fashionstore.contracts.common.EventEnvelope;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;

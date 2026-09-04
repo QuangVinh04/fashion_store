@@ -27,18 +27,22 @@ public interface ProductRepository extends JpaRepository<Product, String>, JpaSp
             "brand",
             "productCategories.category",
             "variants",
+            "variants.colorOption",
+            "variants.sizeOption",
             "images",
             "attributeValues.attribute"
     })
     Optional<Product> findDetailProductById(String id);
 
-    @EntityGraph(attributePaths = {"variants"})
+    @EntityGraph(attributePaths = {"variants", "variants.colorOption", "variants.sizeOption"})
     Optional<Product> findProductWithVariantsById(String id);
 
     @EntityGraph(attributePaths = {
             "brand",
             "productCategories.category",
             "variants",
+            "variants.colorOption",
+            "variants.sizeOption",
             "images",
             "attributeValues.attribute"
     })
@@ -48,6 +52,8 @@ public interface ProductRepository extends JpaRepository<Product, String>, JpaSp
             "brand",
             "productCategories.category",
             "variants",
+            "variants.colorOption",
+            "variants.sizeOption",
             "images",
             "attributeValues.attribute"
     })

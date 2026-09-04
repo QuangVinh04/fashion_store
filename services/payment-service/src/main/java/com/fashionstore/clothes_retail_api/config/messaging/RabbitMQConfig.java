@@ -9,6 +9,7 @@ import org.springframework.amqp.rabbit.connection.ConnectionFactory;
 import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
 import org.springframework.amqp.support.converter.MessageConverter;
 import org.springframework.context.annotation.Bean;
+import com.fashionstore.contracts.common.EventTypes;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
@@ -42,7 +43,7 @@ public class RabbitMQConfig {
                                     DirectExchange fashionEventsExchange) {
         return BindingBuilder.bind(paymentSagaCommandQueue)
                 .to(fashionEventsExchange)
-                .with(RabbitMQNames.PAYMENT_REQUESTED_ROUTING_KEY);
+                .with(EventTypes.PAYMENT_REQUESTED);
     }
 
     @Bean
@@ -52,7 +53,17 @@ public class RabbitMQConfig {
     ) {
         return BindingBuilder.bind(paymentSagaCommandQueue)
                 .to(fashionEventsExchange)
-                .with(RabbitMQNames.PAYMENT_CANCELLATION_REQUESTED_ROUTING_KEY);
+                .with(EventTypes.PAYMENT_CANCELLATION_REQUESTED);
+    }
+
+    @Bean
+    Binding paymentRefundRequestedBinding(
+            Queue paymentSagaCommandQueue,
+            DirectExchange fashionEventsExchange
+    ) {
+        return BindingBuilder.bind(paymentSagaCommandQueue)
+                .to(fashionEventsExchange)
+                .with(EventTypes.PAYMENT_REFUND_REQUESTED);
     }
 
     @Bean

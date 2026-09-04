@@ -31,4 +31,7 @@ public interface ProductService {
     ProductResponse archiveProduct(String productId);
     PageResponse<List<ProductSummaryResponse>> advanceSearchWithSpecifications (Pageable pageable, String[] product);
     ProductVariantSnapshotResponse getProductVariantSnapshot(String variantId);
+
+    /** Dùng bởi cart-service để enrich nhiều item trong 1 lượt gọi, tránh N+1 khi hiển thị giỏ hàng. */
+    List<ProductVariantSnapshotResponse> getProductVariantSnapshots(List<String> variantIds);
 }

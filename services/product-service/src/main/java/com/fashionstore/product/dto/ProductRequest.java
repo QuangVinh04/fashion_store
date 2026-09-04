@@ -13,7 +13,6 @@ import lombok.experimental.FieldDefaults;
 
 import java.math.BigDecimal;
 import java.util.List;
-import java.util.Map;
 
 @Getter
 @Setter
@@ -46,7 +45,6 @@ public class ProductRequest {
 
     ProductType productType;
 
-    @NonNull
     @DecimalMin(value = "0.0", inclusive = true, message = "Base price cannot be negative")
     BigDecimal basePrice;
 
@@ -72,12 +70,10 @@ public class ProductRequest {
     String categoryId;
 
     @Valid
+    @NotEmpty(message = "At least one product variant is required")
     List<ProductVariantRequest> variants;
 
-    List<String> colors;
-
-    List<String> sizes;
-
-    Map<String, String> colorHexMap;
+    @Valid
+    List<ProductAttributeValueRequest> attributes;
 
 }

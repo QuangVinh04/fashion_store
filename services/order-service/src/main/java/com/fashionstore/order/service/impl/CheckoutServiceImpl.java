@@ -10,10 +10,10 @@ import com.fashionstore.order.dto.CheckoutItemResponse;
 import com.fashionstore.order.dto.CheckoutResponse;
 import com.fashionstore.order.dto.CreateCheckoutRequest;
 import com.fashionstore.order.dto.UpdateCheckoutRequest;
-import com.fashionstore.order.entity.Checkout;
-import com.fashionstore.order.entity.CheckoutItem;
-import com.fashionstore.order.entity.CheckoutStatus;
-import com.fashionstore.order.entity.ShippingMethod;
+import com.fashionstore.order.model.Checkout;
+import com.fashionstore.order.model.CheckoutItem;
+import com.fashionstore.order.model.enumeration.CheckoutStatus;
+import com.fashionstore.order.model.enumeration.ShippingMethod;
 import com.fashionstore.order.repository.CheckoutRepository;
 import com.fashionstore.order.service.CheckoutService;
 import com.fashionstore.common.payment.PaymentMethod;
@@ -134,6 +134,25 @@ public class CheckoutServiceImpl implements CheckoutService {
                 .stream()
                 .map(this::toResponse)
                 .toList();
+    }
+
+    @Override
+    @Transactional
+    public CheckoutResponse cancelCheckout(String checkoutId) {
+        String userId = currentUserProvider.getCurrentUserId();
+        Checkout checkout = checkoutRepository.findByIdAndUserId(checkoutId, userId)
+                .orElseThrow(() -> new AppException(ErrorCode.CHECKOUT_NOT_FOUND));
+
+        if (checkout.getStatus() == CheckoutStatus.CANCELLED) {
+            return toResponse(checkout);   // hủy hai lần vẫn ra cùng kết quả
+        }
+        // Checkout đã sinh đơn thì việc hủy thuộc về đơn, không thuộc về checkout.
+        if (checkout.getStatus() == CheckoutStatus.COMPLETED || checkout.getOrder() != null) {
+            throw new AppException(ErrorCode.CHECKOUT_STATUS_INVALID);
+        }
+
+        checkout.setStatus(CheckoutStatus.CANCELLED);
+        return toResponse(checkoutRepository.save(checkout));
     }
 
     private BigDecimal toLineTotal(CartItemServiceResponse item) {

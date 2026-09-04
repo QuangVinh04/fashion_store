@@ -1,7 +1,10 @@
 package com.fashionstore.order.repository;
 
-import com.fashionstore.order.entity.Order;
+import com.fashionstore.order.model.Order;
+import com.fashionstore.order.model.enumeration.OrderStatus;
 import jakarta.persistence.LockModeType;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -9,12 +12,9 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.Optional;
-import java.time.LocalDateTime;
-import java.util.List;
-
-import com.fashionstore.order.entity.OrderStatus;
 
 public interface OrderRepository extends JpaRepository<Order, String> {
+
     @EntityGraph(attributePaths = {"items"})
     Optional<Order> findWithItemsById(String id);
 
@@ -25,6 +25,12 @@ public interface OrderRepository extends JpaRepository<Order, String> {
     @Query("select orders from Order orders where orders.id = :id")
     Optional<Order> findByIdForUpdate(@Param("id") String id);
 
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
-    List<Order> findByStatusAndUpdatedAtBefore(OrderStatus status, LocalDateTime cutoff);
+    // Danh sách trả về bản rút gọn nên cố tình không nạp items: nạp collection cùng phân trang
+    // sẽ khiến Hibernate phân trang trong bộ nhớ.
+
+    Page<Order> findByUserId(String userId, Pageable pageable);
+
+    Page<Order> findByUserIdAndStatus(String userId, OrderStatus status, Pageable pageable);
+
+    Page<Order> findByStatus(OrderStatus status, Pageable pageable);
 }

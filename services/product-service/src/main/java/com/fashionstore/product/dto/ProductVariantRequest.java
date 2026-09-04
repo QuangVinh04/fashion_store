@@ -1,6 +1,7 @@
 package com.fashionstore.product.dto;
 
 import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.NotBlank;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -20,13 +21,11 @@ import java.math.BigDecimal;
 public class ProductVariantRequest {
     String id;
 
-    String variantId;
+    @NotBlank(message = "Size option id is required")
+    String sizeOptionId;
 
-    String size;
-
-    String color;
-
-    String colorHex;
+    @NotBlank(message = "Color option id is required")
+    String colorOptionId;
 
     String sku;
 
@@ -45,5 +44,4 @@ public class ProductVariantRequest {
     String thumbnailUrl;
 
     String mediaId;
-    String imageUrl;
 }

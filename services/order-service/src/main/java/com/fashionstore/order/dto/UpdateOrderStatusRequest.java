@@ -1,6 +1,6 @@
 package com.fashionstore.order.dto;
 
-import com.fashionstore.order.entity.OrderStatus;
+import com.fashionstore.order.model.enumeration.OrderStatus;
 import jakarta.validation.constraints.NotNull;
 import lombok.*;
 import lombok.experimental.FieldDefaults;

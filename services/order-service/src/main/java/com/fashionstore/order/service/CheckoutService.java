@@ -7,6 +7,7 @@ import com.fashionstore.order.dto.UpdateCheckoutRequest;
 import java.util.List;
 
 public interface CheckoutService {
+
     CheckoutResponse createCheckout(CreateCheckoutRequest request);
 
     CheckoutResponse updateCheckout(String checkoutId, UpdateCheckoutRequest request);
@@ -14,4 +15,6 @@ public interface CheckoutService {
     CheckoutResponse getCheckoutById(String checkoutId);
 
     List<CheckoutResponse> getMyCheckouts();
+
+    CheckoutResponse cancelCheckout(String checkoutId);
 }

@@ -2,8 +2,8 @@ package com.fashionstore.order.dto;
 
 import com.fashionstore.common.payment.PaymentMethod;
 import com.fashionstore.common.payment.PaymentProvider;
-import com.fashionstore.order.entity.CheckoutStatus;
-import com.fashionstore.order.entity.ShippingMethod;
+import com.fashionstore.order.model.enumeration.CheckoutStatus;
+import com.fashionstore.order.model.enumeration.ShippingMethod;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 

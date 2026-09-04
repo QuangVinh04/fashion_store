@@ -21,6 +21,12 @@ spring:
           initial-interval: 1000
           max-attempts: 3
           multiplier: 2
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      timeout: 2000ms
+
   jpa:
     database: postgresql
     hibernate:
@@ -40,11 +46,14 @@ app:
     cart-base-url: ${CART_BASE_URL:http://localhost:8088}
     inventory-base-url: ${INVENTORY_BASE_URL:http://localhost:8086}
   outbox:
-    relay-delay-ms: ${OUTBOX_RELAY_DELAY_MS:5000}
+    publisher-delay-ms: ${OUTBOX_PUBLISHER_DELAY_MS:15000}
   saga:
-    timeout-scan-delay-ms: ${SAGA_TIMEOUT_SCAN_DELAY_MS:60000}
-    inventory-timeout-seconds: ${SAGA_INVENTORY_TIMEOUT_SECONDS:300}
-    payment-timeout-seconds: ${SAGA_PAYMENT_TIMEOUT_SECONDS:900}
+    # Deadline của từng bước nằm trong OrderSagaStep; ở đây chỉ là nhịp quét.
+    timeout-scan-delay-ms: ${SAGA_TIMEOUT_SCAN_DELAY_MS:15000}
+  checkout:
+    # Hạn sống của một bản chụp giá, tính từ lúc tạo checkout.
+    ttl-minutes: ${CHECKOUT_TTL_MINUTES:30}
+    expiry-scan-delay-ms: ${CHECKOUT_EXPIRY_SCAN_DELAY_MS:300000}
 
 management:
   endpoints:

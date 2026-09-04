@@ -5,11 +5,10 @@ import com.fashionstore.product.modules.inventory.entity.InventoryReservation;
 import com.fashionstore.product.modules.inventory.entity.InventoryReservationStatus;
 import com.fashionstore.product.modules.inventory.repository.InventoryRepository;
 import com.fashionstore.product.modules.inventory.repository.InventoryReservationRepository;
-import com.fashionstore.contracts.EventEnvelope;
-import com.fashionstore.contracts.EventTypes;
-import com.fashionstore.contracts.inventory.InventoryItem;
-import com.fashionstore.contracts.inventory.InventoryReservationCommand;
-import com.fashionstore.contracts.inventory.InventoryReservationRequested;
+import com.fashionstore.contracts.common.EventEnvelope;
+import com.fashionstore.contracts.common.EventTypes;
+import com.fashionstore.contracts.inventory.command.InventoryItem;
+import com.fashionstore.contracts.inventory.command.ReservationInventoryCommand;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -66,7 +65,7 @@ class InventoryReservationServiceTest {
             return reservation;
         });
 
-        service.reserve(new InventoryReservationRequested(
+        service.reserve(new ReservationInventoryCommand(
                 "order-1",
                 "user-1",
                 List.of(new InventoryItem("variant-1", 2), new InventoryItem("variant-1", 3))
@@ -105,7 +104,7 @@ class InventoryReservationServiceTest {
             return reservation;
         });
 
-        service.reserve(new InventoryReservationRequested(
+        service.reserve(new ReservationInventoryCommand(
                 "order-2",
                 "user-1",
                 List.of(new InventoryItem("variant-1", 2))
@@ -147,7 +146,7 @@ class InventoryReservationServiceTest {
                 .thenReturn(Optional.of(inventory));
 
         service.confirm(
-                new InventoryReservationCommand("order-1", "reservation-1"),
+                new ReservationInventoryCommand("order-1", "reservation-1"),
                 "correlation-1"
         );
 
@@ -174,7 +173,7 @@ class InventoryReservationServiceTest {
                 .thenReturn(Optional.of(inventory));
 
         service.release(
-                new InventoryReservationCommand("order-1", "reservation-1"),
+                new ReservationInventoryCommand("order-1", "reservation-1"),
                 "correlation-1"
         );
 

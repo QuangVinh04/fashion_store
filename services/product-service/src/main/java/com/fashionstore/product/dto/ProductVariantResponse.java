@@ -29,6 +29,8 @@ public class ProductVariantResponse {
     String optionSignature;
     String displayName;
     String thumbnailMediaId;
+    String sizeOptionId;
+    String colorOptionId;
     String size;
     String color;
     String colorHex;

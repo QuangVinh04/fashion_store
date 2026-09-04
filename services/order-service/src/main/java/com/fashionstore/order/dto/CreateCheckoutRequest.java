@@ -2,7 +2,7 @@ package com.fashionstore.order.dto;
 
 import com.fashionstore.common.payment.PaymentMethod;
 import com.fashionstore.common.payment.PaymentProvider;
-import com.fashionstore.order.entity.ShippingMethod;
+import com.fashionstore.order.model.enumeration.ShippingMethod;
 import jakarta.validation.constraints.NotNull;
 import lombok.*;
 import lombok.experimental.FieldDefaults;

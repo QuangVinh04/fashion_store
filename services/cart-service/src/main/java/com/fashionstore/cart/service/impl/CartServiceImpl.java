@@ -1,32 +1,34 @@
 package com.fashionstore.cart.service.impl;
 
-import com.fashionstore.cart.dto.inventory.InventoryDto;
-import com.fashionstore.cart.dto.product.ProductVariantDto;
-import com.fashionstore.cart.model.enumeration.CartStatus;
-import com.fashionstore.common.exception.AppException;
-import com.fashionstore.cart.exception.CartErrorCode;
-import com.fashionstore.common.exception.ErrorCode;
-import com.fashionstore.common.security.CurrentUserProvider;
+import com.fashionstore.cart.client.inventory.InventoryClient;
+import com.fashionstore.cart.client.product.ProductClient;
 import com.fashionstore.cart.dto.cart.AddToCartRequest;
+import com.fashionstore.cart.dto.cart.CartItemResponse;
 import com.fashionstore.cart.dto.cart.CartResponse;
 import com.fashionstore.cart.dto.cart.UpdateCartRequest;
+import com.fashionstore.cart.dto.inventory.StockCheckItem;
+import com.fashionstore.cart.dto.inventory.StockCheckResult;
+import com.fashionstore.cart.dto.product.ProductVariantDto;
+import com.fashionstore.cart.exception.CartErrorCode;
+import com.fashionstore.cart.mapper.CartMapper;
 import com.fashionstore.cart.model.Cart;
 import com.fashionstore.cart.model.CartItem;
-import com.fashionstore.cart.mapper.CartMapper;
+import com.fashionstore.cart.model.enumeration.CartStatus;
 import com.fashionstore.cart.repository.CartItemRepository;
 import com.fashionstore.cart.repository.CartRepository;
 import com.fashionstore.cart.service.CartService;
-import com.fashionstore.cart.client.inventory.InventoryClient;
-import com.fashionstore.cart.client.product.ProductClient;
+import com.fashionstore.common.exception.AppException;
+import com.fashionstore.common.exception.ErrorCode;
+import com.fashionstore.common.security.CurrentUserProvider;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -50,13 +52,8 @@ public class CartServiceImpl implements CartService {
     public CartResponse getMyCart() {
         String userId = currentUserProvider.getCurrentUserId();
 
-        List<Cart> carts = cartRepository.findByUserIdAndStatus(userId, CartStatus.ACTIVE);
-
-        if (carts.size() > 1) {
-            throw new AppException(CartErrorCode.MULTIPLE_ACTIVE_CARTS);
-        }
-
-        if (carts.isEmpty()) {
+        Cart cart = cartRepository.findByUserIdAndStatus(userId, CartStatus.ACTIVE).orElse(null);
+        if (cart == null) {
             return CartResponse.builder()
                     .userId(userId)
                     .items(List.of())
@@ -65,11 +62,8 @@ public class CartServiceImpl implements CartService {
                     .build();
         }
 
-        Cart cart = carts.getFirst();
-
         CartResponse response = cartMapper.toCartResponse(cart);
         enrichCartItems(response, cart);
-
         return response;
     }
 
@@ -77,7 +71,6 @@ public class CartServiceImpl implements CartService {
     @Transactional
     public CartResponse addToCart(AddToCartRequest request) {
         String userId = currentUserProvider.getCurrentUserId();
-
 
         ProductVariantDto variant = productClient.getVariant(request.getVariantId());
 
@@ -90,26 +83,22 @@ public class CartServiceImpl implements CartService {
         int existingQty = existingItem != null ? existingItem.getQuantity() : 0;
         int totalQty = existingQty + request.getQuantity();
 
-        InventoryDto inventory = inventoryClient
-                .getInventoryBatch(request.getVariantId());
-
-        if(!inventory.hasEnoughStock(totalQty)) {
-            log.warn("[Cart] insufficient stock — variantId={}, available={}, requested={}",
-                    request.getVariantId(), inventory.getQuantityAvailable(), totalQty);
+        StockCheckResult stock = inventoryClient.checkStock(
+                List.of(new StockCheckItem(request.getVariantId(), totalQty)));
+        if (!stock.hasEnoughStock(request.getVariantId(), totalQty)) {
+            log.warn("[Cart] insufficient stock — variantId={}, requested={}",
+                    request.getVariantId(), totalQty);
             throw new AppException(CartErrorCode.STOCK_INSUFFICIENT);
         }
 
-
-        if(existingItem != null) {
+        if (existingItem != null) {
             existingItem.setQuantity(totalQty);
             existingItem.setUnitPrice(variant.getPrice());
-        }
-
-        else{
+        } else {
             CartItem cartItem = CartItem.builder()
                     .cart(cart)
                     .productId(variant.getProductId())
-                    .variantId(variant.getId())
+                    .variantId(variant.getVariantId())
                     .quantity(request.getQuantity())
                     .unitPrice(variant.getPrice())
                     .build();
@@ -131,18 +120,16 @@ public class CartServiceImpl implements CartService {
                 .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_FOUND));
 
         Cart cart = item.getCart();
-        validateCartOwnership(item.getCart(), userId);
+        validateCartOwnership(cart, userId);
 
-        InventoryDto inventory = inventoryClient
-                .getInventoryBatch(item.getVariantId());
-
-        if(!inventory.hasEnoughStock(request.getQuantity())) {
+        StockCheckResult stock = inventoryClient.checkStock(
+                List.of(new StockCheckItem(item.getVariantId(), request.getQuantity())));
+        if (!stock.hasEnoughStock(item.getVariantId(), request.getQuantity())) {
             throw new AppException(CartErrorCode.STOCK_INSUFFICIENT);
         }
 
         ProductVariantDto variant = productClient.getVariant(item.getVariantId());
 
-        // 3. Cập nhật
         item.setQuantity(request.getQuantity());
         item.setUnitPrice(variant.getPrice()); // sync giá mới nhất
 
@@ -180,18 +167,9 @@ public class CartServiceImpl implements CartService {
                 .orElseThrow(() -> new AppException(CartErrorCode.CART_NOT_ACTIVE));
 
         cart.getItems().clear();
-        cartRepository.save(cart);
+        Cart saved = cartRepository.save(cart);
 
-        return CartResponse.builder()
-                .id(cart.getId())
-                .userId(userId)
-                .items(List.of())
-                .totalPrice(BigDecimal.ZERO)
-                .totalQuantity(0)
-                .createdAt(cart.getCreatedAt())
-                .updatedAt(cart.getUpdatedAt())
-                .build();
-
+        return cartMapper.toCartResponse(saved);
     }
 
 
@@ -204,19 +182,29 @@ public class CartServiceImpl implements CartService {
         }
     }
 
-
+    /**
+     * Enrich cả tên/size/color/sku (từ product-service) lẫn cờ còn hàng hay không (từ inventory-service),
+     * mỗi loại đúng 1 lượt gọi cho toàn bộ giỏ hàng thay vì N+1. Cả hai đều có circuit breaker riêng nên
+     * một bên chết không kéo bên kia theo — cart luôn hiển thị được từ dữ liệu đã lưu trong DB.
+     */
     private void enrichCartItems(CartResponse response, Cart cart) {
-        if (cart.getItems().isEmpty()) return;
+        if (cart.getItems().isEmpty()) {
+            return;
+        }
 
+        List<String> variantIds = cart.getItems().stream()
+                .map(CartItem::getVariantId)
+                .toList();
+
+        enrichProductInfo(response, variantIds);
+        enrichAvailability(response, cart, variantIds);
+    }
+
+    private void enrichProductInfo(CartResponse response, List<String> variantIds) {
         try {
-            List<String> variantIds = cart.getItems().stream()
-                    .map(CartItem::getVariantId)
-                    .toList();
-
             List<ProductVariantDto> variants = productClient.getVariantsBatch(variantIds);
-
             Map<String, ProductVariantDto> variantMap = variants.stream()
-                    .collect(Collectors.toMap(ProductVariantDto::getId, Function.identity()));
+                    .collect(Collectors.toMap(ProductVariantDto::getVariantId, Function.identity()));
 
             response.getItems().forEach(itemResp -> {
                 ProductVariantDto variant = variantMap.get(itemResp.getVariantId());
@@ -230,27 +218,44 @@ public class CartServiceImpl implements CartService {
         } catch (Exception e) {
             // product-service down → trả về cart data từ DB, không fail cả request
             log.warn("[Cart] Could not enrich cart items from product-service: {}", e.getMessage());
-            response.getItems().forEach(item -> item.setAvailable(null)); // null = unknown
+        }
+    }
+
+    private void enrichAvailability(CartResponse response, Cart cart, List<String> variantIds) {
+        try {
+            List<StockCheckItem> items = cart.getItems().stream()
+                    .map(item -> new StockCheckItem(item.getVariantId(), item.getQuantity()))
+                    .toList();
+            StockCheckResult stock = inventoryClient.checkStock(items);
+
+            response.getItems().forEach(itemResp ->
+                    itemResp.setAvailable(stock.hasEnoughStock(itemResp.getVariantId(), itemResp.getQuantity())));
+        } catch (Exception e) {
+            log.warn("[Cart] Could not check stock availability: {}", e.getMessage());
+            response.getItems().forEach(item -> item.setAvailable(null)); // null = không biết được
         }
     }
 
     private Cart getOrCreateActiveCart(String userId) {
-        List<Cart> activeCarts = cartRepository.findByUserIdAndStatus(userId, CartStatus.ACTIVE);
-
-        if (!activeCarts.isEmpty()) {
-            return activeCarts.stream()
-                    .max(Comparator.comparing(Cart::getCreatedAt))
-                    .orElseThrow();
-        }
-
-        Cart newCart = Cart.builder()
-                .userId(userId)
-                .status(CartStatus.ACTIVE)
-                .build();
-
-        Cart saved = cartRepository.save(newCart);
-        log.info("[Cart] created new cart — cartId={}, userId={}", saved.getId(), userId);
-        return saved;
+        return cartRepository.findByUserIdAndStatus(userId, CartStatus.ACTIVE)
+                .orElseGet(() -> createCart(userId));
     }
 
+    /**
+     * {@code cart.user_id} là unique nên hai request đồng thời tạo cart cho cùng user lần đầu có thể đua
+     * nhau ghi — bên thua cuộc bắt {@link DataIntegrityViolationException} rồi đọc lại thay vì để lộ lỗi.
+     */
+    private Cart createCart(String userId) {
+        try {
+            Cart saved = cartRepository.save(Cart.builder()
+                    .userId(userId)
+                    .status(CartStatus.ACTIVE)
+                    .build());
+            log.info("[Cart] created new cart — cartId={}, userId={}", saved.getId(), userId);
+            return saved;
+        } catch (DataIntegrityViolationException e) {
+            return cartRepository.findByUserIdAndStatus(userId, CartStatus.ACTIVE)
+                    .orElseThrow(() -> e);
+        }
+    }
 }

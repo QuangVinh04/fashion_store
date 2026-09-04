@@ -43,9 +43,24 @@ app:
 resilience4j:
   retry:
     instances:
-      product-service:
+      productService:
         max-attempts: 3
         wait-duration: 500ms
+      inventoryService:
+        max-attempts: 3
+        wait-duration: 500ms
+  circuitbreaker:
+    instances:
+      productService:
+        sliding-window-size: 20
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+        permitted-number-of-calls-in-half-open-state: 5
+      inventoryService:
+        sliding-window-size: 20
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+        permitted-number-of-calls-in-half-open-state: 5
 
 
 management:

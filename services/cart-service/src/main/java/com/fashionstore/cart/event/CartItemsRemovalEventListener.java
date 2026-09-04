@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fashionstore.common.messaging.processed.ProcessedMessageService;
 import com.fashionstore.cart.config.RabbitMQConfig;
 import com.fashionstore.cart.repository.CartItemRepository;
-import com.fashionstore.contracts.EventEnvelope;
+import com.fashionstore.contracts.common.EventEnvelope;
 import com.fashionstore.contracts.cart.CartItemsRemovalRequested;
 import lombok.RequiredArgsConstructor;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;

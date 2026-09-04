@@ -6,9 +6,10 @@ import com.fashionstore.product.modules.payment.dto.PaymentCallbackResult;
 import com.fashionstore.product.modules.payment.dto.PaymentResponse;
 import com.fashionstore.product.modules.payment.entity.Payment;
 import com.fashionstore.product.modules.payment.entity.PaymentStatus;
-import com.fashionstore.contracts.EventEnvelope;
-import com.fashionstore.contracts.EventTypes;
-import com.fashionstore.contracts.payment.PaymentResult;
+import com.fashionstore.contracts.common.EventEnvelope;
+import com.fashionstore.contracts.common.EventTypes;
+import com.fashionstore.contracts.payment.event.PaymentFailedEvent;
+import com.fashionstore.contracts.payment.event.PaymentSuccessEvent;
 import com.fashionstore.product.modules.payment.mapper.PaymentResponseMapper;
 import com.fashionstore.product.modules.payment.repository.PaymentRepository;
 import com.fashionstore.product.modules.payment.service.PaymentStateService;
@@ -68,8 +69,8 @@ public class PaymentStateServiceImpl implements PaymentStateService {
             eventPublisher.publishEvent(EventEnvelope.v1(
                     EventTypes.PAYMENT_COMPLETED,
                     payment.getOrderId(),
-                    payment.getOrderId(),
-                    new PaymentResult(payment.getOrderId(), payment.getId(), null)
+                    correlationId(payment),
+                    new PaymentSuccessEvent(payment.getOrderId(), payment.getId())
             ));
             return;
         }
@@ -78,9 +79,17 @@ public class PaymentStateServiceImpl implements PaymentStateService {
             eventPublisher.publishEvent(EventEnvelope.v1(
                     EventTypes.PAYMENT_FAILED,
                     payment.getOrderId(),
-                    payment.getOrderId(),
-                    new PaymentResult(payment.getOrderId(), payment.getId(), payment.getFailureReason())
+                    correlationId(payment),
+                    new PaymentFailedEvent(payment.getOrderId(), payment.getId(), payment.getFailureReason())
             ));
         }
+    }
+
+    /**
+     * Event sinh ra từ callback của cổng thanh toán vẫn phải mang sagaId, nếu không order-service tra không
+     * thấy saga và lặng lẽ bỏ qua reply.
+     */
+    private String correlationId(Payment payment) {
+        return payment.getSagaId() == null ? payment.getOrderId() : payment.getSagaId();
     }
 }

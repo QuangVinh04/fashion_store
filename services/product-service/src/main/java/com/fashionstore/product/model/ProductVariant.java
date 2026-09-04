@@ -1,6 +1,8 @@
 package com.fashionstore.product.model;
 
 import com.fashionstore.common.persistence.BaseEntity;
+import com.fashionstore.product.model.option.ColorOption;
+import com.fashionstore.product.model.option.SizeOption;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -48,10 +50,28 @@ public class ProductVariant extends BaseEntity {
     @Column(name = "display_name", nullable = false, length = 255)
     String displayName; // "Đỏ / S" — build từ combination values
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "color_option_id")
+    ColorOption colorOption;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "size_option_id")
+    SizeOption sizeOption;
+
+    @Column(name = "color")
+    String colorDisplay;  // copy từ colorOption.name lúc tạo
+
+    @Column(name = "size")
+    String sizeDisplay;
+
+    @Column(name = "color_hex", length = 20)
+    String colorHex;
+
     String sku;
     String barcode;
     BigDecimal price;
     BigDecimal salePrice;
+
 
     @Builder.Default
     Boolean active = false;
@@ -61,5 +81,37 @@ public class ProductVariant extends BaseEntity {
 
     @Column(name = "thumbnail_url")
     String thumbnailUrl;
+
+    public String getColor() {
+        return colorDisplay != null ? colorDisplay : colorOption == null ? null : colorOption.getName();
+    }
+
+    public void setColor(String color) {
+        this.colorDisplay = color;
+    }
+
+    public String getSize() {
+        return sizeDisplay != null ? sizeDisplay : sizeOption == null ? null : sizeOption.getName();
+    }
+
+    public void setSize(String size) {
+        this.sizeDisplay = size;
+    }
+
+    public String getColorHex() {
+        return colorHex != null ? colorHex : colorOption == null ? null : colorOption.getColorHex();
+    }
+
+    public static class ProductVariantBuilder {
+        public ProductVariantBuilder color(String color) {
+            this.colorDisplay = color;
+            return this;
+        }
+
+        public ProductVariantBuilder size(String size) {
+            this.sizeDisplay = size;
+            return this;
+        }
+    }
 
 }

@@ -18,12 +18,10 @@ public interface ProductVariantRepository extends JpaRepository<ProductVariant, 
     @EntityGraph(attributePaths = {"product"})
     Optional<ProductVariant> findBySku(String sku);
 
-    boolean existsBySku(String sku);
-
-    boolean existsByProductIdAndOptionSignature(String productId, String optionSignature);
+    
 
     List<ProductVariant> findByProductId(String productId);
 
-    List<ProductVariant> findAllBySkuIn(List<String> skus);
+    boolean existsBySkuAndActiveIsTrue(String sku);
 }
 

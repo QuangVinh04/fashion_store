@@ -25,6 +25,10 @@ public interface ProductMapper {
     @Mapping(target = "brand", ignore = true)
     @Mapping(target = "sizeChartId", ignore = true)
     @Mapping(target = "slug", ignore = true)
+    @Mapping(target = "variants", ignore = true)
+    @Mapping(target = "images", ignore = true)
+    @Mapping(target = "productCategories", ignore = true)
+    @Mapping(target = "attributeValues", ignore = true)
     Product toProduct(ProductRequest productRequest);
 
 
@@ -121,6 +125,8 @@ public interface ProductMapper {
                 .optionSignature(variant.getOptionSignature())
                 .displayName(variant.getDisplayName())
                 .thumbnailMediaId(variant.getThumbnailMediaId())
+                .sizeOptionId(variant.getSizeOption() == null ? null : variant.getSizeOption().getId())
+                .colorOptionId(variant.getColorOption() == null ? null : variant.getColorOption().getId())
                 .size(variant.getSize())
                 .color(variant.getColor())
                 .colorHex(variant.getColorHex())

@@ -88,6 +88,17 @@ public class ProductController {
                 .build();
     }
 
+    /** cart-service gọi khi hiển thị giỏ hàng — 1 lượt gọi cho toàn bộ item thay vì N+1. */
+    @GetMapping("/api/v1/products/variants/batch")
+    public ApiResponse<List<ProductVariantSnapshotResponse>> getVariantSnapshots(
+            @RequestParam List<String> variantIds
+    ) {
+        return ApiResponse.<List<ProductVariantSnapshotResponse>>builder()
+                .message("Get product variant snapshots successfully")
+                .data(productService.getProductVariantSnapshots(variantIds))
+                .build();
+    }
+
     @GetMapping({"/api/v1/products/{id}/variants", "/api/v1/product/{id}/variants"})
     public ApiResponse<List<ProductVariantResponse>> getVariants(@PathVariable String id) {
         return ApiResponse.<List<ProductVariantResponse>>builder()

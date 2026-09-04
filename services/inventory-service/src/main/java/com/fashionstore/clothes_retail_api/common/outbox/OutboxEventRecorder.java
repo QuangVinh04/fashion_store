@@ -1,7 +1,7 @@
 package com.fashionstore.product.common.outbox;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fashionstore.contracts.EventEnvelope;
+import com.fashionstore.contracts.common.EventEnvelope;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;

@@ -9,6 +9,7 @@ import org.springframework.amqp.rabbit.connection.ConnectionFactory;
 import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
 import org.springframework.amqp.support.converter.MessageConverter;
 import org.springframework.context.annotation.Bean;
+import com.fashionstore.contracts.common.EventTypes;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
@@ -54,7 +55,7 @@ public class RabbitMQConfig {
     ) {
         return BindingBuilder.bind(inventoryReservationRequestedQueue)
                 .to(fashionEventsExchange)
-                .with(RabbitMQNames.INVENTORY_RESERVATION_REQUESTED_ROUTING_KEY);
+                .with(EventTypes.INVENTORY_RESERVATION_REQUESTED);
     }
 
     @Bean
@@ -64,7 +65,7 @@ public class RabbitMQConfig {
     ) {
         return BindingBuilder.bind(inventoryConfirmationRequestedQueue)
                 .to(fashionEventsExchange)
-                .with(RabbitMQNames.INVENTORY_CONFIRMATION_REQUESTED_ROUTING_KEY);
+                .with(EventTypes.INVENTORY_CONFIRMATION_REQUESTED);
     }
 
     @Bean
@@ -74,7 +75,7 @@ public class RabbitMQConfig {
     ) {
         return BindingBuilder.bind(inventoryReleaseRequestedQueue)
                 .to(fashionEventsExchange)
-                .with(RabbitMQNames.INVENTORY_RELEASE_REQUESTED_ROUTING_KEY);
+                .with(EventTypes.INVENTORY_RELEASE_REQUESTED);
     }
 
     @Bean

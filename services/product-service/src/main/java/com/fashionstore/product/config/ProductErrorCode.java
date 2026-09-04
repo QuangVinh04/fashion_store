@@ -33,9 +33,10 @@ public enum ProductErrorCode implements BaseErrorCode {
     ATTRIBUTE_CODE_RESERVED(1025, "Attribute code reserved", HttpStatus.BAD_REQUEST),
     PRODUCT_ATTRIBUTE_IN_USE(1026, "Attribute in use", HttpStatus.BAD_REQUEST),
     PRODUCT_ATTRIBUTE_OPTION_IN_USE(1027, "Option in use", HttpStatus.BAD_REQUEST),
-
-
-
+    OPTION_ALREADY_EXIST(1028, "Option already exists", HttpStatus.CONFLICT),
+    OPTION_NOT_FOUND(1029, "Option not found", HttpStatus.NOT_FOUND),
+    SLUG_ALREADY_EXISTED_OR_DUPLICATED(1030, "Slug already exists or duplicated", HttpStatus.BAD_REQUEST),
+    SKU_ALREADY_EXISTED_OR_DUPLICATED(1031, "Sku already exists or duplicated", HttpStatus.BAD_REQUEST),
     ;
 
     private final int code;

@@ -247,6 +247,16 @@ services:
     networks:
       - fashion-network
 
+  redis:
+    image: redis:alpine
+    container_name: fashion_redis
+    ports:
+      - "6379:6379"   # Port Redis
+    volumes:
+      - redis_data:/var/lib/redis
+    networks:
+      - fashion-network
+
   identity-postgres:
     image: postgres:16
     environment:

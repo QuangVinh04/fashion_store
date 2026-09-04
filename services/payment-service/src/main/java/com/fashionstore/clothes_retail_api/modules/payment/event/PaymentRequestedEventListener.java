@@ -4,12 +4,16 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fashionstore.common.messaging.processed.ProcessedMessageService;
 import com.fashionstore.common.payment.PaymentMethod;
 import com.fashionstore.common.payment.PaymentProvider;
-import com.fashionstore.contracts.EventEnvelope;
-import com.fashionstore.contracts.EventTypes;
-import com.fashionstore.contracts.payment.PaymentCancellationRequested;
-import com.fashionstore.contracts.payment.PaymentCancellationResult;
-import com.fashionstore.contracts.payment.PaymentRequested;
-import com.fashionstore.contracts.payment.PaymentResult;
+import com.fashionstore.contracts.common.EventEnvelope;
+import com.fashionstore.contracts.common.EventTypes;
+import com.fashionstore.contracts.payment.command.AuthorizePaymentCommand;
+import com.fashionstore.contracts.payment.command.CancelPaymentCommand;
+import com.fashionstore.contracts.payment.command.RefundPaymentCommand;
+import com.fashionstore.contracts.payment.event.PaymentCancellationRejectedEvent;
+import com.fashionstore.contracts.payment.event.PaymentCancelledEvent;
+import com.fashionstore.contracts.payment.event.PaymentRefundRejectedEvent;
+import com.fashionstore.contracts.payment.event.PaymentRefundedEvent;
+import com.fashionstore.contracts.payment.event.PaymentSuccessEvent;
 import com.fashionstore.product.config.messaging.RabbitMQNames;
 import com.fashionstore.product.modules.payment.entity.Payment;
 import com.fashionstore.product.modules.payment.entity.PaymentStatus;
@@ -48,11 +52,16 @@ public class PaymentRequestedEventListener {
                     cancelPayment(envelope));
             return;
         }
+        if (EventTypes.PAYMENT_REFUND_REQUESTED.equals(envelope.eventType())) {
+            processedMessageService.processOnce(messageId, "payment-refund-v1", () ->
+                    refundPayment(envelope));
+            return;
+        }
         throw new IllegalArgumentException("Unsupported payment saga command " + envelope.eventType());
     }
 
     private void createPayment(EventEnvelope<?> envelope) {
-        PaymentRequested request = objectMapper.convertValue(envelope.payload(), PaymentRequested.class);
+        AuthorizePaymentCommand request = objectMapper.convertValue(envelope.payload(), AuthorizePaymentCommand.class);
         Payment existing = paymentRepository.findByOrderIdForUpdate(request.orderId()).orElse(null);
         if (existing != null) {
             if (existing.getStatus() == PaymentStatus.COMPLETED) {
@@ -65,9 +74,11 @@ public class PaymentRequestedEventListener {
         Payment payment = Payment.builder()
                 .orderId(request.orderId())
                 .userId(request.userId())
+                .sagaId(envelope.correlationId())
                 .method(method)
                 .provider(PaymentProvider.valueOf(request.provider()))
                 .amount(request.amount())
+                .currency(request.currency())
                 .status(method == PaymentMethod.COD ? PaymentStatus.COMPLETED : PaymentStatus.PENDING)
                 .paidAt(method == PaymentMethod.COD ? LocalDateTime.now() : null)
                 .build();
@@ -78,9 +89,9 @@ public class PaymentRequestedEventListener {
     }
 
     private void cancelPayment(EventEnvelope<?> envelope) {
-        PaymentCancellationRequested request = objectMapper.convertValue(
+        CancelPaymentCommand request = objectMapper.convertValue(
                 envelope.payload(),
-                PaymentCancellationRequested.class
+                CancelPaymentCommand.class
         );
         Payment payment = paymentRepository.findByOrderIdForUpdate(request.orderId())
                 .orElseThrow(() -> new IllegalStateException(
@@ -90,32 +101,78 @@ public class PaymentRequestedEventListener {
             payment.setStatus(PaymentStatus.CANCELLED);
             payment.setFailureReason(request.reason());
             paymentRepository.save(payment);
-            publishCancellationResult(
-                    EventTypes.PAYMENT_CANCELLED,
-                    payment,
-                    request.reason(),
-                    envelope.correlationId()
-            );
+            publishCancelled(payment, request.reason(), envelope.correlationId());
             return;
         }
 
         if (payment.getStatus() == PaymentStatus.COMPLETED
                 || payment.getStatus() == PaymentStatus.REFUNDED) {
-            publishCancellationResult(
-                    EventTypes.PAYMENT_CANCELLATION_REJECTED,
+            // Tiền đã thu: không thể vừa giữ tiền vừa hủy đơn, saga sẽ tự đi tiếp thay vì bù trừ.
+            publishCancellationRejected(
                     payment,
+                    "PAYMENT_ALREADY_CAPTURED",
                     "Payment was already completed",
                     envelope.correlationId()
             );
             return;
         }
 
-        publishCancellationResult(
-                EventTypes.PAYMENT_CANCELLED,
-                payment,
-                payment.getFailureReason(),
-                envelope.correlationId()
-        );
+        publishCancelled(payment, payment.getFailureReason(), envelope.correlationId());
+    }
+
+    /**
+     * Hoàn tiền là yêu cầu độc lập với saga đặt hàng — không có sagaId, correlationId ở đây là orderId.
+     * Chỉ hoàn được khi tiền thật sự đã thu ({@code COMPLETED}); đã hoàn rồi thì trả lại đúng reply cũ
+     * để phía order-service (đang chờ reply) không bị kẹt vì tưởng message thất lạc.
+     */
+    private void refundPayment(EventEnvelope<?> envelope) {
+        RefundPaymentCommand request = objectMapper.convertValue(envelope.payload(), RefundPaymentCommand.class);
+        Payment payment = paymentRepository.findByOrderIdForUpdate(request.orderId()).orElse(null);
+        if (payment == null) {
+            publishRefundRejected(request.orderId(), request.paymentId(), "PAYMENT_NOT_FOUND",
+                    "Không tìm thấy payment cho đơn hàng này", envelope.correlationId());
+            return;
+        }
+
+        if (payment.getStatus() == PaymentStatus.REFUNDED) {
+            publishRefunded(payment, request.reason(), envelope.correlationId());
+            return;
+        }
+        if (payment.getStatus() != PaymentStatus.COMPLETED) {
+            publishRefundRejected(payment.getOrderId(), payment.getId(), "PAYMENT_NOT_CAPTURED",
+                    "Payment đang ở trạng thái " + payment.getStatus() + ", không thể hoàn tiền",
+                    envelope.correlationId());
+            return;
+        }
+
+        payment.setStatus(PaymentStatus.REFUNDED);
+        payment.setFailureReason(request.reason());
+        paymentRepository.save(payment);
+        publishRefunded(payment, request.reason(), envelope.correlationId());
+    }
+
+    private void publishRefunded(Payment payment, String reason, String correlationId) {
+        eventPublisher.publishEvent(EventEnvelope.v1(
+                EventTypes.PAYMENT_REFUNDED,
+                payment.getOrderId(),
+                correlationId,
+                new PaymentRefundedEvent(payment.getOrderId(), payment.getId(), reason)
+        ));
+    }
+
+    private void publishRefundRejected(
+            String orderId,
+            String paymentId,
+            String failureCode,
+            String failureMessage,
+            String correlationId
+    ) {
+        eventPublisher.publishEvent(EventEnvelope.v1(
+                EventTypes.PAYMENT_REFUND_REJECTED,
+                orderId,
+                correlationId,
+                new PaymentRefundRejectedEvent(orderId, paymentId, failureCode, failureMessage)
+        ));
     }
 
     private void publishCompleted(Payment payment, String correlationId) {
@@ -123,21 +180,30 @@ public class PaymentRequestedEventListener {
                 EventTypes.PAYMENT_COMPLETED,
                 payment.getOrderId(),
                 correlationId,
-                new PaymentResult(payment.getOrderId(), payment.getId(), null)
+                new PaymentSuccessEvent(payment.getOrderId(), payment.getId())
         ));
     }
 
-    private void publishCancellationResult(
-            String eventType,
+    private void publishCancelled(Payment payment, String reason, String correlationId) {
+        eventPublisher.publishEvent(EventEnvelope.v1(
+                EventTypes.PAYMENT_CANCELLED,
+                payment.getOrderId(),
+                correlationId,
+                new PaymentCancelledEvent(payment.getOrderId(), payment.getId(), reason)
+        ));
+    }
+
+    private void publishCancellationRejected(
             Payment payment,
-            String reason,
+            String failureCode,
+            String failureMessage,
             String correlationId
     ) {
         eventPublisher.publishEvent(EventEnvelope.v1(
-                eventType,
+                EventTypes.PAYMENT_CANCELLATION_REJECTED,
                 payment.getOrderId(),
                 correlationId,
-                new PaymentCancellationResult(payment.getOrderId(), payment.getId(), reason)
+                new PaymentCancellationRejectedEvent(payment.getOrderId(), failureCode, failureMessage)
         ));
     }
 }

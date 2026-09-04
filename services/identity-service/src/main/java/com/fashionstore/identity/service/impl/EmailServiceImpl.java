@@ -1,8 +1,8 @@
 package com.fashionstore.identity.service.impl;
 
 import com.fashionstore.identity.service.EmailService;
-import com.fashionstore.contracts.EventEnvelope;
-import com.fashionstore.contracts.EventTypes;
+import com.fashionstore.contracts.common.EventEnvelope;
+import com.fashionstore.contracts.common.EventTypes;
 import com.fashionstore.contracts.notification.EmailNotificationRequested;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.MDC;

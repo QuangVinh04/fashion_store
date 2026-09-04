@@ -2,11 +2,11 @@ package com.fashionstore.cart.client.product;
 
 import com.fashionstore.cart.dto.product.ProductVariantDto;
 import com.fashionstore.common.config.feign.FeignGlobalConfig;
+import com.fashionstore.common.dto.ApiResponse;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 
 import java.util.List;
 
@@ -18,9 +18,8 @@ import java.util.List;
 public interface ProductFeignClient {
 
     @GetMapping("/api/v1/products/variants/{id}")
-    ProductVariantDto getVariant(@PathVariable("id") String variantId);
+    ApiResponse<ProductVariantDto> getVariant(@PathVariable("id") String variantId);
 
-
-    @PostMapping("/api/v1/products/variants/batch")
-    List<ProductVariantDto> getVariantsBatch(@RequestBody List<String> variantIds);
+    @GetMapping("/api/v1/products/variants/batch")
+    ApiResponse<List<ProductVariantDto>> getVariantsBatch(@RequestParam List<String> variantIds);
 }

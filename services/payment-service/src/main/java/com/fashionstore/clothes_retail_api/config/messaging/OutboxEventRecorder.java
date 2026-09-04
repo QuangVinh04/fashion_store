@@ -4,7 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fashionstore.product.common.outbox.OutboxEvent;
 import com.fashionstore.product.common.outbox.OutboxEventRepository;
-import com.fashionstore.contracts.EventEnvelope;
+import com.fashionstore.contracts.common.EventEnvelope;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;

@@ -18,7 +18,6 @@ import lombok.experimental.FieldDefaults;
 
 import java.math.BigDecimal;
 import java.util.List;
-import java.util.Map;
 
 @Getter
 @Setter
@@ -79,10 +78,7 @@ public class ProductUpdateRequest {
     @Valid
     List<ProductVariantRequest> variants;
 
-    List<String> colors;
-
-    List<String> sizes;
-
-    Map<String, String> colorHexMap;
+    @Valid
+    List<ProductAttributeValueRequest> attributes;
 
 }

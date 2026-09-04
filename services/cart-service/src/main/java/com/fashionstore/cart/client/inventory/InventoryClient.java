@@ -1,10 +1,8 @@
 package com.fashionstore.cart.client.inventory;
 
-import com.fashionstore.cart.dto.inventory.InventoryDto;
-import com.fashionstore.common.exception.AppException;
-import com.fashionstore.common.exception.ErrorCode;
-import com.fashionstore.cart.exception.CartErrorCode;
-import feign.FeignException;
+import com.fashionstore.cart.dto.inventory.StockCheckItem;
+import com.fashionstore.cart.dto.inventory.StockCheckRequest;
+import com.fashionstore.cart.dto.inventory.StockCheckResult;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.retry.annotation.Retry;
 import lombok.AccessLevel;
@@ -23,17 +21,22 @@ public class InventoryClient {
 
     InventoryFeignClient inventoryFeignClient;
 
-    @CircuitBreaker(name = "inventoryService", fallbackMethod = "getInventoryBatchFallback")
+    /**
+     * Nhận list thay vì (variantId, quantity) đơn lẻ: annotation Resilience4j chỉ áp dụng được qua proxy
+     * Spring AOP, tự gọi lại chính mình trong cùng class sẽ bỏ qua @CircuitBreaker/@Retry — nên không có
+     * overload tiện lợi nào gọi vòng lại method này, gọi thẳng {@code checkStock(List.of(...))} ở call site.
+     */
+    @CircuitBreaker(name = "inventoryService", fallbackMethod = "checkStockFallback")
     @Retry(name = "inventoryService")
-    public InventoryDto getInventoryBatch(String variantId) {
-        return inventoryFeignClient.getInventoryBatch(variantId);
+    public StockCheckResult checkStock(List<StockCheckItem> items) {
+        return inventoryFeignClient.checkStock(StockCheckRequest.builder().items(items).build()).getData();
     }
 
-    // Fallback: trả về unavailable cho tất cả → cart vẫn hiển thị được
-    private InventoryDto getInventoryBatchFallback(
-            String variantId, Exception ex) {
-        log.warn("[CircuitBreaker] inventory-service unavailable for {} variants: {}",
-                variantId, ex.getMessage());
-        return InventoryDto.unavailable(variantId);
+    // Fallback: coi như hết hàng thay vì để lộ lỗi hạ tầng ra khách hàng — cart vẫn hiển thị được,
+    // chỉ không thêm/sửa số lượng được cho tới khi inventory-service hồi phục.
+    private StockCheckResult checkStockFallback(List<StockCheckItem> items, Exception ex) {
+        log.warn("[CircuitBreaker] inventory-service unavailable for {} variant(s): {}",
+                items.size(), ex.getMessage());
+        return StockCheckResult.unavailable(items);
     }
 }

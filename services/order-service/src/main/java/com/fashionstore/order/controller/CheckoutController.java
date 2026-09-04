@@ -46,6 +46,14 @@ public class CheckoutController {
                 .build();
     }
 
+    @PostMapping("/{id}/cancel")
+    public ApiResponse<CheckoutResponse> cancelCheckout(@PathVariable("id") String id) {
+        return ApiResponse.<CheckoutResponse>builder()
+                .message("Cancel checkout successfully")
+                .data(checkoutService.cancelCheckout(id))
+                .build();
+    }
+
     @GetMapping("/me")
     public ApiResponse<List<CheckoutResponse>> getMyCheckouts() {
         return ApiResponse.<List<CheckoutResponse>>builder()

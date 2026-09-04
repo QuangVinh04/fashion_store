@@ -3,9 +3,8 @@ package com.fashionstore.product.modules.inventory.event;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fashionstore.common.messaging.processed.ProcessedMessageService;
 import com.fashionstore.product.config.messaging.RabbitMQNames;
-import com.fashionstore.contracts.EventEnvelope;
-import com.fashionstore.contracts.inventory.InventoryReservationCommand;
-import com.fashionstore.contracts.inventory.InventoryReservationRequested;
+import com.fashionstore.contracts.common.EventEnvelope;
+import com.fashionstore.contracts.inventory.command.ReservationInventoryCommand;
 import lombok.RequiredArgsConstructor;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.messaging.handler.annotation.Header;
@@ -27,7 +26,7 @@ public class InventoryReservationEventListener {
             @Header(RabbitMQNames.OUTBOX_EVENT_ID_HEADER) String messageId
     ) {
         processedMessageService.processOnce(messageId, "inventory-reserve-v1", () ->
-                reservationService.reserve(payload(envelope, InventoryReservationRequested.class), envelope.correlationId()));
+                reservationService.reserve(payload(envelope, ReservationInventoryCommand.class), envelope.correlationId()));
     }
 
     @Transactional
@@ -38,7 +37,7 @@ public class InventoryReservationEventListener {
     ) {
         processedMessageService.processOnce(messageId, "inventory-confirm-v1", () ->
                 reservationService.confirm(
-                        payload(envelope, InventoryReservationCommand.class),
+                        payload(envelope, ReservationInventoryCommand.class),
                         envelope.correlationId()));
     }
 
@@ -50,7 +49,7 @@ public class InventoryReservationEventListener {
     ) {
         processedMessageService.processOnce(messageId, "inventory-release-v1", () ->
                 reservationService.release(
-                        payload(envelope, InventoryReservationCommand.class),
+                        payload(envelope, ReservationInventoryCommand.class),
                         envelope.correlationId()));
     }
 

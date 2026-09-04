@@ -2,9 +2,9 @@ package com.fashionstore.product.modules.payment.event;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fashionstore.common.messaging.processed.ProcessedMessageService;
-import com.fashionstore.contracts.EventEnvelope;
-import com.fashionstore.contracts.EventTypes;
-import com.fashionstore.contracts.payment.PaymentCancellationRequested;
+import com.fashionstore.contracts.common.EventEnvelope;
+import com.fashionstore.contracts.payment.command.CancelPaymentCommand;
+import com.fashionstore.contracts.common.EventTypes;
 import com.fashionstore.product.modules.payment.entity.Payment;
 import com.fashionstore.product.modules.payment.entity.PaymentStatus;
 import com.fashionstore.product.modules.payment.repository.PaymentRepository;
@@ -85,12 +85,12 @@ class PaymentCancellationEventListenerTest {
         return payment;
     }
 
-    private EventEnvelope<PaymentCancellationRequested> cancellationEnvelope() {
+    private EventEnvelope<CancelPaymentCommand> cancellationEnvelope() {
         return EventEnvelope.v1(
                 EventTypes.PAYMENT_CANCELLATION_REQUESTED,
                 "order-1",
                 "correlation-1",
-                new PaymentCancellationRequested("order-1", null, "Payment timed out")
+                new CancelPaymentCommand("order-1", null, "Payment timed out")
         );
     }
 

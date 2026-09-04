@@ -18,6 +18,9 @@ public enum ErrorCode implements BaseErrorCode {
     CHECKOUT_NOT_FOUND(4003, "Checkout not found", HttpStatus.NOT_FOUND),
     CHECKOUT_STATUS_INVALID(4004, "Checkout status does not allow update", HttpStatus.BAD_REQUEST),
     CHECKOUT_AMOUNT_INVALID(4005, "Checkout amount is invalid", HttpStatus.BAD_REQUEST),
+    ORDER_CANNOT_BE_CANCELLED(4006, "Order can no longer be cancelled by the customer", HttpStatus.CONFLICT),
+    ORDER_SAGA_NOT_FOUND(4007, "Saga not found for this order", HttpStatus.NOT_FOUND),
+    ORDER_RETURN_NOT_ALLOWED(4008, "Order is not eligible for a return request", HttpStatus.CONFLICT),
     PAYMENT_PROVIDER_UNSUPPORTED(5002, "Payment provider is not supported", HttpStatus.UNSUPPORTED_MEDIA_TYPE);
 
     private final int code;

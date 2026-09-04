@@ -34,9 +34,13 @@ public interface CartMapper {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         return CartResponse.builder()
+                .id(cart.getId())
+                .userId(cart.getUserId())
                 .items(itemResponses)
                 .totalQuantity(totalQuantity)
                 .totalPrice(totalPrice)
+                .createdAt(cart.getCreatedAt())
+                .updatedAt(cart.getUpdatedAt())
                 .build();
     }
 

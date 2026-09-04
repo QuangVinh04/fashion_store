@@ -1,8 +1,8 @@
 package com.fashionstore.identity.config.messaging;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fashionstore.contracts.EventEnvelope;
-import com.fashionstore.contracts.EventTypes;
+import com.fashionstore.contracts.common.EventEnvelope;
+import com.fashionstore.contracts.common.EventTypes;
 import com.fashionstore.identity.entity.OutboxEvent;
 import com.fashionstore.identity.repository.OutboxEventRepository;
 import lombok.RequiredArgsConstructor;
