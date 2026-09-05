@@ -10,12 +10,12 @@ import org.springframework.web.bind.annotation.RequestBody;
 
 @FeignClient(
         name = "inventory-service",
-        url = "${app.clients.inventory-base-url}",
+        url = "${app.clients.catalog-base-url}",
         configuration = FeignGlobalConfig.class
 )
 public interface InventoryFeignClient {
 
-    /** Read-only, không có side effect — đúng như inventory-service tài liệu hóa cho cart-service. */
+    /** Read-only, không có side effect — đúng như catalog-service tài liệu hóa cho phần giỏ hàng. */
     @PostMapping("/api/v1/inventory/check")
     ApiResponse<StockCheckResult> checkStock(@RequestBody StockCheckRequest request);
 }

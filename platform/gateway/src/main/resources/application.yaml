@@ -19,14 +19,10 @@ spring:
               uri: ${IDENTITY_BASE_URL:http://identity-service:8082}
               predicates:
                 - Path=/api/v1/auth/**,/api/v1/users/**
-            - id: product
-              uri: ${PRODUCT_BASE_URL:http://product-service:8087}
+            - id: catalog
+              uri: ${CATALOG_BASE_URL:http://catalog-service:8087}
               predicates:
-                - Path=/api/v1/product/**,/api/v1/products/**,/api/v1/category/**,/api/v1/categories/**,/admin/products,/admin/products/**
-            - id: file
-              uri: ${FILE_BASE_URL:http://file-service:8091}
-              predicates:
-                - Path=/api/v1/files/**
+                - Path=/api/v1/product/**,/api/v1/products/**,/api/v1/category/**,/api/v1/categories/**,/admin/products,/admin/products/**,/api/v1/files/**
             - id: order
               uri: ${ORDER_BASE_URL:http://order-service:8089}
               predicates:

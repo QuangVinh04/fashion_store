@@ -204,31 +204,73 @@ trong khi Spring Boot BOM kéo mọi module resilience4j khác về 2.2.0. Start
 và unit test không phát hiện được vì lỗi chỉ xảy ra lúc Spring quét
 autoconfiguration. Đã bỏ version ghim cứng, để BOM quản lý.
 
-## P5 — Gộp inventory + file vào catalog-service (3–4 ngày)
+## P5 — Gộp inventory + file vào catalog-service
 
 Mốc lớn nhất. Đây là cặp coupling chặt nhất: `Inventory` khoá theo `variantId`
 vốn thuộc aggregate `ProductVariant`.
 
-- [ ] Đổi tên `product-service` → `catalog-service` (artifact, package gốc giữ
-      `com.fashionstore.catalog`, thư mục, container, biến môi trường)
-- [ ] Chuyển `Inventory`, `InventoryReservation`, listener, service sang
-      `com.fashionstore.catalog.inventory`
-- [ ] Chuyển `MediaFile` + logic upload sang `com.fashionstore.catalog.media`
-- [ ] Gộp lịch sử Flyway — product đang ở V1–V10, inventory V1–V3, file V1:
-      đánh số lại inventory thành V20–V22, file thành V40
-      (DB dev là dữ liệu bỏ đi được, cứ drop và tạo lại)
+### P5a — Dịch chuyển cấu trúc — ĐÃ XONG
+
+Chủ dự án yêu cầu tách riêng phần **không đụng tới code nghiệp vụ** và làm trước.
+`./mvnw -B verify` xanh trên 10 module, `docker compose config` hợp lệ.
+
+- [x] Đổi tên `product-service` → `catalog-service` (artifact, package gốc thành
+      `com.fashionstore.catalog`, thư mục, container, biến môi trường
+      `PRODUCT_POSTGRES_*` → `CATALOG_POSTGRES_*`, DB `catalog_database`)
+- [x] Chuyển `Inventory`, `InventoryReservation`, listener, service sang
+      `com.fashionstore.catalog.inventory` — nguyên văn, không sửa logic
+- [x] Chuyển `MediaFile` + logic upload sang `com.fashionstore.catalog.media`
+- [x] Gộp lịch sử Flyway: inventory V1–V3 → V20–V22, file V1 → V40
+- [x] Gateway: gộp route `product` + `file` thành route `catalog`
+- [x] Xoá `services/inventory-service`, `services/file-service` khỏi reactor và compose
+- [x] Hai Feign client của order-service trỏ chung `app.clients.catalog-base-url`
+- [x] Smoke test khởi động: context lên được, Tomcat 8087, không xung đột bean
+
+Bổ sung sau P5a: hai sub-package `com.fashionstore.catalog.inventory` và
+`...catalog.media` đã được làm phẳng vào các package theo tầng
+(`controller` / `service` / `repository` / `model` / `dto` / `mapper` /
+`config` / `event` / `exception`) — chỉ đổi vị trí package, không sửa logic.
+Xem `services/catalog-service/README.md`.
+
+### P5b — Phần nghiệp vụ — CHƯA LÀM
+
+- [ ] Viết `InventoryReservationService` + consumer cho `RESERVE_INVENTORY`,
+      `CONFIRM_INVENTORY`, `RELEASE_INVENTORY` (đặc tả lấy lại từ file test đã
+      xoá ở P0: `git show f94e7d7^:services/inventory-service/src/test/java/...`)
 - [ ] Đặt `reserve`/`confirm`/`release` tồn kho vào cùng transaction với truy
       vấn variant — bỏ được một vòng round-trip mỗi bước saga
-- [ ] Cập nhật consumer saga: command `RESERVE_INVENTORY`, `CONFIRM_INVENTORY`,
-      `RELEASE_INVENTORY` giờ do catalog-service nhận
-      (`RabbitMQNames`, `SagaConsumers` trong order-service)
 - [ ] Gộp 2 Feign client còn lại của order-service thành 1 `CatalogFeignClient`
-- [ ] Gateway: gộp route `product` + `file` thành route `catalog`
-- [ ] Xoá `services/inventory-service`, `services/file-service` khỏi reactor và compose
-- [ ] Chạy lại smoke test khởi động, so lại response JSON đã ghi
+      (hiện vẫn là hai interface, chỉ chung base URL)
+- [ ] So lại response JSON đã ghi của các endpoint public
 
-**Kết quả sau P4 + P5:** 3 Feign client → 1. Saga còn 2 participant
-(catalog + payment) thay vì 3.
+### Ba xung đột mà kế hoạch gốc không lường
+
+Phát hiện trong lúc làm P5a, đều là lỗi có sẵn hoặc va chạm do gộp:
+
+1. **`outbox_event` tồn tại ở cả hai bên.** product V2/V3 tạo bảng này nhưng
+   product-service **không có một dòng code outbox nào** — schema chết. inventory
+   V3 cũng tạo bảng đó, kèm `created_by`/`updated_by` mà bản của product thiếu.
+   Xử lý: V22 không tạo bảng nữa, chỉ `alter table ... add column if not exists`
+   hai cột kiểm toán để `OutboxEvent extends AuditedEntity` chạy được.
+
+2. **Bảng `inventory` không khớp entity `Inventory`.** `V20` (nguyên bản
+   inventory V1) tạo `available_quantity` và **không có** `product_id`, `status`;
+   entity thì đòi `quantity`, `product_id NOT NULL`, `status NOT NULL`, cộng
+   unique `(product_id, variant_id)`. Với `ddl-auto: none` Hibernate không kiểm
+   tra lúc khởi động nên context vẫn lên, nhưng mọi câu truy vấn tồn kho sẽ chết
+   ở tầng SQL. **Đã cố tình giữ nguyên** vì sửa là đổi schema nghiệp vụ; phải làm
+   ở P5b cùng lúc với `InventoryReservationService`.
+
+3. **Ba `SecurityConfig` có ba luật `anyRequest()` khác nhau** (product: ADMIN,
+   inventory: ADMIN, file: chỉ cần đăng nhập) và hai bean trùng tên
+   (`jwtConverter`, `corsConfigurationSource`) — trùng tên bean là lỗi chết lúc
+   khởi động. Xử lý: mỗi domain một `SecurityFilterChain` khoanh vùng bằng
+   `securityMatcher`, luật bên trong sao nguyên văn; một `CorsConfigurationSource`
+   đăng ký CORS theo đường dẫn. Hai `CustomJwtDecoder` giống nhau từng byte nên
+   giữ một bản.
+
+**Kết quả sau P4 + P5a:** 3 Feign client → 2 (chung 1 base URL), 12 module → 10,
+17 container → 13.
 
 ## P6 — Chốt lại (nửa ngày)
 

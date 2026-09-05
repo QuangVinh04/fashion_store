@@ -18,8 +18,7 @@ Active backend modules:
 
 - `platform/gateway`
 - `services/identity-service`
-- `services/product-service`
-- `services/inventory-service`
+- `services/catalog-service`
 - `services/order-service`
 - `services/payment-service`
 - `services/notification-service`
@@ -29,8 +28,10 @@ Active backend modules:
 boundaries with no code yet; they are described in
 [docs/microservices-roadmap.md](docs/microservices-roadmap.md).
 
-The service decomposition is being consolidated from 8 services down to 5 — see
-[docs/refactor-plan.md](docs/refactor-plan.md) for the prioritised plan.
+The service decomposition has been consolidated from 8 services down to 5.
+`catalog-service` absorbed `product-service`, `inventory-service`, and
+`file-service`; `order-service` absorbed `cart-service`. See
+[docs/refactor-plan.md](docs/refactor-plan.md) for what remains.
 
 ## Build
 

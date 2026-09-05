@@ -18,16 +18,12 @@ services:
       JWT_ISSUER: http://localhost:8080
       JWT_JWK_SET_URI: http://identity-service:8082/api/v1/auth/jwks
       IDENTITY_BASE_URL: http://identity-service:8082
-      PRODUCT_BASE_URL: http://product-service:8087
-      FILE_BASE_URL: http://file-service:8091
-      INVENTORY_BASE_URL: http://inventory-service:8086
+      CATALOG_BASE_URL: http://catalog-service:8087
       ORDER_BASE_URL: http://order-service:8089
       PAYMENT_BASE_URL: http://payment-service:8085
     depends_on:
       - identity-service
-      - product-service
-      - file-service
-      - inventory-service
+      - catalog-service
       - order-service
       - payment-service
     ports:
@@ -87,68 +83,28 @@ services:
     networks:
       - fashion-network
 
-  product-service:
+  catalog-service:
     build:
       context: .
-      dockerfile: services/product-service/Dockerfile
+      dockerfile: services/catalog-service/Dockerfile
     environment:
       <<: *service-environment
       SERVER_PORT: 8087
-      PRODUCT_POSTGRES_HOST: product-postgres
-      PRODUCT_POSTGRES_DB: product_database
-      PRODUCT_POSTGRES_USER: root
-      PRODUCT_POSTGRES_PASSWORD: root
+      CATALOG_POSTGRES_HOST: catalog-postgres
+      CATALOG_POSTGRES_DB: catalog_database
+      CATALOG_POSTGRES_USER: root
+      CATALOG_POSTGRES_PASSWORD: root
+      FILE_STORAGE_LOCATION: /var/lib/catalog-service/media
+      FILE_PUBLIC_BASE_URL: http://localhost:8080
     depends_on:
-      product-postgres:
+      catalog-postgres:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
     expose:
       - "8087"
-    networks:
-      - fashion-network
-
-  file-service:
-    build:
-      context: .
-      dockerfile: services/file-service/Dockerfile
-    environment:
-      <<: *service-environment
-      SERVER_PORT: 8091
-      FILE_POSTGRES_HOST: file-postgres
-      FILE_POSTGRES_DB: file_database
-      FILE_POSTGRES_USER: root
-      FILE_POSTGRES_PASSWORD: root
-      FILE_STORAGE_LOCATION: /var/lib/file-service/media
-      FILE_PUBLIC_BASE_URL: http://localhost:8080
-    depends_on:
-      file-postgres:
-        condition: service_healthy
-    expose:
-      - "8091"
     volumes:
-      - file_media_data:/var/lib/file-service/media
-    networks:
-      - fashion-network
-
-  inventory-service:
-    build:
-      context: .
-      dockerfile: services/inventory-service/Dockerfile
-    environment:
-      <<: *service-environment
-      SERVER_PORT: 8086
-      INVENTORY_POSTGRES_HOST: inventory-postgres
-      INVENTORY_POSTGRES_DB: inventory_database
-      INVENTORY_POSTGRES_USER: root
-      INVENTORY_POSTGRES_PASSWORD: root
-    depends_on:
-      inventory-postgres:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-    expose:
-      - "8086"
+      - file_media_data:/var/lib/catalog-service/media
     networks:
       - fashion-network
 
@@ -163,16 +119,13 @@ services:
       ORDER_POSTGRES_DB: order_database
       ORDER_POSTGRES_USER: root
       ORDER_POSTGRES_PASSWORD: root
-      PRODUCT_BASE_URL: http://product-service:8087
-      INVENTORY_BASE_URL: http://inventory-service:8086
+      CATALOG_BASE_URL: http://catalog-service:8087
     depends_on:
       order-postgres:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
-      product-service:
-        condition: service_started
-      inventory-service:
+      catalog-service:
         condition: service_started
     expose:
       - "8089"
@@ -258,39 +211,15 @@ services:
     networks:
       - fashion-network
 
-  product-postgres:
+  catalog-postgres:
     image: postgres:16
     environment:
-      POSTGRES_DB: product_database
+      POSTGRES_DB: catalog_database
       POSTGRES_USER: root
       POSTGRES_PASSWORD: root
     healthcheck: *postgres-healthcheck
     volumes:
-      - product_postgres_data:/var/lib/postgresql/data
-    networks:
-      - fashion-network
-
-  file-postgres:
-    image: postgres:16
-    environment:
-      POSTGRES_DB: file_database
-      POSTGRES_USER: root
-      POSTGRES_PASSWORD: root
-    healthcheck: *postgres-healthcheck
-    volumes:
-      - file_postgres_data:/var/lib/postgresql/data
-    networks:
-      - fashion-network
-
-  inventory-postgres:
-    image: postgres:16
-    environment:
-      POSTGRES_DB: inventory_database
-      POSTGRES_USER: root
-      POSTGRES_PASSWORD: root
-    healthcheck: *postgres-healthcheck
-    volumes:
-      - inventory_postgres_data:/var/lib/postgresql/data
+      - catalog_postgres_data:/var/lib/postgresql/data
     networks:
       - fashion-network
 
@@ -328,9 +257,7 @@ volumes:
   redis_data:
   identity_postgres_data:
   notification_postgres_data:
-  product_postgres_data:
-  file_postgres_data:
+  catalog_postgres_data:
   file_media_data:
-  inventory_postgres_data:
   order_postgres_data:
   payment_postgres_data:

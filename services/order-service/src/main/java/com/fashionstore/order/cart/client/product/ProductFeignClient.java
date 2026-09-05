@@ -12,7 +12,7 @@ import java.util.List;
 
 @FeignClient(
         name = "product-service",
-        url = "${app.clients.product-base-url}",
+        url = "${app.clients.catalog-base-url}",
         configuration = FeignGlobalConfig.class
 )
 public interface ProductFeignClient {

@@ -1,0 +1,61 @@
+server:
+  port: ${SERVER_PORT:8087}
+
+spring:
+  application:
+    name: catalog-service
+  datasource:
+    url: jdbc:postgresql://${CATALOG_POSTGRES_HOST:localhost}:${CATALOG_POSTGRES_PORT:5435}/${CATALOG_POSTGRES_DB:catalog_database}?options=-c%20timezone=Asia/Ho_Chi_Minh
+    username: ${CATALOG_POSTGRES_USER:root}
+    password: ${CATALOG_POSTGRES_PASSWORD:root}
+    driver-class-name: org.postgresql.Driver
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
+    listener:
+      simple:
+        retry:
+          enabled: true
+          initial-interval: 1000
+          max-attempts: 3
+          multiplier: 2
+  servlet:
+    multipart:
+      max-file-size: ${FILE_MAX_SIZE:20MB}
+      max-request-size: ${FILE_MAX_REQUEST_SIZE:25MB}
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${JWT_ISSUER:http://localhost:8082}
+          jwk-set-uri: ${JWT_JWK_SET_URI:http://localhost:8082/api/v1/auth/jwks}
+  jpa:
+    database: postgresql
+    hibernate:
+      ddl-auto: none
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+app:
+  outbox:
+    relay-delay-ms: ${OUTBOX_RELAY_DELAY_MS:3000}
+  storage:
+    location: ${FILE_STORAGE_LOCATION:./storage/catalog-service}
+    public-base-url: ${FILE_PUBLIC_BASE_URL:http://localhost:8087}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+logging:
+  pattern:
+    level: "%5p [${spring.application.name:},%X{correlationId:-}]"

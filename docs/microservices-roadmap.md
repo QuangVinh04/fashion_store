@@ -6,8 +6,7 @@ describes architecture, service ownership, and required patterns.
 ## Target services
 
 - `identity-service`: authentication, users, roles, permissions, and self-issued JWT.
-- `product-service`: products, variants, categories, product search.
-- `inventory-service`: stock, reservation, stock deduction, stock release.
+- `catalog-service`: products, variants, categories, product search, stock and reservations, media library.
 - `order-service`: cart, checkout, orders, order status workflow.
 - `payment-service`: payment records, VNPAY, PayPal, COD, callbacks.
 - `notification-service`: email verification and order/payment notifications.
@@ -18,8 +17,7 @@ describes architecture, service ownership, and required patterns.
 - `services/identity-service`: users, credentials, JWT signing with a private RSA key, and a public JWKS endpoint.
 - `services/notification-service`: asynchronous email delivery.
 - `services/payment-service`: owns payment tables and serializes payment create/cancel commands for each order through RabbitMQ.
-- `services/inventory-service`: standalone service scaffold. It owns inventory tables. The saga reservation consumer is currently missing — see the P0 debt note in [refactor-plan.md](refactor-plan.md).
-- `services/product-service`: standalone service scaffold. It owns product/category/variant tables. Note: it does **not** currently publish `product.variant.stock` — the inventory-side consumer exists but has no producer.
+- `services/catalog-service`: owns product/category/variant tables (`V1`–`V10`), inventory tables (`V20`–`V22`) and the media library (`V40`) in one database. Absorbed `product-service`, `inventory-service` and `file-service`. The saga reservation consumer is still missing — see the P0 debt note in [refactor-plan.md](refactor-plan.md). `ProductVariantStockEvent` still has no producer, so the stock listener it carries over remains dead code.
 - `services/order-service`: owns cart, checkout and order tables, and orchestrates inventory, payment and compensation through saga events. Cart cleanup after confirmation is a direct write in the same transaction, not a saga message.
 
 ## Current architecture

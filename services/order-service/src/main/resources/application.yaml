@@ -43,8 +43,8 @@ spring:
 
 app:
   clients:
-    product-base-url: ${PRODUCT_BASE_URL:http://localhost:8087}
-    inventory-base-url: ${INVENTORY_BASE_URL:http://localhost:8086}
+    # product + inventory đã gộp thành catalog-service, chung một base URL.
+    catalog-base-url: ${CATALOG_BASE_URL:http://localhost:8087}
   outbox:
     publisher-delay-ms: ${OUTBOX_PUBLISHER_DELAY_MS:15000}
   saga:
