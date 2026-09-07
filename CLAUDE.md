@@ -88,8 +88,8 @@ com.fashionstore.<service>
 
 - Sub-dividing is allowed **inside `model`/`entity` only** (e.g. `model/enumeration`, `model/attribute`, `model/option`).
 - `client/`, `cache/`, `messaging/`, `event/` exist only where a service actually needs them — do not create empty ones.
-- Entity package name differs by service: `model/` in catalog + order, `entity/` in identity + payment. Follow whatever the service you are editing already uses; do not rename a service's package wholesale unless asked.
-- `catalog-service` is the reference implementation of this layout (`services/catalog-service/README.md`). Known deviations still to be flattened: `order-service/cart/**`, `payment-service/{common,order,gateway}/**`.
+- Entity package name differs by service: `model/` in catalog, `entity/` in order + identity + payment. Follow whatever the service you are editing already uses; do not rename a service's package wholesale unless asked.
+- `catalog-service` is the reference implementation of this layout (`services/catalog-service/README.md`). Known deviations still to be flattened: `order-service/{outbox,saga}/**`, `payment-service/{common,order,gateway}/**`.
 - Split by layer, not by domain: e.g. outbox lives as `model/OutboxEvent` + `repository/OutboxEventRepository` + `event/OutboxEventRecorder|OutboxEventRelay`.
 
 ## Constraints & Gotchas

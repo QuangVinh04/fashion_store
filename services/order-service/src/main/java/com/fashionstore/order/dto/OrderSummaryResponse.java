@@ -2,7 +2,7 @@ package com.fashionstore.order.dto;
 
 import com.fashionstore.common.payment.PaymentMethod;
 import com.fashionstore.common.payment.PaymentProvider;
-import com.fashionstore.order.model.enumeration.OrderStatus;
+import com.fashionstore.order.entity.enumeration.OrderStatus;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;

@@ -1,6 +1,6 @@
 package com.fashionstore.order.service;
 
-import com.fashionstore.order.model.enumeration.CheckoutStatus;
+import com.fashionstore.order.entity.enumeration.CheckoutStatus;
 import com.fashionstore.order.repository.CheckoutRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

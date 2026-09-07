@@ -1,7 +1,7 @@
 package com.fashionstore.order.repository;
 
-import com.fashionstore.order.model.Checkout;
-import com.fashionstore.order.model.enumeration.CheckoutStatus;
+import com.fashionstore.order.entity.Checkout;
+import com.fashionstore.order.entity.enumeration.CheckoutStatus;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;

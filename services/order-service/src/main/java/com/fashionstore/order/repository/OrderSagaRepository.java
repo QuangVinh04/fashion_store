@@ -1,7 +1,7 @@
 package com.fashionstore.order.repository;
 
-import com.fashionstore.order.model.OrderSaga;
-import com.fashionstore.order.model.enumeration.OrderSagaStatus;
+import com.fashionstore.order.entity.OrderSaga;
+import com.fashionstore.order.entity.enumeration.OrderSagaStatus;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;

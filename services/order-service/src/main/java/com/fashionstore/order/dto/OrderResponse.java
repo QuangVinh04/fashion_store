@@ -1,6 +1,6 @@
 package com.fashionstore.order.dto;
 
-import com.fashionstore.order.model.enumeration.OrderStatus;
+import com.fashionstore.order.entity.enumeration.OrderStatus;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 

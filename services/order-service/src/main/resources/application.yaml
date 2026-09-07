@@ -56,26 +56,26 @@ app:
     expiry-scan-delay-ms: ${CHECKOUT_EXPIRY_SCAN_DELAY_MS:300000}
 
 resilience4j:
+  # product + inventory giờ là một service (catalog) nên cũng chỉ còn một circuit breaker: hai bên
+  # sống chết cùng nhau, tách ra hai instance chỉ tạo cảm giác cô lập chứ không cô lập được gì.
   retry:
     instances:
-      productService:
+      catalogService:
         max-attempts: 3
         wait-duration: 500ms
-      inventoryService:
-        max-attempts: 3
-        wait-duration: 500ms
+        # AppException = câu trả lời nghiệp vụ (variant không tồn tại), gọi lại 3 lần cũng thế.
+        ignore-exceptions:
+          - com.fashionstore.common.exception.AppException
   circuitbreaker:
     instances:
-      productService:
+      catalogService:
         sliding-window-size: 20
         failure-rate-threshold: 50
         wait-duration-in-open-state: 10s
         permitted-number-of-calls-in-half-open-state: 5
-      inventoryService:
-        sliding-window-size: 20
-        failure-rate-threshold: 50
-        wait-duration-in-open-state: 10s
-        permitted-number-of-calls-in-half-open-state: 5
+        # Khách hỏi variantId không tồn tại không phải là catalog đang lỗi -> đừng mở circuit vì nó.
+        ignore-exceptions:
+          - com.fashionstore.common.exception.AppException
 
 management:
   endpoints:

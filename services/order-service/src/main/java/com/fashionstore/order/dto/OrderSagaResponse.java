@@ -1,7 +1,7 @@
 package com.fashionstore.order.dto;
 
-import com.fashionstore.order.model.enumeration.OrderSagaStatus;
-import com.fashionstore.order.model.enumeration.OrderSagaStep;
+import com.fashionstore.order.entity.enumeration.OrderSagaStatus;
+import com.fashionstore.order.entity.enumeration.OrderSagaStep;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;

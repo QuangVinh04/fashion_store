@@ -1,9 +1,8 @@
 package com.fashionstore.order.service.impl;
 
 import com.fashionstore.common.exception.AppException;
-import com.fashionstore.order.config.ErrorCode;
+import com.fashionstore.order.exception.OrderErrorCode;
 import com.fashionstore.common.security.CurrentUserProvider;
-import com.fashionstore.order.config.messaging.RabbitMQNames;
 import com.fashionstore.common.dto.PageResponse;
 import com.fashionstore.order.dto.CancelOrderRequest;
 import com.fashionstore.order.dto.CreateOrderRequest;
@@ -13,16 +12,16 @@ import com.fashionstore.order.dto.OrderSagaResponse;
 import com.fashionstore.order.dto.OrderSummaryResponse;
 import com.fashionstore.order.dto.ReturnOrderRequest;
 import com.fashionstore.order.dto.UpdateOrderStatusRequest;
-import com.fashionstore.order.messaging.SagaCancellationService;
-import com.fashionstore.order.messaging.SagaCommands;
-import com.fashionstore.order.messaging.SagaOutbox;
-import com.fashionstore.order.model.*;
+import com.fashionstore.order.saga.SagaCancellationService;
+import com.fashionstore.order.saga.SagaCommands;
+import com.fashionstore.order.saga.SagaOutbox;
+import com.fashionstore.order.entity.*;
 import com.fashionstore.contracts.common.EventEnvelope;
 import com.fashionstore.contracts.common.EventTypes;
 import com.fashionstore.contracts.inventory.command.InventoryItem;
 import com.fashionstore.contracts.inventory.command.ReservationInventoryCommand;
-import com.fashionstore.order.model.enumeration.CheckoutStatus;
-import com.fashionstore.order.model.enumeration.OrderStatus;
+import com.fashionstore.order.entity.enumeration.CheckoutStatus;
+import com.fashionstore.order.entity.enumeration.OrderStatus;
 import com.fashionstore.order.repository.CheckoutRepository;
 import com.fashionstore.order.repository.OrderRepository;
 import com.fashionstore.order.repository.OrderSagaRepository;
@@ -69,18 +68,18 @@ public class OrderServiceImpl implements OrderService {
         }
 
         Checkout checkout = checkoutRepository.findForUpdateByIdAndUserId(checkoutId, userId)
-                .orElseThrow(() -> new AppException(ErrorCode.CHECKOUT_NOT_FOUND));
+                .orElseThrow(() -> new AppException(OrderErrorCode.CHECKOUT_NOT_FOUND));
 
         if (checkout.getOrder() != null) {
             return toResponse(checkout.getOrder(), checkoutId);
         }
         if (checkout.getStatus() == CheckoutStatus.CANCELLED || checkout.getStatus() == CheckoutStatus.EXPIRED) {
-            throw new AppException(ErrorCode.CHECKOUT_STATUS_INVALID);
+            throw new AppException(OrderErrorCode.CHECKOUT_STATUS_INVALID);
         }
 
         List<CheckoutItem> checkoutItems = checkout.getItems();
         if (checkoutItems == null || checkoutItems.isEmpty()) {
-            throw new AppException(ErrorCode.CHECKOUT_NOT_FOUND);
+            throw new AppException(OrderErrorCode.CHECKOUT_NOT_FOUND);
         }
 
         Order order = Order.builder()
@@ -128,9 +127,9 @@ public class OrderServiceImpl implements OrderService {
     public OrderResponse getMyOrderById(String orderId) {
         String userId = currentUserProvider.getCurrentUserId();
         Order order = orderRepository.findWithItemsById(orderId)
-                .orElseThrow(() -> new AppException(ErrorCode.ORDER_NOT_FOUND));
+                .orElseThrow(() -> new AppException(OrderErrorCode.ORDER_NOT_FOUND));
         if (!order.getUserId().equals(userId)) {
-            throw new AppException(ErrorCode.ORDER_NOT_FOUND);
+            throw new AppException(OrderErrorCode.ORDER_NOT_FOUND);
         }
         return toResponse(order, order.getCheckoutId());
     }
@@ -150,16 +149,16 @@ public class OrderServiceImpl implements OrderService {
     public OrderResponse cancelMyOrder(String orderId, CancelOrderRequest request) {
         String userId = currentUserProvider.getCurrentUserId();
         Order order = orderRepository.findWithItemsById(orderId)
-                .orElseThrow(() -> new AppException(ErrorCode.ORDER_NOT_FOUND));
+                .orElseThrow(() -> new AppException(OrderErrorCode.ORDER_NOT_FOUND));
         if (!order.getUserId().equals(userId)) {
-            throw new AppException(ErrorCode.ORDER_NOT_FOUND);
+            throw new AppException(OrderErrorCode.ORDER_NOT_FOUND);
         }
         if (order.getStatus() == OrderStatus.CANCELLED) {
             return toResponse(order, order.getCheckoutId());   // hủy hai lần vẫn ra cùng kết quả
         }
         // Đơn đã qua CONFIRMED là chuyện hoàn tiền / hủy giao, không còn là bù trừ saga.
         if (order.getStatus() != OrderStatus.PENDING) {
-            throw new AppException(ErrorCode.ORDER_CANNOT_BE_CANCELLED);
+            throw new AppException(OrderErrorCode.ORDER_CANNOT_BE_CANCELLED);
         }
 
         String reason = reasonOrDefault(request);
@@ -167,7 +166,7 @@ public class OrderServiceImpl implements OrderService {
         // Khóa saga trước, orders sau — cùng thứ tự với handler saga.
         OrderSaga saga = orderSagaRepository.findByOrderIdForUpdate(orderId).orElse(null);
         Order locked = orderRepository.findByIdForUpdate(orderId)
-                .orElseThrow(() -> new AppException(ErrorCode.ORDER_NOT_FOUND));
+                .orElseThrow(() -> new AppException(OrderErrorCode.ORDER_NOT_FOUND));
 
         if (saga == null) {
             // Đơn cũ tạo trước khi có saga: không có gì để bù trừ.
@@ -178,7 +177,7 @@ public class OrderServiceImpl implements OrderService {
 
         SagaCancellationService.Outcome outcome = sagaCancellationService.cancel(saga, locked, reason);
         if (outcome == SagaCancellationService.Outcome.NOT_ALLOWED) {
-            throw new AppException(ErrorCode.ORDER_CANNOT_BE_CANCELLED);
+            throw new AppException(OrderErrorCode.ORDER_CANNOT_BE_CANCELLED);
         }
         return toResponse(locked, locked.getCheckoutId());
     }
@@ -188,16 +187,16 @@ public class OrderServiceImpl implements OrderService {
     public OrderResponse requestReturn(String orderId, ReturnOrderRequest request) {
         String userId = currentUserProvider.getCurrentUserId();
         Order order = orderRepository.findWithItemsById(orderId)
-                .orElseThrow(() -> new AppException(ErrorCode.ORDER_NOT_FOUND));
+                .orElseThrow(() -> new AppException(OrderErrorCode.ORDER_NOT_FOUND));
         if (!order.getUserId().equals(userId)) {
-            throw new AppException(ErrorCode.ORDER_NOT_FOUND);
+            throw new AppException(OrderErrorCode.ORDER_NOT_FOUND);
         }
         if (order.getStatus() == OrderStatus.RETURNED) {
             return toResponse(order, order.getCheckoutId());   // yêu cầu hai lần vẫn ra cùng kết quả
         }
         // Chỉ nhận trả hàng sau khi đã giao — trước đó khách dùng đường hủy đơn (cancelMyOrder).
         if (order.getStatus() != OrderStatus.DELIVERED) {
-            throw new AppException(ErrorCode.ORDER_RETURN_NOT_ALLOWED);
+            throw new AppException(OrderErrorCode.ORDER_RETURN_NOT_ALLOWED);
         }
 
         String reason = request == null || request.getReason() == null || request.getReason().isBlank()
@@ -205,7 +204,7 @@ public class OrderServiceImpl implements OrderService {
                 : request.getReason().trim();
 
         Order locked = orderRepository.findByIdForUpdate(orderId)
-                .orElseThrow(() -> new AppException(ErrorCode.ORDER_NOT_FOUND));
+                .orElseThrow(() -> new AppException(OrderErrorCode.ORDER_NOT_FOUND));
         locked.setStatus(OrderStatus.RETURNED);
         locked.setCancelReason(reason);
         orderRepository.save(locked);
@@ -234,7 +233,7 @@ public class OrderServiceImpl implements OrderService {
     @PreAuthorize("hasRole('ADMIN')")
     public OrderResponse getOrderById(String orderId) {
         Order order = orderRepository.findWithItemsById(orderId)
-                .orElseThrow(() -> new AppException(ErrorCode.ORDER_NOT_FOUND));
+                .orElseThrow(() -> new AppException(OrderErrorCode.ORDER_NOT_FOUND));
         return toResponse(order, order.getCheckoutId());
     }
 
@@ -243,7 +242,7 @@ public class OrderServiceImpl implements OrderService {
     @PreAuthorize("hasRole('ADMIN')")
     public OrderSagaResponse getOrderSaga(String orderId) {
         OrderSaga saga = orderSagaRepository.findByOrderId(orderId)
-                .orElseThrow(() -> new AppException(ErrorCode.ORDER_SAGA_NOT_FOUND));
+                .orElseThrow(() -> new AppException(OrderErrorCode.ORDER_SAGA_NOT_FOUND));
         return OrderSagaResponse.builder()
                 .sagaId(saga.getId())
                 .orderId(saga.getOrderId())
@@ -266,7 +265,7 @@ public class OrderServiceImpl implements OrderService {
     @PreAuthorize("hasRole('ADMIN')")
     public OrderResponse updateOrderStatus(String orderId, UpdateOrderStatusRequest request) {
         Order order = orderRepository.findWithItemsById(orderId)
-                .orElseThrow(() -> new AppException(ErrorCode.ORDER_NOT_FOUND));
+                .orElseThrow(() -> new AppException(OrderErrorCode.ORDER_NOT_FOUND));
 
         validateTransition(order.getStatus(), request.getStatus());
 
@@ -329,7 +328,7 @@ public class OrderServiceImpl implements OrderService {
         };
 
         if (!valid) {
-            throw new AppException(ErrorCode.ORDER_STATUS_INVALID);
+            throw new AppException(OrderErrorCode.ORDER_STATUS_INVALID);
         }
     }
 

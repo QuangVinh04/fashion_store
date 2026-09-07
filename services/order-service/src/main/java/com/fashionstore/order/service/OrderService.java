@@ -8,7 +8,7 @@ import com.fashionstore.order.dto.OrderSagaResponse;
 import com.fashionstore.order.dto.OrderSummaryResponse;
 import com.fashionstore.order.dto.ReturnOrderRequest;
 import com.fashionstore.order.dto.UpdateOrderStatusRequest;
-import com.fashionstore.order.model.enumeration.OrderStatus;
+import com.fashionstore.order.entity.enumeration.OrderStatus;
 import org.springframework.data.domain.Pageable;
 
 import java.util.List;

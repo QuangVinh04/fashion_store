@@ -1,7 +1,7 @@
 package com.fashionstore.order.repository;
 
-import com.fashionstore.order.model.Order;
-import com.fashionstore.order.model.enumeration.OrderStatus;
+import com.fashionstore.order.entity.Order;
+import com.fashionstore.order.entity.enumeration.OrderStatus;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;

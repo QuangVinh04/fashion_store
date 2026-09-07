@@ -6,20 +6,20 @@ import com.fashionstore.common.payment.PaymentMethod;
 import com.fashionstore.common.payment.PaymentProvider;
 import com.fashionstore.common.security.CurrentUserProvider;
 import com.fashionstore.contracts.common.EventTypes;
-import com.fashionstore.order.config.ErrorCode;
+import com.fashionstore.order.exception.OrderErrorCode;
 import com.fashionstore.order.dto.CancelOrderRequest;
 import com.fashionstore.order.dto.CreateOrderRequest;
 import com.fashionstore.order.dto.OrderResponse;
 import com.fashionstore.order.dto.OrderSagaResponse;
 import com.fashionstore.order.dto.OrderSummaryResponse;
-import com.fashionstore.order.messaging.SagaCommand;
-import com.fashionstore.order.messaging.SagaCancellationService;
-import com.fashionstore.order.messaging.SagaOutbox;
-import com.fashionstore.order.model.Order;
-import com.fashionstore.order.model.OrderSaga;
-import com.fashionstore.order.model.enumeration.OrderSagaStatus;
-import com.fashionstore.order.model.enumeration.OrderSagaStep;
-import com.fashionstore.order.model.enumeration.OrderStatus;
+import com.fashionstore.order.saga.SagaCommand;
+import com.fashionstore.order.saga.SagaCancellationService;
+import com.fashionstore.order.saga.SagaOutbox;
+import com.fashionstore.order.entity.Order;
+import com.fashionstore.order.entity.OrderSaga;
+import com.fashionstore.order.entity.enumeration.OrderSagaStatus;
+import com.fashionstore.order.entity.enumeration.OrderSagaStep;
+import com.fashionstore.order.entity.enumeration.OrderStatus;
 import com.fashionstore.order.outbox.OutboxService;
 import com.fashionstore.order.repository.CheckoutRepository;
 import com.fashionstore.order.repository.OrderRepository;
@@ -180,7 +180,7 @@ class OrderServiceImplTest {
         AppException exception = assertThrows(AppException.class,
                 () -> service.cancelMyOrder("order-1", new CancelOrderRequest(null)));
 
-        assertEquals(ErrorCode.ORDER_CANNOT_BE_CANCELLED, exception.getErrorCode());
+        assertEquals(OrderErrorCode.ORDER_CANNOT_BE_CANCELLED, exception.getErrorCode());
         verify(sagaOutbox, never()).emit(any(), any());
     }
 
@@ -192,7 +192,7 @@ class OrderServiceImplTest {
         AppException exception = assertThrows(AppException.class,
                 () -> service.cancelMyOrder("order-1", null));
 
-        assertEquals(ErrorCode.ORDER_CANNOT_BE_CANCELLED, exception.getErrorCode());
+        assertEquals(OrderErrorCode.ORDER_CANNOT_BE_CANCELLED, exception.getErrorCode());
     }
 
     @Test
@@ -217,7 +217,7 @@ class OrderServiceImplTest {
         AppException exception = assertThrows(AppException.class,
                 () -> service.cancelMyOrder("order-1", null));
 
-        assertEquals(ErrorCode.ORDER_NOT_FOUND, exception.getErrorCode());
+        assertEquals(OrderErrorCode.ORDER_NOT_FOUND, exception.getErrorCode());
     }
 
     // ----- admin -----
@@ -241,7 +241,7 @@ class OrderServiceImplTest {
 
         AppException exception = assertThrows(AppException.class, () -> service.getOrderSaga("order-1"));
 
-        assertEquals(ErrorCode.ORDER_SAGA_NOT_FOUND, exception.getErrorCode());
+        assertEquals(OrderErrorCode.ORDER_SAGA_NOT_FOUND, exception.getErrorCode());
     }
 
     // ----- helpers -----
