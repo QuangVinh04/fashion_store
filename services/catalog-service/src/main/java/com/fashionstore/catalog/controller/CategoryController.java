@@ -22,7 +22,7 @@ import java.util.List;
 
 @Slf4j
 @RestController
-@RequestMapping({"/api/v1/categories", "/api/v1/category"})
+@RequestMapping("/api/v1/category")
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class CategoryController {
@@ -30,7 +30,7 @@ public class CategoryController {
     CategoryService categoryService;
     ProductService productService;
 
-    @PostMapping({"", "/"})
+    @PostMapping("/")
     public ApiResponse<CategoryResponse> create(@Valid @RequestBody CategoryRequest request) {
         CategoryResponse response = categoryService.createCategory(request);
 
@@ -42,7 +42,8 @@ public class CategoryController {
     }
 
     @RequestMapping(value = "/{id}", method = {RequestMethod.PUT, RequestMethod.POST})
-    public ApiResponse<CategoryResponse> update(@PathVariable String id, @Valid @RequestBody CategoryRequest request) {
+    public ApiResponse<CategoryResponse> update(@PathVariable String id,
+                                                @Valid @RequestBody CategoryRequest request) {
         CategoryResponse response = categoryService.updateCategory(id, request);
 
         return ApiResponse.<CategoryResponse>builder()

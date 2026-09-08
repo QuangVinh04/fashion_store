@@ -13,6 +13,7 @@ import com.fashionstore.catalog.model.option.ColorOption;
 import com.fashionstore.catalog.model.option.SizeOption;
 import com.fashionstore.catalog.repository.*;
 import com.fashionstore.catalog.repository.ProductSpecificationsBuilder;
+import com.fashionstore.catalog.service.InventoryService;
 import com.fashionstore.catalog.service.ProductService;
 import com.fashionstore.catalog.util.StringUtils;
 import lombok.AccessLevel;
@@ -52,7 +53,9 @@ public class ProductServiceImpl implements ProductService {
     SizeChartRepository sizeChartRepository;
     ColorOptionRepository colorOptionRepository;
     SizeOptionRepository sizeOptionRepository;
+    MediaFileRepository mediaFileRepository;
     ProductMapper productMapper;
+    InventoryService inventoryService;
 
 
     @Override
@@ -132,6 +135,7 @@ public class ProductServiceImpl implements ProductService {
         }
 
         Product savedProduct = productRepository.save(product);
+        seedInventoryForVariants(savedProduct);
         return productMapper.toProductResponse(savedProduct);
     }
 
@@ -247,7 +251,9 @@ public class ProductServiceImpl implements ProductService {
         assignImages(product, request.getImages());
         assignAttributes(product, request.getAttributes());
 
-        return productMapper.toProductResponse(productRepository.save(product));
+        Product saved = productRepository.save(product);
+        seedInventoryForVariants(saved);
+        return productMapper.toProductResponse(saved);
     }
 
     @Override
@@ -262,7 +268,9 @@ public class ProductServiceImpl implements ProductService {
                         : request.getVariants();
 
         synchronizeVariants(product, variantRequests);
-        return productMapper.toProductResponse(productRepository.save(product));
+        Product saved = productRepository.save(product);
+        seedInventoryForVariants(saved);
+        return productMapper.toProductResponse(saved);
     }
 
     @Override
@@ -505,6 +513,12 @@ public class ProductServiceImpl implements ProductService {
             return;
         }
 
+        for (ProductImageItem item : images) {
+            if (item.getMediaId() != null && !mediaFileRepository.existsById(item.getMediaId())) {
+                throw new AppException(ProductErrorCode.MEDIA_FILE_NOT_FOUND);
+            }
+        }
+
         product.getImages().clear();
         for (int i = 0; i < images.size(); i++) {
             ProductImageItem item = images.get(i);
@@ -550,6 +564,14 @@ public class ProductServiceImpl implements ProductService {
                 }
             }
             validatePrices(request.getPrice(), request.getSalePrice());
+            // validate mediaId if provided
+            String mediaId = StringUtils.cleanText(request.getThumbnailMediaId());
+            if (mediaId == null) {
+                mediaId = StringUtils.cleanText(request.getMediaId());
+            }
+            if (mediaId != null && !mediaFileRepository.existsById(mediaId)) {
+                throw new AppException(ProductErrorCode.MEDIA_FILE_NOT_FOUND);
+            }
         }
         // validate colorOption and sizeOption
         List<String> colorOptionIds = requests.stream()
@@ -635,6 +657,16 @@ public class ProductServiceImpl implements ProductService {
     private String firstNonBlank(String first, String second) {
         String cleanedFirst = StringUtils.cleanText(first);
         return cleanedFirst != null ? cleanedFirst : StringUtils.cleanText(second);
+    }
+
+    private void seedInventoryForVariants(Product product) {
+        for (ProductVariant variant : product.getVariants()) {
+            if (variant.getId() == null) {
+                continue;
+            }
+            // upsertStock(variantId, productId, 0) tạo dòng mới với quantity 0 nếu chưa có
+            inventoryService.upsertStock(variant.getId(), product.getId(), 0);
+        }
     }
 
     private void assignAttributes(Product product, List<ProductAttributeValueRequest> requests) {

@@ -106,10 +106,8 @@ public class CategoryServiceImpl implements CategoryService {
             throw new AppException(ProductErrorCode.CATEGORY_ALREADY_EXIST);
         }
 
-        // Kiá»ƒm tra vÃ  cáº­p nháº­t Parent náº¿u cÃ³ thay Ä‘á»•i
         String newParentId = request.getParentId();
         if (newParentId != null && !newParentId.isBlank()) {
-            // Chá»‰ xá»­ lÃ½ náº¿u Ä‘á»•i sang parent khÃ¡c
             if (category.getParent() == null || !category.getParent().getId().equals(newParentId)) {
                 Category newParent = categoryRepository.findById(newParentId)
                         .orElseThrow(() -> new AppException(ProductErrorCode.CATEGORY_NOT_FOUND));

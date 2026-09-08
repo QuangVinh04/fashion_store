@@ -21,11 +21,6 @@ public class RabbitMQConfig {
     }
 
     @Bean
-    Queue inventoryProductVariantStockQueue() {
-        return new Queue(RabbitMQNames.INVENTORY_PRODUCT_VARIANT_STOCK_QUEUE, true);
-    }
-
-    @Bean
     Queue inventoryReservationRequestedQueue() {
         return new Queue(RabbitMQNames.INVENTORY_RESERVATION_REQUESTED_QUEUE, true);
     }
@@ -38,14 +33,6 @@ public class RabbitMQConfig {
     @Bean
     Queue inventoryReleaseRequestedQueue() {
         return new Queue(RabbitMQNames.INVENTORY_RELEASE_REQUESTED_QUEUE, true);
-    }
-
-    @Bean
-    Binding inventoryProductVariantStockBinding(Queue inventoryProductVariantStockQueue,
-                                                DirectExchange fashionEventsExchange) {
-        return BindingBuilder.bind(inventoryProductVariantStockQueue)
-                .to(fashionEventsExchange)
-                .with(RabbitMQNames.PRODUCT_VARIANT_STOCK_ROUTING_KEY);
     }
 
     @Bean

@@ -13,6 +13,7 @@ import java.util.Optional;
 @Repository
 public interface ColorOptionRepository extends JpaRepository<ColorOption, String> {
     boolean existsByNormalizedName(String normalizedName);
+    boolean existsByNormalizedNameAndIdNot(String normalizedName, String id);
     Optional<ColorOption> findByNormalizedName(String normalizedName);
     List<ColorOption> findAllByActiveTrueOrderByDisplayOrderAsc();
 }

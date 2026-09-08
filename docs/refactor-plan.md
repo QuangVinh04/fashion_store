@@ -272,14 +272,45 @@ Phát hiện trong lúc làm P5a, đều là lỗi có sẵn hoặc va chạm do
 **Kết quả sau P4 + P5a:** 3 Feign client → 2 (chung 1 base URL), 12 module → 10,
 17 container → 13.
 
-## P6 — Chốt lại (nửa ngày)
+## P6 — Chốt lại
 
-- [ ] Cập nhật `docs/microservices-roadmap.md` và `README.md` theo cấu trúc mới
-- [ ] Vẽ lại sơ đồ kiến trúc (5 service + gateway, luồng saga rút gọn)
+Phần docs kiến trúc đã xong (2026-09-06). Còn lại một mục CI.
+
+- [x] Cập nhật `docs/microservices-roadmap.md` và `README.md` theo cấu trúc mới —
+      bảng 5 service + gateway kèm port/database, và sửa lại những mô tả đã sai
+      so với code (xem "Sai lệch docs đã sửa" bên dưới)
+- [x] Vẽ lại sơ đồ kiến trúc: hai sơ đồ mermaid trong `microservices-roadmap.md`
+      — `flowchart` toàn hệ thống và `sequenceDiagram` luồng saga rút gọn, kèm
+      bảng bốn bước saga với timeout và nhánh bù trừ
+- [x] Viết đoạn giải thích **lý do** gộp — mục "Why the decomposition shrank from
+      8 services to 5" trong `microservices-roadmap.md`. Lập luận: ranh giới gốc
+      vạch theo *danh từ* (một service một họ entity) thay vì theo chi phí vượt
+      ranh giới; ba trong tám ranh giới không trả nổi cái giá đó. Dùng trực tiếp
+      cho báo cáo đồ án (báo cáo nằm ngoài repo)
 - [ ] CI: cân nhắc `push` chỉ chạy trên `main`, `pull_request` chạy đầy đủ
-- [ ] Viết một đoạn trong báo cáo đồ án giải thích **lý do** gộp — đây là nội
-      dung có giá trị học thuật: biết khi nào *không* nên tách service cũng là
-      một kết luận kiến trúc
+      (`.github/workflows/backend-ci.yml`)
+
+### Sai lệch docs đã sửa ở P6
+
+`microservices-roadmap.md` mô tả kiến trúc từ trước P4/P5, nên có bốn chỗ nói
+sai so với code hiện tại:
+
+1. "Cart now runs as its own service and calls product/inventory via HTTP" —
+   cart đã nằm trong order-service từ P4, `CheckoutServiceImpl` gọi thẳng
+   `CartService`.
+2. "Product publishes `ProductVariantStockEvent`" — không có producer nào, đây là
+   code chết. Chính file đó ở đoạn dưới lại ghi đúng là "no producer", tự mâu thuẫn.
+3. Ba trạng thái `PENDING_INVENTORY`, `CONFIRMING_INVENTORY`, `RELEASING_INVENTORY`
+   **không tồn tại** trong `OrderStatus`. `orders.status` chỉ giữ giá trị đã chốt
+   (`PENDING` → `CONFIRMED`/`CANCELLED`); tiến độ saga nằm ở `order_saga.step`.
+   Đây là điểm thiết kế đáng ghi rõ, không phải lỗi chính tả.
+4. "Anti-corruption clients such as `ProductClient`, `InventoryClient`,
+   `PaymentClient`, and `CartClient`" — `CartClient` đã xoá ở P4, `PaymentClient`
+   chưa từng có (payment đi qua message, không gọi HTTP).
+
+Đồng thời bổ sung mục "Known gaps" liệt kê 5 khoản nợ đang mở, để người đọc docs
+không tưởng saga đang chạy được đầu-cuối.
+
 
 ---
 

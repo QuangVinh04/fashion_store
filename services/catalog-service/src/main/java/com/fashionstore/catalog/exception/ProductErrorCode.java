@@ -37,6 +37,7 @@ public enum ProductErrorCode implements BaseErrorCode {
     OPTION_NOT_FOUND(1029, "Option not found", HttpStatus.NOT_FOUND),
     SLUG_ALREADY_EXISTED_OR_DUPLICATED(1030, "Slug already exists or duplicated", HttpStatus.BAD_REQUEST),
     SKU_ALREADY_EXISTED_OR_DUPLICATED(1031, "Sku already exists or duplicated", HttpStatus.BAD_REQUEST),
+    MEDIA_FILE_NOT_FOUND(1032, "Media file not found", HttpStatus.BAD_REQUEST),
     ;
 
     private final int code;

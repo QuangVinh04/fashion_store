@@ -26,6 +26,8 @@ import com.fashionstore.catalog.repository.ProductRepository;
 import com.fashionstore.catalog.repository.ProductVariantRepository;
 import com.fashionstore.catalog.repository.SizeChartRepository;
 import com.fashionstore.catalog.repository.SizeOptionRepository;
+import com.fashionstore.catalog.repository.MediaFileRepository;
+import com.fashionstore.catalog.service.InventoryService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -67,6 +69,10 @@ class ProductServiceImplTest {
     ColorOptionRepository colorOptionRepository;
     @Mock
     SizeOptionRepository sizeOptionRepository;
+        @Mock
+        MediaFileRepository mediaFileRepository;
+    @Mock
+    InventoryService inventoryService;
 
     @InjectMocks
     ProductServiceImpl productService;
@@ -242,6 +248,7 @@ class ProductServiceImplTest {
         when(categoryRepository.findAllById(List.of("category-1"))).thenReturn(List.of(category));
         when(colorOptionRepository.findAllById(List.of("color-black"))).thenReturn(List.of(black));
         when(sizeOptionRepository.findAllById(List.of("size-m"))).thenReturn(List.of(medium));
+        when(mediaFileRepository.existsById("media-1")).thenReturn(true);
         when(productVariantRepository.findBySku("TEE-BLK-M")).thenReturn(Optional.empty());
         when(productRepository.save(any(Product.class))).thenAnswer(invocation -> invocation.getArgument(0));
 

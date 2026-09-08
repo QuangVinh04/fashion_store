@@ -22,7 +22,7 @@ spring:
             - id: catalog
               uri: ${CATALOG_BASE_URL:http://catalog-service:8087}
               predicates:
-                - Path=/api/v1/product/**,/api/v1/products/**,/api/v1/category/**,/api/v1/categories/**,/admin/products,/admin/products/**,/api/v1/files/**
+                - Path=/api/v1/product/**,/api/v1/products/**,/api/v1/category/**,/api/v1/categories/**,/api/v1/inventory/**,/api/v1/brands/**,/api/v1/product-attributes/**,/api/v1/color-options/**,/api/v1/size-options/**,/api/v1/size-charts/**,/admin/products,/admin/products/**,/admin/brands/**,/admin/product-attributes/**,/admin/color-options/**,/admin/size-options/**,/admin/size-charts/**,/api/v1/files/**
             - id: order
               uri: ${ORDER_BASE_URL:http://order-service:8089}
               predicates:

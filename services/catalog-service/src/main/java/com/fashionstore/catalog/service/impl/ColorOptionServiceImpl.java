@@ -74,7 +74,7 @@ public class ColorOptionServiceImpl implements ColorOptionService {
                 .orElseThrow(() -> new AppException(ProductErrorCode.OPTION_NOT_FOUND));
 
         String normalized = StringUtils.normalizeCode(request.getName());
-        if(colorOptionRepository.existsByNormalizedName(normalized)){
+        if(colorOptionRepository.existsByNormalizedNameAndIdNot(normalized, Id)){
             throw new AppException(ProductErrorCode.OPTION_ALREADY_EXIST);
         }
         colorOptionMapper.updateColorOption(option, request);
@@ -85,8 +85,12 @@ public class ColorOptionServiceImpl implements ColorOptionService {
     }
 
     @Override
+    @Transactional
     public void delete(String Id) {
-
+        ColorOption option = colorOptionRepository.findById(Id)
+                .orElseThrow(() -> new AppException(ProductErrorCode.OPTION_NOT_FOUND));
+        option.setActive(false);
+        colorOptionRepository.save(option);
     }
 }
 

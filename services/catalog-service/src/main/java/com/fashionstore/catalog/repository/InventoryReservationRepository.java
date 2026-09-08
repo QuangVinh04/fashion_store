@@ -1,22 +1,16 @@
 package com.fashionstore.catalog.repository;
 
-import com.fashionstore.catalog.dto.*;
 import com.fashionstore.catalog.model.InventoryReservation;
 import com.fashionstore.catalog.model.enumeration.InventoryReservationStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
 
-
-import java.util.List;
 import java.util.Optional;
 
+@Repository
 public interface InventoryReservationRepository extends JpaRepository<InventoryReservation, String> {
 
-    List<InventoryReservation> findByOrderId(String orderId);
+    Optional<InventoryReservation> findByOrderId(String orderId);
 
-    List<InventoryReservation> findByOrderIdAndStatus(String orderId, InventoryReservationStatus status);
-
-    Optional<InventoryReservation> findByOrderIdAndVariantId(String orderId, String variantId);
-
-    boolean existsByOrderIdAndVariantIdAndStatus(String orderId, String variantId,
-                                                 InventoryReservationStatus status);
+    Optional<InventoryReservation> findByOrderIdAndStatus(String orderId, InventoryReservationStatus status);
 }

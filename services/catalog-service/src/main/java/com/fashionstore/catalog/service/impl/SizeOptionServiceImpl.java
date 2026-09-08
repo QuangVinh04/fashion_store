@@ -71,7 +71,7 @@ public class SizeOptionServiceImpl implements SizeOptionService {
                 .orElseThrow(() -> new AppException(ProductErrorCode.OPTION_NOT_FOUND));
 
         String normalized = StringUtils.normalizeCode(request.getName());
-        if(SizeOptionRepository.existsByNormalizedName(normalized)){
+        if(SizeOptionRepository.existsByNormalizedNameAndIdNot(normalized, Id)){
             throw new AppException(ProductErrorCode.OPTION_ALREADY_EXIST);
         }
         SizeOptionMapper.updateSizeOption(option, request);
@@ -82,8 +82,12 @@ public class SizeOptionServiceImpl implements SizeOptionService {
     }
 
     @Override
+    @Transactional
     public void delete(String Id) {
-
+        SizeOption option = SizeOptionRepository.findById(Id)
+                .orElseThrow(() -> new AppException(ProductErrorCode.OPTION_NOT_FOUND));
+        option.setActive(false);
+        SizeOptionRepository.save(option);
     }
 
 

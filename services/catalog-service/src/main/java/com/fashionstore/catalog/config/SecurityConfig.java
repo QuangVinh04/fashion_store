@@ -65,7 +65,7 @@ public class SecurityConfig {
                 .build();
     }
 
-    /** Nguyên văn từ inventory-service. {@code /internal/v1/**} chưa có controller nào. */
+    /** Inventory: cart checkStock cho phép authenticated (không ADMIN), còn mutate chỉ saga hoặc ADMIN. */
     @Bean
     @Order(2)
     SecurityFilterChain inventoryFilterChain(
@@ -80,7 +80,8 @@ public class SecurityConfig {
                 .securityMatcher("/api/v1/inventory/**", "/internal/v1/**")
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/v1/inventory/availability/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/inventory/check").authenticated()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/inventory/**").hasAnyRole("ADMIN")
                         .requestMatchers("/internal/v1/**").hasAuthority("internal")
                         .anyRequest().hasRole("ADMIN"))
                 .oauth2ResourceServer(resourceServer -> resourceServer
@@ -116,7 +117,11 @@ public class SecurityConfig {
                                 "/api/v1/products/**",
                                 "/api/v1/product/**",
                                 "/api/v1/categories/**",
-                                "/api/v1/category/**").permitAll()
+                                "/api/v1/category/**",
+                                "/api/v1/brands/**",
+                                "/api/v1/color-options/**",
+                                "/api/v1/size-options/**",
+                                "/api/v1/size-charts/**").permitAll()
                         .anyRequest().hasRole("ADMIN"))
                 .oauth2ResourceServer(resourceServer -> resourceServer
                         .jwt(jwt -> jwt.decoder(jwtDecoder).jwtAuthenticationConverter(jwtConverter))

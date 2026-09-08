@@ -14,6 +14,7 @@ import java.util.Optional;
 @Repository
 public interface SizeOptionRepository extends JpaRepository<SizeOption, String> {
     boolean existsByNormalizedName(String normalizedName);
+    boolean existsByNormalizedNameAndIdNot(String normalizedName, String id);
     Optional<SizeOption> findByNormalizedName(String normalizedName);
     List<SizeOption> findAllByActiveTrueOrderByDisplayOrderAsc();
 }
