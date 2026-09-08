@@ -38,6 +38,16 @@ public class InventoryController {
                 .build();
     }
 
+    @PutMapping("/variants/{variantId}")
+    public ApiResponse<InventoryResponse> updateStock(
+            @PathVariable String variantId,
+            @Valid @RequestBody UpdateStockRequest request) {
+        return ApiResponse.<InventoryResponse>builder()
+                .message("Stock updated successfully")
+                .data(inventoryService.updateStock(variantId, request.getQuantity()))
+                .build();
+    }
+
     // ── BUSINESS OPERATIONS ──────────────────────────────────────────
 
     /**

@@ -14,8 +14,8 @@ public interface InventoryService {
     void confirmStock(String orderId);
     InventoryResponse getByVariantId(String variantId);
     List<InventoryResponse> getByVariantIds(List<String> variantIds);
-    void upsertStock(String variantId, Integer quantity);
-    void upsertStock(String variantId, String productId, Integer quantity);
+    InventoryResponse updateStock(String variantId, Integer quantity);
+    void ensureStock(String variantId, String productId);
     void deleteStock(String variantId);
 
     // Saga (RabbitMQ) — all-or-nothing, idempotent theo orderId

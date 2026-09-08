@@ -480,34 +480,6 @@ public class ProductServiceImpl implements ProductService {
         }
     }
 
-
-
-
-// check
-//    private List<ProductCategory> setProductCategories(Product product, List<Category> categories) {
-//        List<ProductCategory> productCategoryList = new ArrayList<>();
-//        if (CollectionUtils.isEmpty(categories)) {
-//            List<Category> categoryIds
-//                    = product.getProductCategories().stream().map(ProductCategory::getCategory).sorted().toList();
-//            if (categoryIds.size() ) {
-//                List<Category> categoryList = categoryRepository.findAllById(vmCategoryIds);
-//                if (categoryList.isEmpty()) {
-//                    throw new BadRequestException(Constants.ErrorCode.CATEGORY_NOT_FOUND, vmCategoryIds);
-//                } else if (categoryList.size() < vmCategoryIds.size()) {
-//                    vmCategoryIds.removeAll(categoryList.stream().map(Category::getId).toList());
-//                    throw new BadRequestException(Constants.ErrorCode.CATEGORY_NOT_FOUND, vmCategoryIds);
-//                } else {
-//                    for (Category category : categoryList) {
-//                        productCategoryList.add(ProductCategory.builder()
-//                                .product(product)
-//                                .category(category).build());
-//                    }
-//                }
-//            }
-//        }
-//        return productCategoryList;
-//    }
-
     private void assignImages(Product product, List<ProductImageItem> images) {
         if (images == null) {
             return;
@@ -664,8 +636,7 @@ public class ProductServiceImpl implements ProductService {
             if (variant.getId() == null) {
                 continue;
             }
-            // upsertStock(variantId, productId, 0) tạo dòng mới với quantity 0 nếu chưa có
-            inventoryService.upsertStock(variant.getId(), product.getId(), 0);
+            inventoryService.ensureStock(variant.getId(), product.getId());
         }
     }
 

@@ -329,32 +329,29 @@ public class InventoryServiceImpl implements InventoryService {
 
     @Override
     @Transactional
-    public void upsertStock(String variantId, Integer quantity) {
+    public InventoryResponse updateStock(String variantId, Integer quantity) {
         if (quantity == null || quantity < 0) {
             throw new AppException(InventoryErrorCode.INVALID_STOCK_QUANTITY);
         }
-        inventoryRepository.findByVariantId(variantId).ifPresentOrElse(
-                inventory -> {
-                    inventory.setQuantity(quantity);
-                    inventoryRepository.save(inventory);
-                },
-                () -> log.warn("[Inventory] upsertStock — no inventory for variant {}, skip", variantId));
+        Inventory inventory = inventoryRepository.findByVariantIdWithLock(variantId)
+                .orElseThrow(() -> new AppException(InventoryErrorCode.INVENTORY_NOT_FOUND));
+        if (quantity < inventory.getReservedQuantity()) {
+            throw new AppException(InventoryErrorCode.STOCK_BELOW_RESERVED);
+        }
+        inventory.setQuantity(quantity);
+        return inventoryMapper.toResponse(inventoryRepository.save(inventory));
     }
 
-    public void upsertStock(String variantId, String productId, Integer quantity) {
-        if (quantity == null || quantity < 0) {
-            throw new AppException(InventoryErrorCode.INVALID_STOCK_QUANTITY);
-        }
+    @Override
+    @Transactional
+    public void ensureStock(String variantId, String productId) {
         inventoryRepository.findByVariantId(variantId).ifPresentOrElse(
-                inventory -> {
-                    inventory.setQuantity(quantity);
-                    inventoryRepository.save(inventory);
-                },
+                inventory -> { },
                 () -> {
                     Inventory created = Inventory.builder()
                             .variantId(variantId)
                             .productId(productId)
-                            .quantity(quantity)
+                            .quantity(0)
                             .reservedQuantity(0)
                             .status(InventoryStatus.ACTIVE)
                             .build();
