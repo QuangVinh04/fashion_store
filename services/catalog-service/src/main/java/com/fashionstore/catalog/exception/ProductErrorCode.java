@@ -38,6 +38,8 @@ public enum ProductErrorCode implements BaseErrorCode {
     SLUG_ALREADY_EXISTED_OR_DUPLICATED(1030, "Slug already exists or duplicated", HttpStatus.BAD_REQUEST),
     SKU_ALREADY_EXISTED_OR_DUPLICATED(1031, "Sku already exists or duplicated", HttpStatus.BAD_REQUEST),
     MEDIA_FILE_NOT_FOUND(1032, "Media file not found", HttpStatus.BAD_REQUEST),
+    BARCODE_INVALID(1033, "Barcode must be a GTIN of 8, 12, 13 or 14 digits", HttpStatus.BAD_REQUEST),
+    BARCODE_ALREADY_EXISTED_OR_DUPLICATED(1034, "Barcode already exists or duplicated", HttpStatus.BAD_REQUEST),
     ;
 
     private final int code;

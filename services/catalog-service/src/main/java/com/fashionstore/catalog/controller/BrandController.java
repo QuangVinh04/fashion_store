@@ -33,6 +33,13 @@ public class BrandController {
                 .data(brandService.getById(id)).build();
     }
 
+    @GetMapping("/admin/brands")
+    public ApiResponse<List<BrandResponse>> listForAdmin() {
+        return ApiResponse.<List<BrandResponse>>builder()
+                .message("Get brands successfully")
+                .data(brandService.getAllForAdmin()).build();
+    }
+
     @PostMapping("/admin/brands")
     public ApiResponse<BrandResponse> create(@Valid @RequestBody BrandRequest request) {
         return ApiResponse.<BrandResponse>builder()

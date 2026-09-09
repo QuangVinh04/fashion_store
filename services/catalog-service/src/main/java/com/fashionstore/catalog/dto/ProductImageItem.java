@@ -11,6 +11,7 @@ import lombok.*;
 public class ProductImageItem {
     String mediaId;
     String url;
+    String color;
     String altText;
     Integer sortOrder;
     Boolean isPrimary;

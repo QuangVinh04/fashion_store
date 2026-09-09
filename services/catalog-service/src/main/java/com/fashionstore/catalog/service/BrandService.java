@@ -22,8 +22,15 @@ public class BrandService {
 
     BrandRepository brandRepository;
 
+    /** Public listing — /api/v1/brands is permitAll, so deactivated brands stay out of it. */
     @Transactional(readOnly = true)
     public List<BrandResponse> getAll() {
+        return brandRepository.findAllByActiveTrueOrderByNameAsc().stream().map(this::toResponse).toList();
+    }
+
+    /** Backoffice listing — has to include deactivated brands so a delete can be undone. */
+    @Transactional(readOnly = true)
+    public List<BrandResponse> getAllForAdmin() {
         return brandRepository.findAll().stream().map(this::toResponse).toList();
     }
 
@@ -63,9 +70,15 @@ public class BrandService {
         return toResponse(brandRepository.save(brand));
     }
 
+    /**
+     * product.brand_id is a real FK with no ON DELETE rule, so removing the row would fail at
+     * flush time for any brand still in use. Deactivate instead, matching ColorOption/SizeOption.
+     */
     @Transactional
     public void delete(String id) {
-        brandRepository.delete(findById(id));
+        Brand brand = findById(id);
+        brand.setActive(false);
+        brandRepository.save(brand);
     }
 
     private Brand findById(String id) {

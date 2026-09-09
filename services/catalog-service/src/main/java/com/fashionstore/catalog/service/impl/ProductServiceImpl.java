@@ -22,6 +22,7 @@ import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -44,6 +45,17 @@ public class ProductServiceImpl implements ProductService {
             Set.of("name", "description", "price", "basePrice", "category", "priceRange", "color", "size");
     private static final Pattern SEARCH_PATTERN =
             Pattern.compile("(\\w+?)([<:>~!])(\\p{Punct}?)(.*)(\\p{Punct}?)");
+
+    /**
+     * Advanced search is served under {@code /api/v1/products/**}, which SecurityConfig
+     * opens with {@code permitAll()}. Every path through it has to carry this restriction;
+     * the backoffice listing is a separate ADMIN-only method.
+     */
+    private static final Specification<Product> PUBLISHED_ONLY = (root, query, cb) ->
+            cb.equal(root.get("status"), ProductStatus.PUBLISHED);
+
+    /** GTIN-8/12/13/14 — the only barcode shapes a variant may carry. */
+    private static final Pattern GTIN_PATTERN = Pattern.compile("\\d{8}|\\d{12}|\\d{13}|\\d{14}");
 
     ProductRepository productRepository;
     CategoryRepository categoryRepository;
@@ -396,28 +408,26 @@ public class ProductServiceImpl implements ProductService {
     public PageResponse<List<ProductSummaryResponse>> advanceSearchWithSpecifications (Pageable pageable, String[] product) {
         log.info("Search product by specifications");
 
-        if (product != null) {
-            if (product.length == 0) {
-                return getPageResponse(pageable, productRepository.findAll(pageable));
-            }
-
-            ProductSpecificationsBuilder builder = new ProductSpecificationsBuilder();
-
-            for (String s : product) {
-                Matcher matcher = SEARCH_PATTERN.matcher(s);
-                if (!matcher.matches() || !SEARCHABLE_FIELDS.contains(matcher.group(1))) {
-                    throw new AppException(ProductErrorCode.INVALID_SEARCH_CRITERIA);
-                }
-                validateSearchValue(matcher.group(1), matcher.group(4));
-                builder.with(matcher.group(1), matcher.group(2), matcher.group(4), matcher.group(3), matcher.group(5));
-            }
-            Page<Product> products = productRepository.findAll(builder.build(), pageable);
-            return getPageResponse(pageable, products);
+        if (product == null || product.length == 0) {
+            return getPageResponse(pageable, productRepository.findAllByStatus(ProductStatus.PUBLISHED, pageable));
         }
 
-        Page<Product> products = productRepository.findAll(pageable);
-        return getPageResponse(pageable, products);
+        ProductSpecificationsBuilder builder = new ProductSpecificationsBuilder();
 
+        for (String s : product) {
+            Matcher matcher = SEARCH_PATTERN.matcher(s);
+            if (!matcher.matches() || !SEARCHABLE_FIELDS.contains(matcher.group(1))) {
+                throw new AppException(ProductErrorCode.INVALID_SEARCH_CRITERIA);
+            }
+            validateSearchValue(matcher.group(1), matcher.group(4));
+            builder.with(matcher.group(1), matcher.group(2), matcher.group(4), matcher.group(3), matcher.group(5));
+        }
+
+        // build() is null when no criterion survived parsing; the visibility filter still applies.
+        Specification<Product> criteria = builder.build();
+        Page<Product> products = productRepository.findAll(
+                criteria == null ? PUBLISHED_ONLY : criteria.and(PUBLISHED_ONLY), pageable);
+        return getPageResponse(pageable, products);
     }
 
 
@@ -498,6 +508,7 @@ public class ProductServiceImpl implements ProductService {
                     .product(product)
                     .mediaId(item.getMediaId())
                     .url(item.getUrl())
+                    .color(StringUtils.cleanText(item.getColor()))
                     .altText(StringUtils.cleanText(item.getAltText()))
                     .sortOrder(item.getSortOrder() != null ? item.getSortOrder() : i)
                     .isPrimary(Boolean.TRUE.equals(item.getIsPrimary()) || i == 0)
@@ -525,6 +536,7 @@ public class ProductServiceImpl implements ProductService {
                         .collect(Collectors.toSet());
 
         // validate price and sku
+        Set<String> barcodesInRequest = new HashSet<>();
         for (ProductVariantRequest request : requests) {
             String sku = StringUtils.cleanText(request.getSku());
             // uk_product_variant_sku ap dung cho moi dong, ke ca variant da tat,
@@ -533,6 +545,20 @@ public class ProductServiceImpl implements ProductService {
                 Optional<ProductVariant> holder = productVariantRepository.findBySku(sku);
                 if (holder.isPresent() && !ownVariantIds.contains(holder.get().getId())) {
                     throw new AppException(ProductErrorCode.SKU_ALREADY_EXISTED_OR_DUPLICATED);
+                }
+            }
+            // Barcode doi xung voi sku: cung mot unique index, cung mot cach kiem tra truoc khi ghi.
+            String barcode = StringUtils.cleanText(request.getBarcode());
+            if (barcode != null) {
+                if (!GTIN_PATTERN.matcher(barcode).matches()) {
+                    throw new AppException(ProductErrorCode.BARCODE_INVALID);
+                }
+                if (!barcodesInRequest.add(barcode)) {
+                    throw new AppException(ProductErrorCode.BARCODE_ALREADY_EXISTED_OR_DUPLICATED);
+                }
+                Optional<ProductVariant> holder = productVariantRepository.findByBarcode(barcode);
+                if (holder.isPresent() && !ownVariantIds.contains(holder.get().getId())) {
+                    throw new AppException(ProductErrorCode.BARCODE_ALREADY_EXISTED_OR_DUPLICATED);
                 }
             }
             validatePrices(request.getPrice(), request.getSalePrice());
@@ -565,6 +591,19 @@ public class ProductServiceImpl implements ProductService {
                 .collect(Collectors.toMap(SizeOption::getId, option -> option));
         if (colorsById.size() != colorOptionIds.size() || sizesById.size() != sizeOptionIds.size()) {
             throw new AppException(ProductErrorCode.OPTION_NOT_FOUND);
+        }
+
+        // Hai request cung mau+size se sinh ra cung mot option_signature. synchronizeVariants
+        // giu existingBySignature nhu mot snapshot truoc vong lap nen ca hai deu duoc them moi,
+        // va uk_product_variant_product_signature chi no tung flush — phai chan truoc o day.
+        Set<String> signatures = new HashSet<>();
+        for (ProductVariantRequest request : requests) {
+            String signature = buildOptionSignature(
+                    colorsById.get(StringUtils.cleanText(request.getColorOptionId())),
+                    sizesById.get(StringUtils.cleanText(request.getSizeOptionId())));
+            if (!signatures.add(signature)) {
+                throw new AppException(ProductErrorCode.PRODUCT_VARIANT_ALREADY_EXIST);
+            }
         }
         return new VariantOptionsValidation(colorsById, sizesById);
     }

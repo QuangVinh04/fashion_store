@@ -54,7 +54,10 @@ public class ProductSpecification implements Specification<Product> {
             case "color", "size" -> {
                 query.distinct(true);
                 Join<Product, ProductVariant> variantJoin = root.join("variants");
-                yield cb.equal(cb.lower(variantJoin.get(key)), value.toString().toLowerCase());
+                // A deactivated variant must not keep its product in a public facet result.
+                yield cb.and(
+                        cb.equal(cb.lower(variantJoin.get(key)), value.toString().toLowerCase()),
+                        cb.isTrue(variantJoin.get("active")));
             }
 
             case "price" -> getPredicate(cb, root.get("basePrice"), value);

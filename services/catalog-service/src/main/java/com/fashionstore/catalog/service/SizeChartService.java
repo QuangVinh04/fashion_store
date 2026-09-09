@@ -26,8 +26,17 @@ public class SizeChartService {
     SizeChartRepository sizeChartRepository;
     SizeChartRowRepository sizeChartRowRepository;
 
+    /** Public listing — /api/v1/size-charts is permitAll, so deactivated charts stay out of it. */
     @Transactional(readOnly = true)
     public List<SizeChartResponse> getAll() {
+        return sizeChartRepository.findAllByActiveTrueOrderByNameAsc().stream()
+                .map(this::toResponseWithoutRows)
+                .toList();
+    }
+
+    /** Backoffice listing — has to include deactivated charts so a delete can be undone. */
+    @Transactional(readOnly = true)
+    public List<SizeChartResponse> getAllForAdmin() {
         return sizeChartRepository.findAll().stream().map(this::toResponseWithoutRows).toList();
     }
 
@@ -59,9 +68,16 @@ public class SizeChartService {
         return toResponse(sizeChartRepository.save(sizeChart));
     }
 
+    /**
+     * product.size_chart_id has no FK, so removing the row would silently leave products pointing
+     * at a chart that no longer exists and their /size-chart endpoint would 404 forever.
+     * Deactivate instead; the reference stays resolvable.
+     */
     @Transactional
     public void delete(String id) {
-        sizeChartRepository.delete(findDetail(id));
+        SizeChart sizeChart = findDetail(id);
+        sizeChart.setActive(false);
+        sizeChartRepository.save(sizeChart);
     }
 
     @Transactional

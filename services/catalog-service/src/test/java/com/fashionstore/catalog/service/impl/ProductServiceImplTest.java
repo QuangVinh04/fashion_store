@@ -1,6 +1,7 @@
 package com.fashionstore.catalog.service.impl;
 
 import com.fashionstore.catalog.dto.ProductAttributeValueRequest;
+import com.fashionstore.catalog.dto.ProductImageItem;
 import com.fashionstore.catalog.dto.ProductRequest;
 import com.fashionstore.catalog.dto.ProductUpdateRequest;
 import com.fashionstore.catalog.dto.ProductVariantRequest;
@@ -12,6 +13,7 @@ import com.fashionstore.catalog.model.Brand;
 import com.fashionstore.catalog.model.Category;
 import com.fashionstore.catalog.model.Product;
 import com.fashionstore.catalog.model.ProductCategory;
+import com.fashionstore.catalog.model.ProductImage;
 import com.fashionstore.catalog.model.ProductVariant;
 import com.fashionstore.catalog.model.attribute.ProductAttribute;
 import com.fashionstore.catalog.model.enumeration.ProductStatus;
@@ -28,13 +30,21 @@ import com.fashionstore.catalog.repository.SizeChartRepository;
 import com.fashionstore.catalog.repository.SizeOptionRepository;
 import com.fashionstore.catalog.repository.MediaFileRepository;
 import com.fashionstore.catalog.service.InventoryService;
+import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.CriteriaQuery;
+import jakarta.persistence.criteria.Path;
+import jakarta.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.Root;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -44,6 +54,10 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -73,6 +87,23 @@ class ProductServiceImplTest {
         MediaFileRepository mediaFileRepository;
     @Mock
     InventoryService inventoryService;
+
+    @Mock
+    Root<Product> searchRoot;
+    @Mock
+    CriteriaQuery<?> searchQuery;
+    @Mock
+    CriteriaBuilder criteriaBuilder;
+    @Mock
+    Path<String> namePath;
+    @Mock
+    Path<Object> statusPath;
+    @Mock
+    Predicate nameMatches;
+    @Mock
+    Predicate publishedOnly;
+    @Mock
+    Predicate narrowed;
 
     @InjectMocks
     ProductServiceImpl productService;
@@ -445,6 +476,228 @@ class ProductServiceImplTest {
                 .isInstanceOfSatisfying(AppException.class,
                         exception -> assertThat(exception.getErrorCode())
                                 .isEqualTo(ProductErrorCode.INVALID_SEARCH_CRITERIA));
+    }
+
+    /**
+     * The advanced search endpoints sit under {@code /api/v1/products/**}, which
+     * {@code SecurityConfig} opens with {@code permitAll()}. An absent search must
+     * therefore not fall back to an unfiltered {@code findAll}.
+     */
+    @Test
+    void advancedSearchWithoutCriteriaReturnsOnlyPublishedProducts() {
+        Pageable pageable = PageRequest.of(0, 10);
+        when(productRepository.findAllByStatus(ProductStatus.PUBLISHED, pageable))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        productService.advanceSearchWithSpecifications(pageable, null);
+
+        verify(productRepository).findAllByStatus(ProductStatus.PUBLISHED, pageable);
+        verify(productRepository, never()).findAll(pageable);
+    }
+
+    @Test
+    void advancedSearchWithEmptyCriteriaReturnsOnlyPublishedProducts() {
+        Pageable pageable = PageRequest.of(0, 10);
+        when(productRepository.findAllByStatus(ProductStatus.PUBLISHED, pageable))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        productService.advanceSearchWithSpecifications(pageable, new String[0]);
+
+        verify(productRepository).findAllByStatus(ProductStatus.PUBLISHED, pageable);
+        verify(productRepository, never()).findAll(pageable);
+    }
+
+    /**
+     * The caller supplied criteria must be ANDed with the published restriction, never
+     * replace it — otherwise DRAFT and ARCHIVED products leak through the public search.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void advancedSearchWithCriteriaNarrowsToPublishedProducts() {
+        Pageable pageable = PageRequest.of(0, 10);
+        when(productRepository.findAll(any(Specification.class), eq(pageable)))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        productService.advanceSearchWithSpecifications(pageable, new String[]{"name:ao"});
+
+        ArgumentCaptor<Specification<Product>> captor = ArgumentCaptor.forClass(Specification.class);
+        verify(productRepository).findAll(captor.capture(), eq(pageable));
+
+        when(searchRoot.<String>get("name")).thenReturn(namePath);
+        doReturn(String.class).when(namePath).getJavaType();
+        when(searchRoot.get("status")).thenReturn(statusPath);
+        when(criteriaBuilder.equal(namePath, "ao")).thenReturn(nameMatches);
+        when(criteriaBuilder.equal(statusPath, ProductStatus.PUBLISHED)).thenReturn(publishedOnly);
+        when(criteriaBuilder.and(nameMatches, publishedOnly)).thenReturn(narrowed);
+
+        assertThat(captor.getValue().toPredicate(searchRoot, searchQuery, criteriaBuilder))
+                .isSameAs(narrowed);
+    }
+
+    @Test
+    void rejectsTwoVariantsSharingTheSameColorAndSizeInOneRequest() {
+        Category category = Category.builder().name("Tops").build();
+        category.setId("category-1");
+        ColorOption black = color("color-black", "Black", "#111111");
+        SizeOption medium = size("size-m", "M");
+
+        ProductRequest request = ProductRequest.builder()
+                .name("Basic Tee")
+                .categoryIds(List.of("category-1"))
+                .basePrice(new BigDecimal("20.00"))
+                .variants(List.of(
+                        ProductVariantRequest.builder()
+                                .colorOptionId("color-black")
+                                .sizeOptionId("size-m")
+                                .sku("TEE-BLK-M-A")
+                                .build(),
+                        ProductVariantRequest.builder()
+                                .colorOptionId("color-black")
+                                .sizeOptionId("size-m")
+                                .sku("TEE-BLK-M-B")
+                                .build()))
+                .build();
+
+        when(productRepository.existsBySlug("basic-tee")).thenReturn(false);
+        when(categoryRepository.findAllById(List.of("category-1"))).thenReturn(List.of(category));
+        when(colorOptionRepository.findAllById(List.of("color-black"))).thenReturn(List.of(black));
+        when(sizeOptionRepository.findAllById(List.of("size-m"))).thenReturn(List.of(medium));
+        when(productVariantRepository.findBySku(any())).thenReturn(Optional.empty());
+
+        // uk_product_variant_product_signature would reject this at flush time with a 500.
+        assertThatThrownBy(() -> productService.createProduct(request))
+                .isInstanceOfSatisfying(AppException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ProductErrorCode.PRODUCT_VARIANT_ALREADY_EXIST));
+
+        verify(productRepository, never()).save(any(Product.class));
+    }
+
+    @Test
+    void persistsTheColorAssignedToEachProductImage() {
+        Category category = Category.builder().name("Tops").build();
+        category.setId("category-1");
+
+        ProductRequest request = ProductRequest.builder()
+                .name("Basic Tee")
+                .categoryIds(List.of("category-1"))
+                .basePrice(new BigDecimal("20.00"))
+                .images(List.of(
+                        ProductImageItem.builder()
+                                .mediaId("media-1")
+                                .url("https://cdn.example.com/black-front.jpg")
+                                .color("Black")
+                                .isPrimary(true)
+                                .build(),
+                        ProductImageItem.builder()
+                                .mediaId("media-2")
+                                .url("https://cdn.example.com/detail.jpg")
+                                .build()))
+                .build();
+
+        when(productRepository.existsBySlug("basic-tee")).thenReturn(false);
+        when(categoryRepository.findAllById(List.of("category-1"))).thenReturn(List.of(category));
+        when(mediaFileRepository.existsById(any())).thenReturn(true);
+        when(productRepository.save(any(Product.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        productService.createProduct(request);
+
+        ArgumentCaptor<Product> productCaptor = ArgumentCaptor.forClass(Product.class);
+        verify(productRepository).save(productCaptor.capture());
+        // product_image.color already existed and was already returned by the API — it was just never written.
+        assertThat(productCaptor.getValue().getImages())
+                .extracting(ProductImage::getColor)
+                .containsExactly("Black", null);
+    }
+
+    @Test
+    void rejectsABarcodeThatIsNotAGtin() {
+        Category category = Category.builder().name("Tops").build();
+        category.setId("category-1");
+
+        ProductRequest request = ProductRequest.builder()
+                .name("Basic Tee")
+                .categoryIds(List.of("category-1"))
+                .basePrice(new BigDecimal("20.00"))
+                .variants(List.of(ProductVariantRequest.builder()
+                        .colorOptionId("color-black")
+                        .sizeOptionId("size-m")
+                        .barcode("not-a-gtin")
+                        .build()))
+                .build();
+
+        when(productRepository.existsBySlug("basic-tee")).thenReturn(false);
+        when(categoryRepository.findAllById(List.of("category-1"))).thenReturn(List.of(category));
+
+        assertThatThrownBy(() -> productService.createProduct(request))
+                .isInstanceOfSatisfying(AppException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ProductErrorCode.BARCODE_INVALID));
+
+        verify(productRepository, never()).save(any(Product.class));
+    }
+
+    @Test
+    void rejectsTwoVariantsSharingTheSameBarcodeInOneRequest() {
+        Category category = Category.builder().name("Tops").build();
+        category.setId("category-1");
+
+        ProductRequest request = ProductRequest.builder()
+                .name("Basic Tee")
+                .categoryIds(List.of("category-1"))
+                .basePrice(new BigDecimal("20.00"))
+                .variants(List.of(
+                        ProductVariantRequest.builder()
+                                .colorOptionId("color-black")
+                                .sizeOptionId("size-m")
+                                .barcode("4006381333931")
+                                .build(),
+                        ProductVariantRequest.builder()
+                                .colorOptionId("color-black")
+                                .sizeOptionId("size-l")
+                                .barcode("4006381333931")
+                                .build()))
+                .build();
+
+        when(productRepository.existsBySlug("basic-tee")).thenReturn(false);
+        when(categoryRepository.findAllById(List.of("category-1"))).thenReturn(List.of(category));
+
+        assertThatThrownBy(() -> productService.createProduct(request))
+                .isInstanceOfSatisfying(AppException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ProductErrorCode.BARCODE_ALREADY_EXISTED_OR_DUPLICATED));
+
+        verify(productRepository, never()).save(any(Product.class));
+    }
+
+    @Test
+    void rejectsABarcodeAlreadyUsedByAnotherVariant() {
+        Category category = Category.builder().name("Tops").build();
+        category.setId("category-1");
+        ProductVariant otherVariant = ProductVariant.builder().sku("OTHER-BLK-M").build();
+        otherVariant.setId("variant-other");
+
+        ProductRequest request = ProductRequest.builder()
+                .name("Basic Tee")
+                .categoryIds(List.of("category-1"))
+                .basePrice(new BigDecimal("20.00"))
+                .variants(List.of(ProductVariantRequest.builder()
+                        .colorOptionId("color-black")
+                        .sizeOptionId("size-m")
+                        .barcode("4006381333931")
+                        .build()))
+                .build();
+
+        when(productRepository.existsBySlug("basic-tee")).thenReturn(false);
+        when(categoryRepository.findAllById(List.of("category-1"))).thenReturn(List.of(category));
+        when(productVariantRepository.findByBarcode("4006381333931")).thenReturn(Optional.of(otherVariant));
+
+        assertThatThrownBy(() -> productService.createProduct(request))
+                .isInstanceOfSatisfying(AppException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ProductErrorCode.BARCODE_ALREADY_EXISTED_OR_DUPLICATED));
+
+        verify(productRepository, never()).save(any(Product.class));
     }
 
     private ColorOption color(String id, String name, String colorHex) {

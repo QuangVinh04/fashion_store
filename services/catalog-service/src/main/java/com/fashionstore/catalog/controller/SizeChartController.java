@@ -32,6 +32,13 @@ public class SizeChartController {
                 .data(sizeChartService.getById(id)).build();
     }
 
+    @GetMapping("/admin/size-charts")
+    public ApiResponse<List<SizeChartResponse>> listForAdmin() {
+        return ApiResponse.<List<SizeChartResponse>>builder()
+                .message("Get size charts successfully")
+                .data(sizeChartService.getAllForAdmin()).build();
+    }
+
     @PostMapping("/admin/size-charts")
     public ApiResponse<SizeChartResponse> create(@Valid @RequestBody SizeChartRequest request) {
         return ApiResponse.<SizeChartResponse>builder()
