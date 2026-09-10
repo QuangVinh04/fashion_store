@@ -2,15 +2,24 @@ package com.fashionstore.catalog.service.impl;
 
 import com.fashionstore.catalog.config.MinioProperties;
 import com.fashionstore.catalog.dto.PresignedUpload;
+import io.minio.BucketExistsArgs;
+import io.minio.MakeBucketArgs;
 import io.minio.MinioClient;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 /**
- * Chi kiem tra chu ky cua presigned URL nen khong can MinIO that: region duoc set san
- * de {@code getRegionAsync} khong goi GetBucketLocation.
+ * Khong can MinIO that: client noi bo (stat/remove/bucket) duoc mock, con client ky
+ * presigned URL la client that nhung da set san region nen {@code getRegionAsync}
+ * khong goi GetBucketLocation.
  */
 class MinioStorageServiceTest {
 
@@ -23,20 +32,41 @@ class MinioStorageServiceTest {
             900,
             20L * 1024 * 1024);
 
+    private MinioClient internalClient;
     private MinioStorageService storageService;
 
     @BeforeEach
-    void setUp() {
-        storageService = new MinioStorageService(client(PROPERTIES.endpoint()),
-                client(PROPERTIES.publicEndpoint()), PROPERTIES);
+    void setUp() throws Exception {
+        internalClient = mock(MinioClient.class);
+        when(internalClient.bucketExists(any(BucketExistsArgs.class))).thenReturn(true);
+        storageService = new MinioStorageService(internalClient, presignClient(), PROPERTIES);
     }
 
-    private MinioClient client(String endpoint) {
+    private MinioClient presignClient() {
         return MinioClient.builder()
-                .endpoint(endpoint)
+                .endpoint(PROPERTIES.publicEndpoint())
                 .region("us-east-1")
                 .credentials(PROPERTIES.accessKey(), PROPERTIES.secretKey())
                 .build();
+    }
+
+    @Test
+    void presignUploadCreatesBucketOnceWhenMissing() throws Exception {
+        when(internalClient.bucketExists(any(BucketExistsArgs.class))).thenReturn(false, true);
+
+        storageService.presignUpload("2026/09/a.png", "image/png");
+        storageService.presignUpload("2026/09/b.png", "image/png");
+
+        // bucket tao lan dau can den, va chi mot lan — khong lam lai moi presign
+        verify(internalClient, times(1)).makeBucket(any(MakeBucketArgs.class));
+        verify(internalClient, times(1)).bucketExists(any(BucketExistsArgs.class));
+    }
+
+    @Test
+    void presignUploadSkipsBucketCreationWhenAlreadyThere() throws Exception {
+        storageService.presignUpload("2026/09/a.png", "image/png");
+
+        verify(internalClient, never()).makeBucket(any(MakeBucketArgs.class));
     }
 
     @Test

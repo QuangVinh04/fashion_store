@@ -100,6 +100,8 @@ services:
       MINIO_ACCESS_KEY: minioadmin
       MINIO_SECRET_KEY: minioadmin
       MINIO_BUCKET: fashion-media
+      MINIO_PRESIGN_EXPIRY_SECONDS: 900
+      MINIO_MAX_UPLOAD_BYTES: 20971520
     depends_on:
       catalog-postgres:
         condition: service_healthy

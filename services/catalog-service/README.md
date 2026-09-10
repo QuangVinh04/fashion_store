@@ -83,6 +83,8 @@ Bytes không đi qua service. Ba bước:
 - `purgeStalePendingUploads` (`@Scheduled`, mỗi giờ) xoá row `PENDING` cũ hơn hai lần
   `presign-expiry-seconds` cùng object của nó — presign rồi bỏ dở thì hết hạn là hết
   đường upload. Quét bằng index `idx_media_file_status_created_at` (`V41`).
+- Bucket được tạo lần đầu `presignUpload` cần đến, không phải lúc khởi động: MinIO chưa
+  lên thì service vẫn boot, và vẫn tự tạo bucket khi MinIO lên sau.
 
 ## HTTP API
 

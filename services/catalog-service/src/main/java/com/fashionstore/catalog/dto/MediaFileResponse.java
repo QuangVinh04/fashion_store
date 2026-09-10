@@ -30,7 +30,6 @@ public class MediaFileResponse {
     String contentType;
     String extension;
     Long sizeBytes;
-    String checksumSha256;
     MediaType mediaType;
     MediaStatus status;
     MediaVisibility visibility;

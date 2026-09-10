@@ -70,9 +70,6 @@ public class MediaFile extends BaseEntity {
     @Column(name = "etag", length = 64)
     String etag; // ETag do storage sinh sau khi upload xong
 
-    @Column(name = "checksum_sha256", length = 64)
-    String checksumSha256;
-
     @Enumerated(EnumType.STRING)
     @Column(name = "media_type", nullable = false, length = 20)
     MediaType mediaType;

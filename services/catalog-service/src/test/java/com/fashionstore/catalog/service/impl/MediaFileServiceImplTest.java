@@ -113,7 +113,6 @@ class MediaFileServiceImplTest {
         assertThat(saved.getMediaType()).isEqualTo(MediaType.IMAGE);
         assertThat(saved.getFolder()).isEqualTo("campaigns/summer");
         assertThat(saved.getTags()).containsExactly("homepage", "summer");
-        assertThat(saved.getChecksumSha256()).isNull();
 
         assertThat(response.getMediaId()).isEqualTo("file-1");
         assertThat(response.getUploadUrl()).isEqualTo("http://localhost:9000/fashion-media/key?sig=x");

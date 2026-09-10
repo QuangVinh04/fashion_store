@@ -15,8 +15,6 @@ import io.minio.StatObjectArgs;
 import io.minio.StatObjectResponse;
 import io.minio.errors.ErrorResponseException;
 import io.minio.http.Method;
-import jakarta.annotation.PostConstruct;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
@@ -31,6 +29,7 @@ public class MinioStorageService implements StorageService {
     private final MinioClient minioClient;
     private final MinioClient presignMinioClient;
     private final MinioProperties properties;
+    private volatile boolean bucketReady;
 
     public MinioStorageService(MinioClient minioClient,
                                @Qualifier("presignMinioClient") MinioClient presignMinioClient,
@@ -40,17 +39,31 @@ public class MinioStorageService implements StorageService {
         this.properties = properties;
     }
 
-    @PostConstruct
-    void ensureBucket() {
-        try {
-            boolean exists = minioClient.bucketExists(
-                    BucketExistsArgs.builder().bucket(properties.bucket()).build());
-            if (!exists) {
-                minioClient.makeBucket(MakeBucketArgs.builder().bucket(properties.bucket()).build());
-                log.info("[Media] created bucket {}", properties.bucket());
+    /**
+     * Bucket duoc tao lan dau can den chu khong phai luc khoi dong: MinIO chua san sang
+     * thi service van boot, va van tu tao bucket khi MinIO len sau. Kiem tra o
+     * {@code @PostConstruct} lam startup phu thuoc vao MinIO ma van khong tu chua duoc
+     * neu MinIO len muon.
+     */
+    private void ensureBucket() {
+        if (bucketReady) {
+            return;
+        }
+        synchronized (this) {
+            if (bucketReady) {
+                return;
             }
-        } catch (Exception exception) {
-            throw new AppException(FileErrorCode.FILE_STORAGE_FAILED, exception);
+            try {
+                boolean exists = minioClient.bucketExists(
+                        BucketExistsArgs.builder().bucket(properties.bucket()).build());
+                if (!exists) {
+                    minioClient.makeBucket(MakeBucketArgs.builder().bucket(properties.bucket()).build());
+                    log.info("[Media] created bucket {}", properties.bucket());
+                }
+                bucketReady = true;
+            } catch (Exception exception) {
+                throw new AppException(FileErrorCode.FILE_STORAGE_FAILED, exception);
+            }
         }
     }
 
@@ -62,6 +75,7 @@ public class MinioStorageService implements StorageService {
      */
     @Override
     public PresignedUpload presignUpload(String storageKey, String contentType) {
+        ensureBucket();
         try {
             String url = presignMinioClient.getPresignedObjectUrl(GetPresignedObjectUrlArgs.builder()
                     .method(Method.PUT)
