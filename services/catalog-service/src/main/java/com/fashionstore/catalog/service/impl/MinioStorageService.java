@@ -21,6 +21,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 @Slf4j
@@ -53,6 +54,12 @@ public class MinioStorageService implements StorageService {
         }
     }
 
+    /**
+     * {@code Content-Type} nam trong {@code extraHeaders} nen no vao ca canonical request va
+     * {@code X-Amz-SignedHeaders}: URL chi upload duoc dung content type da khai, PUT bang
+     * type khac se bi MinIO tra {@code SignatureDoesNotMatch}. Khong ky header nay thi
+     * allow-list o buoc presign chi la loi de nghi, client PUT gi cung duoc.
+     */
     @Override
     public PresignedUpload presignUpload(String storageKey, String contentType) {
         try {
@@ -60,6 +67,7 @@ public class MinioStorageService implements StorageService {
                     .method(Method.PUT)
                     .bucket(properties.bucket())
                     .object(storageKey)
+                    .extraHeaders(Map.of("Content-Type", contentType))
                     .expiry(properties.presignExpirySeconds(), TimeUnit.SECONDS)
                     .build());
             return new PresignedUpload(url, properties.presignExpirySeconds());

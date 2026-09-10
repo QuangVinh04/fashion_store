@@ -28,6 +28,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Optional;
 
@@ -268,6 +269,53 @@ class MediaFileServiceImplTest {
 
         assertThat(response.getStatus()).isEqualTo(MediaStatus.ACTIVE);
         assertThat(response.getTrashedAt()).isNull();
+    }
+
+    @Test
+    void completeUploadDropsObjectWhenStorageContentTypeNotAllowed() {
+        MediaFile pending = pendingFile();
+        when(currentUserProvider.getCurrentUserId()).thenReturn("user-1");
+        when(mediaFileRepository.findById("file-1")).thenReturn(Optional.of(pending));
+        // Content-Type khong nam trong chu ky truoc day nen client co the PUT bat ky thu gi
+        when(storageService.stat("2026/09/object.png"))
+                .thenReturn(new StoredObject(2048L, "text/html", "etag-1"));
+
+        assertThatThrownBy(() -> mediaFileService.completeUpload("file-1", null))
+                .isInstanceOf(AppException.class)
+                .extracting(exception -> ((AppException) exception).getErrorCode())
+                .isEqualTo(FileErrorCode.FILE_TYPE_NOT_ALLOWED);
+
+        // object da nam tren storage nen phai don, khong de rac nhu nhanh FILE_TOO_LARGE
+        verify(storageService).delete("2026/09/object.png");
+        verify(mediaFileRepository).delete(pending);
+    }
+
+    @Test
+    void purgeStalePendingUploadsRemovesObjectAndRow() {
+        MediaFile stale = pendingFile();
+        ArgumentCaptor<LocalDateTime> cutoff = ArgumentCaptor.forClass(LocalDateTime.class);
+        when(mediaFileRepository.findByStatusAndCreatedAtBefore(eq(MediaStatus.PENDING), any(LocalDateTime.class)))
+                .thenReturn(List.of(stale));
+
+        mediaFileService.purgeStalePendingUploads();
+
+        verify(mediaFileRepository).findByStatusAndCreatedAtBefore(eq(MediaStatus.PENDING), cutoff.capture());
+        // moc cat = 2 lan thoi han presign, du cho mot lenh complete ve muon
+        assertThat(ChronoUnit.SECONDS.between(cutoff.getValue(), LocalDateTime.now()))
+                .isBetween(1795L, 1805L);
+        verify(storageService).delete("2026/09/object.png");
+        verify(mediaFileRepository).delete(stale);
+    }
+
+    @Test
+    void purgeStalePendingUploadsDoesNothingWhenNoStaleRow() {
+        when(mediaFileRepository.findByStatusAndCreatedAtBefore(eq(MediaStatus.PENDING), any(LocalDateTime.class)))
+                .thenReturn(List.of());
+
+        mediaFileService.purgeStalePendingUploads();
+
+        verify(storageService, never()).delete(anyString());
+        verify(mediaFileRepository, never()).delete(any(MediaFile.class));
     }
 
     private MediaFile pendingFile() {

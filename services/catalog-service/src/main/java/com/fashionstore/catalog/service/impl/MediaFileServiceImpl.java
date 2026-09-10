@@ -29,6 +29,7 @@ import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -124,13 +125,15 @@ public class MediaFileServiceImpl implements MediaFileService {
             throw new AppException(FileErrorCode.FILE_UPLOAD_NOT_COMPLETED);
         }
         if (stored.sizeBytes() > minioProperties.maxUploadBytes()) {
-            storageService.delete(mediaFile.getStorageKey());
-            mediaFileRepository.delete(mediaFile);
+            discard(mediaFile);
             throw new AppException(FileErrorCode.FILE_TOO_LARGE);
         }
 
         String contentType = resolveContentType(stored.contentType());
-        ensureContentTypeAllowed(contentType);
+        if (!ALLOWED_CONTENT_TYPES.contains(contentType)) {
+            discard(mediaFile);
+            throw new AppException(FileErrorCode.FILE_TYPE_NOT_ALLOWED);
+        }
 
         mediaFile.setContentType(contentType);
         mediaFile.setMediaType(resolveMediaType(contentType));
@@ -233,6 +236,28 @@ public class MediaFileServiceImpl implements MediaFileService {
                 .orElseThrow(() -> new AppException(FileErrorCode.FILE_NOT_FOUND));
         ensureContentAccess(mediaFile);
         return storageService.presignDownload(mediaFile.getStorageKey());
+    }
+
+    @Override
+    @Transactional
+    @Scheduled(cron = "0 0 * * * ?")
+    public void purgeStalePendingUploads() {
+        // Het han presign la het duong upload, nen row PENDING cu hon the khong bao gio
+        // complete duoc nua. Nhan doi thoi han de mot lenh complete ve muon khong bi cat.
+        LocalDateTime cutoff = LocalDateTime.now().minusSeconds(2L * minioProperties.presignExpirySeconds());
+        List<MediaFile> stale = mediaFileRepository.findByStatusAndCreatedAtBefore(MediaStatus.PENDING, cutoff);
+        for (MediaFile mediaFile : stale) {
+            discard(mediaFile);
+        }
+        if (!stale.isEmpty()) {
+            log.info("[Media] purged {} stale pending upload(s) older than {}", stale.size(), cutoff);
+        }
+    }
+
+    /** Object co the da nam tren storage: xoa ca hai phia de khong de lai rac. */
+    private void discard(MediaFile mediaFile) {
+        storageService.delete(mediaFile.getStorageKey());
+        mediaFileRepository.delete(mediaFile);
     }
 
     private MediaFile findOwnedFile(String id) {

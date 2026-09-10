@@ -36,4 +36,7 @@ public interface MediaFileService {
 
     /** URL da ky de doc noi dung, dung cho redirect tu {@code /api/v1/files/{id}/content}. */
     String resolveContentUrl(String id);
+
+    /** Don row {@code PENDING} qua han presign — presign roi bo do se de lai rac vinh vien. */
+    void purgeStalePendingUploads();
 }

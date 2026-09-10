@@ -66,10 +66,13 @@ Bytes không đi qua service. Ba bước:
 1. `POST /api/v1/files/presign` — validate content type (allow-list) + kích thước khai báo,
    sinh `storageKey = yyyy/MM/<uuid>.<ext>`, INSERT row `status = PENDING`, trả `uploadUrl`
    đã ký (`PUT`, hết hạn theo `app.minio.presign-expiry-seconds`).
-2. Browser `PUT <uploadUrl>` thẳng lên MinIO, kèm đúng header `Content-Type` đã ký.
+2. Browser `PUT <uploadUrl>` thẳng lên MinIO, kèm đúng header `Content-Type` đã ký —
+   `Content-Type` nằm trong `X-Amz-SignedHeaders`, PUT bằng type khác thì MinIO trả
+   `SignatureDoesNotMatch`.
 3. `POST /api/v1/files/{id}/complete` — `statObject` xác minh object có thật, lấy size/etag
    thật từ storage (không tin số client khai), `width`/`height` do FE gửi kèm, chuyển
    `status = ACTIVE`. Không có bước này thì DB sẽ có row trỏ tới object không tồn tại.
+   Size hoặc content type thật vượt luật thì xoá cả object và row, không để rác.
 
 - `GET /api/v1/files/{id}/content` giữ nguyên đường dẫn nhưng trả `302` sang presigned GET URL.
 - Tìm kiếm bằng `MediaFileSpecifications` (owner, folder, tag, type, status), sửa
@@ -77,6 +80,9 @@ Bytes không đi qua service. Ba bước:
   (`MediaStatus`), phân quyền xem bằng `MediaVisibility`.
 - Chỉ media `ACTIVE` mới gán được vào sản phẩm (`existsByIdAndStatus`) — row `PENDING`
   chưa upload xong không lọt vào `product_image` hay thumbnail của variant.
+- `purgeStalePendingUploads` (`@Scheduled`, mỗi giờ) xoá row `PENDING` cũ hơn hai lần
+  `presign-expiry-seconds` cùng object của nó — presign rồi bỏ dở thì hết hạn là hết
+  đường upload. Quét bằng index `idx_media_file_status_created_at` (`V41`).
 
 ## HTTP API
 
