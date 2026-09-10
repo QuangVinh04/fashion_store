@@ -1,6 +1,7 @@
 package com.fashionstore.catalog;
 
 import com.fashionstore.catalog.config.FileStorageProperties;
+import com.fashionstore.catalog.config.MinioProperties;
 import com.fashionstore.common.messaging.processed.EnableProcessedMessages;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -13,7 +14,7 @@ import java.util.TimeZone;
 @EnableScheduling
 @EnableJpaAuditing
 @EnableProcessedMessages
-@EnableConfigurationProperties(FileStorageProperties.class)
+@EnableConfigurationProperties({FileStorageProperties.class, MinioProperties.class})
 @SpringBootApplication
 public class CatalogServiceApplication {
 

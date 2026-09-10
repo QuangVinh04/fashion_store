@@ -21,10 +21,6 @@ spring:
           initial-interval: 1000
           max-attempts: 3
           multiplier: 2
-  servlet:
-    multipart:
-      max-file-size: ${FILE_MAX_SIZE:20MB}
-      max-request-size: ${FILE_MAX_REQUEST_SIZE:25MB}
   security:
     oauth2:
       resourceserver:
@@ -43,8 +39,15 @@ app:
   outbox:
     relay-delay-ms: ${OUTBOX_RELAY_DELAY_MS:3000}
   storage:
-    location: ${FILE_STORAGE_LOCATION:./storage/catalog-service}
     public-base-url: ${FILE_PUBLIC_BASE_URL:http://localhost:8087}
+  minio:
+    endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
+    public-endpoint: ${MINIO_PUBLIC_ENDPOINT:http://localhost:9000}
+    access-key: ${MINIO_ACCESS_KEY:minioadmin}
+    secret-key: ${MINIO_SECRET_KEY:minioadmin}
+    bucket: ${MINIO_BUCKET:fashion-media}
+    presign-expiry-seconds: ${MINIO_PRESIGN_EXPIRY_SECONDS:900}
+    max-upload-bytes: ${MINIO_MAX_UPLOAD_BYTES:20971520}
 
 management:
   endpoints:

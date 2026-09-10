@@ -5,10 +5,14 @@ import com.fashionstore.common.exception.AppException;
 import com.fashionstore.common.exception.ErrorCode;
 import com.fashionstore.common.security.CurrentUserProvider;
 import com.fashionstore.catalog.config.FileStorageProperties;
-import com.fashionstore.catalog.dto.MediaFileContent;
+import com.fashionstore.catalog.config.MinioProperties;
+import com.fashionstore.catalog.dto.CompleteUploadRequest;
 import com.fashionstore.catalog.dto.MediaFileResponse;
 import com.fashionstore.catalog.dto.MediaFileUpdateRequest;
-import com.fashionstore.catalog.dto.StoredFile;
+import com.fashionstore.catalog.dto.PresignUploadRequest;
+import com.fashionstore.catalog.dto.PresignUploadResponse;
+import com.fashionstore.catalog.dto.PresignedUpload;
+import com.fashionstore.catalog.dto.StoredObject;
 import com.fashionstore.catalog.exception.FileErrorCode;
 import com.fashionstore.catalog.mapper.MediaFileMapper;
 import com.fashionstore.catalog.model.MediaFile;
@@ -23,7 +27,6 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.core.io.Resource;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.Authentication;
@@ -32,21 +35,15 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.multipart.MultipartFile;
 
-import javax.imageio.ImageIO;
-import java.awt.image.BufferedImage;
-import java.io.ByteArrayInputStream;
-import java.io.IOException;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.LinkedHashSet;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.UUID;
 
 @Slf4j
 @Service
@@ -54,57 +51,98 @@ import java.util.Set;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class MediaFileServiceImpl implements MediaFileService {
 
+    /**
+     * Browser PUT thang len storage nen service khong bao gio nhin thay bytes: content type
+     * la thu duy nhat kiem soat duoc, va no cung la thu MinIO tra lai khi client tai file ve.
+     * Cho phep text/html o day dong nghia mo cua XSS tren domain phuc vu media.
+     */
+    private static final Set<String> ALLOWED_CONTENT_TYPES = Set.of(
+            "image/jpeg", "image/png", "image/webp", "image/gif", "image/avif", "image/svg+xml",
+            "video/mp4", "video/webm",
+            "application/pdf");
+
     MediaFileRepository mediaFileRepository;
     StorageService storageService;
     CurrentUserProvider currentUserProvider;
     MediaFileMapper mediaFileMapper;
     FileStorageProperties storageProperties;
+    MinioProperties minioProperties;
 
     @Override
     @Transactional
-    public MediaFileResponse upload(MultipartFile file,
-                                    String displayName,
-                                    String altText,
-                                    String folder,
-                                    List<String> tags,
-                                    MediaVisibility visibility) {
-        if (file == null || file.isEmpty()) {
-            throw new AppException(FileErrorCode.FILE_UPLOAD_INVALID);
-        }
+    public PresignUploadResponse presignUpload(PresignUploadRequest request) {
+        String contentType = resolveContentType(request.getContentType());
+        ensureContentTypeAllowed(contentType);
+        ensureSizeWithinLimit(request.getSizeBytes());
 
-        byte[] content = readBytes(file);
-        String ownerId = currentUserProvider.getCurrentUserId();
-        String originalFilename = cleanFilename(file.getOriginalFilename());
-        String contentType = resolveContentType(file.getContentType());
-        MediaType mediaType = resolveMediaType(contentType);
-        StoredFile storedFile = storageService.store(content, originalFilename);
-        ImageDimensions dimensions = readImageDimensions(content, mediaType);
+        String originalFilename = cleanFilename(request.getFilename());
+        String extension = resolveExtension(originalFilename);
+        String storedFilename = UUID.randomUUID() + (extension == null ? "" : "." + extension);
+        LocalDate today = LocalDate.now();
+        String storageKey = "%d/%02d/%s".formatted(today.getYear(), today.getMonthValue(), storedFilename);
 
         MediaFile mediaFile = MediaFile.builder()
-                .ownerId(ownerId)
+                .ownerId(currentUserProvider.getCurrentUserId())
                 .originalFilename(originalFilename)
-                .displayName(resolveDisplayName(displayName, originalFilename))
-                .storedFilename(storedFile.storedFilename())
-                .storageKey(storedFile.storageKey())
+                .displayName(resolveDisplayName(request.getDisplayName(), originalFilename))
+                .storedFilename(storedFilename)
+                .storageKey(storageKey)
                 .contentType(contentType)
-                .extension(storedFile.extension())
-                .sizeBytes((long) content.length)
-                .checksumSha256(sha256(content))
-                .mediaType(mediaType)
-                .visibility(visibility == null ? MediaVisibility.PUBLIC : visibility)
-                .altText(cleanNullable(altText))
-                .folder(cleanFolder(folder))
-                .width(dimensions.width())
-                .height(dimensions.height())
-                .tags(normalizeTags(tags))
+                .extension(extension)
+                .sizeBytes(request.getSizeBytes())
+                .mediaType(resolveMediaType(contentType))
+                .status(MediaStatus.PENDING)
+                .visibility(request.getVisibility() == null ? MediaVisibility.PUBLIC : request.getVisibility())
+                .altText(cleanNullable(request.getAltText()))
+                .folder(cleanFolder(request.getFolder()))
+                .tags(normalizeTags(request.getTags()))
                 .build();
 
-        try {
-            return toResponse(mediaFileRepository.save(mediaFile));
-        } catch (RuntimeException exception) {
-            storageService.delete(storedFile.storageKey());
-            throw exception;
+        MediaFile saved = mediaFileRepository.save(mediaFile);
+        PresignedUpload presigned = storageService.presignUpload(storageKey, contentType);
+
+        return PresignUploadResponse.builder()
+                .mediaId(saved.getId())
+                .storageKey(storageKey)
+                .uploadUrl(presigned.url())
+                .contentType(contentType)
+                .expiresInSeconds(presigned.expiresInSeconds())
+                .build();
+    }
+
+    @Override
+    @Transactional
+    public MediaFileResponse completeUpload(String id, CompleteUploadRequest request) {
+        MediaFile mediaFile = findOwnedFile(id);
+        if (mediaFile.getStatus() != MediaStatus.PENDING) {
+            throw new AppException(FileErrorCode.FILE_ALREADY_COMPLETED);
         }
+
+        // Nguon su that la storage, khong phai loi khai cua client o buoc presign.
+        StoredObject stored = storageService.stat(mediaFile.getStorageKey());
+        if (stored == null) {
+            throw new AppException(FileErrorCode.FILE_UPLOAD_NOT_COMPLETED);
+        }
+        if (stored.sizeBytes() > minioProperties.maxUploadBytes()) {
+            storageService.delete(mediaFile.getStorageKey());
+            mediaFileRepository.delete(mediaFile);
+            throw new AppException(FileErrorCode.FILE_TOO_LARGE);
+        }
+
+        String contentType = resolveContentType(stored.contentType());
+        ensureContentTypeAllowed(contentType);
+
+        mediaFile.setContentType(contentType);
+        mediaFile.setMediaType(resolveMediaType(contentType));
+        mediaFile.setSizeBytes(stored.sizeBytes());
+        mediaFile.setEtag(stored.etag());
+        if (request != null) {
+            mediaFile.setWidth(request.getWidth());
+            mediaFile.setHeight(request.getHeight());
+        }
+        mediaFile.setStatus(MediaStatus.ACTIVE);
+
+        return toResponse(mediaFileRepository.save(mediaFile));
     }
 
     @Override
@@ -131,8 +169,7 @@ public class MediaFileServiceImpl implements MediaFileService {
     @Override
     @Transactional(readOnly = true)
     public MediaFileResponse getById(String id) {
-        MediaFile mediaFile = findOwnedFile(id);
-        return toResponse(mediaFile);
+        return toResponse(findOwnedFile(id));
     }
 
     @Override
@@ -191,12 +228,11 @@ public class MediaFileServiceImpl implements MediaFileService {
 
     @Override
     @Transactional(readOnly = true)
-    public MediaFileContent loadContent(String id) {
+    public String resolveContentUrl(String id) {
         MediaFile mediaFile = mediaFileRepository.findById(id)
                 .orElseThrow(() -> new AppException(FileErrorCode.FILE_NOT_FOUND));
         ensureContentAccess(mediaFile);
-        Resource resource = storageService.load(mediaFile.getStorageKey());
-        return new MediaFileContent(resource, mediaFile.getContentType(), mediaFile.getOriginalFilename());
+        return storageService.presignDownload(mediaFile.getStorageKey());
     }
 
     private MediaFile findOwnedFile(String id) {
@@ -218,6 +254,21 @@ public class MediaFileServiceImpl implements MediaFileService {
         String userId = getAuthenticatedUserIdOrNull();
         if (userId == null || !userId.equals(mediaFile.getOwnerId())) {
             throw new AppException(FileErrorCode.FILE_ACCESS_DENIED);
+        }
+    }
+
+    private void ensureContentTypeAllowed(String contentType) {
+        if (!ALLOWED_CONTENT_TYPES.contains(contentType)) {
+            throw new AppException(FileErrorCode.FILE_TYPE_NOT_ALLOWED);
+        }
+    }
+
+    private void ensureSizeWithinLimit(Long sizeBytes) {
+        if (sizeBytes == null || sizeBytes <= 0) {
+            throw new AppException(FileErrorCode.FILE_UPLOAD_INVALID);
+        }
+        if (sizeBytes > minioProperties.maxUploadBytes()) {
+            throw new AppException(FileErrorCode.FILE_TOO_LARGE);
         }
     }
 
@@ -243,21 +294,25 @@ public class MediaFileServiceImpl implements MediaFileService {
         return mediaFileMapper.toResponse(mediaFile, storageProperties.publicBaseUrl());
     }
 
-    private byte[] readBytes(MultipartFile file) {
-        try {
-            return file.getBytes();
-        } catch (IOException exception) {
-            throw new AppException(FileErrorCode.FILE_UPLOAD_INVALID, exception);
-        }
-    }
-
     private String cleanFilename(String filename) {
         String cleaned = cleanNullable(filename);
         if (cleaned == null) {
             return "untitled";
         }
         String normalized = cleaned.replace("\\", "/");
-        return normalized.substring(normalized.lastIndexOf('/') + 1);
+        String base = normalized.substring(normalized.lastIndexOf('/') + 1);
+        return base.isBlank() ? "untitled" : base;
+    }
+
+    private String resolveExtension(String filename) {
+        int dot = filename.lastIndexOf('.');
+        if (dot < 0 || dot == filename.length() - 1) {
+            return null;
+        }
+        String extension = filename.substring(dot + 1)
+                .replaceAll("[^A-Za-z0-9]", "")
+                .toLowerCase(Locale.ROOT);
+        return extension.isEmpty() ? null : extension;
     }
 
     private String resolveDisplayName(String displayName, String originalFilename) {
@@ -319,33 +374,5 @@ public class MediaFileServiceImpl implements MediaFileService {
             return MediaType.DOCUMENT;
         }
         return MediaType.OTHER;
-    }
-
-    private ImageDimensions readImageDimensions(byte[] content, MediaType mediaType) {
-        if (mediaType != MediaType.IMAGE) {
-            return new ImageDimensions(null, null);
-        }
-        try {
-            BufferedImage image = ImageIO.read(new ByteArrayInputStream(content));
-            if (image == null) {
-                return new ImageDimensions(null, null);
-            }
-            return new ImageDimensions(image.getWidth(), image.getHeight());
-        } catch (IOException exception) {
-            log.debug("Could not read image dimensions", exception);
-            return new ImageDimensions(null, null);
-        }
-    }
-
-    private String sha256(byte[] content) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            return HexFormat.of().formatHex(digest.digest(content));
-        } catch (NoSuchAlgorithmException exception) {
-            throw new AppException(FileErrorCode.FILE_STORAGE_FAILED, exception);
-        }
-    }
-
-    private record ImageDimensions(Integer width, Integer height) {
     }
 }

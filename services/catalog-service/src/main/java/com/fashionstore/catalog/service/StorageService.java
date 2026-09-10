@@ -1,13 +1,16 @@
 package com.fashionstore.catalog.service;
 
-import com.fashionstore.catalog.dto.StoredFile;
-import org.springframework.core.io.Resource;
+import com.fashionstore.catalog.dto.PresignedUpload;
+import com.fashionstore.catalog.dto.StoredObject;
 
 public interface StorageService {
 
-    StoredFile store(byte[] content, String originalFilename);
+    PresignedUpload presignUpload(String storageKey, String contentType);
 
-    Resource load(String storageKey);
+    String presignDownload(String storageKey);
+
+    /** {@code null} khi object chua ton tai tren storage. */
+    StoredObject stat(String storageKey);
 
     void delete(String storageKey);
 }

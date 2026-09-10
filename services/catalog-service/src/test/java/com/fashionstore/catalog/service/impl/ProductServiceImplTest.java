@@ -16,6 +16,7 @@ import com.fashionstore.catalog.model.ProductCategory;
 import com.fashionstore.catalog.model.ProductImage;
 import com.fashionstore.catalog.model.ProductVariant;
 import com.fashionstore.catalog.model.attribute.ProductAttribute;
+import com.fashionstore.catalog.model.enumeration.MediaStatus;
 import com.fashionstore.catalog.model.enumeration.ProductStatus;
 import com.fashionstore.catalog.model.option.ColorOption;
 import com.fashionstore.catalog.model.option.SizeOption;
@@ -279,7 +280,7 @@ class ProductServiceImplTest {
         when(categoryRepository.findAllById(List.of("category-1"))).thenReturn(List.of(category));
         when(colorOptionRepository.findAllById(List.of("color-black"))).thenReturn(List.of(black));
         when(sizeOptionRepository.findAllById(List.of("size-m"))).thenReturn(List.of(medium));
-        when(mediaFileRepository.existsById("media-1")).thenReturn(true);
+        when(mediaFileRepository.existsByIdAndStatus("media-1", MediaStatus.ACTIVE)).thenReturn(true);
         when(productVariantRepository.findBySku("TEE-BLK-M")).thenReturn(Optional.empty());
         when(productRepository.save(any(Product.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -597,7 +598,7 @@ class ProductServiceImplTest {
 
         when(productRepository.existsBySlug("basic-tee")).thenReturn(false);
         when(categoryRepository.findAllById(List.of("category-1"))).thenReturn(List.of(category));
-        when(mediaFileRepository.existsById(any())).thenReturn(true);
+        when(mediaFileRepository.existsByIdAndStatus(any(), eq(MediaStatus.ACTIVE))).thenReturn(true);
         when(productRepository.save(any(Product.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         productService.createProduct(request);

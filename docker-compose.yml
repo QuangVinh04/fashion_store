@@ -94,17 +94,21 @@ services:
       CATALOG_POSTGRES_DB: catalog_database
       CATALOG_POSTGRES_USER: root
       CATALOG_POSTGRES_PASSWORD: root
-      FILE_STORAGE_LOCATION: /var/lib/catalog-service/media
       FILE_PUBLIC_BASE_URL: http://localhost:8080
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_PUBLIC_ENDPOINT: http://localhost:9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+      MINIO_BUCKET: fashion-media
     depends_on:
       catalog-postgres:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+      minio:
+        condition: service_healthy
     expose:
       - "8087"
-    volumes:
-      - file_media_data:/var/lib/catalog-service/media
     networks:
       - fashion-network
 
@@ -170,6 +174,28 @@ services:
       retries: 10
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - fashion-network
+
+  minio:
+    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    container_name: fashion_minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+      # Browser PUT thang len :9000 nen CORS phai mo o day, SecurityConfig cua catalog khong voi toi.
+      MINIO_API_CORS_ALLOW_ORIGIN: "http://localhost:3000,http://localhost:5173"
+    ports:
+      - "9000:9000"   # S3 API — browser goi presigned URL vao day
+      - "9001:9001"   # Console
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - minio_data:/data
     networks:
       - fashion-network
 
@@ -258,6 +284,6 @@ volumes:
   identity_postgres_data:
   notification_postgres_data:
   catalog_postgres_data:
-  file_media_data:
+  minio_data:
   order_postgres_data:
   payment_postgres_data:

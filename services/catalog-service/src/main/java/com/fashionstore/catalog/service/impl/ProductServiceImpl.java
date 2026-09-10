@@ -8,6 +8,7 @@ import com.fashionstore.catalog.mapper.ProductMapper;
 import com.fashionstore.catalog.model.*;
 import com.fashionstore.catalog.model.attribute.ProductAttribute;
 import com.fashionstore.catalog.model.attribute.ProductAttributeValue;
+import com.fashionstore.catalog.model.enumeration.MediaStatus;
 import com.fashionstore.catalog.model.enumeration.ProductStatus;
 import com.fashionstore.catalog.model.option.ColorOption;
 import com.fashionstore.catalog.model.option.SizeOption;
@@ -496,7 +497,9 @@ public class ProductServiceImpl implements ProductService {
         }
 
         for (ProductImageItem item : images) {
-            if (item.getMediaId() != null && !mediaFileRepository.existsById(item.getMediaId())) {
+            // PENDING = da cap presigned URL nhung chua upload xong, chua duoc gan vao san pham.
+            if (item.getMediaId() != null
+                    && !mediaFileRepository.existsByIdAndStatus(item.getMediaId(), MediaStatus.ACTIVE)) {
                 throw new AppException(ProductErrorCode.MEDIA_FILE_NOT_FOUND);
             }
         }
@@ -567,7 +570,7 @@ public class ProductServiceImpl implements ProductService {
             if (mediaId == null) {
                 mediaId = StringUtils.cleanText(request.getMediaId());
             }
-            if (mediaId != null && !mediaFileRepository.existsById(mediaId)) {
+            if (mediaId != null && !mediaFileRepository.existsByIdAndStatus(mediaId, MediaStatus.ACTIVE)) {
                 throw new AppException(ProductErrorCode.MEDIA_FILE_NOT_FOUND);
             }
         }

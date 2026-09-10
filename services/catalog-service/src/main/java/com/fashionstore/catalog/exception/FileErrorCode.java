@@ -12,7 +12,11 @@ public enum FileErrorCode implements BaseErrorCode {
     FILE_STORAGE_FAILED(6003, "File storage failed", HttpStatus.INTERNAL_SERVER_ERROR),
     FILE_ACCESS_DENIED(6004, "File access denied", HttpStatus.FORBIDDEN),
     FILE_ALREADY_TRASHED(6005, "File already trashed", HttpStatus.BAD_REQUEST),
-    FILE_NOT_TRASHED(6006, "File is not trashed", HttpStatus.BAD_REQUEST);
+    FILE_NOT_TRASHED(6006, "File is not trashed", HttpStatus.BAD_REQUEST),
+    FILE_TYPE_NOT_ALLOWED(6007, "File content type is not allowed", HttpStatus.BAD_REQUEST),
+    FILE_TOO_LARGE(6008, "File exceeds the maximum allowed size", HttpStatus.PAYLOAD_TOO_LARGE),
+    FILE_UPLOAD_NOT_COMPLETED(6009, "File has not been uploaded to storage", HttpStatus.BAD_REQUEST),
+    FILE_ALREADY_COMPLETED(6010, "File upload is already completed", HttpStatus.BAD_REQUEST);
 
     private final int code;
     private final String message;

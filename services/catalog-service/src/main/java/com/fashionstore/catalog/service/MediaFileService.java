@@ -1,25 +1,22 @@
 package com.fashionstore.catalog.service;
 
-import com.fashionstore.common.dto.PageResponse;
-import com.fashionstore.catalog.dto.MediaFileContent;
+import com.fashionstore.catalog.dto.CompleteUploadRequest;
 import com.fashionstore.catalog.dto.MediaFileResponse;
 import com.fashionstore.catalog.dto.MediaFileUpdateRequest;
+import com.fashionstore.catalog.dto.PresignUploadRequest;
+import com.fashionstore.catalog.dto.PresignUploadResponse;
+import com.fashionstore.common.dto.PageResponse;
 import com.fashionstore.catalog.model.enumeration.MediaStatus;
 import com.fashionstore.catalog.model.enumeration.MediaType;
-import com.fashionstore.catalog.model.enumeration.MediaVisibility;
 import org.springframework.data.domain.Pageable;
-import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
 public interface MediaFileService {
 
-    MediaFileResponse upload(MultipartFile file,
-                             String displayName,
-                             String altText,
-                             String folder,
-                             List<String> tags,
-                             MediaVisibility visibility);
+    PresignUploadResponse presignUpload(PresignUploadRequest request);
+
+    MediaFileResponse completeUpload(String id, CompleteUploadRequest request);
 
     PageResponse<List<MediaFileResponse>> search(Pageable pageable,
                                                  String keyword,
@@ -37,5 +34,6 @@ public interface MediaFileService {
 
     void deletePermanently(String id);
 
-    MediaFileContent loadContent(String id);
+    /** URL da ky de doc noi dung, dung cho redirect tu {@code /api/v1/files/{id}/content}. */
+    String resolveContentUrl(String id);
 }
