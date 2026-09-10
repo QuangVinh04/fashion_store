@@ -1,6 +1,9 @@
 package com.fashionstore.order.entity;
 
+import com.fashionstore.common.payment.PaymentMethod;
+import com.fashionstore.common.payment.PaymentProvider;
 import com.fashionstore.common.persistence.BaseEntity;
+import com.fashionstore.order.entity.enumeration.OrderStatus;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
@@ -31,20 +34,31 @@ public class Order extends BaseEntity {
     @Column(name = "inventory_reservation_id", length = 36)
     String inventoryReservationId;
 
+    // ----- Snapshot dữ liệu thanh toán (copy từ Checkout lúc tạo đơn) -----
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "payment_method", nullable = false, length = 20)
+    PaymentMethod paymentMethod;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "payment_provider", nullable = false, length = 30)
+    PaymentProvider paymentProvider;
+
+    /** ISO-4217. Thiếu field này thì lệnh authorize gửi số tiền trần, không an toàn. */
+    @Column(name = "currency", nullable = false, length = 3)
+    @Builder.Default
+    String currency = "VND";
+
     @Column(name = "payment_id", length = 36)
     String paymentId;
 
-    @Column(name = "saga_failure_reason", length = 500)
-    String sagaFailureReason;
-
-    @Enumerated(EnumType.STRING)
-    @Column(name = "compensation_target_status", length = 30)
-    OrderStatus compensationTargetStatus;
+    @Column(name = "cancel_reason", length = 500)
+    String cancelReason;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 30)
     @Builder.Default
-    OrderStatus status = OrderStatus.PENDING_INVENTORY;
+    OrderStatus status = OrderStatus.PENDING;
 
     @Column(name = "recipient_name", nullable = false, length = 120)
     String recipientName;
@@ -79,6 +93,22 @@ public class Order extends BaseEntity {
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
     List<OrderItem> items = new ArrayList<>();
 
-    @OneToOne(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
-    Checkout checkout;
+    @Column(name = "checkout_id", nullable = false, unique = true)
+    String checkoutId;
+
+
+    // Saga chỉ chạm vào orders tại ba thời điểm: tạo đơn (PENDING), saga xong (CONFIRMED),
+    // saga bù trừ xong (CANCELLED). Ngoài ba mốc đó, tiến độ điều phối nằm hết ở OrderSaga.
+
+    public void confirm(String paymentId) {
+        this.status = OrderStatus.CONFIRMED;
+        this.paymentId = paymentId;
+        this.cancelReason = null;
+    }
+
+    /** @param reason câu viết cho người đọc; mã lỗi kỹ thuật nằm ở OrderSaga.failureCode. */
+    public void cancel(String reason) {
+        this.status = OrderStatus.CANCELLED;
+        this.cancelReason = reason;
+    }
 }

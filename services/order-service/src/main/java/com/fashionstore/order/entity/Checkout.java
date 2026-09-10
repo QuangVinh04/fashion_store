@@ -3,6 +3,8 @@ package com.fashionstore.order.entity;
 import com.fashionstore.common.persistence.BaseEntity;
 import com.fashionstore.common.payment.PaymentMethod;
 import com.fashionstore.common.payment.PaymentProvider;
+import com.fashionstore.order.entity.enumeration.CheckoutStatus;
+import com.fashionstore.order.entity.enumeration.ShippingMethod;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;

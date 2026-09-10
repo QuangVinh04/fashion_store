@@ -1,6 +1,6 @@
 package com.fashionstore.notification.config;
 
-import com.fashionstore.contracts.EventTypes;
+import com.fashionstore.contracts.common.EventTypes;
 import org.springframework.amqp.core.Binding;
 import org.springframework.amqp.core.BindingBuilder;
 import org.springframework.amqp.core.DirectExchange;

@@ -1,20 +1,20 @@
 package com.fashionstore.order.service.impl;
 
 import com.fashionstore.common.exception.AppException;
-import com.fashionstore.order.config.ErrorCode;
+import com.fashionstore.order.exception.OrderErrorCode;
 import com.fashionstore.common.security.CurrentUserProvider;
-import com.fashionstore.order.client.CartServiceClient;
-import com.fashionstore.order.client.dto.CartItemServiceResponse;
-import com.fashionstore.order.client.dto.CartServiceResponse;
 import com.fashionstore.order.dto.CheckoutItemResponse;
 import com.fashionstore.order.dto.CheckoutResponse;
 import com.fashionstore.order.dto.CreateCheckoutRequest;
 import com.fashionstore.order.dto.UpdateCheckoutRequest;
+import com.fashionstore.order.entity.Cart;
+import com.fashionstore.order.entity.CartItem;
 import com.fashionstore.order.entity.Checkout;
 import com.fashionstore.order.entity.CheckoutItem;
-import com.fashionstore.order.entity.CheckoutStatus;
-import com.fashionstore.order.entity.ShippingMethod;
+import com.fashionstore.order.entity.enumeration.CheckoutStatus;
+import com.fashionstore.order.entity.enumeration.ShippingMethod;
 import com.fashionstore.order.repository.CheckoutRepository;
+import com.fashionstore.order.service.CartService;
 import com.fashionstore.order.service.CheckoutService;
 import com.fashionstore.common.payment.PaymentMethod;
 import com.fashionstore.common.payment.PaymentProvider;
@@ -35,20 +35,21 @@ import java.util.List;
 public class CheckoutServiceImpl implements CheckoutService {
 
     CheckoutRepository checkoutRepository;
-    CartServiceClient cartServiceClient;
+    CartService cartService;
     CurrentUserProvider currentUserProvider;
 
+    /**
+     * Không có {@code @Transactional}: bước xác nhận lại giỏ với catalog là gọi mạng, không được giữ
+     * transaction DB. Checkout + items vẫn vào DB nguyên khối nhờ một lần save cascade ở cuối.
+     */
     @Override
-    @Transactional
     public CheckoutResponse createCheckout(CreateCheckoutRequest request) {
         String userId = currentUserProvider.getCurrentUserId();
-        CartServiceResponse cart = cartServiceClient.getMyCart();
+        // Giỏ đã được xác nhận lại với catalog (còn bán, giá hiện tại, kho còn đủ) và snapshot đã cập nhật.
+        Cart cart = cartService.revalidateActiveCart();
+        List<CartItem> cartItems = cart.getItems();
 
-        if (cart.getItems() == null || cart.getItems().isEmpty()) {
-            throw new AppException(ErrorCode.CART_EMPTY);
-        }
-
-        BigDecimal subtotal = cart.getItems().stream()
+        BigDecimal subtotal = cartItems.stream()
                 .map(this::toLineTotal)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
@@ -72,7 +73,7 @@ public class CheckoutServiceImpl implements CheckoutService {
                 .submittedAt(LocalDateTime.now())
                 .build();
 
-        List<CheckoutItem> snapshotItems = cart.getItems().stream()
+        List<CheckoutItem> snapshotItems = cartItems.stream()
                 .map(item -> toCheckoutItem(checkout, item))
                 .toList();
         checkout.setItems(snapshotItems);
@@ -85,12 +86,12 @@ public class CheckoutServiceImpl implements CheckoutService {
     public CheckoutResponse updateCheckout(String checkoutId, UpdateCheckoutRequest request) {
         String userId = currentUserProvider.getCurrentUserId();
         Checkout checkout = checkoutRepository.findByIdAndUserId(checkoutId, userId)
-                .orElseThrow(() -> new AppException(ErrorCode.CHECKOUT_NOT_FOUND));
+                .orElseThrow(() -> new AppException(OrderErrorCode.CHECKOUT_NOT_FOUND));
 
         if (checkout.getStatus() == CheckoutStatus.COMPLETED
                 || checkout.getStatus() == CheckoutStatus.CANCELLED
                 || checkout.getStatus() == CheckoutStatus.EXPIRED) {
-            throw new AppException(ErrorCode.CHECKOUT_STATUS_INVALID);
+            throw new AppException(OrderErrorCode.CHECKOUT_STATUS_INVALID);
         }
 
         if (request.getPaymentMethod() != null) {
@@ -122,7 +123,7 @@ public class CheckoutServiceImpl implements CheckoutService {
     public CheckoutResponse getCheckoutById(String checkoutId) {
         String userId = currentUserProvider.getCurrentUserId();
         Checkout checkout = checkoutRepository.findByIdAndUserId(checkoutId, userId)
-                .orElseThrow(() -> new AppException(ErrorCode.CHECKOUT_NOT_FOUND));
+                .orElseThrow(() -> new AppException(OrderErrorCode.CHECKOUT_NOT_FOUND));
         return toResponse(checkout);
     }
 
@@ -136,7 +137,26 @@ public class CheckoutServiceImpl implements CheckoutService {
                 .toList();
     }
 
-    private BigDecimal toLineTotal(CartItemServiceResponse item) {
+    @Override
+    @Transactional
+    public CheckoutResponse cancelCheckout(String checkoutId) {
+        String userId = currentUserProvider.getCurrentUserId();
+        Checkout checkout = checkoutRepository.findByIdAndUserId(checkoutId, userId)
+                .orElseThrow(() -> new AppException(OrderErrorCode.CHECKOUT_NOT_FOUND));
+
+        if (checkout.getStatus() == CheckoutStatus.CANCELLED) {
+            return toResponse(checkout);   // hủy hai lần vẫn ra cùng kết quả
+        }
+        // Checkout đã sinh đơn thì việc hủy thuộc về đơn, không thuộc về checkout.
+        if (checkout.getStatus() == CheckoutStatus.COMPLETED || checkout.getOrder() != null) {
+            throw new AppException(OrderErrorCode.CHECKOUT_STATUS_INVALID);
+        }
+
+        checkout.setStatus(CheckoutStatus.CANCELLED);
+        return toResponse(checkoutRepository.save(checkout));
+    }
+
+    private BigDecimal toLineTotal(CartItem item) {
         BigDecimal unitPrice = item.getUnitPrice() == null ? BigDecimal.ZERO : item.getUnitPrice();
         return unitPrice.multiply(BigDecimal.valueOf(item.getQuantity()));
     }
@@ -171,8 +191,12 @@ public class CheckoutServiceImpl implements CheckoutService {
                 .build();
     }
 
-    private CheckoutItem toCheckoutItem(Checkout checkout, CartItemServiceResponse cartItem) {
-        BigDecimal lineTotal = cartItem.getUnitPrice().multiply(BigDecimal.valueOf(cartItem.getQuantity()));
+    private CheckoutItem toCheckoutItem(Checkout checkout, CartItem cartItem) {
+        if (cartItem.getProductName() == null || cartItem.getProductName().isBlank()) {
+            // Dòng giỏ hàng tạo trước khi cart_item lưu snapshot: báo rõ thay vì để DB ném NOT NULL.
+            throw new AppException(OrderErrorCode.CART_ITEM_STALE);
+        }
+        BigDecimal lineTotal = toLineTotal(cartItem);
         return CheckoutItem.builder()
                 .checkout(checkout)
                 .cartItemId(cartItem.getId())
@@ -207,16 +231,16 @@ public class CheckoutServiceImpl implements CheckoutService {
 
     private void validateAmounts(BigDecimal subtotal, BigDecimal discount, BigDecimal shippingFee, BigDecimal total) {
         if (subtotal == null || discount == null || shippingFee == null || total == null) {
-            throw new AppException(ErrorCode.CHECKOUT_AMOUNT_INVALID);
+            throw new AppException(OrderErrorCode.CHECKOUT_AMOUNT_INVALID);
         }
         if (subtotal.compareTo(BigDecimal.ZERO) < 0
                 || discount.compareTo(BigDecimal.ZERO) < 0
                 || shippingFee.compareTo(BigDecimal.ZERO) < 0
                 || total.compareTo(BigDecimal.ZERO) < 0) {
-            throw new AppException(ErrorCode.CHECKOUT_AMOUNT_INVALID);
+            throw new AppException(OrderErrorCode.CHECKOUT_AMOUNT_INVALID);
         }
         if (discount.compareTo(subtotal) > 0) {
-            throw new AppException(ErrorCode.CHECKOUT_AMOUNT_INVALID);
+            throw new AppException(OrderErrorCode.CHECKOUT_AMOUNT_INVALID);
         }
     }
 
@@ -225,12 +249,12 @@ public class CheckoutServiceImpl implements CheckoutService {
             if (provider == null || provider == PaymentProvider.COD) {
                 return PaymentProvider.COD;
             }
-            throw new AppException(ErrorCode.PAYMENT_PROVIDER_UNSUPPORTED);
+            throw new AppException(OrderErrorCode.PAYMENT_PROVIDER_UNSUPPORTED);
         }
 
         PaymentProvider resolved = provider == null ? PaymentProvider.VNPAY : provider;
         if (resolved != PaymentProvider.VNPAY && resolved != PaymentProvider.PAYPAL) {
-            throw new AppException(ErrorCode.PAYMENT_PROVIDER_UNSUPPORTED);
+            throw new AppException(OrderErrorCode.PAYMENT_PROVIDER_UNSUPPORTED);
         }
         return resolved;
     }

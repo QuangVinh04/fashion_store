@@ -21,6 +21,12 @@ spring:
           initial-interval: 1000
           max-attempts: 3
           multiplier: 2
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      timeout: 2000ms
+
   jpa:
     database: postgresql
     hibernate:
@@ -37,14 +43,39 @@ spring:
 
 app:
   clients:
-    cart-base-url: ${CART_BASE_URL:http://localhost:8088}
-    inventory-base-url: ${INVENTORY_BASE_URL:http://localhost:8086}
+    # product + inventory đã gộp thành catalog-service, chung một base URL.
+    catalog-base-url: ${CATALOG_BASE_URL:http://localhost:8087}
   outbox:
-    relay-delay-ms: ${OUTBOX_RELAY_DELAY_MS:5000}
+    publisher-delay-ms: ${OUTBOX_PUBLISHER_DELAY_MS:15000}
   saga:
-    timeout-scan-delay-ms: ${SAGA_TIMEOUT_SCAN_DELAY_MS:60000}
-    inventory-timeout-seconds: ${SAGA_INVENTORY_TIMEOUT_SECONDS:300}
-    payment-timeout-seconds: ${SAGA_PAYMENT_TIMEOUT_SECONDS:900}
+    # Deadline của từng bước nằm trong OrderSagaStep; ở đây chỉ là nhịp quét.
+    timeout-scan-delay-ms: ${SAGA_TIMEOUT_SCAN_DELAY_MS:15000}
+  checkout:
+    # Hạn sống của một bản chụp giá, tính từ lúc tạo checkout.
+    ttl-minutes: ${CHECKOUT_TTL_MINUTES:30}
+    expiry-scan-delay-ms: ${CHECKOUT_EXPIRY_SCAN_DELAY_MS:300000}
+
+resilience4j:
+  # product + inventory giờ là một service (catalog) nên cũng chỉ còn một circuit breaker: hai bên
+  # sống chết cùng nhau, tách ra hai instance chỉ tạo cảm giác cô lập chứ không cô lập được gì.
+  retry:
+    instances:
+      catalogService:
+        max-attempts: 3
+        wait-duration: 500ms
+        # AppException = câu trả lời nghiệp vụ (variant không tồn tại), gọi lại 3 lần cũng thế.
+        ignore-exceptions:
+          - com.fashionstore.common.exception.AppException
+  circuitbreaker:
+    instances:
+      catalogService:
+        sliding-window-size: 20
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+        permitted-number-of-calls-in-half-open-state: 5
+        # Khách hỏi variantId không tồn tại không phải là catalog đang lỗi -> đừng mở circuit vì nó.
+        ignore-exceptions:
+          - com.fashionstore.common.exception.AppException
 
 management:
   endpoints:
