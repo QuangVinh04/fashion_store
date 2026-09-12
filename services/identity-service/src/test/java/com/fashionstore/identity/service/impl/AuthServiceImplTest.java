@@ -68,16 +68,16 @@ class AuthServiceImplTest {
                 .build();
         Role userRole = Role.builder().name(PredefinedRole.USER_ROLE).build();
 
-        when(userRepository.existsByEmail(request.getEmail())).thenReturn(false);
+        when(userRepository.existsByEmail(request.email())).thenReturn(false);
         when(roleRepository.findByName(PredefinedRole.USER_ROLE)).thenReturn(Optional.of(userRole));
-        when(passwordEncoder.encode(request.getPassword())).thenReturn("encoded-password");
+        when(passwordEncoder.encode(request.password())).thenReturn("encoded-password");
 
         authService.register(request);
 
         ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
         verify(userRepository).save(userCaptor.capture());
         User savedUser = userCaptor.getValue();
-        assertEquals(request.getEmail(), savedUser.getEmail());
+        assertEquals(request.email(), savedUser.getEmail());
         assertEquals("encoded-password", savedUser.getPassword());
         assertEquals(Set.of(userRole), savedUser.getRoles());
         assertFalse(savedUser.getIsEmailVerified());
@@ -89,8 +89,8 @@ class AuthServiceImplTest {
         assertFalse(savedToken.getUsed());
         assertTrue(savedToken.getExpiresAt().isAfter(LocalDateTime.now().plusHours(23)));
         verify(emailService).sendVerificationEmail(
-                request.getEmail(),
-                request.getFullName(),
+                request.email(),
+                request.fullName(),
                 savedToken.getToken()
         );
     }
@@ -102,7 +102,7 @@ class AuthServiceImplTest {
                 .password("secret123")
                 .fullName("Customer")
                 .build();
-        when(userRepository.existsByEmail(request.getEmail())).thenReturn(true);
+        when(userRepository.existsByEmail(request.email())).thenReturn(true);
 
         AppException exception = assertThrows(AppException.class, () -> authService.register(request));
 
