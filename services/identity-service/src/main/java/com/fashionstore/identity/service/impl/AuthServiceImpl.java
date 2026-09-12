@@ -1,12 +1,14 @@
 package com.fashionstore.identity.service.impl;
 
 import com.fashionstore.common.exception.AppException;
+import com.fashionstore.common.redis.RedisService;
 import com.fashionstore.identity.config.ErrorCode;
 import com.fashionstore.common.util.VerificationCodeGenerator;
 import com.fashionstore.identity.constant.PredefinedRole;
 import com.fashionstore.identity.dto.AuthResponse;
 import com.fashionstore.identity.dto.LoginRequest;
 import com.fashionstore.identity.dto.RegisterRequest;
+import com.fashionstore.identity.dto.VerifyEmailRequest;
 import com.fashionstore.identity.entity.CustomUserDetails;
 import com.fashionstore.identity.entity.Role;
 import com.fashionstore.identity.entity.User;
@@ -28,10 +30,12 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
-import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 
@@ -41,13 +45,21 @@ import java.util.stream.Collectors;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class AuthServiceImpl implements AuthService {
 
+    static String OTP_KEY_PREFIX = "auth:verify:otp:";
+    static String ATTEMPTS_KEY_PREFIX = "auth:verify:attempts:";
+    static String COOLDOWN_KEY_PREFIX = "auth:verify:resend-cooldown:";
+
+    static long OTP_TTL_MINUTES = 10;
+    static long COOLDOWN_TTL_SECONDS = 60;
+    static int MAX_ATTEMPTS = 5;
+
     UserRepository userRepository;
     RoleRepository roleRepository;
-    VerificationTokenRepository verificationTokenRepository;
     PasswordEncoder passwordEncoder;
     AuthenticationManager authenticationManager;
     JwtService jwtService;
     EmailService emailService;
+    RedisService redisService;
 
 
     @Override
@@ -73,14 +85,74 @@ public class AuthServiceImpl implements AuthService {
         userRepository.save(user);
         log.info("New user registered: {}", user.getEmail());
 
-        String verifyToken = VerificationCodeGenerator.generateSixDigitCode();
-        VerificationToken vT = VerificationToken.builder()
-                .token(verifyToken)
-                .user(user)
-                .expiresAt(LocalDateTime.now().plusHours(24))
-                .build();
-        verificationTokenRepository.save(vT);
-        emailService.sendVerificationEmail(user.getEmail(), user.getFullName(), verifyToken);
+        // Sinh OTP và lưu vào Redis
+        sendAndStoreOtp(user.getEmail(), user.getFullName());
+    }
+
+    @Override
+    @Transactional
+    public void verifyEmail(VerifyEmailRequest request) {
+        String email = request.email();
+        String inputOtp = request.otp();
+        String otpKey = OTP_KEY_PREFIX + email;
+        String attemptsKey = ATTEMPTS_KEY_PREFIX + email;
+
+        // 1. Kiểm tra số lần nhập sai
+        Object attemptsVal = redisService.getValue(attemptsKey);
+        int attempts = attemptsVal != null ? Integer.parseInt(attemptsVal.toString()) : 0;
+        if (attempts >= MAX_ATTEMPTS) {
+            // Xóa luôn OTP để ép người dùng phải gửi lại mã mới
+            redisService.deleteValue(otpKey);
+            throw new AppException(ErrorCode.OTP_MAX_ATTEMPTS_EXCEEDED);
+        }
+        // 2. Lấy OTP đang lưu trong Redis
+        String cachedOtp = redisService.getValue(otpKey, String.class);
+        if (cachedOtp == null) {
+            throw new AppException(ErrorCode.OTP_INVALID_OR_EXPIRED);
+        }
+        // 3. So sánh OTP
+        if (!cachedOtp.equals(inputOtp)) {
+            Long currentAttempts = redisService.increment(attemptsKey);
+            if (currentAttempts != null && currentAttempts == 1) {
+                redisService.setExpire(attemptsKey, OTP_TTL_MINUTES, TimeUnit.MINUTES);
+            }
+            if (currentAttempts != null && currentAttempts >= MAX_ATTEMPTS) {
+                redisService.deleteValue(otpKey);
+                throw new AppException(ErrorCode.OTP_MAX_ATTEMPTS_EXCEEDED);
+            }
+            throw new AppException(ErrorCode.OTP_INVALID_OR_EXPIRED);
+        }
+        // 4. Xác minh thành công -> Kích hoạt tài khoản
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+        user.setIsEmailVerified(true);
+        userRepository.save(user);
+
+        // 5. Dọn dẹp key trên Redis
+        redisService.deleteKeys(List.of(otpKey, attemptsKey));
+        log.info("Email verified successfully for: {}", email);
+    }
+
+    @Override
+    @Transactional
+    public void resendVerification(String email) {
+        // 1. Tìm user
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+
+        // 2. Kiểm tra trạng thái verified
+        if (Boolean.TRUE.equals(user.getIsEmailVerified())) {
+            throw new AppException(ErrorCode.EMAIL_ALREADY_VERIFIED);
+        }
+
+        // Kiểm tra Cooldown 60s
+        String cooldownKey = COOLDOWN_KEY_PREFIX + email;
+        if (redisService.existsValue(cooldownKey)) {
+            throw new AppException(ErrorCode.RESEND_COOLDOWN_ACTIVE);
+        }
+
+        redisService.deleteValue(ATTEMPTS_KEY_PREFIX + email);
+        sendAndStoreOtp(user.getEmail(), user.getFullName());
     }
 
     @Override
@@ -103,51 +175,15 @@ public class AuthServiceImpl implements AuthService {
         return buildAuthResponse(user, token);
     }
 
-    @Override
-    @Transactional
-    public void verifyEmail(String token) {
-        VerificationToken vt = verificationTokenRepository.findByToken(token)
-                .orElseThrow(() -> new AppException(ErrorCode.VERIFICATION_TOKEN_INVALID));
-
-        if (Boolean.TRUE.equals(vt.getUsed())) {
-            throw new AppException(ErrorCode.VERIFICATION_TOKEN_INVALID);
-        }
-        if (vt.getExpiresAt().isBefore(LocalDateTime.now())) {
-            throw new AppException(ErrorCode.VERIFICATION_TOKEN_EXPIRED);
-        }
-        User user = vt.getUser();
-        user.setIsEmailVerified(true);
-        userRepository.save(user);
-
-        vt.setUsed(true);
-        verificationTokenRepository.save(vt);
-    }
-    @Override
-    @Transactional
-    public void resendVerification(String email) {
-        // 1. Tìm user
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
-
-        // 2. Kiểm tra trạng thái verified
-        if (Boolean.TRUE.equals(user.getIsEmailVerified())) {
-            throw new AppException(ErrorCode.EMAIL_ALREADY_VERIFIED);
-        }
-
-        // Nếu tìm thấy thì dùng lại object đó, nếu không thì tạo mới gắn với user này
-        VerificationToken vt = verificationTokenRepository.findByUserId(user.getId())
-                .orElseGet(() -> VerificationToken.builder()
-                        .user(user)
-                        .build());
-
-        String verifyToken = VerificationCodeGenerator.generateSixDigitCode();
-        vt.setToken(verifyToken);
-        vt.setExpiresAt(LocalDateTime.now().plusHours(24));
-        vt.setUsed(false); // Đảm bảo token mới có thể sử dụng được
-
-        verificationTokenRepository.save(vt);
-
-        emailService.sendVerificationEmail(user.getEmail(), user.getFullName(), verifyToken);
+    private void sendAndStoreOtp(String email, String fullName) {
+        String otp = VerificationCodeGenerator.generateSixDigitCode();
+        // 1. Lưu OTP vào Redis với TTL 10 phút
+        redisService.setWithTTL(OTP_KEY_PREFIX + email, otp, OTP_TTL_MINUTES, TimeUnit.MINUTES);
+        // 2. Đặt cờ Cooldown 60 giây
+        redisService.setWithTTL(COOLDOWN_KEY_PREFIX + email, "1", COOLDOWN_TTL_SECONDS, TimeUnit.SECONDS);
+        // 3. Bắn event gửi email qua Transactional Outbox
+        emailService.sendVerificationEmail(email, fullName, otp);
+        log.info("Verification OTP sent to email: {}", email);
     }
 
 
