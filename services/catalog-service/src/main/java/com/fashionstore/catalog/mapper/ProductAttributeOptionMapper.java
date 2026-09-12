@@ -1,7 +1,7 @@
 package com.fashionstore.catalog.mapper;
 
 import com.fashionstore.catalog.dto.*;
-import com.fashionstore.catalog.model.attribute.ProductAttributeOption;
+import com.fashionstore.catalog.entity.attribute.ProductAttributeOption;
 import org.mapstruct.Mapper;
 
 @Mapper(componentModel = "spring")

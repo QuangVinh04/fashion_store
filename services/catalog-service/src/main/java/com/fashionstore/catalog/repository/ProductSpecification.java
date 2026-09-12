@@ -1,8 +1,8 @@
 package com.fashionstore.catalog.repository;
 
-import com.fashionstore.catalog.model.Product;
-import com.fashionstore.catalog.model.ProductCategory;
-import com.fashionstore.catalog.model.ProductVariant;
+import com.fashionstore.catalog.entity.Product;
+import com.fashionstore.catalog.entity.ProductCategory;
+import com.fashionstore.catalog.entity.ProductVariant;
 import jakarta.persistence.criteria.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;

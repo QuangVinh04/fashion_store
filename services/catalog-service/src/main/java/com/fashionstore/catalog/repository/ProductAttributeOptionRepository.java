@@ -1,7 +1,7 @@
 package com.fashionstore.catalog.repository;
 
 
-import com.fashionstore.catalog.model.attribute.ProductAttributeOption;
+import com.fashionstore.catalog.entity.attribute.ProductAttributeOption;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 

@@ -2,7 +2,7 @@ package com.fashionstore.catalog.mapper;
 
 import com.fashionstore.catalog.dto.ProductVariantRequest;
 import com.fashionstore.catalog.dto.ProductVariantResponse;
-import com.fashionstore.catalog.model.ProductVariant;
+import com.fashionstore.catalog.entity.ProductVariant;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.MappingTarget;

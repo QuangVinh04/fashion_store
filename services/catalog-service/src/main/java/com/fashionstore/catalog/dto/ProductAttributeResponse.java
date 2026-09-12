@@ -1,7 +1,7 @@
 package com.fashionstore.catalog.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
-import com.fashionstore.catalog.model.enumeration.AttributeType;
+import com.fashionstore.catalog.entity.enumeration.AttributeType;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;

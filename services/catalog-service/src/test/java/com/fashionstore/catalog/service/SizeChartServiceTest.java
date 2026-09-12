@@ -1,7 +1,7 @@
 package com.fashionstore.catalog.service;
 
 import com.fashionstore.catalog.dto.SizeChartResponse;
-import com.fashionstore.catalog.model.SizeChart;
+import com.fashionstore.catalog.entity.SizeChart;
 import com.fashionstore.catalog.repository.SizeChartRepository;
 import com.fashionstore.catalog.repository.SizeChartRowRepository;
 import org.junit.jupiter.api.Test;

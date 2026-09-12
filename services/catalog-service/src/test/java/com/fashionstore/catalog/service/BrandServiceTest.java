@@ -1,7 +1,7 @@
 package com.fashionstore.catalog.service;
 
 import com.fashionstore.catalog.dto.BrandResponse;
-import com.fashionstore.catalog.model.Brand;
+import com.fashionstore.catalog.entity.Brand;
 import com.fashionstore.catalog.repository.BrandRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

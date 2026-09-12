@@ -2,7 +2,7 @@ package com.fashionstore.catalog.mapper;
 
 
 import com.fashionstore.catalog.dto.InventoryResponse;
-import com.fashionstore.catalog.model.Inventory;
+import com.fashionstore.catalog.entity.Inventory;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 

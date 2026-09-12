@@ -5,7 +5,7 @@ import com.fashionstore.common.util.SlugUtils;
 import com.fashionstore.catalog.dto.BrandRequest;
 import com.fashionstore.catalog.dto.BrandResponse;
 import com.fashionstore.catalog.exception.ProductErrorCode;
-import com.fashionstore.catalog.model.Brand;
+import com.fashionstore.catalog.entity.Brand;
 import com.fashionstore.catalog.repository.BrandRepository;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;

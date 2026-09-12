@@ -1,6 +1,6 @@
 package com.fashionstore.catalog.dto;
 
-import com.fashionstore.catalog.model.enumeration.MediaVisibility;
+import com.fashionstore.catalog.entity.enumeration.MediaVisibility;
 import jakarta.validation.constraints.Size;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;

@@ -1,6 +1,6 @@
 package com.fashionstore.catalog.dto;
 
-import com.fashionstore.catalog.model.enumeration.AttributeType;
+import com.fashionstore.catalog.entity.enumeration.AttributeType;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;

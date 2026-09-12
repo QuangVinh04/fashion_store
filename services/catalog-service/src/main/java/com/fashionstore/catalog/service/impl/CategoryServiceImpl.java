@@ -7,7 +7,7 @@ import com.fashionstore.common.util.SlugUtils;
 import com.fashionstore.catalog.dto.CategoryResponse;
 import com.fashionstore.catalog.exception.ProductErrorCode;
 import com.fashionstore.catalog.mapper.CategoryMapper;
-import com.fashionstore.catalog.model.Category;
+import com.fashionstore.catalog.entity.Category;
 import com.fashionstore.catalog.repository.CategoryRepository;
 import com.fashionstore.catalog.repository.ProductRepository;
 import com.fashionstore.catalog.service.CategoryService;

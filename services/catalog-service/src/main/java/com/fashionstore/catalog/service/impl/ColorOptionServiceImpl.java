@@ -2,15 +2,13 @@ package com.fashionstore.catalog.service.impl;
 
 import com.fashionstore.common.dto.PageResponse;
 import com.fashionstore.common.exception.AppException;
-import com.fashionstore.common.exception.ErrorCode;
 import com.fashionstore.catalog.dto.ColorOptionRequest;
 import com.fashionstore.catalog.dto.ColorOptionResponse;
 import com.fashionstore.catalog.exception.ProductErrorCode;
 import com.fashionstore.catalog.mapper.ColorOptionMapper;
-import com.fashionstore.catalog.model.option.ColorOption;
+import com.fashionstore.catalog.entity.option.ColorOption;
 import com.fashionstore.catalog.repository.ColorOptionRepository;
 import com.fashionstore.catalog.service.ColorOptionService;
-import com.fashionstore.catalog.service.ProductAtrributeService;
 import com.fashionstore.catalog.util.StringUtils;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -20,7 +18,6 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.ArrayList;
 import java.util.List;
 
 @Service

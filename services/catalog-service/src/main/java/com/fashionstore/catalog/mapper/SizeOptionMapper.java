@@ -2,7 +2,7 @@ package com.fashionstore.catalog.mapper;
 
 import com.fashionstore.catalog.dto.SizeOptionRequest;
 import com.fashionstore.catalog.dto.SizeOptionResponse;
-import com.fashionstore.catalog.model.option.SizeOption;
+import com.fashionstore.catalog.entity.option.SizeOption;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.MappingTarget;

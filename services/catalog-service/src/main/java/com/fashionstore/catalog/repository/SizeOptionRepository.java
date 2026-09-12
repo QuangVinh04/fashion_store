@@ -1,9 +1,7 @@
 package com.fashionstore.catalog.repository;
 
 
-import com.fashionstore.catalog.model.attribute.ProductAttributeOption;
-import com.fashionstore.catalog.model.option.ColorOption;
-import com.fashionstore.catalog.model.option.SizeOption;
+import com.fashionstore.catalog.entity.option.SizeOption;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 

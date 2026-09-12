@@ -1,6 +1,6 @@
 package com.fashionstore.catalog.repository;
 
-import com.fashionstore.catalog.model.SizeChart;
+import com.fashionstore.catalog.entity.SizeChart;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;

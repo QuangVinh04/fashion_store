@@ -1,7 +1,7 @@
 package com.fashionstore.catalog.repository;
 
-import com.fashionstore.catalog.model.InventoryReservation;
-import com.fashionstore.catalog.model.enumeration.InventoryReservationStatus;
+import com.fashionstore.catalog.entity.InventoryReservation;
+import com.fashionstore.catalog.entity.enumeration.InventoryReservationStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 

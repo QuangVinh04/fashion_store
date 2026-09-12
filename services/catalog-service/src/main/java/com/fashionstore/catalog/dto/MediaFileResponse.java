@@ -1,9 +1,9 @@
 package com.fashionstore.catalog.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
-import com.fashionstore.catalog.model.enumeration.MediaStatus;
-import com.fashionstore.catalog.model.enumeration.MediaType;
-import com.fashionstore.catalog.model.enumeration.MediaVisibility;
+import com.fashionstore.catalog.entity.enumeration.MediaStatus;
+import com.fashionstore.catalog.entity.enumeration.MediaType;
+import com.fashionstore.catalog.entity.enumeration.MediaVisibility;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;

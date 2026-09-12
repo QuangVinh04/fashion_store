@@ -5,9 +5,9 @@ import com.fashionstore.catalog.dto.ProductAttributeOptionRequest;
 import com.fashionstore.catalog.dto.ProductAttributeResponse;
 import com.fashionstore.catalog.dto.ProductAttributeUpdateRequest;
 import com.fashionstore.catalog.dto.ProductAttributeValueResponse;
-import com.fashionstore.catalog.model.attribute.ProductAttribute;
-import com.fashionstore.catalog.model.attribute.ProductAttributeValue;
-import com.fashionstore.catalog.model.enumeration.AttributeType;
+import com.fashionstore.catalog.entity.attribute.ProductAttribute;
+import com.fashionstore.catalog.entity.attribute.ProductAttributeValue;
+import com.fashionstore.catalog.entity.enumeration.AttributeType;
 import org.mapstruct.Mapper;
 import org.mapstruct.MappingTarget;
 

@@ -6,8 +6,8 @@ import com.fashionstore.catalog.dto.MediaFileUpdateRequest;
 import com.fashionstore.catalog.dto.PresignUploadRequest;
 import com.fashionstore.catalog.dto.PresignUploadResponse;
 import com.fashionstore.common.dto.PageResponse;
-import com.fashionstore.catalog.model.enumeration.MediaStatus;
-import com.fashionstore.catalog.model.enumeration.MediaType;
+import com.fashionstore.catalog.entity.enumeration.MediaStatus;
+import com.fashionstore.catalog.entity.enumeration.MediaType;
 import org.springframework.data.domain.Pageable;
 
 import java.util.List;

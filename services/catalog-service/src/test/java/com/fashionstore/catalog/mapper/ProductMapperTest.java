@@ -1,9 +1,9 @@
 package com.fashionstore.catalog.mapper;
 
 import com.fashionstore.catalog.dto.ProductResponse;
-import com.fashionstore.catalog.model.Category;
-import com.fashionstore.catalog.model.Product;
-import com.fashionstore.catalog.model.ProductCategory;
+import com.fashionstore.catalog.entity.Category;
+import com.fashionstore.catalog.entity.Product;
+import com.fashionstore.catalog.entity.ProductCategory;
 import org.junit.jupiter.api.Test;
 import org.mapstruct.factory.Mappers;
 

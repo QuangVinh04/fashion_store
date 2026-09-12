@@ -2,7 +2,7 @@ package com.fashionstore.catalog.mapper;
 
 import com.fashionstore.catalog.dto.CategoryRequest;
 import com.fashionstore.catalog.dto.CategoryResponse;
-import com.fashionstore.catalog.model.Category;
+import com.fashionstore.catalog.entity.Category;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.MappingTarget;

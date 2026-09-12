@@ -1,7 +1,7 @@
 package com.fashionstore.catalog.repository;
 
-import com.fashionstore.catalog.model.MediaFile;
-import com.fashionstore.catalog.model.enumeration.MediaStatus;
+import com.fashionstore.catalog.entity.MediaFile;
+import com.fashionstore.catalog.entity.enumeration.MediaStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.stereotype.Repository;

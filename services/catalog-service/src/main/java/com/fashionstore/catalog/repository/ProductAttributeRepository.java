@@ -1,6 +1,6 @@
 package com.fashionstore.catalog.repository;
 
-import com.fashionstore.catalog.model.attribute.ProductAttribute;
+import com.fashionstore.catalog.entity.attribute.ProductAttribute;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;

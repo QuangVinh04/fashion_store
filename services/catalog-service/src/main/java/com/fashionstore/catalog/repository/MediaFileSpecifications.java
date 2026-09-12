@@ -1,8 +1,8 @@
 package com.fashionstore.catalog.repository;
 
-import com.fashionstore.catalog.model.MediaFile;
-import com.fashionstore.catalog.model.enumeration.MediaStatus;
-import com.fashionstore.catalog.model.enumeration.MediaType;
+import com.fashionstore.catalog.entity.MediaFile;
+import com.fashionstore.catalog.entity.enumeration.MediaStatus;
+import com.fashionstore.catalog.entity.enumeration.MediaType;
 import jakarta.persistence.criteria.JoinType;
 import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.jpa.domain.Specification;

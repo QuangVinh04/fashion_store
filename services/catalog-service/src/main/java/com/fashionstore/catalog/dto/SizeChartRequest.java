@@ -1,7 +1,7 @@
 package com.fashionstore.catalog.dto;
 
-import com.fashionstore.catalog.model.enumeration.Gender;
-import com.fashionstore.catalog.model.enumeration.ProductType;
+import com.fashionstore.catalog.entity.enumeration.Gender;
+import com.fashionstore.catalog.entity.enumeration.ProductType;
 import jakarta.validation.constraints.NotBlank;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;

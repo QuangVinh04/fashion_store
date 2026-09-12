@@ -1,7 +1,7 @@
 package com.fashionstore.catalog.mapper;
 
 import com.fashionstore.catalog.dto.MediaFileResponse;
-import com.fashionstore.catalog.model.MediaFile;
+import com.fashionstore.catalog.entity.MediaFile;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 

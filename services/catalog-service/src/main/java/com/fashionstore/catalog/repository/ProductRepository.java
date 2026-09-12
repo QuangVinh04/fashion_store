@@ -1,9 +1,9 @@
 package com.fashionstore.catalog.repository;
 
 
-import com.fashionstore.catalog.model.Category;
-import com.fashionstore.catalog.model.Product;
-import com.fashionstore.catalog.model.enumeration.ProductStatus;
+import com.fashionstore.catalog.entity.Category;
+import com.fashionstore.catalog.entity.Product;
+import com.fashionstore.catalog.entity.enumeration.ProductStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;

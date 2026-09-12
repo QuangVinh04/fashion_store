@@ -1,6 +1,6 @@
 package com.fashionstore.catalog.repository;
 
-import com.fashionstore.catalog.model.Brand;
+import com.fashionstore.catalog.entity.Brand;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 

@@ -1,6 +1,6 @@
 package com.fashionstore.catalog.dto;
 
-import com.fashionstore.catalog.model.enumeration.MediaVisibility;
+import com.fashionstore.catalog.entity.enumeration.MediaVisibility;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;

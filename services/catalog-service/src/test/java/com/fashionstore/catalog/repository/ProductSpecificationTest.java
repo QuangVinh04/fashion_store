@@ -1,7 +1,7 @@
 package com.fashionstore.catalog.repository;
 
-import com.fashionstore.catalog.model.Product;
-import com.fashionstore.catalog.model.ProductVariant;
+import com.fashionstore.catalog.entity.Product;
+import com.fashionstore.catalog.entity.ProductVariant;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Join;

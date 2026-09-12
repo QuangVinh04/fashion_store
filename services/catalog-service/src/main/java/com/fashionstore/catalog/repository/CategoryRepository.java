@@ -1,6 +1,6 @@
 package com.fashionstore.catalog.repository;
 
-import com.fashionstore.catalog.model.Category;
+import com.fashionstore.catalog.entity.Category;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import org.springframework.data.jpa.repository.Query;

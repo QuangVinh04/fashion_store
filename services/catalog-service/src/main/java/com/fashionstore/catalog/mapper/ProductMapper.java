@@ -1,13 +1,13 @@
 package com.fashionstore.catalog.mapper;
 
 import com.fashionstore.catalog.dto.*;
-import com.fashionstore.catalog.model.Brand;
-import com.fashionstore.catalog.model.Category;
-import com.fashionstore.catalog.model.Product;
-import com.fashionstore.catalog.model.ProductCategory;
-import com.fashionstore.catalog.model.ProductImage;
-import com.fashionstore.catalog.model.ProductVariant;
-import com.fashionstore.catalog.model.attribute.ProductAttributeValue;
+import com.fashionstore.catalog.entity.Brand;
+import com.fashionstore.catalog.entity.Category;
+import com.fashionstore.catalog.entity.Product;
+import com.fashionstore.catalog.entity.ProductCategory;
+import com.fashionstore.catalog.entity.ProductImage;
+import com.fashionstore.catalog.entity.ProductVariant;
+import com.fashionstore.catalog.entity.attribute.ProductAttributeValue;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 
