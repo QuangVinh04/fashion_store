@@ -16,12 +16,7 @@ public enum ErrorCode implements BaseErrorCode {
     EMAIL_NOT_VERIFIED(2007, "Email not verified", HttpStatus.FORBIDDEN),
     VERIFICATION_TOKEN_EXPIRED(2008, "Verification link has expired", HttpStatus.BAD_REQUEST),
     VERIFICATION_TOKEN_INVALID(2009, "Verification link is invalid", HttpStatus.BAD_REQUEST),
-    EMAIL_ALREADY_VERIFIED(2010, "Email is already verified", HttpStatus.CONFLICT),
-    OTP_INVALID_OR_EXPIRED(2011, "Verification code is invalid or has expired", HttpStatus.BAD_REQUEST),
-    OTP_MAX_ATTEMPTS_EXCEEDED(2012, "You have entered the wrong information more than 5 times. Please request a new verification code", HttpStatus.TOO_MANY_REQUESTS),
-    RESEND_COOLDOWN_ACTIVE(2013, "Please wait 60 seconds before requesting to resend the code", HttpStatus.TOO_MANY_REQUESTS);
-
-
+    EMAIL_ALREADY_VERIFIED(2010, "Email is already verified", HttpStatus.CONFLICT);
 
     private final int code;
     private final String message;
