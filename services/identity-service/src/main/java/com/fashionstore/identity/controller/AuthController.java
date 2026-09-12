@@ -4,6 +4,7 @@ import com.fashionstore.common.dto.ApiResponse;
 import com.fashionstore.identity.dto.AuthResponse;
 import com.fashionstore.identity.dto.LoginRequest;
 import com.fashionstore.identity.dto.RegisterRequest;
+import com.fashionstore.identity.dto.VerifyEmailRequest;
 import com.fashionstore.identity.service.AuthService;
 import jakarta.validation.Valid;
 import lombok.AccessLevel;
@@ -34,9 +35,9 @@ public class AuthController {
                         .build();
     }
 
-    @GetMapping("/verify-email")
-    public ApiResponse<Void> verifyEmail(@RequestParam String token) {
-        authService.verifyEmail(token);
+    @PostMapping("/verify-email")
+    public ApiResponse<Void> verifyEmail(@Valid @RequestBody VerifyEmailRequest request) {
+        authService.verifyEmail(request);
         return ApiResponse.<Void>builder()
                 .message("Xác nhận email thành công, bạn có thể đăng nhập")
                 .build();
