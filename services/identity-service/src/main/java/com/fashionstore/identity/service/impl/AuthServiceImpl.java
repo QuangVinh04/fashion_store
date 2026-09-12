@@ -49,6 +49,7 @@ public class AuthServiceImpl implements AuthService {
     JwtService jwtService;
     EmailService emailService;
 
+
     @Override
     @Transactional
     public void register(RegisterRequest request) {
