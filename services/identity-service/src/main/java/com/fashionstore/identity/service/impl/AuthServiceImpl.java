@@ -7,6 +7,7 @@ import com.fashionstore.identity.constant.PredefinedRole;
 import com.fashionstore.identity.dto.AuthResponse;
 import com.fashionstore.identity.dto.LoginRequest;
 import com.fashionstore.identity.dto.RegisterRequest;
+import com.fashionstore.identity.entity.CustomUserDetails;
 import com.fashionstore.identity.entity.Role;
 import com.fashionstore.identity.entity.User;
 import com.fashionstore.identity.entity.VerificationToken;
@@ -22,6 +23,7 @@ import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -51,7 +53,7 @@ public class AuthServiceImpl implements AuthService {
     @Transactional
     public void register(RegisterRequest request) {
         // Kiểm tra email đã tồn tại chưa
-        if (userRepository.existsByEmail(request.getEmail())) {
+        if (userRepository.existsByEmail(request.email())) {
             throw new AppException(ErrorCode.EMAIL_ALREADY_EXISTS);
         }
         // Lấy role USER mặc định
@@ -59,10 +61,10 @@ public class AuthServiceImpl implements AuthService {
                 .orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_FOUND));
         // Tạo user mới
         User user = User.builder()
-                .email(request.getEmail())
-                .password(passwordEncoder.encode(request.getPassword()))
-                .fullName(request.getFullName())
-                .phone(request.getPhone())
+                .email(request.email())
+                .password(passwordEncoder.encode(request.password()))
+                .fullName(request.fullName())
+                .phone(request.phone())
                 .isActive(true)
                 .isEmailVerified(false)
                 .roles(new HashSet<>(Set.of(userRole)))
@@ -81,16 +83,15 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public AuthResponse login(LoginRequest request) {
         // Spring Security tự: load user từ DB + so sánh password
-        authenticationManager.authenticate(new UsernamePasswordAuthenticationToken(
-                        request.getEmail(),
-                        request.getPassword()
-                )
-        );
+        Authentication authentication = authenticationManager.authenticate(
+                new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword()));
+
         // Đến đây = xác thực thành công
-        User user = userRepository.findByEmail(request.getEmail())
-                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+        CustomUserDetails userDetails = (CustomUserDetails) authentication.getPrincipal();
+        User user = userDetails.getUser();
 
         if(!Boolean.TRUE.equals(user.getIsEmailVerified())) {
             throw new AppException(ErrorCode.EMAIL_NOT_VERIFIED);

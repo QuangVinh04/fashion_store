@@ -1,5 +1,6 @@
 package com.fashionstore.identity.config.security;
 
+import com.fashionstore.identity.service.CustomUserDetailsService;
 import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jose.jwk.RSAKey;
@@ -48,7 +49,7 @@ public class SecurityConfig {
 
     @Bean
     AuthenticationProvider authenticationProvider(
-            com.fashionstore.identity.service.CustomerUserDetailsService userDetailsService,
+            CustomUserDetailsService userDetailsService,
             PasswordEncoder passwordEncoder
     ) {
         DaoAuthenticationProvider provider = new DaoAuthenticationProvider();
