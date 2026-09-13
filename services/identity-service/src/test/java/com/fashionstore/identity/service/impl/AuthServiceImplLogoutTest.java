@@ -52,7 +52,7 @@ class AuthServiceImplLogoutTest {
 
     @BeforeEach
     void setUp() {
-        authService = new AuthServiceImpl(7, userRepository, roleRepository,
+                authService = new AuthServiceImpl(userRepository, roleRepository,
                 passwordEncoder, authenticationManager, jwtService, emailService, redisService, jwtDecoder);
     }
 

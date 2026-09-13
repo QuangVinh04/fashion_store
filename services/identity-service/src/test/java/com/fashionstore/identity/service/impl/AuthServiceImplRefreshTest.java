@@ -17,6 +17,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtException;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -60,8 +61,9 @@ class AuthServiceImplRefreshTest {
 
     @BeforeEach
     void setUp() {
-        authService = new AuthServiceImpl(7, userRepository, roleRepository,
+        authService = new AuthServiceImpl(userRepository, roleRepository,
                 passwordEncoder, authenticationManager, jwtService, emailService, redisService, jwtDecoder);
+        ReflectionTestUtils.setField(authService, "refreshTokenTtlDays", 7L);
     }
 
     private static String sha256Hex(String value) {
