@@ -2,8 +2,8 @@ package com.fashionstore.identity.mapper;
 
 
 import com.fashionstore.identity.entity.User;
-import com.fashionstore.identity.dto.UpdateProfileRequest;
-import com.fashionstore.identity.dto.UserProfileResponse;
+import com.fashionstore.identity.dto.user.UpdateProfileRequest;
+import com.fashionstore.identity.dto.user.UserProfileResponse;
 import org.mapstruct.BeanMapping;
 import org.mapstruct.Mapper;
 import org.mapstruct.MappingTarget;

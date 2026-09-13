@@ -24,7 +24,7 @@ public class JwtService {
     @Value("${security.jwt.issuer}")
     private String issuer;
 
-    @Value("${security.jwt.access-token-ttl-seconds:3600}")
+    @Value("${security.jwt.access-token-ttl-seconds:900}")
     private long accessTokenTtlSeconds;
 
     public String generateAccessToken(User user) {

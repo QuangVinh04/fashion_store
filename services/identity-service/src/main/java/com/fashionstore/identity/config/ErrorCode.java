@@ -19,8 +19,8 @@ public enum ErrorCode implements BaseErrorCode {
     EMAIL_ALREADY_VERIFIED(2010, "Email is already verified", HttpStatus.CONFLICT),
     OTP_INVALID_OR_EXPIRED(2011, "Mã xác thực không hợp lệ hoặc đã hết hạn", HttpStatus.BAD_REQUEST),
     OTP_MAX_ATTEMPTS_EXCEEDED(2012, "Bạn đã nhập sai quá 5 lần. Vui lòng yêu cầu mã xác thực mới", HttpStatus.TOO_MANY_REQUESTS),
-    RESEND_COOLDOWN_ACTIVE(2013, "Vui lòng đợi 60 giây trước khi yêu cầu gửi lại mã", HttpStatus.TOO_MANY_REQUESTS);
-
+    RESEND_COOLDOWN_ACTIVE(2013, "Vui lòng đợi 60 giây trước khi yêu cầu gửi lại mã", HttpStatus.TOO_MANY_REQUESTS),
+    REFRESH_TOKEN_INVALID(2014, "Refresh token không hợp lệ hoặc đã hết hạn", HttpStatus.UNAUTHORIZED);
     private final int code;
     private final String message;
     private final HttpStatusCode statusCode;

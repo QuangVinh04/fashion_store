@@ -1,9 +1,9 @@
 package com.fashionstore.identity.service;
 
-import com.fashionstore.identity.dto.AuthResponse;
-import com.fashionstore.identity.dto.LoginRequest;
-import com.fashionstore.identity.dto.RegisterRequest;
-import com.fashionstore.identity.dto.VerifyEmailRequest;
+import com.fashionstore.identity.dto.auth.AuthResponse;
+import com.fashionstore.identity.dto.auth.LoginRequest;
+import com.fashionstore.identity.dto.auth.RegisterRequest;
+import com.fashionstore.identity.dto.auth.VerifyEmailRequest;
 
 public interface AuthService {
     void register(RegisterRequest request);

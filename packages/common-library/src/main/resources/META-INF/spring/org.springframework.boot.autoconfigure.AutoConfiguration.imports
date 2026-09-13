@@ -1,3 +1,4 @@
 com.fashionstore.common.autoconfigure.CommonSecurityAutoConfiguration
 com.fashionstore.common.autoconfigure.CommonWebAutoConfiguration
 com.fashionstore.common.autoconfigure.CommonErrorHandlingAutoConfiguration
+com.fashionstore.common.autoconfigure.CommonRedisAutoConfiguration

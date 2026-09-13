@@ -27,7 +27,8 @@ spring:
 security:
   jwt:
     issuer: ${JWT_ISSUER:http://localhost:8082}
-    access-token-ttl-seconds: ${JWT_ACCESS_TOKEN_TTL_SECONDS:3600}
+    access-token-ttl-seconds: ${JWT_ACCESS_TOKEN_TTL_SECONDS:900}       # 15 phút
+    refresh-token-ttl-days: ${JWT_REFRESH_TOKEN_TTL_DAYS:7}
     private-key-file: ${JWT_PRIVATE_KEY_FILE:.data/identity-private.pem}
     public-key-file: ${JWT_PUBLIC_KEY_FILE:.data/identity-public.pem}
     legacy-jwk-file: ${JWT_LEGACY_JWK_FILE:.data/identity-rsa.jwk}

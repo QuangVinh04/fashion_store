@@ -1,9 +1,9 @@
 package com.fashionstore.identity.controller;
 
 import com.fashionstore.common.dto.ApiResponse;
-import com.fashionstore.identity.dto.ChangePasswordRequest;
-import com.fashionstore.identity.dto.UpdateProfileRequest;
-import com.fashionstore.identity.dto.UserProfileResponse;
+import com.fashionstore.identity.dto.auth.ChangePasswordRequest;
+import com.fashionstore.identity.dto.user.UpdateProfileRequest;
+import com.fashionstore.identity.dto.user.UserProfileResponse;
 import com.fashionstore.identity.service.UserService;
 import jakarta.validation.Valid;
 import lombok.AccessLevel;

@@ -1,5 +1,6 @@
 package com.fashionstore.identity.config.security;
 
+import com.fashionstore.common.redis.RedisService;
 import com.fashionstore.identity.service.CustomUserDetailsService;
 import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.jwk.JWKSet;
@@ -16,13 +17,14 @@ import org.springframework.security.authentication.dao.DaoAuthenticationProvider
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.security.oauth2.jwt.JwtDecoder;
-import org.springframework.security.oauth2.jwt.JwtEncoder;
-import org.springframework.security.oauth2.jwt.JwtValidators;
-import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
-import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
+import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
+import org.springframework.security.oauth2.core.OAuth2Error;
+import org.springframework.security.oauth2.core.OAuth2TokenValidator;
+import org.springframework.security.oauth2.core.OAuth2TokenValidatorResult;
+import org.springframework.security.oauth2.jwt.*;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.web.SecurityFilterChain;
@@ -44,6 +46,8 @@ public class SecurityConfig {
                                 .decoder(jwtDecoder)
                                 .jwtAuthenticationConverter(jwtAuthenticationConverter())))
                 .csrf(csrf -> csrf.disable())
+                .sessionManagement(session ->
+                        session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .build();
     }
 
@@ -97,10 +101,23 @@ public class SecurityConfig {
     @Bean
     JwtDecoder jwtDecoder(
             RSAKey rsaKey,
-            @Value("${security.jwt.issuer}") String issuer
+            @Value("${security.jwt.issuer}") String issuer,
+            RedisService redisService
     ) throws JOSEException {
         NimbusJwtDecoder decoder = NimbusJwtDecoder.withPublicKey(rsaKey.toRSAPublicKey()).build();
-        decoder.setJwtValidator(JwtValidators.createDefaultWithIssuer(issuer));
+        // 1. Validator mặc định kiểm tra issuer và expiration
+        OAuth2TokenValidator<Jwt> defaultValidator = JwtValidators.createDefaultWithIssuer(issuer);
+        // 2. Custom Validator kiểm tra Blacklist trên Redis
+        OAuth2TokenValidator<Jwt> blacklistValidator = jwt -> {
+            String jti = jwt.getId();
+            if (jti != null && redisService.existsValue("auth:blacklist:" + jti)) {
+                return OAuth2TokenValidatorResult.failure(
+                        new OAuth2Error("token_revoked", "Access token has been revoked", null)
+                );
+            }
+            return OAuth2TokenValidatorResult.success();
+        };
+        decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(defaultValidator, blacklistValidator));
         return decoder;
     }
 

@@ -1,10 +1,10 @@
 package com.fashionstore.identity.controller;
 
 import com.fashionstore.common.dto.ApiResponse;
-import com.fashionstore.identity.dto.AuthResponse;
-import com.fashionstore.identity.dto.LoginRequest;
-import com.fashionstore.identity.dto.RegisterRequest;
-import com.fashionstore.identity.dto.VerifyEmailRequest;
+import com.fashionstore.identity.dto.auth.AuthResponse;
+import com.fashionstore.identity.dto.auth.LoginRequest;
+import com.fashionstore.identity.dto.auth.RegisterRequest;
+import com.fashionstore.identity.dto.auth.VerifyEmailRequest;
 import com.fashionstore.identity.service.AuthService;
 import jakarta.validation.Valid;
 import lombok.AccessLevel;

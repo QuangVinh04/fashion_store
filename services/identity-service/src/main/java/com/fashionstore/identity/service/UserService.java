@@ -1,8 +1,8 @@
 package com.fashionstore.identity.service;
 
-import com.fashionstore.identity.dto.ChangePasswordRequest;
-import com.fashionstore.identity.dto.UpdateProfileRequest;
-import com.fashionstore.identity.dto.UserProfileResponse;
+import com.fashionstore.identity.dto.auth.ChangePasswordRequest;
+import com.fashionstore.identity.dto.user.UpdateProfileRequest;
+import com.fashionstore.identity.dto.user.UserProfileResponse;
 
 public interface UserService {
     UserProfileResponse getMyProfile();

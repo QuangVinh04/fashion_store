@@ -12,10 +12,8 @@ import java.util.Collection;
 import java.util.concurrent.TimeUnit;
 
 @Slf4j
-@Service
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
-@ConditionalOnBean(RedisTemplate.class) // CHỈ KÍCH HOẠT KHI DỰ ÁN CÓ DÙNG REDIS
 public class RedisService {
     RedisTemplate<String, Object> redisTemplate;
 
