@@ -9,6 +9,7 @@ import org.springframework.security.oauth2.jose.jws.SignatureAlgorithm;
 import org.springframework.security.oauth2.jwt.*;
 import org.springframework.stereotype.Service;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -21,11 +22,14 @@ public class JwtService {
     private final JwtEncoder jwtEncoder;
     private final RsaKeyMaterial rsaKeyMaterial;
 
-    @Value("${security.jwt.issuer}")
+    @Value("${security.jwt.issuer:http://localhost:8082}")
     private String issuer;
 
-    @Value("${security.jwt.access-token-ttl-seconds:900}")
+    @Value("${security.jwt.access-token-ttl-seconds:900}") // 15 phút
     private long accessTokenTtlSeconds;
+
+    @Value("${security.jwt.refresh-token-ttl-days:7}") // 7 ngày
+    private long refreshTokenTtlDays;
 
     public String generateAccessToken(User user) {
         Instant now = Instant.now();
@@ -55,5 +59,21 @@ public class JwtService {
                 .getTokenValue();
     }
 
-    // Gom roles + permissions, space-separated (chuẩn OAuth2 scope)
+    // 2. SINH REFRESH TOKEN (JWT gọn nhẹ, thời hạn 7 ngày)
+    public String generateRefreshToken(User user) {
+        Instant now = Instant.now();
+        JwtClaimsSet claims = JwtClaimsSet.builder()
+                .issuer(issuer)
+                .subject(user.getId())
+                .audience(List.of("fashion-api"))
+                .issuedAt(now)
+                .id(UUID.randomUUID().toString()) // jti của refresh token
+                .expiresAt(now.plus(refreshTokenTtlDays, ChronoUnit.DAYS))
+                .claim("token_type", "REFRESH_TOKEN")
+                .build();
+        JwsHeader header = JwsHeader.with(SignatureAlgorithm.RS256)
+                .keyId(rsaKeyMaterial.keyId())
+                .build();
+        return jwtEncoder.encode(JwtEncoderParameters.from(header, claims)).getTokenValue();
+    }
 }

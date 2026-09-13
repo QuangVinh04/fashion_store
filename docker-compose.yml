@@ -7,6 +7,8 @@ x-service-environment: &service-environment
   RABBITMQ_PORT: 5672
   RABBITMQ_USERNAME: guest
   RABBITMQ_PASSWORD: guest
+  REDIS_HOST: redis
+  REDIS_PORT: 6379
 
 services:
   api-gateway:
@@ -17,6 +19,8 @@ services:
       SERVER_PORT: 8080
       JWT_ISSUER: http://localhost:8080
       JWT_JWK_SET_URI: http://identity-service:8082/api/v1/auth/jwks
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
       IDENTITY_BASE_URL: http://identity-service:8082
       CATALOG_BASE_URL: http://catalog-service:8087
       ORDER_BASE_URL: http://order-service:8089

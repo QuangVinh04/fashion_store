@@ -32,8 +32,6 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -301,16 +299,6 @@ public class MediaFileServiceImpl implements MediaFileService {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || authentication.getName() == null) {
             return null;
-        }
-        if (authentication instanceof JwtAuthenticationToken jwtAuthenticationToken) {
-            Jwt jwt = jwtAuthenticationToken.getToken();
-            Object userId = jwt.getClaims().get("userId");
-            if (userId != null && !userId.toString().isBlank()) {
-                return userId.toString();
-            }
-            if (jwt.getSubject() != null && !jwt.getSubject().isBlank()) {
-                return jwt.getSubject();
-            }
         }
         return authentication.getName();
     }

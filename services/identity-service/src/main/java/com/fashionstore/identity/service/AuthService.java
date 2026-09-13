@@ -1,15 +1,16 @@
 package com.fashionstore.identity.service;
 
-import com.fashionstore.identity.dto.auth.AuthResponse;
-import com.fashionstore.identity.dto.auth.LoginRequest;
-import com.fashionstore.identity.dto.auth.RegisterRequest;
-import com.fashionstore.identity.dto.auth.VerifyEmailRequest;
+import com.fashionstore.identity.dto.auth.*;
+import org.springframework.security.oauth2.jwt.Jwt;
 
 public interface AuthService {
     void register(RegisterRequest request);
-    AuthResponse login(LoginRequest request);
+    AuthResult login(LoginRequest request);
+    AuthResult login(LoginRequest request, String clientIp);
     void verifyEmail(VerifyEmailRequest token);
     void resendVerification(String email);
 
 
+    AuthResult refresh(String refreshToken);
+    void logout(String refreshToken, Jwt jwt);
 }

@@ -2,6 +2,8 @@ package com.fashionstore.identity.controller;
 
 import com.nimbusds.jose.jwk.RSAKey;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.CacheControl;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -17,7 +19,9 @@ public class JwkController {
     private final RSAKey rsaKey;
 
     @GetMapping("/jwks")
-    public Map<String, Object> getJwkSet() {
-        return Map.of("keys", List.of(rsaKey.toPublicJWK().toJSONObject()));
+    public ResponseEntity<Map<String, Object>> getJwkSet() {
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.maxAge(java.time.Duration.ofMinutes(5)).cachePublic())
+                .body(Map.of("keys", List.of(rsaKey.toPublicJWK().toJSONObject())));
     }
 }

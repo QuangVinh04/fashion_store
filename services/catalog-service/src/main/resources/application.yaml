@@ -21,12 +21,6 @@ spring:
           initial-interval: 1000
           max-attempts: 3
           multiplier: 2
-  security:
-    oauth2:
-      resourceserver:
-        jwt:
-          issuer-uri: ${JWT_ISSUER:http://localhost:8082}
-          jwk-set-uri: ${JWT_JWK_SET_URI:http://localhost:8082/api/v1/auth/jwks}
   jpa:
     database: postgresql
     hibernate:

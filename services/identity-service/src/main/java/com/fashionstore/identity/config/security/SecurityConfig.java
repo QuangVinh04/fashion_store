@@ -1,6 +1,8 @@
 package com.fashionstore.identity.config.security;
 
 import com.fashionstore.common.redis.RedisService;
+import com.fashionstore.common.security.JwtBlacklistValidator;
+import com.fashionstore.common.security.GatewayHeaderAuthenticationFilter;
 import com.fashionstore.identity.service.CustomUserDetailsService;
 import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.jwk.JWKSet;
@@ -21,10 +23,15 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
-import org.springframework.security.oauth2.core.OAuth2Error;
 import org.springframework.security.oauth2.core.OAuth2TokenValidator;
-import org.springframework.security.oauth2.core.OAuth2TokenValidatorResult;
-import org.springframework.security.oauth2.jwt.*;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtClaimNames;
+import org.springframework.security.oauth2.jwt.JwtClaimValidator;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.JwtEncoder;
+import org.springframework.security.oauth2.jwt.JwtValidators;
+import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
+import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.web.SecurityFilterChain;
@@ -39,12 +46,15 @@ public class SecurityConfig {
     SecurityFilterChain securityFilterChain(HttpSecurity http, JwtDecoder jwtDecoder) throws Exception {
         return http
                 .authorizeHttpRequests(authorize -> authorize
+                        .requestMatchers("/api/v1/auth/logout").authenticated()
                         .requestMatchers("/api/v1/auth/**", "/actuator/health/**", "/error").permitAll()
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(resourceServer -> resourceServer
                         .jwt(jwt -> jwt
                                 .decoder(jwtDecoder)
                                 .jwtAuthenticationConverter(jwtAuthenticationConverter())))
+                .addFilterBefore(new GatewayHeaderAuthenticationFilter(),
+                        org.springframework.security.web.access.intercept.AuthorizationFilter.class)
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
@@ -108,16 +118,12 @@ public class SecurityConfig {
         // 1. Validator mặc định kiểm tra issuer và expiration
         OAuth2TokenValidator<Jwt> defaultValidator = JwtValidators.createDefaultWithIssuer(issuer);
         // 2. Custom Validator kiểm tra Blacklist trên Redis
-        OAuth2TokenValidator<Jwt> blacklistValidator = jwt -> {
-            String jti = jwt.getId();
-            if (jti != null && redisService.existsValue("auth:blacklist:" + jti)) {
-                return OAuth2TokenValidatorResult.failure(
-                        new OAuth2Error("token_revoked", "Access token has been revoked", null)
-                );
-            }
-            return OAuth2TokenValidatorResult.success();
-        };
-        decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(defaultValidator, blacklistValidator));
+        OAuth2TokenValidator<Jwt> blacklistValidator = new JwtBlacklistValidator(redisService);
+        OAuth2TokenValidator<Jwt> audienceValidator =
+                new JwtClaimValidator<java.util.List<String>>(JwtClaimNames.AUD,
+                        aud -> aud != null && aud.contains("fashion-api"));
+        decoder.setJwtValidator(
+                new DelegatingOAuth2TokenValidator<>(defaultValidator, audienceValidator, blacklistValidator));
         return decoder;
     }
 

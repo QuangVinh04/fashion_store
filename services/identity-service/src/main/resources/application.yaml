@@ -27,6 +27,7 @@ spring:
 security:
   jwt:
     issuer: ${JWT_ISSUER:http://localhost:8082}
+  cookie-secure: ${SECURITY_COOKIE_SECURE:false}
     access-token-ttl-seconds: ${JWT_ACCESS_TOKEN_TTL_SECONDS:900}       # 15 phút
     refresh-token-ttl-days: ${JWT_REFRESH_TOKEN_TTL_DAYS:7}
     private-key-file: ${JWT_PRIVATE_KEY_FILE:.data/identity-private.pem}

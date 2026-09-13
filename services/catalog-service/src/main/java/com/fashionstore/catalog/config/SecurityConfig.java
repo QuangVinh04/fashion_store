@@ -2,117 +2,55 @@ package com.fashionstore.catalog.config;
 
 import com.fashionstore.common.security.ApiAccessDeniedHandler;
 import com.fashionstore.common.security.ApiAuthenticationEntryPoint;
+import com.fashionstore.common.security.GatewayHeaderAuthenticationFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
-import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
+import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.access.intercept.AuthorizationFilter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.util.List;
 
-/**
- * Gộp ba {@code SecurityConfig} của product-service, inventory-service và file-service.
- *
- * <p>Một Spring context chỉ nhận một tập bean, mà ba service cũ có ba luật
- * {@code anyRequest()} khác nhau (product: ADMIN, inventory: ADMIN, file: chỉ cần
- * đăng nhập). Nên thay vì trộn tất cả vào một chain — việc bắt buộc phải chọn một
- * {@code anyRequest()} duy nhất và do đó làm đổi quyền của ai đó — mỗi domain giữ
- * một chain riêng, khoanh vùng bằng {@code securityMatcher}. Luật bên trong từng
- * chain được sao lại nguyên văn từ service cũ.
- *
- * <p>Thứ tự chain quan trọng: chain có {@code securityMatcher} phải đứng trước
- * chain bao trùm ({@link #catalogFilterChain}) vốn không khoanh vùng gì.
- */
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
 public class SecurityConfig {
 
-    /** Nguyên văn từ file-service: nội dung file công khai, còn lại chỉ cần đăng nhập. */
     @Bean
-    @Order(1)
-    SecurityFilterChain mediaFilterChain(
+    public SecurityFilterChain securityFilterChain(
             HttpSecurity http,
-            CustomJwtDecoder jwtDecoder,
-            JwtAuthenticationConverter jwtConverter,
             CorsConfigurationSource corsConfigurationSource,
             ApiAuthenticationEntryPoint authenticationEntryPoint,
             ApiAccessDeniedHandler accessDeniedHandler
     ) throws Exception {
         return http
-                .securityMatcher("/api/v1/files/**")
-                .authorizeHttpRequests(authorize -> authorize
-                        .requestMatchers(HttpMethod.GET, "/api/v1/files/*/content").permitAll()
-                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                        .anyRequest().authenticated())
-                .oauth2ResourceServer(resourceServer -> resourceServer
-                        .jwt(jwt -> jwt.decoder(jwtDecoder).jwtAuthenticationConverter(jwtConverter))
-                        .authenticationEntryPoint(authenticationEntryPoint))
-                .exceptionHandling(exceptions -> exceptions
-                        .authenticationEntryPoint(authenticationEntryPoint)
-                        .accessDeniedHandler(accessDeniedHandler))
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(cors -> cors.configurationSource(corsConfigurationSource))
-                .build();
-    }
-
-    /** Inventory: cart checkStock cho phép authenticated (không ADMIN), còn mutate chỉ saga hoặc ADMIN. */
-    @Bean
-    @Order(2)
-    SecurityFilterChain inventoryFilterChain(
-            HttpSecurity http,
-            CustomJwtDecoder jwtDecoder,
-            JwtAuthenticationConverter jwtConverter,
-            CorsConfigurationSource corsConfigurationSource,
-            ApiAuthenticationEntryPoint authenticationEntryPoint,
-            ApiAccessDeniedHandler accessDeniedHandler
-    ) throws Exception {
-        return http
-                .securityMatcher("/api/v1/inventory/**", "/internal/v1/**")
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authorize -> authorize
+                        // 1. CORS Preflight & Hệ thống (Công khai)
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/v1/inventory/check").authenticated()
-                        .requestMatchers(HttpMethod.GET, "/api/v1/inventory/**").hasAnyRole("ADMIN")
-                        .requestMatchers("/internal/v1/**").hasAuthority("internal")
-                        .anyRequest().hasRole("ADMIN"))
-                .oauth2ResourceServer(resourceServer -> resourceServer
-                        .jwt(jwt -> jwt.decoder(jwtDecoder).jwtAuthenticationConverter(jwtConverter))
-                        .authenticationEntryPoint(authenticationEntryPoint))
-                .exceptionHandling(exceptions -> exceptions
-                        .authenticationEntryPoint(authenticationEntryPoint)
-                        .accessDeniedHandler(accessDeniedHandler))
-                .csrf(AbstractHttpConfigurer::disable)
-                .cors(cors -> cors.configurationSource(corsConfigurationSource))
-                .build();
-    }
-
-    /**
-     * Nguyên văn từ product-service, cộng thêm hai đường swagger mà inventory và file
-     * vốn mở (không có springdoc trên classpath nên hiện là luật vô hại). Chain này
-     * không bật CORS vì product-service trước đây cũng không bật.
-     */
-    @Bean
-    @Order(3)
-    SecurityFilterChain catalogFilterChain(
-            HttpSecurity http,
-            CustomJwtDecoder jwtDecoder,
-            JwtAuthenticationConverter jwtConverter,
-            ApiAuthenticationEntryPoint authenticationEntryPoint,
-            ApiAccessDeniedHandler accessDeniedHandler
-    ) throws Exception {
-        return http
-                .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers("/actuator/health/**").permitAll()
                         .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
+
+                        // 2. Domain Media / File: Xem ảnh công khai, các thao tác file khác chỉ cần đăng nhập
+                        .requestMatchers(HttpMethod.GET, "/api/v1/files/*/content").permitAll()
+                        .requestMatchers("/api/v1/files/**").authenticated()
+
+                        // 3. Domain Inventory: Khách xem giỏ hàng checkStock cần đăng nhập, internal Saga cần quyền internal
+                        .requestMatchers(HttpMethod.POST, "/api/v1/inventory/check").authenticated()
+                        .requestMatchers("/internal/v1/**").hasAuthority("internal")
+                        .requestMatchers(HttpMethod.GET, "/api/v1/inventory/**").hasRole("ADMIN")
+
+                        // 4. Domain Product / Catalog: Khách xem sản phẩm, danh mục công khai
                         .requestMatchers(HttpMethod.GET,
                                 "/api/v1/products/**",
                                 "/api/v1/product/**",
@@ -122,42 +60,32 @@ public class SecurityConfig {
                                 "/api/v1/color-options/**",
                                 "/api/v1/size-options/**",
                                 "/api/v1/size-charts/**").permitAll()
-                        .anyRequest().hasRole("ADMIN"))
-                .oauth2ResourceServer(resourceServer -> resourceServer
-                        .jwt(jwt -> jwt.decoder(jwtDecoder).jwtAuthenticationConverter(jwtConverter))
-                        .authenticationEntryPoint(authenticationEntryPoint))
+
+                        // 5. Mọi thao tác còn lại (Thêm/Sửa/Xóa sản phẩm, cập nhật kho...): Bắt buộc quyền ADMIN
+                        .anyRequest().hasRole("ADMIN")
+                )
+                // Filter nhận diện User từ Gateway (Header: X-User-Id, X-User-Roles)
+                .addFilterBefore(new GatewayHeaderAuthenticationFilter(), AuthorizationFilter.class)
                 .exceptionHandling(exceptions -> exceptions
                         .authenticationEntryPoint(authenticationEntryPoint)
-                        .accessDeniedHandler(accessDeniedHandler))
-                .csrf(AbstractHttpConfigurer::disable)
+                        .accessDeniedHandler(accessDeniedHandler)
+                )
                 .build();
     }
 
-    /** Ba service cũ đều dùng bản giống nhau: bỏ tiền tố ROLE_ mặc định. */
     @Bean
-    JwtAuthenticationConverter jwtConverter() {
-        JwtGrantedAuthoritiesConverter authoritiesConverter = new JwtGrantedAuthoritiesConverter();
-        authoritiesConverter.setAuthorityPrefix("");
-        JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
-        converter.setJwtGrantedAuthoritiesConverter(authoritiesConverter);
-        return converter;
-    }
-
-    /**
-     * Hai cấu hình CORS cũ khác nhau ở method và exposed header, nên đăng ký theo
-     * đường dẫn thay vì chọn một cái: {@code /api/v1/files/**} lấy bản của
-     * file-service, phần còn lại lấy bản của inventory-service. Pattern cụ thể phải
-     * đăng ký trước vì {@link UrlBasedCorsConfigurationSource} trả về pattern khớp đầu tiên.
-     */
-    @Bean
-    CorsConfigurationSource corsConfigurationSource() {
+    public CorsConfigurationSource corsConfigurationSource() {
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        // Cấu hình CORS cho media files
         source.registerCorsConfiguration("/api/v1/files/**", corsConfig(
                 List.of("GET", "POST", "PATCH", "DELETE", "OPTIONS"),
-                List.of("Authorization", "Content-Disposition")));
+                List.of("Authorization", "Content-Disposition")
+        ));
+        // Cấu hình CORS chung cho toàn bộ catalog
         source.registerCorsConfiguration("/**", corsConfig(
                 List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"),
-                List.of("Authorization")));
+                List.of("Authorization")
+        ));
         return source;
     }
 
