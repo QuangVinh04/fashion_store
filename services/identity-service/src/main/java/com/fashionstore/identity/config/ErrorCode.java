@@ -21,7 +21,13 @@ public enum ErrorCode implements BaseErrorCode {
     OTP_MAX_ATTEMPTS_EXCEEDED(2012, "Bạn đã nhập sai quá 5 lần. Vui lòng yêu cầu mã xác thực mới", HttpStatus.TOO_MANY_REQUESTS),
     RESEND_COOLDOWN_ACTIVE(2013, "Vui lòng đợi 60 giây trước khi yêu cầu gửi lại mã", HttpStatus.TOO_MANY_REQUESTS),
     REFRESH_TOKEN_INVALID(2014, "Refresh token không hợp lệ hoặc đã hết hạn", HttpStatus.UNAUTHORIZED),
-    LOGIN_RATE_LIMITED(2015, "Quá nhiều lần đăng nhập thất bại. Vui lòng thử lại sau 5 phút", HttpStatus.TOO_MANY_REQUESTS);
+    LOGIN_RATE_LIMITED(2015, "Quá nhiều lần đăng nhập thất bại. Vui lòng thử lại sau 5 phút", HttpStatus.TOO_MANY_REQUESTS),
+    ADDRESS_NOT_FOUND(2016, "Địa chỉ không tồn tại", HttpStatus.NOT_FOUND),
+    CANNOT_DELETE_DEFAULT_ADDRESS(2017, "Không thể xóa địa chỉ mặc định khi vẫn còn địa chỉ khác", HttpStatus.BAD_REQUEST)
+
+
+    ;
+
     private final int code;
     private final String message;
     private final HttpStatusCode statusCode;
