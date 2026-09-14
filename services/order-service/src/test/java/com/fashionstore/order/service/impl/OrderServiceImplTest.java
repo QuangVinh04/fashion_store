@@ -7,6 +7,7 @@ import com.fashionstore.common.payment.PaymentProvider;
 import com.fashionstore.common.security.CurrentUserProvider;
 import com.fashionstore.contracts.common.EventTypes;
 import com.fashionstore.order.exception.OrderErrorCode;
+import com.fashionstore.order.client.IdentityClient;
 import com.fashionstore.order.dto.CancelOrderRequest;
 import com.fashionstore.order.dto.CreateOrderRequest;
 import com.fashionstore.order.dto.OrderResponse;
@@ -71,6 +72,9 @@ class OrderServiceImplTest {
     @Mock
     private CurrentUserProvider currentUserProvider;
 
+    @Mock
+    private IdentityClient identityClient;
+
     private OrderServiceImpl service;
 
     @BeforeEach
@@ -85,7 +89,8 @@ class OrderServiceImplTest {
                 outboxService,
                 sagaOutbox,
                 cancellationService,
-                currentUserProvider
+                currentUserProvider,
+                identityClient
         );
         when(currentUserProvider.getCurrentUserId()).thenReturn("user-1");
     }
