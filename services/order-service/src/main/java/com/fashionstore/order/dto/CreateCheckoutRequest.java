@@ -22,6 +22,8 @@ public class CreateCheckoutRequest {
 
     PaymentProvider paymentProvider;
 
+    String addressId;
+
     @Builder.Default
     ShippingMethod shippingMethod = ShippingMethod.STANDARD;
 }

@@ -30,5 +30,6 @@ public class CheckoutResponse {
     BigDecimal discountAmount;
     BigDecimal shippingFee;
     BigDecimal totalAmount;
+    String addressId;
     LocalDateTime submittedAt;
 }

@@ -70,6 +70,7 @@ public class CheckoutServiceImpl implements CheckoutService {
                 .discountAmount(discount)
                 .shippingFee(shippingFee)
                 .totalAmount(total)
+                .addressId(request.getAddressId())
                 .submittedAt(LocalDateTime.now())
                 .build();
 
@@ -105,6 +106,9 @@ public class CheckoutServiceImpl implements CheckoutService {
         }
         if (request.getCouponCode() != null) {
             checkout.setCouponCode(request.getCouponCode());
+        }
+        if (request.getAddressId() != null) {
+            checkout.setAddressId(request.getAddressId());
         }
 
         BigDecimal discount = calculateDiscount(checkout.getSubtotalAmount(), checkout.getCouponCode());
@@ -187,6 +191,7 @@ public class CheckoutServiceImpl implements CheckoutService {
                 .discountAmount(checkout.getDiscountAmount())
                 .shippingFee(checkout.getShippingFee())
                 .totalAmount(checkout.getTotalAmount())
+                .addressId(checkout.getAddressId())
                 .submittedAt(checkout.getSubmittedAt())
                 .build();
     }

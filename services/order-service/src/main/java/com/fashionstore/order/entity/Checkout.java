@@ -66,6 +66,9 @@ public class Checkout extends BaseEntity {
     @Column(name = "total_amount", nullable = false, precision = 19, scale = 2)
     BigDecimal totalAmount;
 
+    @Column(name = "address_id", length = 36)
+    String addressId;
+
     @Column(name = "submitted_at")
     LocalDateTime submittedAt;
 

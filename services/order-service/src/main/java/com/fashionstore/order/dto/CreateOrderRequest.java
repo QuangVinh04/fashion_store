@@ -12,12 +12,11 @@ import lombok.experimental.FieldDefaults;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class CreateOrderRequest {
 
-    @NotBlank
+    String addressId;
+
     String recipientName;
 
-    @NotBlank
     String recipientPhone;
 
-    @NotBlank
     String shippingAddress;
 }

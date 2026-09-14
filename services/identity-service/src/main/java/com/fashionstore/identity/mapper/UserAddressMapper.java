@@ -6,12 +6,11 @@ import com.fashionstore.identity.dto.user.UserAddressResponse;
 import com.fashionstore.identity.entity.UserAddress;
 import org.mapstruct.*;
 
-@Mapper(componentModel = "spring")
+@Mapper(componentModel = "spring", unmappedTargetPolicy = ReportingPolicy.IGNORE)
 public interface UserAddressMapper {
     @Mapping(target = "fullAddress", expression = "java(buildFullAddress(entity))")
     UserAddressResponse toResponse(UserAddress entity);
 
-    @Mapping(target = "id", ignore = true)
     @Mapping(target = "userId", ignore = true)
     UserAddress toEntity(UserAddressRequest request);
 

@@ -1,17 +1,12 @@
 package com.fashionstore.order.service.impl;
 
 import com.fashionstore.common.exception.AppException;
+import com.fashionstore.common.exception.ErrorCode;
+import com.fashionstore.order.client.IdentityClient;
+import com.fashionstore.order.dto.*;
 import com.fashionstore.order.exception.OrderErrorCode;
 import com.fashionstore.common.security.CurrentUserProvider;
 import com.fashionstore.common.dto.PageResponse;
-import com.fashionstore.order.dto.CancelOrderRequest;
-import com.fashionstore.order.dto.CreateOrderRequest;
-import com.fashionstore.order.dto.OrderItemResponse;
-import com.fashionstore.order.dto.OrderResponse;
-import com.fashionstore.order.dto.OrderSagaResponse;
-import com.fashionstore.order.dto.OrderSummaryResponse;
-import com.fashionstore.order.dto.ReturnOrderRequest;
-import com.fashionstore.order.dto.UpdateOrderStatusRequest;
 import com.fashionstore.order.saga.SagaCancellationService;
 import com.fashionstore.order.saga.SagaCommands;
 import com.fashionstore.order.saga.SagaOutbox;
@@ -52,6 +47,7 @@ public class OrderServiceImpl implements OrderService {
     SagaOutbox sagaOutbox;
     SagaCancellationService sagaCancellationService;
     CurrentUserProvider currentUserProvider;
+    IdentityClient identityClient;
 
     @Override
     @Transactional
@@ -82,6 +78,32 @@ public class OrderServiceImpl implements OrderService {
             throw new AppException(OrderErrorCode.CHECKOUT_NOT_FOUND);
         }
 
+        String recipientName = request.getRecipientName();
+        String recipientPhone = request.getRecipientPhone();
+        String shippingAddress = request.getShippingAddress();
+
+        // 1. Xác định addressId: ưu tiên từ CreateOrderRequest; nếu không có thì lấy từ Checkout
+        String effectiveAddressId = (request.getAddressId() != null && !request.getAddressId().isBlank())
+                ? request.getAddressId().trim()
+                : checkout.getAddressId();
+
+        // 2. Nếu có addressId, gọi sang identity-service để lấy thông tin chi tiết
+        if (effectiveAddressId != null && !effectiveAddressId.isBlank()) {
+            UserAddressDto addressDto = identityClient.getAddress(effectiveAddressId);
+            if (addressDto != null) {
+                recipientName = addressDto.getRecipientName();
+                recipientPhone = addressDto.getPhone();
+                shippingAddress = addressDto.getFullAddress();
+            }
+        }
+
+        // 3. Đảm bảo thông tin giao hàng bắt buộc phải có giá trị
+        if (recipientName == null || recipientName.isBlank()
+                || recipientPhone == null || recipientPhone.isBlank()
+                || shippingAddress == null || shippingAddress.isBlank()) {
+            throw new AppException(ErrorCode.VALIDATION_FAILED);
+        }
+
         Order order = Order.builder()
                 .orderCode(generateOrderCode())
                 .paymentMethod(checkout.getPaymentMethod())
@@ -90,9 +112,9 @@ public class OrderServiceImpl implements OrderService {
                 .idempotencyKey(effectiveIdempotencyKey)
                 .status(OrderStatus.PENDING)
                 .checkoutId(checkout.getId())
-                .recipientName(request.getRecipientName())
-                .recipientPhone(request.getRecipientPhone())
-                .shippingAddress(request.getShippingAddress())
+                .recipientName(recipientName)
+                .recipientPhone(recipientPhone)
+                .shippingAddress(shippingAddress)
                 .subtotalAmount(checkout.getSubtotalAmount())
                 .discountAmount(checkout.getDiscountAmount())
                 .shippingFee(checkout.getShippingFee())
