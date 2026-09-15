@@ -21,6 +21,7 @@ import com.fashionstore.order.repository.CheckoutRepository;
 import com.fashionstore.order.repository.OrderRepository;
 import com.fashionstore.order.repository.OrderSagaRepository;
 import com.fashionstore.order.service.OrderService;
+import com.fashionstore.order.service.PromotionService;
 import com.fashionstore.order.outbox.OutboxService;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -48,6 +49,7 @@ public class OrderServiceImpl implements OrderService {
     SagaCancellationService sagaCancellationService;
     CurrentUserProvider currentUserProvider;
     IdentityClient identityClient;
+    PromotionService promotionService;
 
     @Override
     @Transactional
@@ -128,6 +130,20 @@ public class OrderServiceImpl implements OrderService {
         order.setItems(orderItems);
         orderRepository.save(order);
 
+        if (checkout.getCouponCode() != null && !checkout.getCouponCode().isBlank()) {
+            List<PromotionItemDto> promoItems = checkoutItems.stream()
+                    .map(item -> PromotionItemDto.builder()
+                            .variantId(item.getVariantId())
+                            .productId(item.getProductId())
+                            .categoryId(item.getCategoryId())
+                            .unitPrice(item.getUnitPrice())
+                            .quantity(item.getQuantity())
+                            .lineTotal(item.getLineTotal())
+                            .build())
+                    .toList();
+            promotionService.reserve(checkout.getCouponCode(), userId, order.getId(), checkout.getSubtotalAmount(), promoItems);
+        }
+
         checkout.setOrder(order);
         checkout.setStatus(CheckoutStatus.COMPLETED);
         checkoutRepository.save(checkout);
@@ -194,12 +210,16 @@ public class OrderServiceImpl implements OrderService {
             // Đơn cũ tạo trước khi có saga: không có gì để bù trừ.
             locked.cancel(reason);
             orderRepository.save(locked);
+            promotionService.release(locked.getId());
             return toResponse(locked, locked.getCheckoutId());
         }
 
         SagaCancellationService.Outcome outcome = sagaCancellationService.cancel(saga, locked, reason);
         if (outcome == SagaCancellationService.Outcome.NOT_ALLOWED) {
             throw new AppException(OrderErrorCode.ORDER_CANNOT_BE_CANCELLED);
+        }
+        if (outcome == SagaCancellationService.Outcome.CANCELLED) {
+            promotionService.release(locked.getId());
         }
         return toResponse(locked, locked.getCheckoutId());
     }

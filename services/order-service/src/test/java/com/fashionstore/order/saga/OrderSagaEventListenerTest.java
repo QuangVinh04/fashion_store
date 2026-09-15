@@ -22,6 +22,7 @@ import com.fashionstore.order.entity.enumeration.OrderStatus;
 import com.fashionstore.order.repository.CartRepository;
 import com.fashionstore.order.repository.OrderRepository;
 import com.fashionstore.order.repository.OrderSagaRepository;
+import com.fashionstore.order.service.PromotionService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -71,6 +72,9 @@ class OrderSagaEventListenerTest {
     @Mock
     private CartRepository cartRepository;
 
+    @Mock
+    private PromotionService promotionService;
+
     private OrderSagaEventListener listener;
 
     @BeforeEach
@@ -86,7 +90,7 @@ class OrderSagaEventListenerTest {
                 sagaOutbox,
                 new ObjectMapper()
         );
-        listener = new OrderSagaEventListener(processor, orderRepository, cartRepository);
+        listener = new OrderSagaEventListener(processor, orderRepository, cartRepository, promotionService);
         when(cartRepository.findByUserIdAndStatus(anyString(), any())).thenReturn(Optional.empty());
     }
 

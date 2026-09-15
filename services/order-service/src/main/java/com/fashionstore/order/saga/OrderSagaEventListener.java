@@ -18,6 +18,7 @@ import com.fashionstore.order.entity.enumeration.CartStatus;
 import com.fashionstore.order.entity.enumeration.OrderSagaStep;
 import com.fashionstore.order.repository.CartRepository;
 import com.fashionstore.order.repository.OrderRepository;
+import com.fashionstore.order.service.PromotionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.messaging.handler.annotation.Header;
@@ -39,6 +40,7 @@ public class OrderSagaEventListener {
     private final SagaReplyProcessor sagaReplies;
     private final OrderRepository orderRepository;
     private final CartRepository cartRepository;
+    private final PromotionService promotionService;
 
     // 1. Giữ kho xong -> xin thanh toán
     @Transactional
@@ -194,6 +196,7 @@ public class OrderSagaEventListener {
                     Order order = lockOrderWithItems(saga);
                     order.confirm(saga.getPaymentId());
                     orderRepository.save(order);
+                    promotionService.confirm(order.getId());
 
                     // Giỏ hàng giờ nằm cùng database nên xoá thẳng trong transaction này,
                     // không cần đi vòng qua message. Đổi lại: xoá hỏng thì đơn rollback theo —
@@ -260,6 +263,7 @@ public class OrderSagaEventListener {
         Order order = order(saga);
         order.cancel(reason);
         orderRepository.save(order);
+        promotionService.release(order.getId());
         return List.of(SagaCommands.orderCancelled(order, reason));
     }
 

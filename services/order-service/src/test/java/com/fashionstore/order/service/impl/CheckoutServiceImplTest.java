@@ -16,6 +16,7 @@ import com.fashionstore.order.entity.enumeration.ShippingMethod;
 import com.fashionstore.order.exception.OrderErrorCode;
 import com.fashionstore.order.repository.CheckoutRepository;
 import com.fashionstore.order.service.CartService;
+import com.fashionstore.order.service.PromotionService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -32,6 +33,7 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -49,11 +51,14 @@ class CheckoutServiceImplTest {
     @Mock
     private CurrentUserProvider currentUserProvider;
 
+    @Mock
+    private PromotionService promotionService;
+
     private CheckoutServiceImpl service;
 
     @BeforeEach
     void setUp() {
-        service = new CheckoutServiceImpl(checkoutRepository, cartService, currentUserProvider);
+        service = new CheckoutServiceImpl(checkoutRepository, cartService, currentUserProvider, promotionService);
         when(currentUserProvider.getCurrentUserId()).thenReturn("user-1");
         when(checkoutRepository.save(any(Checkout.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
@@ -147,6 +152,41 @@ class CheckoutServiceImplTest {
 
         assertEquals(OrderErrorCode.CART_ITEM_STALE, exception.getErrorCode());
         verify(checkoutRepository, never()).save(any(Checkout.class));
+    }
+
+    @Test
+    void createsCheckoutWithPromotionDiscount() {
+        Cart cart = cart(cartItem("item-1", "variant-1", 2, "100000"));
+        when(cartService.revalidateActiveCart()).thenReturn(cart);
+        when(promotionService.previewDiscount(eq("SALE20"), eq("user-1"), eq(new BigDecimal("200000")), any()))
+                .thenReturn(new BigDecimal("40000"));
+
+        CheckoutResponse response = service.createCheckout(CreateCheckoutRequest.builder()
+                .paymentMethod(PaymentMethod.COD)
+                .shippingMethod(ShippingMethod.STANDARD)
+                .couponCode("SALE20")
+                .build());
+
+        assertEquals(0, response.getSubtotalAmount().compareTo(new BigDecimal("200000")));
+        assertEquals(0, response.getDiscountAmount().compareTo(new BigDecimal("40000")));
+        assertEquals(0, response.getShippingFee().compareTo(new BigDecimal("25000")));
+        assertEquals(0, response.getTotalAmount().compareTo(new BigDecimal("185000")));
+        assertEquals("SALE20", response.getCouponCode());
+    }
+
+    @Test
+    void createsCheckoutWithEmptyCoupon_returnsZeroDiscount() {
+        Cart cart = cart(cartItem("item-1", "variant-1", 2, "100000"));
+        when(cartService.revalidateActiveCart()).thenReturn(cart);
+
+        CheckoutResponse response = service.createCheckout(CreateCheckoutRequest.builder()
+                .paymentMethod(PaymentMethod.COD)
+                .shippingMethod(ShippingMethod.STANDARD)
+                .couponCode("")
+                .build());
+
+        assertEquals(0, response.getDiscountAmount().compareTo(BigDecimal.ZERO));
+        verify(promotionService, never()).previewDiscount(any(), any(), any(), any());
     }
 
     private Cart cart(CartItem... items) {

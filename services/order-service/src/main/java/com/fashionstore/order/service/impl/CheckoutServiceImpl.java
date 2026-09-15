@@ -17,6 +17,8 @@ import com.fashionstore.order.repository.CheckoutRepository;
 import com.fashionstore.order.service.CartService;
 import com.fashionstore.order.service.CheckoutService;
 import com.fashionstore.common.payment.PaymentMethod;
+import com.fashionstore.order.dto.PromotionItemDto;
+import com.fashionstore.order.service.PromotionService;
 import com.fashionstore.common.payment.PaymentProvider;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -37,6 +39,7 @@ public class CheckoutServiceImpl implements CheckoutService {
     CheckoutRepository checkoutRepository;
     CartService cartService;
     CurrentUserProvider currentUserProvider;
+    PromotionService promotionService;
 
     /**
      * Không có {@code @Transactional}: bước xác nhận lại giỏ với catalog là gọi mạng, không được giữ
@@ -55,7 +58,16 @@ public class CheckoutServiceImpl implements CheckoutService {
 
         ShippingMethod shippingMethod = request.getShippingMethod() == null ? ShippingMethod.STANDARD : request.getShippingMethod();
         BigDecimal shippingFee = calculateShippingFee(subtotal, shippingMethod);
-        BigDecimal discount = calculateDiscount(subtotal, request.getCouponCode());
+        List<PromotionItemDto> promoItems = cartItems.stream()
+                .map(item -> PromotionItemDto.builder()
+                        .variantId(item.getVariantId())
+                        .productId(item.getProductId())
+                        .unitPrice(item.getUnitPrice())
+                        .quantity(item.getQuantity())
+                        .lineTotal(toLineTotal(item))
+                        .build())
+                .toList();
+        BigDecimal discount = calculateDiscount(request.getCouponCode(), userId, subtotal, promoItems);
         BigDecimal total = subtotal.subtract(discount).add(shippingFee);
         validateAmounts(subtotal, discount, shippingFee, total);
 
@@ -111,7 +123,17 @@ public class CheckoutServiceImpl implements CheckoutService {
             checkout.setAddressId(request.getAddressId());
         }
 
-        BigDecimal discount = calculateDiscount(checkout.getSubtotalAmount(), checkout.getCouponCode());
+        List<PromotionItemDto> promoItems = checkout.getItems() == null ? List.of() : checkout.getItems().stream()
+                .map(item -> PromotionItemDto.builder()
+                        .variantId(item.getVariantId())
+                        .productId(item.getProductId())
+                        .categoryId(item.getCategoryId())
+                        .unitPrice(item.getUnitPrice())
+                        .quantity(item.getQuantity())
+                        .lineTotal(item.getLineTotal())
+                        .build())
+                .toList();
+        BigDecimal discount = calculateDiscount(checkout.getCouponCode(), userId, checkout.getSubtotalAmount(), promoItems);
         BigDecimal shippingFee = calculateShippingFee(checkout.getSubtotalAmount(), checkout.getShippingMethod());
         BigDecimal total = checkout.getSubtotalAmount().subtract(discount).add(shippingFee);
         validateAmounts(checkout.getSubtotalAmount(), discount, shippingFee, total);
@@ -206,6 +228,7 @@ public class CheckoutServiceImpl implements CheckoutService {
                 .checkout(checkout)
                 .cartItemId(cartItem.getId())
                 .variantId(cartItem.getVariantId())
+                .productId(cartItem.getProductId())
                 .productName(cartItem.getProductName())
                 .size(cartItem.getSize())
                 .color(cartItem.getColor())
@@ -222,16 +245,11 @@ public class CheckoutServiceImpl implements CheckoutService {
         return shippingMethod == ShippingMethod.EXPRESS ? BigDecimal.valueOf(40000) : BigDecimal.valueOf(25000);
     }
 
-    private BigDecimal calculateDiscount(BigDecimal subtotal, String couponCode) {
+    private BigDecimal calculateDiscount(String couponCode, String userId, BigDecimal subtotal, List<PromotionItemDto> items) {
         if (couponCode == null || couponCode.isBlank()) {
             return BigDecimal.ZERO;
         }
-        if (!"WELCOME10".equalsIgnoreCase(couponCode.trim())) {
-            return BigDecimal.ZERO;
-        }
-        BigDecimal percentDiscount = subtotal.multiply(BigDecimal.valueOf(0.10)).setScale(0, RoundingMode.HALF_UP);
-        BigDecimal maxDiscount = BigDecimal.valueOf(50000);
-        return percentDiscount.min(maxDiscount);
+        return promotionService.previewDiscount(couponCode.trim(), userId, subtotal, items);
     }
 
     private void validateAmounts(BigDecimal subtotal, BigDecimal discount, BigDecimal shippingFee, BigDecimal total) {

@@ -27,6 +27,12 @@ public class CheckoutItem extends BaseEntity {
     @Column(name = "variant_id", nullable = false)
     String variantId;
 
+    @Column(name = "product_id", length = 36)
+    String productId;
+
+    @Column(name = "category_id", length = 36)
+    String categoryId;
+
     @Column(name = "product_name", nullable = false, length = 255)
     String productName;
 

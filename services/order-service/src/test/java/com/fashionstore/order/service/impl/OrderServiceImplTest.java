@@ -42,10 +42,15 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
+import com.fashionstore.order.entity.Checkout;
+import com.fashionstore.order.entity.CheckoutItem;
+import com.fashionstore.order.entity.enumeration.CheckoutStatus;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -75,6 +80,9 @@ class OrderServiceImplTest {
     @Mock
     private IdentityClient identityClient;
 
+    @Mock
+    private com.fashionstore.order.service.PromotionService promotionService;
+
     private OrderServiceImpl service;
 
     @BeforeEach
@@ -90,7 +98,8 @@ class OrderServiceImplTest {
                 sagaOutbox,
                 cancellationService,
                 currentUserProvider,
-                identityClient
+                identityClient,
+                promotionService
         );
         when(currentUserProvider.getCurrentUserId()).thenReturn("user-1");
     }
@@ -112,6 +121,52 @@ class OrderServiceImplTest {
         verify(checkoutRepository, never()).findForUpdateByIdAndUserId("checkout-1", "user-1");
         verify(orderSagaRepository, never()).save(any());
         verify(outboxService, never()).saveMessage(anyString(), anyString(), any());
+        verify(promotionService, never()).reserve(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void createOrder_withCoupon_reservesPromotion() {
+        CheckoutItem item = CheckoutItem.builder()
+                .variantId("variant-1")
+                .productId("product-1")
+                .productName("Tee")
+                .quantity(1)
+                .unitPrice(new BigDecimal("100000"))
+                .lineTotal(new BigDecimal("100000"))
+                .build();
+        Checkout checkout = Checkout.builder()
+                .userId("user-1")
+                .status(CheckoutStatus.SUBMITTED)
+                .paymentMethod(PaymentMethod.COD)
+                .paymentProvider(PaymentProvider.COD)
+                .couponCode("WELCOME10")
+                .subtotalAmount(new BigDecimal("100000"))
+                .discountAmount(new BigDecimal("10000"))
+                .shippingFee(BigDecimal.ZERO)
+                .totalAmount(new BigDecimal("90000"))
+                .items(List.of(item))
+                .build();
+        checkout.setId("checkout-1");
+        when(orderRepository.findByUserIdAndIdempotencyKey("user-1", "checkout-1")).thenReturn(Optional.empty());
+        when(checkoutRepository.findForUpdateByIdAndUserId("checkout-1", "user-1")).thenReturn(Optional.of(checkout));
+        when(orderRepository.save(any(Order.class))).thenAnswer(inv -> {
+            Order o = inv.getArgument(0);
+            o.setId("order-1");
+            return o;
+        });
+
+        CreateOrderRequest request = CreateOrderRequest.builder()
+                .recipientName("John")
+                .recipientPhone("0912345678")
+                .shippingAddress("123 Street")
+                .build();
+
+        OrderResponse response = service.createOrder("checkout-1", null, request);
+
+        assertEquals("order-1", response.getId());
+        ArgumentCaptor<List<com.fashionstore.order.dto.PromotionItemDto>> itemsCaptor = ArgumentCaptor.forClass(List.class);
+        verify(promotionService).reserve(eq("WELCOME10"), eq("user-1"), eq("order-1"), eq(new BigDecimal("100000")), itemsCaptor.capture());
+        assertEquals("product-1", itemsCaptor.getValue().get(0).getProductId());
     }
 
     // ----- GET /orders -----

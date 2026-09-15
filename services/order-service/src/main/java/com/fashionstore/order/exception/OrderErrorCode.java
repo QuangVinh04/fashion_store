@@ -28,6 +28,13 @@ public enum OrderErrorCode implements BaseErrorCode {
     ORDER_SAGA_NOT_FOUND(4007, "Saga not found for this order", HttpStatus.NOT_FOUND),
     ORDER_RETURN_NOT_ALLOWED(4008, "Order is not eligible for a return request", HttpStatus.CONFLICT),
     ADDRESS_NOT_FOUND(4009, "Address not found", HttpStatus.NOT_FOUND),
+    PROMOTION_NOT_FOUND(4010, "Promotion not found", HttpStatus.NOT_FOUND),
+    PROMOTION_EXPIRED(4011, "Promotion is expired or not yet active", HttpStatus.BAD_REQUEST),
+    PROMOTION_QUOTA_EXCEEDED(4012, "Promotion quota has been exceeded", HttpStatus.BAD_REQUEST),
+    PROMOTION_MIN_ORDER_NOT_MET(4013, "Minimum order amount not met for promotion", HttpStatus.BAD_REQUEST),
+    PROMOTION_SCOPE_MISMATCH(4014, "Promotion does not apply to items in order", HttpStatus.BAD_REQUEST),
+    PROMOTION_CODE_EXISTS(4015, "Promotion code already exists", HttpStatus.CONFLICT),
+    PROMOTION_CANNOT_BE_MODIFIED(4016, "Promotion code cannot be changed after usage has occurred", HttpStatus.BAD_REQUEST),
     PAYMENT_PROVIDER_UNSUPPORTED(5002, "Payment provider is not supported", HttpStatus.UNSUPPORTED_MEDIA_TYPE);
 
     private final int code;
