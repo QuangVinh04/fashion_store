@@ -68,6 +68,17 @@ public class ProductVariant extends BaseEntity {
     BigDecimal price;
     BigDecimal salePrice;
 
+    @Column(name = "weight_gram")
+    Integer weightGram;
+
+    @Column(name = "length_mm")
+    Integer lengthMm;
+
+    @Column(name = "width_mm")
+    Integer widthMm;
+
+    @Column(name = "height_mm")
+    Integer heightMm;
 
     @Builder.Default
     Boolean active = false;

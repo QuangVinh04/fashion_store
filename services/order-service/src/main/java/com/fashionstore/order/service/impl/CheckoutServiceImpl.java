@@ -20,9 +20,15 @@ import com.fashionstore.common.payment.PaymentMethod;
 import com.fashionstore.order.dto.PromotionItemDto;
 import com.fashionstore.order.service.PromotionService;
 import com.fashionstore.common.payment.PaymentProvider;
+import com.fashionstore.order.client.CatalogClient;
+import com.fashionstore.order.client.GhnClient;
+import com.fashionstore.order.client.IdentityClient;
+import com.fashionstore.order.dto.ProductVariantDto;
+import com.fashionstore.order.dto.UserAddressDto;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,7 +36,10 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
@@ -40,6 +49,9 @@ public class CheckoutServiceImpl implements CheckoutService {
     CartService cartService;
     CurrentUserProvider currentUserProvider;
     PromotionService promotionService;
+    CatalogClient catalogClient;
+    IdentityClient identityClient;
+    GhnClient ghnClient;
 
     /**
      * Không có {@code @Transactional}: bước xác nhận lại giỏ với catalog là gọi mạng, không được giữ
@@ -57,7 +69,8 @@ public class CheckoutServiceImpl implements CheckoutService {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         ShippingMethod shippingMethod = request.getShippingMethod() == null ? ShippingMethod.STANDARD : request.getShippingMethod();
-        BigDecimal shippingFee = calculateShippingFee(subtotal, shippingMethod);
+        int totalWeightGram = calculateTotalWeightFromCartItems(cartItems);
+        BigDecimal shippingFee = calculateShippingFee(subtotal, shippingMethod, request.getAddressId(), totalWeightGram);
         List<PromotionItemDto> promoItems = cartItems.stream()
                 .map(item -> PromotionItemDto.builder()
                         .variantId(item.getVariantId())
@@ -134,7 +147,8 @@ public class CheckoutServiceImpl implements CheckoutService {
                         .build())
                 .toList();
         BigDecimal discount = calculateDiscount(checkout.getCouponCode(), userId, checkout.getSubtotalAmount(), promoItems);
-        BigDecimal shippingFee = calculateShippingFee(checkout.getSubtotalAmount(), checkout.getShippingMethod());
+        int totalWeightGram = calculateTotalWeightFromCheckoutItems(checkout.getItems());
+        BigDecimal shippingFee = calculateShippingFee(checkout.getSubtotalAmount(), checkout.getShippingMethod(), checkout.getAddressId(), totalWeightGram);
         BigDecimal total = checkout.getSubtotalAmount().subtract(discount).add(shippingFee);
         validateAmounts(checkout.getSubtotalAmount(), discount, shippingFee, total);
         checkout.setDiscountAmount(discount);
@@ -238,11 +252,61 @@ public class CheckoutServiceImpl implements CheckoutService {
                 .build();
     }
 
-    private BigDecimal calculateShippingFee(BigDecimal subtotal, ShippingMethod shippingMethod) {
+    private BigDecimal calculateShippingFee(BigDecimal subtotal, ShippingMethod shippingMethod, String addressId, int totalWeightGram) {
         if (subtotal.compareTo(BigDecimal.valueOf(500000)) >= 0) {
             return BigDecimal.ZERO;
         }
-        return shippingMethod == ShippingMethod.EXPRESS ? BigDecimal.valueOf(40000) : BigDecimal.valueOf(25000);
+        if (addressId == null || addressId.isBlank()) {
+            return shippingMethod == ShippingMethod.EXPRESS ? BigDecimal.valueOf(40000) : BigDecimal.valueOf(25000);
+        }
+        UserAddressDto address = identityClient.getAddress(addressId);
+        if (address == null || address.getDistrictId() == null || address.getWardCode() == null || address.getWardCode().isBlank()) {
+            throw new AppException(OrderErrorCode.SHIPPING_ADDRESS_INVALID);
+        }
+        return ghnClient.calculateFee(address.getDistrictId(), address.getWardCode(), totalWeightGram, shippingMethod);
+    }
+
+
+    private int calculateTotalWeightFromCartItems(List<CartItem> cartItems) {
+        if (cartItems == null || cartItems.isEmpty()) {
+            return 200;
+        }
+        try {
+            List<String> variantIds = cartItems.stream().map(CartItem::getVariantId).toList();
+            Map<String, Integer> weightMap = catalogClient.getVariantsBatch(variantIds).stream()
+                    .collect(Collectors.toMap(
+                            ProductVariantDto::getVariantId,
+                            v -> v.getWeightGram() != null && v.getWeightGram() > 0 ? v.getWeightGram() : 200,
+                            (a, b) -> a
+                    ));
+            return cartItems.stream()
+                    .mapToInt(item -> weightMap.getOrDefault(item.getVariantId(), 200) * item.getQuantity())
+                    .sum();
+        } catch (Exception e) {
+            log.warn("[Checkout] Failed to query weights for cart items, defaulting to 200g each: {}", e.getMessage());
+            return cartItems.stream().mapToInt(item -> 200 * item.getQuantity()).sum();
+        }
+    }
+
+    private int calculateTotalWeightFromCheckoutItems(List<CheckoutItem> checkoutItems) {
+        if (checkoutItems == null || checkoutItems.isEmpty()) {
+            return 200;
+        }
+        try {
+            List<String> variantIds = checkoutItems.stream().map(CheckoutItem::getVariantId).toList();
+            Map<String, Integer> weightMap = catalogClient.getVariantsBatch(variantIds).stream()
+                    .collect(Collectors.toMap(
+                            ProductVariantDto::getVariantId,
+                            v -> v.getWeightGram() != null && v.getWeightGram() > 0 ? v.getWeightGram() : 200,
+                            (a, b) -> a
+                    ));
+            return checkoutItems.stream()
+                    .mapToInt(item -> weightMap.getOrDefault(item.getVariantId(), 200) * item.getQuantity())
+                    .sum();
+        } catch (Exception e) {
+            log.warn("[Checkout] Failed to query weights for checkout items, defaulting to 200g each: {}", e.getMessage());
+            return checkoutItems.stream().mapToInt(item -> 200 * item.getQuantity()).sum();
+        }
     }
 
     private BigDecimal calculateDiscount(String couponCode, String userId, BigDecimal subtotal, List<PromotionItemDto> items) {

@@ -39,6 +39,16 @@ app:
     # product + inventory đã gộp thành catalog-service, chung một base URL.
     catalog-base-url: ${CATALOG_BASE_URL:http://localhost:8087}
     identity-base-url: ${IDENTITY_BASE_URL:http://localhost:8082}
+  ghn:
+    api-url: ${GHN_API_URL:https://dev-online-gateway.ghn.vn/shiip/public-api}
+    token: ${GHN_TOKEN:}
+    shop-id: ${GHN_SHOP_ID:}
+    from-district-id: ${GHN_FROM_DISTRICT_ID:1442}
+    from-ward-code: ${GHN_FROM_WARD_CODE:20101}
+    enabled: ${GHN_ENABLED:true}
+    allow-mock: ${GHN_ALLOW_MOCK:false}
+    webhook-token: ${GHN_WEBHOOK_TOKEN:fashion-store-ghn-webhook-secret}
+
 
   outbox:
     publisher-delay-ms: ${OUTBOX_PUBLISHER_DELAY_MS:15000}

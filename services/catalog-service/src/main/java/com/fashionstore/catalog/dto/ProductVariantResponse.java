@@ -25,6 +25,10 @@ public class ProductVariantResponse {
     String barcode;
     BigDecimal price;
     BigDecimal salePrice;
+    Integer weightGram;
+    Integer lengthMm;
+    Integer widthMm;
+    Integer heightMm;
     Boolean active;
     String optionSignature;
     String displayName;

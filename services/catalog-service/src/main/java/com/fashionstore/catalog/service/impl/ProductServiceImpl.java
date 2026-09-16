@@ -399,6 +399,10 @@ public class ProductServiceImpl implements ProductService {
                 .price(variant.getPrice())
                 .salePrice(variant.getSalePrice())
                 .active(variant.getActive())
+                .weightGram(variant.getWeightGram())
+                .lengthMm(variant.getLengthMm())
+                .widthMm(variant.getWidthMm())
+                .heightMm(variant.getHeightMm())
                 .optionSignature(variant.getOptionSignature())
                 .displayName(variant.getDisplayName())
                 .build();
@@ -656,6 +660,10 @@ public class ProductServiceImpl implements ProductService {
             variant.setBarcode(StringUtils.cleanText(request.getBarcode()));
             variant.setPrice(request.getPrice() == null ? product.getBasePrice() : request.getPrice());
             variant.setSalePrice(request.getSalePrice());
+            variant.setWeightGram(request.getWeightGram());
+            variant.setLengthMm(request.getLengthMm());
+            variant.setWidthMm(request.getWidthMm());
+            variant.setHeightMm(request.getHeightMm());
             if (request.getActive() != null || newVariant) {
                 variant.setActive(Boolean.TRUE.equals(request.getActive()));
             }

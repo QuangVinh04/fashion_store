@@ -35,6 +35,7 @@ public enum OrderErrorCode implements BaseErrorCode {
     PROMOTION_SCOPE_MISMATCH(4014, "Promotion does not apply to items in order", HttpStatus.BAD_REQUEST),
     PROMOTION_CODE_EXISTS(4015, "Promotion code already exists", HttpStatus.CONFLICT),
     PROMOTION_CANNOT_BE_MODIFIED(4016, "Promotion code cannot be changed after usage has occurred", HttpStatus.BAD_REQUEST),
+    SHIPPING_ADDRESS_INVALID(4017, "Shipping address is missing valid district or ward code for shipping provider", HttpStatus.BAD_REQUEST),
     PAYMENT_PROVIDER_UNSUPPORTED(5002, "Payment provider is not supported", HttpStatus.UNSUPPORTED_MEDIA_TYPE);
 
     private final int code;

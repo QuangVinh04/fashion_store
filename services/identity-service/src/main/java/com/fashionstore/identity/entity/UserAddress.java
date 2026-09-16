@@ -40,6 +40,12 @@ public class UserAddress extends BaseEntity {
     @Column(name = "detail_address", nullable = false, length = 255)
     String detailAddress;
 
+    @Column(name = "district_id")
+    Integer districtId;
+
+    @Column(name = "ward_code", length = 20)
+    String wardCode;
+
     @Builder.Default
     @Column(name = "is_default", nullable = false)
     Boolean isDefault = false;

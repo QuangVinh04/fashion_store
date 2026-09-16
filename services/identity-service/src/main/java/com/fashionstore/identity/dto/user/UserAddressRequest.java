@@ -31,6 +31,10 @@ public record UserAddressRequest (
     @Size(max = 255, message = "Địa chỉ chi tiết tối đa 255 ký tự")
     String detailAddress,
 
+    Integer districtId,
+
+    String wardCode,
+
     @NotNull(message = "Cờ mặc định không được để trống")
     Boolean isDefault
 ) {}

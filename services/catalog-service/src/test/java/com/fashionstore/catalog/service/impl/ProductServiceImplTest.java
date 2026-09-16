@@ -721,4 +721,37 @@ class ProductServiceImplTest {
         option.setId(id);
         return option;
     }
+
+    @Test
+    void getProductVariantSnapshot_returnsWeightAndDimensions() {
+        Product product = Product.builder()
+                .name("Áo Thun")
+                .build();
+        product.setId("prod-1");
+
+        ProductVariant variant = ProductVariant.builder()
+                .product(product)
+                .sku("SKU-1")
+                .barcode("BC-1")
+                .price(BigDecimal.valueOf(100000))
+                .salePrice(BigDecimal.valueOf(80000))
+                .weightGram(250)
+                .lengthMm(300)
+                .widthMm(200)
+                .heightMm(50)
+                .active(true)
+                .build();
+        variant.setId("var-1");
+
+        when(productVariantRepository.findById("var-1")).thenReturn(Optional.of(variant));
+
+        ProductVariantSnapshotResponse response = productService.getProductVariantSnapshot("var-1");
+
+        assertThat(response).isNotNull();
+        assertThat(response.getVariantId()).isEqualTo("var-1");
+        assertThat(response.getWeightGram()).isEqualTo(250);
+        assertThat(response.getLengthMm()).isEqualTo(300);
+        assertThat(response.getWidthMm()).isEqualTo(200);
+        assertThat(response.getHeightMm()).isEqualTo(50);
+    }
 }

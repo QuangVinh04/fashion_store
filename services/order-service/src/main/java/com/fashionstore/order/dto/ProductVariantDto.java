@@ -20,6 +20,10 @@ public class ProductVariantDto {
     private String sku;
     private BigDecimal price;
     private BigDecimal salePrice;
+    private Integer weightGram;
+    private Integer lengthMm;
+    private Integer widthMm;
+    private Integer heightMm;
     private Boolean active;
 
     /** true = chưa hỏi được catalog (fallback), khác hẳn với "catalog nói variant này không tồn tại". */

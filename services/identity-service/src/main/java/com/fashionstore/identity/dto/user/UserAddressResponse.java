@@ -20,6 +20,8 @@ public class UserAddressResponse {
     String district;
     String ward;
     String detailAddress;
+    Integer districtId;
+    String wardCode;
     Boolean isDefault;
     String fullAddress;
     LocalDateTime createdAt;
