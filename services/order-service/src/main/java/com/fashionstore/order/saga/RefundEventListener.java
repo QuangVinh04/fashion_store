@@ -6,8 +6,10 @@ import com.fashionstore.contracts.payment.event.PaymentRefundRejectedEvent;
 import com.fashionstore.contracts.payment.event.PaymentRefundedEvent;
 import com.fashionstore.order.config.messaging.RabbitMQNames;
 import com.fashionstore.order.entity.Order;
+import com.fashionstore.order.entity.OrderStatusHistory;
 import com.fashionstore.order.entity.enumeration.OrderStatus;
 import com.fashionstore.order.repository.OrderRepository;
+import com.fashionstore.order.repository.OrderStatusHistoryRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -32,6 +34,7 @@ public class RefundEventListener {
     private final ProcessedMessageService processedMessageService;
     private final OrderRepository orderRepository;
     private final ObjectMapper objectMapper;
+    private final OrderStatusHistoryRepository orderStatusHistoryRepository;
 
     @Transactional
     @RabbitListener(queues = RabbitMQNames.ORDER_PAYMENT_REFUNDED_QUEUE)
@@ -56,8 +59,19 @@ public class RefundEventListener {
             }
             order.setStatus(OrderStatus.REFUNDED);
             orderRepository.save(order);
+
+            OrderStatusHistory history = OrderStatusHistory.builder()
+                    .order(order)
+                    .fromStatus(OrderStatus.RETURNED)
+                    .toStatus(OrderStatus.REFUNDED)
+                    .action("PAYMENT_REFUNDED")
+                    .changedBy("PAYMENT_SERVICE")
+                    .reason("Hoàn tiền thành công qua cổng thanh toán")
+                    .build();
+            orderStatusHistoryRepository.save(history);
         });
     }
+
 
     @Transactional
     @RabbitListener(queues = RabbitMQNames.ORDER_PAYMENT_REFUND_REJECTED_QUEUE)

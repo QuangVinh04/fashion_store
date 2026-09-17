@@ -19,4 +19,7 @@ public class UpdateOrderStatusRequest {
     String shippingProvider;
 
     String trackingCode;
+
+    String reason;
 }
+

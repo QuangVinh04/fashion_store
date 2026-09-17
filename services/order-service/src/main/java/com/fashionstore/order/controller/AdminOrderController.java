@@ -4,6 +4,7 @@ import com.fashionstore.common.dto.ApiResponse;
 import com.fashionstore.common.dto.PageResponse;
 import com.fashionstore.order.dto.OrderResponse;
 import com.fashionstore.order.dto.OrderSagaResponse;
+import com.fashionstore.order.dto.OrderStatusHistoryResponse;
 import com.fashionstore.order.dto.OrderSummaryResponse;
 import com.fashionstore.order.entity.enumeration.OrderStatus;
 import com.fashionstore.order.service.OrderService;
@@ -78,6 +79,16 @@ public class AdminOrderController {
         return ApiResponse.<OrderSagaResponse>builder()
                 .message("Get order saga successfully")
                 .data(orderService.getOrderSaga(orderId))
+                .build();
+    }
+
+    @Operation(summary = "Xem lịch sử trạng thái của một đơn (ADMIN)",
+            description = "Trả về danh sách các lần đổi trạng thái của đơn hàng, mới nhất trước.")
+    @GetMapping("/{orderId}/history")
+    public ApiResponse<List<OrderStatusHistoryResponse>> getOrderHistory(@PathVariable String orderId) {
+        return ApiResponse.<List<OrderStatusHistoryResponse>>builder()
+                .message("Get order history successfully")
+                .data(orderService.getOrderHistory(orderId))
                 .build();
     }
 }

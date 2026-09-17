@@ -103,6 +103,8 @@ class OpenApiDocumentTest {
                 .andExpect(jsonPath("$.paths['/api/v1/checkouts/{id}/cancel'].post.summary").exists())
                 .andExpect(jsonPath("$.paths['/api/v1/orders/{checkoutId}'].post.summary").exists())
                 .andExpect(jsonPath("$.paths['/api/v1/orders/{id}/status'].put.summary").exists())
+                .andExpect(jsonPath("$.paths['/api/v1/orders/{id}/history'].get.summary").exists())
+                .andExpect(jsonPath("$.paths['/api/v1/admin/orders/{orderId}/history'].get.summary").exists())
                 .andExpect(jsonPath("$.paths['/api/v1/admin/orders/{orderId}/saga'].get.summary").exists());
     }
 

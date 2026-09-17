@@ -19,8 +19,10 @@ import com.fashionstore.order.entity.enumeration.OrderStatus;
 import com.fashionstore.order.entity.enumeration.ShipmentProvider;
 import com.fashionstore.order.entity.enumeration.ShipmentStatus;
 import com.fashionstore.order.exception.OrderErrorCode;
+import com.fashionstore.order.entity.OrderStatusHistory;
 import com.fashionstore.order.repository.CheckoutRepository;
 import com.fashionstore.order.repository.OrderRepository;
+import com.fashionstore.order.repository.OrderStatusHistoryRepository;
 import com.fashionstore.order.repository.ShipmentRepository;
 import com.fashionstore.order.service.ShipmentService;
 
@@ -50,6 +52,8 @@ public class ShipmentServiceImpl implements ShipmentService {
     GhnClient ghnClient;
     CatalogClient catalogClient;
     CurrentUserProvider currentUserProvider;
+    OrderStatusHistoryRepository orderStatusHistoryRepository;
+
 
     @Override
     @Transactional
@@ -132,6 +136,8 @@ public class ShipmentServiceImpl implements ShipmentService {
         order.setTrackingCode(trackingCode);
         if (order.getStatus() == OrderStatus.CONFIRMED) {
             order.setStatus(OrderStatus.PACKED);
+            recordHistory(order, OrderStatus.CONFIRMED, OrderStatus.PACKED, "SHIPMENT_CREATED",
+                    resolveUserIdSafely(), "Shipment created with tracking code: " + trackingCode);
         }
         orderRepository.save(order);
 
@@ -198,16 +204,22 @@ public class ShipmentServiceImpl implements ShipmentService {
         Order order = shipment.getOrder();
         if (order != null) {
             if (newStatus == ShipmentStatus.SHIPPING && (order.getStatus() == OrderStatus.CONFIRMED || order.getStatus() == OrderStatus.PACKED || order.getStatus() == OrderStatus.PROCESSING)) {
+                OrderStatus oldStatus = order.getStatus();
                 order.setStatus(OrderStatus.SHIPPING);
                 orderRepository.save(order);
+                recordHistory(order, oldStatus, OrderStatus.SHIPPING, "GHN_WEBHOOK", "GHN", "Status updated from GHN webhook: " + payload.getStatus());
                 log.info("[GHN Webhook] Order {} transitioned to SHIPPING", order.getId());
             } else if (newStatus == ShipmentStatus.DELIVERED && (order.getStatus() == OrderStatus.SHIPPING || order.getStatus() == OrderStatus.PACKED || order.getStatus() == OrderStatus.CONFIRMED || order.getStatus() == OrderStatus.PROCESSING)) {
+                OrderStatus oldStatus = order.getStatus();
                 order.setStatus(OrderStatus.DELIVERED);
                 orderRepository.save(order);
+                recordHistory(order, oldStatus, OrderStatus.DELIVERED, "GHN_WEBHOOK", "GHN", "Status updated from GHN webhook: " + payload.getStatus());
                 log.info("[GHN Webhook] Order {} transitioned to DELIVERED", order.getId());
             } else if (newStatus == ShipmentStatus.RETURNED && order.getStatus() != OrderStatus.RETURNED && order.getStatus() != OrderStatus.CANCELLED) {
+                OrderStatus oldStatus = order.getStatus();
                 order.setStatus(OrderStatus.RETURNED);
                 orderRepository.save(order);
+                recordHistory(order, oldStatus, OrderStatus.RETURNED, "GHN_WEBHOOK", "GHN", "Status updated from GHN webhook: " + payload.getStatus());
                 log.info("[GHN Webhook] Order {} transitioned to RETURNED", order.getId());
             }
         }
@@ -282,6 +294,32 @@ public class ShipmentServiceImpl implements ShipmentService {
             case SHIPPING -> next == ShipmentStatus.DELIVERED || next == ShipmentStatus.RETURNED || next == ShipmentStatus.CANCELLED;
             default -> false;
         };
+    }
+
+    private void recordHistory(Order order, OrderStatus fromStatus, OrderStatus toStatus, String action, String changedBy, String reason) {
+        if (orderStatusHistoryRepository == null) {
+            return;
+        }
+        OrderStatusHistory history = OrderStatusHistory.builder()
+                .order(order)
+                .fromStatus(fromStatus)
+                .toStatus(toStatus)
+                .action(action)
+                .changedBy(changedBy != null && !changedBy.isBlank() ? changedBy : "SYSTEM")
+                .reason(reason)
+                .build();
+        orderStatusHistoryRepository.save(history);
+    }
+
+    private String resolveUserIdSafely() {
+        try {
+            return (currentUserProvider != null && currentUserProvider.getCurrentUserId() != null)
+                    ? currentUserProvider.getCurrentUserId()
+                    : "SYSTEM";
+        } catch (Exception e) {
+            log.debug("[Shipment] User context not found: {}", e.getMessage());
+            return "SYSTEM";
+        }
     }
 }
 

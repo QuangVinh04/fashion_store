@@ -5,6 +5,7 @@ import com.fashionstore.common.dto.PageResponse;
 import com.fashionstore.order.dto.CancelOrderRequest;
 import com.fashionstore.order.dto.CreateOrderRequest;
 import com.fashionstore.order.dto.OrderResponse;
+import com.fashionstore.order.dto.OrderStatusHistoryResponse;
 import com.fashionstore.order.dto.OrderSummaryResponse;
 import com.fashionstore.order.dto.ReturnOrderRequest;
 import com.fashionstore.order.dto.UpdateOrderStatusRequest;
@@ -145,13 +146,23 @@ public class OrderController {
                     `REFUNDED` không set trực tiếp: nó phát lệnh hoàn tiền cho payment-service, đơn giữ
                     `RETURNED` cho tới khi có xác nhận `payment.refunded` về.
 
-                    Mã lỗi: `4001` (404) · `4002` chuyển trạng thái không hợp lệ (400).""")
+                    Mã lỗi: `4001` (404) · `4002` chuyển trạng thái không hợp lệ (400) · `4018` chuyển sang SHIPPING nhưng chưa có vận đơn (400).""")
     @PutMapping("/{id}/status")
     public ApiResponse<OrderResponse> updateOrderStatus(@PathVariable("id") String id,
                                                         @Valid @RequestBody UpdateOrderStatusRequest request) {
         return ApiResponse.<OrderResponse>builder()
                 .message("Update order status successfully")
                 .data(orderService.updateOrderStatus(id, request))
+                .build();
+    }
+
+    @Operation(summary = "Xem lịch sử trạng thái của một đơn của mình",
+            description = "Đơn của user khác cũng trả `4001` (404) — không tiết lộ sự tồn tại của đơn.")
+    @GetMapping("/{id}/history")
+    public ApiResponse<List<OrderStatusHistoryResponse>> getMyOrderHistory(@PathVariable("id") String id) {
+        return ApiResponse.<List<OrderStatusHistoryResponse>>builder()
+                .message("Get order history successfully")
+                .data(orderService.getMyOrderHistory(id))
                 .build();
     }
 }

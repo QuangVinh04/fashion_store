@@ -3,11 +3,13 @@ package com.fashionstore.order.saga;
 import com.fashionstore.contracts.common.EventTypes;
 import com.fashionstore.order.entity.Order;
 import com.fashionstore.order.entity.OrderSaga;
+import com.fashionstore.order.entity.OrderStatusHistory;
 import com.fashionstore.order.entity.enumeration.OrderSagaStatus;
 import com.fashionstore.order.entity.enumeration.OrderSagaStep;
 import com.fashionstore.order.entity.enumeration.OrderStatus;
 import com.fashionstore.order.repository.OrderRepository;
 import com.fashionstore.order.repository.OrderSagaRepository;
+import com.fashionstore.order.repository.OrderStatusHistoryRepository;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -45,13 +47,16 @@ class OrderSagaTimeoutScannerTest {
     @Mock
     private SagaOutbox sagaOutbox;
 
+    @Mock
+    private OrderStatusHistoryRepository orderStatusHistoryRepository;
+
     private SimpleMeterRegistry meterRegistry;
     private OrderSagaTimeoutScanner scanner;
 
     @BeforeEach
     void setUp() {
         meterRegistry = new SimpleMeterRegistry();
-        scanner = new OrderSagaTimeoutScanner(sagaRepository, orderRepository, sagaOutbox, meterRegistry);
+        scanner = new OrderSagaTimeoutScanner(sagaRepository, orderRepository, sagaOutbox, meterRegistry, orderStatusHistoryRepository);
     }
 
     @Test
@@ -66,6 +71,13 @@ class OrderSagaTimeoutScannerTest {
         assertEquals(OrderSagaStatus.COMPENSATED, saga.getStatus());
         assertEquals(OrderStatus.CANCELLED, order.getStatus());
         assertEquals(EventTypes.ORDER_CANCELLED, emitted().getFirst().eventType());
+
+        ArgumentCaptor<OrderStatusHistory> historyCaptor = ArgumentCaptor.forClass(OrderStatusHistory.class);
+        verify(orderStatusHistoryRepository).save(historyCaptor.capture());
+        assertEquals(OrderStatus.PENDING, historyCaptor.getValue().getFromStatus());
+        assertEquals(OrderStatus.CANCELLED, historyCaptor.getValue().getToStatus());
+        assertEquals("SAGA_TIMEOUT", historyCaptor.getValue().getAction());
+        assertEquals("SYSTEM", historyCaptor.getValue().getChangedBy());
     }
 
     @Test

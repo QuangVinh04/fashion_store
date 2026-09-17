@@ -16,8 +16,12 @@ import com.fashionstore.order.entity.OrderItem;
 import com.fashionstore.order.entity.OrderSaga;
 import com.fashionstore.order.entity.enumeration.CartStatus;
 import com.fashionstore.order.entity.enumeration.OrderSagaStep;
+import com.fashionstore.order.entity.OrderStatusHistory;
+
+import com.fashionstore.order.entity.enumeration.OrderStatus;
 import com.fashionstore.order.repository.CartRepository;
 import com.fashionstore.order.repository.OrderRepository;
+import com.fashionstore.order.repository.OrderStatusHistoryRepository;
 import com.fashionstore.order.service.PromotionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
@@ -41,6 +45,8 @@ public class OrderSagaEventListener {
     private final OrderRepository orderRepository;
     private final CartRepository cartRepository;
     private final PromotionService promotionService;
+    private final OrderStatusHistoryRepository orderStatusHistoryRepository;
+
 
     // 1. Giữ kho xong -> xin thanh toán
     @Transactional
@@ -197,6 +203,7 @@ public class OrderSagaEventListener {
                     order.confirm(saga.getPaymentId());
                     orderRepository.save(order);
                     promotionService.confirm(order.getId());
+                    recordHistory(order, OrderStatus.PENDING, OrderStatus.CONFIRMED, "ORDER_CONFIRMED", "SYSTEM", "Saga hoàn tất thanh toán và giữ kho thành công");
 
                     // Giỏ hàng giờ nằm cùng database nên xoá thẳng trong transaction này,
                     // không cần đi vòng qua message. Đổi lại: xoá hỏng thì đơn rollback theo —
@@ -264,8 +271,22 @@ public class OrderSagaEventListener {
         order.cancel(reason);
         orderRepository.save(order);
         promotionService.release(order.getId());
+        recordHistory(order, OrderStatus.PENDING, OrderStatus.CANCELLED, "ORDER_CANCELLED", "SYSTEM", reason);
         return List.of(SagaCommands.orderCancelled(order, reason));
     }
+
+    private void recordHistory(Order order, OrderStatus fromStatus, OrderStatus toStatus, String action, String changedBy, String reason) {
+        OrderStatusHistory history = OrderStatusHistory.builder()
+                .order(order)
+                .fromStatus(fromStatus)
+                .toStatus(toStatus)
+                .action(action)
+                .changedBy(changedBy != null && !changedBy.isBlank() ? changedBy : "SYSTEM")
+                .reason(reason)
+                .build();
+        orderStatusHistoryRepository.save(history);
+    }
+
 
     /**
      * Order phải tồn tại khi saga của nó còn sống — thiếu là lỗi dữ liệu thật, không phải race bình thường,

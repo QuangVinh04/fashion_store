@@ -12,7 +12,13 @@ import com.fashionstore.order.dto.CancelOrderRequest;
 import com.fashionstore.order.dto.CreateOrderRequest;
 import com.fashionstore.order.dto.OrderResponse;
 import com.fashionstore.order.dto.OrderSagaResponse;
+import com.fashionstore.order.dto.OrderStatusHistoryResponse;
 import com.fashionstore.order.dto.OrderSummaryResponse;
+import com.fashionstore.order.dto.UpdateOrderStatusRequest;
+import com.fashionstore.order.entity.OrderStatusHistory;
+import com.fashionstore.order.entity.Shipment;
+import com.fashionstore.order.repository.OrderStatusHistoryRepository;
+import com.fashionstore.order.repository.ShipmentRepository;
 import com.fashionstore.order.saga.SagaCommand;
 import com.fashionstore.order.saga.SagaCancellationService;
 import com.fashionstore.order.saga.SagaOutbox;
@@ -83,6 +89,12 @@ class OrderServiceImplTest {
     @Mock
     private com.fashionstore.order.service.PromotionService promotionService;
 
+    @Mock
+    private OrderStatusHistoryRepository orderStatusHistoryRepository;
+
+    @Mock
+    private ShipmentRepository shipmentRepository;
+
     private OrderServiceImpl service;
 
     @BeforeEach
@@ -99,9 +111,12 @@ class OrderServiceImplTest {
                 cancellationService,
                 currentUserProvider,
                 identityClient,
-                promotionService
+                promotionService,
+                orderStatusHistoryRepository,
+                shipmentRepository
         );
         when(currentUserProvider.getCurrentUserId()).thenReturn("user-1");
+        when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
     }
 
     // ----- idempotency của POST /orders -----
@@ -211,6 +226,12 @@ class OrderServiceImplTest {
         assertEquals("Đổi ý", response.getCancelReason());
         assertEquals(OrderSagaStatus.COMPENSATED, saga.getStatus());
         assertEquals(EventTypes.ORDER_CANCELLED, emitted().getFirst().eventType());
+
+        ArgumentCaptor<OrderStatusHistory> historyCaptor = ArgumentCaptor.forClass(OrderStatusHistory.class);
+        verify(orderStatusHistoryRepository, org.mockito.Mockito.times(1)).save(historyCaptor.capture());
+        assertEquals(OrderStatus.PENDING, historyCaptor.getValue().getFromStatus());
+        assertEquals(OrderStatus.CANCELLED, historyCaptor.getValue().getToStatus());
+        assertEquals("ORDER_CANCELLED", historyCaptor.getValue().getAction());
     }
 
     @Test
@@ -302,6 +323,185 @@ class OrderServiceImplTest {
         AppException exception = assertThrows(AppException.class, () -> service.getOrderSaga("order-1"));
 
         assertEquals(OrderErrorCode.ORDER_SAGA_NOT_FOUND, exception.getErrorCode());
+    }
+
+    // ----- updateOrderStatus & order history -----
+
+    @Test
+    void updateOrderStatus_toShipping_withoutShipmentOrTrackingCode_throwsShipmentRequired() {
+        Order order = order(OrderStatus.PACKED);
+        when(orderRepository.findWithItemsById("order-1")).thenReturn(Optional.of(order));
+        when(shipmentRepository.findByOrderId("order-1")).thenReturn(Optional.empty());
+
+        UpdateOrderStatusRequest request = new UpdateOrderStatusRequest();
+        request.setStatus(OrderStatus.SHIPPING);
+
+        AppException ex = assertThrows(AppException.class, () -> service.updateOrderStatus("order-1", request));
+        assertEquals(OrderErrorCode.SHIPMENT_REQUIRED, ex.getErrorCode());
+    }
+
+    @Test
+    void updateOrderStatus_toShipping_whenClientSendsTrackingCodeWithoutShipment_throwsShipmentRequired() {
+        Order order = order(OrderStatus.PACKED);
+        when(orderRepository.findWithItemsById("order-1")).thenReturn(Optional.of(order));
+        when(shipmentRepository.findByOrderId("order-1")).thenReturn(Optional.empty());
+
+        UpdateOrderStatusRequest request = new UpdateOrderStatusRequest();
+        request.setStatus(OrderStatus.SHIPPING);
+        request.setTrackingCode("FAKE_TRACK_123");
+
+        AppException ex = assertThrows(AppException.class, () -> service.updateOrderStatus("order-1", request));
+        assertEquals(OrderErrorCode.SHIPMENT_REQUIRED, ex.getErrorCode());
+    }
+
+    @Test
+    void updateOrderStatus_sameStatus_returnsEarlyWithoutDuplicateHistory() {
+        Order order = order(OrderStatus.PROCESSING);
+        when(orderRepository.findWithItemsById("order-1")).thenReturn(Optional.of(order));
+
+        UpdateOrderStatusRequest request = new UpdateOrderStatusRequest();
+        request.setStatus(OrderStatus.PROCESSING);
+
+        OrderResponse response = service.updateOrderStatus("order-1", request);
+        assertEquals(OrderStatus.PROCESSING, response.getStatus());
+
+        verify(orderStatusHistoryRepository, never()).save(any());
+        verify(orderRepository, never()).save(any());
+    }
+
+    @Test
+    void updateOrderStatus_invalidTransitions_throwsOrderStatusInvalid() {
+        // CONFIRMED -> DELIVERED
+        Order o1 = order(OrderStatus.CONFIRMED);
+        when(orderRepository.findWithItemsById("order-1")).thenReturn(Optional.of(o1));
+        UpdateOrderStatusRequest r1 = new UpdateOrderStatusRequest();
+        r1.setStatus(OrderStatus.DELIVERED);
+        assertEquals(OrderErrorCode.ORDER_STATUS_INVALID,
+                assertThrows(AppException.class, () -> service.updateOrderStatus("order-1", r1)).getErrorCode());
+
+        // CANCELLED -> SHIPPING
+        Order o2 = order(OrderStatus.CANCELLED);
+        when(orderRepository.findWithItemsById("order-2")).thenReturn(Optional.of(o2));
+        UpdateOrderStatusRequest r2 = new UpdateOrderStatusRequest();
+        r2.setStatus(OrderStatus.SHIPPING);
+        assertEquals(OrderErrorCode.ORDER_STATUS_INVALID,
+                assertThrows(AppException.class, () -> service.updateOrderStatus("order-2", r2)).getErrorCode());
+
+        // PENDING -> PROCESSING
+        Order o3 = order(OrderStatus.PENDING);
+        when(orderRepository.findWithItemsById("order-3")).thenReturn(Optional.of(o3));
+        UpdateOrderStatusRequest r3 = new UpdateOrderStatusRequest();
+        r3.setStatus(OrderStatus.PROCESSING);
+        assertEquals(OrderErrorCode.ORDER_STATUS_INVALID,
+                assertThrows(AppException.class, () -> service.updateOrderStatus("order-3", r3)).getErrorCode());
+    }
+
+    @Test
+    void updateOrderStatus_preservesExistingTrackingCodeWhenRequestTrackingCodeIsNull() {
+        Order order = order(OrderStatus.PACKED);
+        order.setTrackingCode("GHN_ORIGINAL_123");
+        when(orderRepository.findWithItemsById("order-1")).thenReturn(Optional.of(order));
+        Shipment shipment = Shipment.builder().trackingCode("GHN_ORIGINAL_123").build();
+        when(shipmentRepository.findByOrderId("order-1")).thenReturn(Optional.of(shipment));
+
+        UpdateOrderStatusRequest request = new UpdateOrderStatusRequest();
+        request.setStatus(OrderStatus.SHIPPING);
+        request.setTrackingCode(null); // Request không gửi trackingCode
+
+        OrderResponse response = service.updateOrderStatus("order-1", request);
+        assertEquals(OrderStatus.SHIPPING, response.getStatus());
+        assertEquals("GHN_ORIGINAL_123", order.getTrackingCode());
+    }
+
+    @Test
+    void updateOrderStatus_toShipping_withShipment_succeedsAndRecordsHistory() {
+        Order order = order(OrderStatus.PACKED);
+        when(orderRepository.findWithItemsById("order-1")).thenReturn(Optional.of(order));
+        Shipment shipment = Shipment.builder().trackingCode("GHN123").build();
+        when(shipmentRepository.findByOrderId("order-1")).thenReturn(Optional.of(shipment));
+
+        UpdateOrderStatusRequest request = new UpdateOrderStatusRequest();
+        request.setStatus(OrderStatus.SHIPPING);
+        request.setReason("Shipped via GHN");
+
+        OrderResponse response = service.updateOrderStatus("order-1", request);
+        assertEquals(OrderStatus.SHIPPING, response.getStatus());
+
+        ArgumentCaptor<OrderStatusHistory> historyCaptor = ArgumentCaptor.forClass(OrderStatusHistory.class);
+        verify(orderStatusHistoryRepository, org.mockito.Mockito.times(1)).save(historyCaptor.capture());
+        OrderStatusHistory captured = historyCaptor.getValue();
+        assertEquals(OrderStatus.PACKED, captured.getFromStatus());
+        assertEquals(OrderStatus.SHIPPING, captured.getToStatus());
+        assertEquals("ADMIN_UPDATE", captured.getAction());
+        assertEquals("Shipped via GHN", captured.getReason());
+    }
+
+    @Test
+    void updateOrderStatus_fromConfirmedToProcessing_succeedsAndRecordsHistory() {
+        Order order = order(OrderStatus.CONFIRMED);
+        when(orderRepository.findWithItemsById("order-1")).thenReturn(Optional.of(order));
+
+        UpdateOrderStatusRequest request = new UpdateOrderStatusRequest();
+        request.setStatus(OrderStatus.PROCESSING);
+        request.setReason("Preparing items");
+
+        OrderResponse response = service.updateOrderStatus("order-1", request);
+        assertEquals(OrderStatus.PROCESSING, response.getStatus());
+
+        ArgumentCaptor<OrderStatusHistory> historyCaptor = ArgumentCaptor.forClass(OrderStatusHistory.class);
+        verify(orderStatusHistoryRepository, org.mockito.Mockito.times(1)).save(historyCaptor.capture());
+        OrderStatusHistory captured = historyCaptor.getValue();
+        assertEquals(OrderStatus.CONFIRMED, captured.getFromStatus());
+        assertEquals(OrderStatus.PROCESSING, captured.getToStatus());
+    }
+
+    @Test
+    void getOrderHistory_returnsHistoryList() {
+        Order order = order(OrderStatus.DELIVERED);
+        when(orderRepository.findById("order-1")).thenReturn(Optional.of(order));
+        OrderStatusHistory h1 = OrderStatusHistory.builder()
+                .order(order)
+                .fromStatus(OrderStatus.CONFIRMED)
+                .toStatus(OrderStatus.PACKED)
+                .action("SHIPMENT_CREATED")
+                .changedBy("admin")
+                .reason("Packed")
+                .build();
+        when(orderStatusHistoryRepository.findByOrderIdOrderByCreatedAtDescIdDesc("order-1"))
+                .thenReturn(List.of(h1));
+
+        List<OrderStatusHistoryResponse> result = service.getOrderHistory("order-1");
+        assertEquals(1, result.size());
+        assertEquals("SHIPMENT_CREATED", result.getFirst().getAction());
+    }
+
+    @Test
+    void getMyOrderHistory_whenForbiddenUser_throwsOrderNotFound() {
+        Order order = order(OrderStatus.DELIVERED);
+        order.setUserId("other-user");
+        when(orderRepository.findById("order-1")).thenReturn(Optional.of(order));
+
+        AppException ex = assertThrows(AppException.class, () -> service.getMyOrderHistory("order-1"));
+        assertEquals(OrderErrorCode.ORDER_NOT_FOUND, ex.getErrorCode());
+    }
+
+    @Test
+    void getMyOrderHistory_whenOwner_returnsHistoryList() {
+        Order order = order(OrderStatus.DELIVERED);
+        when(orderRepository.findById("order-1")).thenReturn(Optional.of(order));
+        OrderStatusHistory h1 = OrderStatusHistory.builder()
+                .order(order)
+                .fromStatus(OrderStatus.PENDING)
+                .toStatus(OrderStatus.CONFIRMED)
+                .action("ORDER_CONFIRMED")
+                .changedBy("SYSTEM")
+                .build();
+        when(orderStatusHistoryRepository.findByOrderIdOrderByCreatedAtDescIdDesc("order-1"))
+                .thenReturn(List.of(h1));
+
+        List<OrderStatusHistoryResponse> result = service.getMyOrderHistory("order-1");
+        assertEquals(1, result.size());
+        assertEquals("ORDER_CONFIRMED", result.getFirst().getAction());
     }
 
     // ----- helpers -----

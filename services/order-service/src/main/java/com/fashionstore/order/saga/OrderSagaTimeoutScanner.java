@@ -2,10 +2,13 @@ package com.fashionstore.order.saga;
 
 import com.fashionstore.order.entity.Order;
 import com.fashionstore.order.entity.OrderSaga;
+import com.fashionstore.order.entity.OrderStatusHistory;
 import com.fashionstore.order.entity.enumeration.OrderSagaStatus;
 import com.fashionstore.order.entity.enumeration.OrderSagaStep;
+import com.fashionstore.order.entity.enumeration.OrderStatus;
 import com.fashionstore.order.repository.OrderRepository;
 import com.fashionstore.order.repository.OrderSagaRepository;
+import com.fashionstore.order.repository.OrderStatusHistoryRepository;
 import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -37,6 +40,7 @@ public class OrderSagaTimeoutScanner {
     private final OrderRepository orderRepository;
     private final SagaOutbox sagaOutbox;
     private final MeterRegistry meterRegistry;
+    private final OrderStatusHistoryRepository orderStatusHistoryRepository;
 
     @Transactional
     @Scheduled(fixedDelayString = "${app.saga.timeout-scan-delay-ms:15000}")
@@ -96,6 +100,18 @@ public class OrderSagaTimeoutScanner {
                         "Order %s của saga %s không tồn tại".formatted(saga.getOrderId(), saga.getId())));
         order.cancel(reason);
         orderRepository.save(order);
+
+        if (orderStatusHistoryRepository != null) {
+            orderStatusHistoryRepository.save(OrderStatusHistory.builder()
+                    .order(order)
+                    .fromStatus(OrderStatus.PENDING)
+                    .toStatus(OrderStatus.CANCELLED)
+                    .action("SAGA_TIMEOUT")
+                    .changedBy("SYSTEM")
+                    .reason(reason)
+                    .build());
+        }
+
         sagaOutbox.emit(saga, SagaCommands.orderCancelled(order, reason));
     }
 }

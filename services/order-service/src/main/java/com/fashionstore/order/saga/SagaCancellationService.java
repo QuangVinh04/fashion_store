@@ -65,6 +65,7 @@ public class SagaCancellationService {
                 log.info("Saga {} bị khách hủy trước khi giữ kho", saga.getId());
                 yield Outcome.CANCELLED;
             }
+
             case AUTHORIZE_PAYMENT -> {
                 saga.startCompensation(OrderSagaStep.CANCEL_PAYMENT, "CANCELLED_BY_CUSTOMER", reason);
                 sagaRepository.save(saga);

@@ -46,4 +46,9 @@ public interface OrderService {
     OrderResponse getOrderById(String orderId);
 
     OrderSagaResponse getOrderSaga(String orderId);
+
+    List<com.fashionstore.order.dto.OrderStatusHistoryResponse> getOrderHistory(String orderId);
+
+    List<com.fashionstore.order.dto.OrderStatusHistoryResponse> getMyOrderHistory(String orderId);
 }
+

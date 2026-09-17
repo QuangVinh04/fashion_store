@@ -22,6 +22,8 @@ import com.fashionstore.order.entity.enumeration.OrderStatus;
 import com.fashionstore.order.repository.CartRepository;
 import com.fashionstore.order.repository.OrderRepository;
 import com.fashionstore.order.repository.OrderSagaRepository;
+import com.fashionstore.order.repository.OrderStatusHistoryRepository;
+import com.fashionstore.order.entity.OrderStatusHistory;
 import com.fashionstore.order.service.PromotionService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -75,6 +77,9 @@ class OrderSagaEventListenerTest {
     @Mock
     private PromotionService promotionService;
 
+    @Mock
+    private OrderStatusHistoryRepository orderStatusHistoryRepository;
+
     private OrderSagaEventListener listener;
 
     @BeforeEach
@@ -90,7 +95,7 @@ class OrderSagaEventListenerTest {
                 sagaOutbox,
                 new ObjectMapper()
         );
-        listener = new OrderSagaEventListener(processor, orderRepository, cartRepository, promotionService);
+        listener = new OrderSagaEventListener(processor, orderRepository, cartRepository, promotionService, orderStatusHistoryRepository);
         when(cartRepository.findByUserIdAndStatus(anyString(), any())).thenReturn(Optional.empty());
     }
 
@@ -189,6 +194,13 @@ class OrderSagaEventListenerTest {
 
         List<String> emitted = emittedCommands().stream().map(SagaCommand::eventType).toList();
         assertEquals(List.of(EventTypes.ORDER_CONFIRMED), emitted);
+
+        ArgumentCaptor<OrderStatusHistory> historyCaptor = ArgumentCaptor.forClass(OrderStatusHistory.class);
+        verify(orderStatusHistoryRepository, org.mockito.Mockito.times(1)).save(historyCaptor.capture());
+        assertEquals(OrderStatus.PENDING, historyCaptor.getValue().getFromStatus());
+        assertEquals(OrderStatus.CONFIRMED, historyCaptor.getValue().getToStatus());
+        assertEquals("ORDER_CONFIRMED", historyCaptor.getValue().getAction());
+        assertEquals("SYSTEM", historyCaptor.getValue().getChangedBy());
     }
 
     /**

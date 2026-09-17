@@ -20,6 +20,8 @@ import com.fashionstore.order.entity.enumeration.OrderStatus;
 import com.fashionstore.order.repository.CheckoutRepository;
 import com.fashionstore.order.repository.OrderRepository;
 import com.fashionstore.order.repository.OrderSagaRepository;
+import com.fashionstore.order.repository.OrderStatusHistoryRepository;
+import com.fashionstore.order.repository.ShipmentRepository;
 import com.fashionstore.order.service.OrderService;
 import com.fashionstore.order.service.PromotionService;
 import com.fashionstore.order.outbox.OutboxService;
@@ -50,6 +52,9 @@ public class OrderServiceImpl implements OrderService {
     CurrentUserProvider currentUserProvider;
     IdentityClient identityClient;
     PromotionService promotionService;
+    OrderStatusHistoryRepository orderStatusHistoryRepository;
+    ShipmentRepository shipmentRepository;
+
 
     @Override
     @Transactional
@@ -129,8 +134,10 @@ public class OrderServiceImpl implements OrderService {
 
         order.setItems(orderItems);
         orderRepository.save(order);
+        recordHistory(order, null, OrderStatus.PENDING, "ORDER_CREATED", userId, "Khách hàng tạo đơn hàng từ checkout");
 
         if (checkout.getCouponCode() != null && !checkout.getCouponCode().isBlank()) {
+
             List<PromotionItemDto> promoItems = checkoutItems.stream()
                     .map(item -> PromotionItemDto.builder()
                             .variantId(item.getVariantId())
@@ -211,6 +218,7 @@ public class OrderServiceImpl implements OrderService {
             locked.cancel(reason);
             orderRepository.save(locked);
             promotionService.release(locked.getId());
+            recordHistory(locked, OrderStatus.PENDING, OrderStatus.CANCELLED, "ORDER_CANCELLED", userId, reason);
             return toResponse(locked, locked.getCheckoutId());
         }
 
@@ -220,6 +228,7 @@ public class OrderServiceImpl implements OrderService {
         }
         if (outcome == SagaCancellationService.Outcome.CANCELLED) {
             promotionService.release(locked.getId());
+            recordHistory(locked, OrderStatus.PENDING, OrderStatus.CANCELLED, "ORDER_CANCELLED", userId, reason);
         }
         return toResponse(locked, locked.getCheckoutId());
     }
@@ -250,8 +259,10 @@ public class OrderServiceImpl implements OrderService {
         locked.setStatus(OrderStatus.RETURNED);
         locked.setCancelReason(reason);
         orderRepository.save(locked);
+        recordHistory(locked, OrderStatus.DELIVERED, OrderStatus.RETURNED, "RETURN_REQUESTED", userId, reason);
         return toResponse(locked, locked.getCheckoutId());
     }
+
 
     @Override
     @Transactional(readOnly = true)
@@ -309,7 +320,20 @@ public class OrderServiceImpl implements OrderService {
         Order order = orderRepository.findWithItemsById(orderId)
                 .orElseThrow(() -> new AppException(OrderErrorCode.ORDER_NOT_FOUND));
 
-        validateTransition(order.getStatus(), request.getStatus());
+        OrderStatus fromStatus = order.getStatus();
+        if (fromStatus == request.getStatus()) {
+            return toResponse(order, order.getCheckoutId());
+        }
+        validateTransition(fromStatus, request.getStatus());
+
+        // Guard: Chỉ cho phép chuyển sang SHIPPING khi đã có vận đơn hoặc trackingCode
+        if (request.getStatus() == OrderStatus.SHIPPING) {
+            boolean hasShipment = shipmentRepository.findByOrderId(order.getId()).isPresent()
+                    || (order.getTrackingCode() != null && !order.getTrackingCode().isBlank());
+            if (!hasShipment) {
+                throw new AppException(OrderErrorCode.SHIPMENT_REQUIRED);
+            }
+        }
 
         // REFUNDED không phải một cột cần set — nó là kết quả của một reply từ payment-service.
         // Đơn giữ nguyên RETURNED cho tới khi RefundEventListener nhận payment.refunded xác nhận.
@@ -320,12 +344,19 @@ public class OrderServiceImpl implements OrderService {
         }
 
         order.setStatus(request.getStatus());
-        order.setShippingProvider(request.getShippingProvider());
-        order.setTrackingCode(request.getTrackingCode());
+        if (request.getShippingProvider() != null && !request.getShippingProvider().isBlank()) {
+            order.setShippingProvider(request.getShippingProvider());
+        }
+        if (request.getTrackingCode() != null && !request.getTrackingCode().isBlank()) {
+            order.setTrackingCode(request.getTrackingCode());
+        }
 
         Order saved = orderRepository.save(order);
+        String changedBy = currentUserProvider.getCurrentUserId();
+        recordHistory(saved, fromStatus, request.getStatus(), "ADMIN_UPDATE", changedBy != null ? changedBy : "ADMIN", request.getReason());
         return toResponse(saved, saved.getCheckoutId());
     }
+
 
     /** correlationId = sagaId ngay từ command đầu tiên, để mọi reply về đúng một saga instance. */
     private EventEnvelope<ReservationInventoryCommand> reserveInventory(Order order, OrderSaga saga, List<CheckoutItem> checkoutItems) {
@@ -450,4 +481,57 @@ public class OrderServiceImpl implements OrderService {
                 .updatedAt(order.getUpdatedAt())
                 .build();
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    @PreAuthorize("hasRole('ADMIN')")
+    public List<OrderStatusHistoryResponse> getOrderHistory(String orderId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new AppException(OrderErrorCode.ORDER_NOT_FOUND));
+        return orderStatusHistoryRepository.findByOrderIdOrderByCreatedAtDescIdDesc(order.getId())
+                .stream()
+                .map(this::toHistoryResponse)
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<OrderStatusHistoryResponse> getMyOrderHistory(String orderId) {
+        String userId = currentUserProvider.getCurrentUserId();
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new AppException(OrderErrorCode.ORDER_NOT_FOUND));
+        if (!order.getUserId().equals(userId)) {
+            throw new AppException(OrderErrorCode.ORDER_NOT_FOUND);
+        }
+        return orderStatusHistoryRepository.findByOrderIdOrderByCreatedAtDescIdDesc(order.getId())
+                .stream()
+                .map(this::toHistoryResponse)
+                .toList();
+    }
+
+    private void recordHistory(Order order, OrderStatus fromStatus, OrderStatus toStatus, String action, String changedBy, String reason) {
+        OrderStatusHistory history = OrderStatusHistory.builder()
+                .order(order)
+                .fromStatus(fromStatus)
+                .toStatus(toStatus)
+                .action(action)
+                .changedBy(changedBy != null && !changedBy.isBlank() ? changedBy : "SYSTEM")
+                .reason(reason)
+                .build();
+        orderStatusHistoryRepository.save(history);
+    }
+
+    private OrderStatusHistoryResponse toHistoryResponse(OrderStatusHistory history) {
+        return OrderStatusHistoryResponse.builder()
+                .id(history.getId())
+                .orderId(history.getOrder() != null ? history.getOrder().getId() : null)
+                .fromStatus(history.getFromStatus())
+                .toStatus(history.getToStatus())
+                .action(history.getAction())
+                .changedBy(history.getChangedBy())
+                .reason(history.getReason())
+                .createdAt(history.getCreatedAt())
+                .build();
+    }
 }
+

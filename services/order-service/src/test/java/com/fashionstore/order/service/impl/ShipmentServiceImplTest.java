@@ -14,6 +14,7 @@ import com.fashionstore.order.dto.ghn.GhnWebhookPayload;
 import com.fashionstore.order.entity.Checkout;
 import com.fashionstore.order.entity.Order;
 import com.fashionstore.order.entity.OrderItem;
+import com.fashionstore.order.entity.OrderStatusHistory;
 import com.fashionstore.order.entity.Shipment;
 import com.fashionstore.order.entity.enumeration.OrderStatus;
 import com.fashionstore.order.entity.enumeration.ShipmentProvider;
@@ -21,10 +22,12 @@ import com.fashionstore.order.entity.enumeration.ShipmentStatus;
 import com.fashionstore.order.exception.OrderErrorCode;
 import com.fashionstore.order.repository.CheckoutRepository;
 import com.fashionstore.order.repository.OrderRepository;
+import com.fashionstore.order.repository.OrderStatusHistoryRepository;
 import com.fashionstore.order.repository.ShipmentRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -40,6 +43,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -68,11 +72,14 @@ class ShipmentServiceImplTest {
     @Mock
     CurrentUserProvider currentUserProvider;
 
+    @Mock
+    OrderStatusHistoryRepository orderStatusHistoryRepository;
+
     ShipmentServiceImpl service;
 
     @BeforeEach
     void setUp() {
-        service = new ShipmentServiceImpl(shipmentRepository, orderRepository, checkoutRepository, identityClient, ghnClient, catalogClient, currentUserProvider);
+        service = new ShipmentServiceImpl(shipmentRepository, orderRepository, checkoutRepository, identityClient, ghnClient, catalogClient, currentUserProvider, orderStatusHistoryRepository);
         when(currentUserProvider.getCurrentUserId()).thenReturn("user-1");
         when(shipmentRepository.save(any(Shipment.class))).thenAnswer(i -> i.getArgument(0));
         when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
@@ -127,7 +134,13 @@ class ShipmentServiceImplTest {
         assertThat(response.getStatus()).isEqualTo(ShipmentStatus.PENDING);
         assertThat(order.getTrackingCode()).isEqualTo("GHN_TRACK_123");
         assertThat(order.getStatus()).isEqualTo(OrderStatus.PACKED);
-        verify(shipmentRepository).save(any(Shipment.class));
+        verify(shipmentRepository, times(1)).save(any(Shipment.class));
+
+        ArgumentCaptor<OrderStatusHistory> historyCaptor = ArgumentCaptor.forClass(OrderStatusHistory.class);
+        verify(orderStatusHistoryRepository, times(1)).save(historyCaptor.capture());
+        assertThat(historyCaptor.getValue().getFromStatus()).isEqualTo(OrderStatus.CONFIRMED);
+        assertThat(historyCaptor.getValue().getToStatus()).isEqualTo(OrderStatus.PACKED);
+        assertThat(historyCaptor.getValue().getAction()).isEqualTo("SHIPMENT_CREATED");
     }
 
     @Test
@@ -263,8 +276,15 @@ class ShipmentServiceImplTest {
         assertThat(shipment.getStatus()).isEqualTo(ShipmentStatus.SHIPPING);
         assertThat(shipment.getWeightGram()).isEqualTo(600);
         assertThat(order.getStatus()).isEqualTo(OrderStatus.SHIPPING);
-        verify(shipmentRepository).save(shipment);
-        verify(orderRepository).save(order);
+        verify(shipmentRepository, times(1)).save(shipment);
+        verify(orderRepository, times(1)).save(order);
+
+        ArgumentCaptor<OrderStatusHistory> historyCaptor = ArgumentCaptor.forClass(OrderStatusHistory.class);
+        verify(orderStatusHistoryRepository, times(1)).save(historyCaptor.capture());
+        assertThat(historyCaptor.getValue().getFromStatus()).isEqualTo(OrderStatus.PACKED);
+        assertThat(historyCaptor.getValue().getToStatus()).isEqualTo(OrderStatus.SHIPPING);
+        assertThat(historyCaptor.getValue().getAction()).isEqualTo("GHN_WEBHOOK");
+        assertThat(historyCaptor.getValue().getChangedBy()).isEqualTo("GHN");
     }
 
     @Test
@@ -293,8 +313,15 @@ class ShipmentServiceImplTest {
 
         assertThat(shipment.getStatus()).isEqualTo(ShipmentStatus.DELIVERED);
         assertThat(order.getStatus()).isEqualTo(OrderStatus.DELIVERED);
-        verify(shipmentRepository).save(shipment);
-        verify(orderRepository).save(order);
+        verify(shipmentRepository, times(1)).save(shipment);
+        verify(orderRepository, times(1)).save(order);
+
+        ArgumentCaptor<OrderStatusHistory> historyCaptor = ArgumentCaptor.forClass(OrderStatusHistory.class);
+        verify(orderStatusHistoryRepository, times(1)).save(historyCaptor.capture());
+        assertThat(historyCaptor.getValue().getFromStatus()).isEqualTo(OrderStatus.SHIPPING);
+        assertThat(historyCaptor.getValue().getToStatus()).isEqualTo(OrderStatus.DELIVERED);
+        assertThat(historyCaptor.getValue().getAction()).isEqualTo("GHN_WEBHOOK");
+        assertThat(historyCaptor.getValue().getChangedBy()).isEqualTo("GHN");
     }
 
     @Test
