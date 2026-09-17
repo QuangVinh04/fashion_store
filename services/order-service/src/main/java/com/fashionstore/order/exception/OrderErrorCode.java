@@ -37,6 +37,10 @@ public enum OrderErrorCode implements BaseErrorCode {
     PROMOTION_CANNOT_BE_MODIFIED(4016, "Promotion code cannot be changed after usage has occurred", HttpStatus.BAD_REQUEST),
     SHIPPING_ADDRESS_INVALID(4017, "Shipping address is missing valid district or ward code for shipping provider", HttpStatus.BAD_REQUEST),
     SHIPMENT_REQUIRED(4018, "Order must have shipment and tracking code before shipping", HttpStatus.BAD_REQUEST),
+    RETURN_REQUEST_NOT_FOUND(4019, "Return request not found", HttpStatus.NOT_FOUND),
+    RETURN_REQUEST_ALREADY_EXISTS(4020, "Return request already exists for this order", HttpStatus.CONFLICT),
+    RETURN_REQUEST_ALREADY_PROCESSED(4021, "Return request has already been processed", HttpStatus.BAD_REQUEST),
+    RETURN_REJECT_REASON_REQUIRED(4022, "Rejection reason is required", HttpStatus.BAD_REQUEST),
     PAYMENT_PROVIDER_UNSUPPORTED(5002, "Payment provider is not supported", HttpStatus.UNSUPPORTED_MEDIA_TYPE);
 
 

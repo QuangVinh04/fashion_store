@@ -135,4 +135,33 @@ class RefundEventListenerTest {
         verify(orderRepository, never()).save(any());
         verify(orderStatusHistoryRepository, never()).save(any());
     }
+
+    @Test
+    void paymentRefundRejected_whenOrderExists_recordsPaymentRefundFailedHistory() {
+        Order order = Order.builder()
+                .userId("user-1")
+                .status(OrderStatus.RETURNED)
+                .build();
+        order.setId("order-1");
+
+        when(orderRepository.findByIdForUpdate("order-1")).thenReturn(Optional.of(order));
+
+        com.fashionstore.contracts.payment.event.PaymentRefundRejectedEvent event =
+                new com.fashionstore.contracts.payment.event.PaymentRefundRejectedEvent(
+                        "order-1", "pay-1", "VNPAY_GATEWAY_TIMEOUT", "Cổng VNPay không phản hồi"
+                );
+        EventEnvelope<com.fashionstore.contracts.payment.event.PaymentRefundRejectedEvent> envelope =
+                EventEnvelope.v1("payment.refund.rejected", "order-1", "order-1", event);
+
+        listener.paymentRefundRejected(envelope, "msg-2");
+
+        ArgumentCaptor<OrderStatusHistory> historyCaptor = ArgumentCaptor.forClass(OrderStatusHistory.class);
+        verify(orderStatusHistoryRepository, times(1)).save(historyCaptor.capture());
+        assertEquals("PAYMENT_REFUND_FAILED", historyCaptor.getValue().getAction());
+        assertEquals("PAYMENT_SERVICE", historyCaptor.getValue().getChangedBy());
+        assertEquals(OrderStatus.RETURNED, historyCaptor.getValue().getFromStatus());
+        assertEquals(OrderStatus.RETURNED, historyCaptor.getValue().getToStatus());
+        org.assertj.core.api.Assertions.assertThat(historyCaptor.getValue().getReason())
+                .contains("VNPAY_GATEWAY_TIMEOUT");
+    }
 }

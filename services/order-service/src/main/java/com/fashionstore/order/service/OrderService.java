@@ -27,11 +27,6 @@ public interface OrderService {
      */
     OrderResponse cancelMyOrder(String orderId, CancelOrderRequest request);
 
-    /**
-     * Khách tự yêu cầu trả hàng. Chỉ áp dụng cho đơn đã DELIVERED — tiền chưa được hoàn ngay ở đây,
-     * đó là một bước riêng do admin xác nhận qua {@link #updateOrderStatus}.
-     */
-    OrderResponse requestReturn(String orderId, ReturnOrderRequest request);
 
     /**
      * Chuyển sang REFUNDED không đổi trạng thái ngay: nó phát {@code payment.refund.requested} và giữ đơn

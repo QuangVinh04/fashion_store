@@ -311,6 +311,40 @@ public class InventoryServiceImpl implements InventoryService {
     }
 
     @Override
+    @Transactional
+    public void restock(String orderId) {
+        log.info("[Inventory] restock request for orderId={}", orderId);
+        Optional<InventoryReservation> opt = reservationRepository.findByOrderIdForUpdate(orderId);
+        if (opt.isEmpty()) {
+            log.warn("[Inventory] no reservation found for orderId={} — skip restock", orderId);
+            return;
+        }
+        InventoryReservation reservation = opt.get();
+        if (reservation.getStatus() == InventoryReservationStatus.RELEASED) {
+            log.info("[Inventory] reservation for orderId={} already RELEASED — skip restock", orderId);
+            return;
+        }
+        if (reservation.getStatus() != InventoryReservationStatus.CONFIRMED) {
+            log.warn("[Inventory] reservation for orderId={} is {} (not CONFIRMED) — skip restock",
+                    orderId, reservation.getStatus());
+            return;
+        }
+
+        List<InventoryReservationItem> items = reservationItemRepository.findByReservationId(reservation.getId());
+        items.sort(Comparator.comparing(InventoryReservationItem::getVariantId));
+        for (InventoryReservationItem item : items) {
+            Inventory inv = inventoryRepository.findByVariantIdWithLock(item.getVariantId())
+                    .orElseThrow(() -> new AppException(InventoryErrorCode.INVENTORY_NOT_FOUND));
+            inv.setQuantity(inv.getQuantity() + item.getQuantity());
+            inventoryRepository.save(inv);
+        }
+        reservation.setStatus(InventoryReservationStatus.RELEASED);
+        reservation.setUpdatedAt(LocalDateTime.now());
+        reservationRepository.save(reservation);
+        log.info("[Inventory] restock completed for orderId={}, reservationId={}", orderId, reservation.getId());
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public InventoryResponse getByVariantId(String variantId) {
         Inventory inventory = inventoryRepository.findByVariantId(variantId)

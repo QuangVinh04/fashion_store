@@ -34,4 +34,8 @@ public interface CatalogFeignClient {
     /** Read-only, không có side effect — đúng như catalog-service tài liệu hóa cho phần giỏ hàng. */
     @PostMapping("/api/v1/inventory/check")
     ApiResponse<StockCheckResult> checkStock(@RequestBody StockCheckRequest request);
+
+    /** Hoàn trả tồn kho khi duyệt trả hàng (RETURN_APPROVED). */
+    @PostMapping("/api/v1/inventory/restock/{orderId}")
+    ApiResponse<Void> restock(@PathVariable("orderId") String orderId);
 }

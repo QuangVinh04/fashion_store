@@ -28,9 +28,12 @@ class AdminOrderControllerTest {
     @Mock
     private OrderService orderService;
 
+    @Mock
+    private com.fashionstore.order.service.ReturnService returnService;
+
     @BeforeEach
     void setUp() {
-        mockMvc = MockMvcBuilders.standaloneSetup(new AdminOrderController(orderService))
+        mockMvc = MockMvcBuilders.standaloneSetup(new AdminOrderController(orderService, returnService))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
     }

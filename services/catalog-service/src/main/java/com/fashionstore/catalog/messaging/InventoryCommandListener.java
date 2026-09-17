@@ -63,6 +63,19 @@ public class InventoryCommandListener {
                 () -> handleRelease(envelope));
     }
 
+    @RabbitListener(queues = RabbitMQNames.INVENTORY_RESTOCK_REQUESTED_QUEUE)
+    public void onRestockRequested(
+            EventEnvelope<?> envelope,
+            @Header(RabbitMQNames.OUTBOX_EVENT_ID_HEADER) String messageId) {
+        if (!EventTypes.INVENTORY_RESTOCK_REQUESTED.equals(envelope.eventType())) {
+            throw new IllegalArgumentException("Unsupported eventType on restock queue: " + envelope.eventType());
+        }
+        processedMessageService.processOnce(
+                messageId,
+                RabbitMQNames.INVENTORY_RESERVATION_CONSUMER + "-restock-v1",
+                () -> handleRestock(envelope));
+    }
+
     private void handleReservation(EventEnvelope<?> envelope) {
         ReservationInventoryCommand cmd =
                 objectMapper.convertValue(envelope.payload(), ReservationInventoryCommand.class);
@@ -79,5 +92,11 @@ public class InventoryCommandListener {
         ReleaseInventoryCommand cmd =
                 objectMapper.convertValue(envelope.payload(), ReleaseInventoryCommand.class);
         inventoryService.releaseSaga(cmd);
+    }
+
+    private void handleRestock(EventEnvelope<?> envelope) {
+        com.fashionstore.contracts.inventory.command.RestockInventoryCommand cmd =
+                objectMapper.convertValue(envelope.payload(), com.fashionstore.contracts.inventory.command.RestockInventoryCommand.class);
+        inventoryService.restock(cmd.orderId());
     }
 }

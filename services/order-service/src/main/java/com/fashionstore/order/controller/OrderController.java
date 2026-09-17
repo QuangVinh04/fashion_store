@@ -17,6 +17,8 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springdoc.core.annotations.ParameterObject;
 import lombok.AccessLevel;
+import com.fashionstore.order.dto.ReturnRequestResponse;
+import com.fashionstore.order.service.ReturnService;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import org.springframework.data.domain.Pageable;
@@ -45,6 +47,7 @@ import java.util.List;
 public class OrderController {
 
     OrderService orderService;
+    ReturnService returnService;
 
     @Operation(
             summary = "Đặt hàng từ một checkout",
@@ -123,16 +126,27 @@ public class OrderController {
     @Operation(
             summary = "Khách yêu cầu trả hàng",
             description = """
-                    Chỉ nhận cho đơn đã `DELIVERED`; trước đó dùng đường huỷ đơn. Đơn chuyển `RETURNED`, tiền
-                    chưa hoàn ở bước này — admin xác nhận hoàn tiền qua `PUT /{id}/status` với `REFUNDED`.
+                    Chỉ nhận cho đơn đã `DELIVERED`; trước đó dùng đường huỷ đơn (`cancelMyOrder`).
+                    Tạo yêu cầu hoàn trả với trạng thái `PENDING`, đơn hàng vẫn giữ `DELIVERED` để chờ Admin xét duyệt.
 
-                    Mã lỗi: `4001` (404) · `4008` đơn chưa DELIVERED (409).""")
+                    Mã lỗi: `4001` (404) · `4008` đơn chưa DELIVERED (409) · `4021` yêu cầu đã được xử lý (400).""")
     @PostMapping("/{id}/return-request")
-    public ApiResponse<OrderResponse> requestReturn(@PathVariable("id") String id,
-                                                    @Valid @RequestBody(required = false) ReturnOrderRequest request) {
-        return ApiResponse.<OrderResponse>builder()
-                .message("Return request accepted")
-                .data(orderService.requestReturn(id, request))
+    public ApiResponse<ReturnRequestResponse> createReturnRequest(@PathVariable("id") String id,
+                                                                  @Valid @RequestBody(required = false) ReturnOrderRequest request) {
+        return ApiResponse.<ReturnRequestResponse>builder()
+                .message("Return request submitted successfully")
+                .data(returnService.createReturnRequest(id, request))
+                .build();
+    }
+
+    @Operation(
+            summary = "Khách xem yêu cầu trả hàng của đơn mình",
+            description = "Trả về chi tiết yêu cầu hoàn trả hàng của đơn hàng.")
+    @GetMapping("/{id}/return-request")
+    public ApiResponse<ReturnRequestResponse> getReturnRequest(@PathVariable("id") String id) {
+        return ApiResponse.<ReturnRequestResponse>builder()
+                .message("Get return request successfully")
+                .data(returnService.getReturnRequestByOrderId(id))
                 .build();
     }
 

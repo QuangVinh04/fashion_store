@@ -10,6 +10,7 @@ public final class RabbitMQNames {
     public static final String INVENTORY_RESERVATION_REQUESTED_QUEUE = "inventory.reservation-requested";
     public static final String INVENTORY_CONFIRMATION_REQUESTED_QUEUE = "inventory.confirmation-requested";
     public static final String INVENTORY_RELEASE_REQUESTED_QUEUE = "inventory.release-requested";
+    public static final String INVENTORY_RESTOCK_REQUESTED_QUEUE = "inventory.restock-requested";
 
     public static final String INVENTORY_RESERVATION_CONSUMER = "inventory-reservation-consumer";
 

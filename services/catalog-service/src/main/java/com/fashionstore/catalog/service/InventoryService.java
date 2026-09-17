@@ -12,6 +12,7 @@ public interface InventoryService {
     ReserveStockResponse reserveStock(ReserveStockRequest request);
     void releaseStock(ReleaseStockRequest request);
     void confirmStock(String orderId);
+    void restock(String orderId);
     InventoryResponse getByVariantId(String variantId);
     List<InventoryResponse> getByVariantIds(List<String> variantIds);
     InventoryResponse updateStock(String variantId, Integer quantity);

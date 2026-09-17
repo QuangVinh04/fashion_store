@@ -85,6 +85,20 @@ public class RefundEventListener {
             // thất bại (payment chưa từng COMPLETED, đã hoàn trước đó theo cách khác, v.v.) rồi thử lại.
             log.error("Hoàn tiền cho order {} bị từ chối [{}]: {} — cần người vận hành xử lý",
                     event.orderId(), event.failureCode(), event.failureMessage());
+
+            Order order = orderRepository.findByIdForUpdate(event.orderId()).orElse(null);
+            if (order != null) {
+                OrderStatusHistory history = OrderStatusHistory.builder()
+                        .order(order)
+                        .fromStatus(order.getStatus())
+                        .toStatus(order.getStatus())
+                        .action("PAYMENT_REFUND_FAILED")
+                        .changedBy("PAYMENT_SERVICE")
+                        .reason(String.format("Hoàn tiền thất bại [%s]: %s — cần can thiệp thủ công",
+                                event.failureCode(), event.failureMessage()))
+                        .build();
+                orderStatusHistoryRepository.save(history);
+            }
         });
     }
 

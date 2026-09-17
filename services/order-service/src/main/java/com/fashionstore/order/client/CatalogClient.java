@@ -58,6 +58,16 @@ public class CatalogClient {
         return catalogFeignClient.checkStock(StockCheckRequest.builder().items(items).build()).getData();
     }
 
+    @CircuitBreaker(name = "catalogService", fallbackMethod = "restockFallback")
+    @Retry(name = "catalogService")
+    public void restock(String orderId) {
+        catalogFeignClient.restock(orderId);
+    }
+
+    private void restockFallback(String orderId, Exception ex) {
+        log.error("[CircuitBreaker] Failed to restock orderId={} on catalog-service: {}", orderId, ex.getMessage());
+    }
+
     private ProductVariantDto getVariantFallback(String variantId, Exception ex) {
         if (ex instanceof AppException appException) {
             throw appException;   // 404 nghiệp vụ, không phải sự cố hạ tầng

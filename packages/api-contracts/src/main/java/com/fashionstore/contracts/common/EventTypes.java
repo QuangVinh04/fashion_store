@@ -9,6 +9,7 @@ public final class EventTypes {
     public static final String INVENTORY_CONFIRMED = "inventory.confirmed";
     public static final String INVENTORY_RELEASE_REQUESTED = "inventory.release.requested";
     public static final String INVENTORY_RELEASED = "inventory.released";
+    public static final String INVENTORY_RESTOCK_REQUESTED = "inventory.restock.requested";
     public static final String PAYMENT_REQUESTED = "payment.requested";
     public static final String PAYMENT_COMPLETED = "payment.completed";
     public static final String PAYMENT_FAILED = "payment.failed";

@@ -1,7 +1,6 @@
 package com.fashionstore.order.dto;
 
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Size;
+import com.fashionstore.order.entity.enumeration.ReturnRequestStatus;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -10,6 +9,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.FieldDefaults;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Getter
@@ -18,11 +18,17 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class ReturnOrderRequest {
+public class ReturnRequestResponse {
 
-    @Size(max = 500, message = "Lý do trả hàng tối đa 500 ký tự")
+    String id;
+    String orderId;
+    String userId;
     String reason;
-
-    @Size(max = 5, message = "Tối đa 5 hình ảnh minh chứng")
-    List<@Size(max = 2048, message = "Đường dẫn ảnh tối đa 2048 ký tự") String> images;
+    List<String> images;
+    ReturnRequestStatus status;
+    String rejectReason;
+    String reviewedBy;
+    LocalDateTime reviewedAt;
+    LocalDateTime createdAt;
+    LocalDateTime updatedAt;
 }

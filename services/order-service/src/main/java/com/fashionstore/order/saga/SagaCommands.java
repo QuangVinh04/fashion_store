@@ -3,6 +3,7 @@ package com.fashionstore.order.saga;
 import com.fashionstore.contracts.common.EventTypes;
 import com.fashionstore.contracts.inventory.command.ConfirmInventoryCommand;
 import com.fashionstore.contracts.inventory.command.ReleaseInventoryCommand;
+import com.fashionstore.contracts.inventory.command.RestockInventoryCommand;
 import com.fashionstore.contracts.order.OrderCancelledEvent;
 import com.fashionstore.contracts.order.OrderConfirmedEvent;
 import com.fashionstore.contracts.payment.command.AuthorizePaymentCommand;
@@ -69,6 +70,13 @@ public final class SagaCommands {
         return SagaCommand.of(
                 EventTypes.PAYMENT_REFUND_REQUESTED,
                 new RefundPaymentCommand(order.getId(), order.getPaymentId(), amount, reason)
+        );
+    }
+
+    public static SagaCommand restockInventory(String orderId) {
+        return SagaCommand.of(
+                EventTypes.INVENTORY_RESTOCK_REQUESTED,
+                new RestockInventoryCommand(orderId)
         );
     }
 

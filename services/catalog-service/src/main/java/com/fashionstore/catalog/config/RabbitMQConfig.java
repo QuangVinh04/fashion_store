@@ -36,6 +36,11 @@ public class RabbitMQConfig {
     }
 
     @Bean
+    Queue inventoryRestockRequestedQueue() {
+        return new Queue(RabbitMQNames.INVENTORY_RESTOCK_REQUESTED_QUEUE, true);
+    }
+
+    @Bean
     Binding inventoryReservationRequestedBinding(
             Queue inventoryReservationRequestedQueue,
             DirectExchange fashionEventsExchange
@@ -63,6 +68,16 @@ public class RabbitMQConfig {
         return BindingBuilder.bind(inventoryReleaseRequestedQueue)
                 .to(fashionEventsExchange)
                 .with(EventTypes.INVENTORY_RELEASE_REQUESTED);
+    }
+
+    @Bean
+    Binding inventoryRestockRequestedBinding(
+            Queue inventoryRestockRequestedQueue,
+            DirectExchange fashionEventsExchange
+    ) {
+        return BindingBuilder.bind(inventoryRestockRequestedQueue)
+                .to(fashionEventsExchange)
+                .with(EventTypes.INVENTORY_RESTOCK_REQUESTED);
     }
 
     @Bean

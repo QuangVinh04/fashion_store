@@ -80,6 +80,9 @@ class OpenApiDocumentTest {
     @MockitoBean
     private OrderService orderService;
 
+    @MockitoBean
+    private com.fashionstore.order.service.ReturnService returnService;
+
     @Test
     void publishesTheDocumentWithBearerAuthAndAllFourTags() throws Exception {
         mockMvc.perform(get("/v3/api-docs"))
@@ -104,6 +107,11 @@ class OpenApiDocumentTest {
                 .andExpect(jsonPath("$.paths['/api/v1/orders/{checkoutId}'].post.summary").exists())
                 .andExpect(jsonPath("$.paths['/api/v1/orders/{id}/status'].put.summary").exists())
                 .andExpect(jsonPath("$.paths['/api/v1/orders/{id}/history'].get.summary").exists())
+                .andExpect(jsonPath("$.paths['/api/v1/orders/{id}/return-request'].post.summary").exists())
+                .andExpect(jsonPath("$.paths['/api/v1/orders/{id}/return-request'].get.summary").exists())
+                .andExpect(jsonPath("$.paths['/api/v1/admin/orders/returns'].get.summary").exists())
+                .andExpect(jsonPath("$.paths['/api/v1/admin/orders/returns/{id}/approve'].post.summary").exists())
+                .andExpect(jsonPath("$.paths['/api/v1/admin/orders/returns/{id}/reject'].post.summary").exists())
                 .andExpect(jsonPath("$.paths['/api/v1/admin/orders/{orderId}/history'].get.summary").exists())
                 .andExpect(jsonPath("$.paths['/api/v1/admin/orders/{orderId}/saga'].get.summary").exists());
     }

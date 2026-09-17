@@ -233,35 +233,6 @@ public class OrderServiceImpl implements OrderService {
         return toResponse(locked, locked.getCheckoutId());
     }
 
-    @Override
-    @Transactional
-    public OrderResponse requestReturn(String orderId, ReturnOrderRequest request) {
-        String userId = currentUserProvider.getCurrentUserId();
-        Order order = orderRepository.findWithItemsById(orderId)
-                .orElseThrow(() -> new AppException(OrderErrorCode.ORDER_NOT_FOUND));
-        if (!order.getUserId().equals(userId)) {
-            throw new AppException(OrderErrorCode.ORDER_NOT_FOUND);
-        }
-        if (order.getStatus() == OrderStatus.RETURNED) {
-            return toResponse(order, order.getCheckoutId());   // yêu cầu hai lần vẫn ra cùng kết quả
-        }
-        // Chỉ nhận trả hàng sau khi đã giao — trước đó khách dùng đường hủy đơn (cancelMyOrder).
-        if (order.getStatus() != OrderStatus.DELIVERED) {
-            throw new AppException(OrderErrorCode.ORDER_RETURN_NOT_ALLOWED);
-        }
-
-        String reason = request == null || request.getReason() == null || request.getReason().isBlank()
-                ? "Khách hàng yêu cầu trả hàng"
-                : request.getReason().trim();
-
-        Order locked = orderRepository.findByIdForUpdate(orderId)
-                .orElseThrow(() -> new AppException(OrderErrorCode.ORDER_NOT_FOUND));
-        locked.setStatus(OrderStatus.RETURNED);
-        locked.setCancelReason(reason);
-        orderRepository.save(locked);
-        recordHistory(locked, OrderStatus.DELIVERED, OrderStatus.RETURNED, "RETURN_REQUESTED", userId, reason);
-        return toResponse(locked, locked.getCheckoutId());
-    }
 
 
     @Override
