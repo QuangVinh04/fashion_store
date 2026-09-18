@@ -491,6 +491,12 @@ public class InventoryServiceImpl implements InventoryService {
                 .build();
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public long countLowStock(int threshold) {
+        return inventoryRepository.countLowStockInventories(threshold);
+    }
+
     private void recordLedger(String variantId, InventoryLedgerType type, int quantity, String refOrderId) {
         String createdBy = null;
         try {

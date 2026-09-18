@@ -33,6 +33,13 @@ public class ProductSpecification implements Specification<Product> {
                 yield cb.like(cb.lower(categoryJoin.get("name")), "%" + value.toString().toLowerCase() + "%");
             }
 
+            case "categoryId" -> {
+                query.distinct(true);
+                Join<Product, ProductCategory> productCategoryJoin = root.join("productCategories");
+                Join<ProductCategory, ?> categoryJoin = productCategoryJoin.join("category");
+                yield cb.equal(categoryJoin.get("id"), value.toString());
+            }
+
             case "priceRange" -> {
                 String rangeStr = criteria.getValue().toString();
 
@@ -51,12 +58,66 @@ public class ProductSpecification implements Specification<Product> {
             }
 
 
-            case "color", "size" -> {
+            case "minPrice" -> {
+                BigDecimal min = (value instanceof BigDecimal bd) ? bd : new BigDecimal(value.toString());
+                yield cb.greaterThanOrEqualTo(root.get("basePrice"), min);
+            }
+
+            case "maxPrice" -> {
+                BigDecimal max = (value instanceof BigDecimal bd) ? bd : new BigDecimal(value.toString());
+                yield cb.lessThanOrEqualTo(root.get("basePrice"), max);
+            }
+
+            case "brandId" -> cb.equal(root.get("brand").get("id"), value.toString());
+
+            case "brand" -> {
+                Join<Product, ?> brandJoin = root.join("brand", JoinType.LEFT);
+                yield cb.or(
+                        cb.equal(brandJoin.get("id"), value.toString()),
+                        cb.like(cb.lower(brandJoin.get("name")), "%" + value.toString().toLowerCase() + "%"),
+                        cb.equal(cb.lower(brandJoin.get("slug")), value.toString().toLowerCase())
+                );
+            }
+
+            case "gender" -> {
+                com.fashionstore.catalog.entity.enumeration.Gender g;
+                try {
+                    g = com.fashionstore.catalog.entity.enumeration.Gender.valueOf(value.toString().toUpperCase());
+                } catch (Exception e) {
+                    yield null;
+                }
+                yield cb.equal(root.get("gender"), g);
+            }
+
+            case "material" -> {
+                query.distinct(true);
+                Join<Product, com.fashionstore.catalog.entity.attribute.ProductAttributeValue> attrValueJoin = root.join("attributeValues");
+                Join<com.fashionstore.catalog.entity.attribute.ProductAttributeValue, com.fashionstore.catalog.entity.attribute.ProductAttribute> attrJoin = attrValueJoin.join("attribute");
+                yield cb.and(
+                        cb.or(
+                                cb.equal(cb.lower(attrJoin.get("code")), "material"),
+                                cb.like(cb.lower(attrJoin.get("name")), "%chất liệu%"),
+                                cb.like(cb.lower(attrJoin.get("name")), "%material%")
+                        ),
+                        cb.like(cb.lower(attrValueJoin.get("value")), "%" + value.toString().toLowerCase() + "%")
+                );
+            }
+
+            case "color" -> {
                 query.distinct(true);
                 Join<Product, ProductVariant> variantJoin = root.join("variants");
                 // A deactivated variant must not keep its product in a public facet result.
                 yield cb.and(
-                        cb.equal(cb.lower(variantJoin.get(key)), value.toString().toLowerCase()),
+                        cb.equal(cb.lower(variantJoin.get("colorDisplay")), value.toString().toLowerCase()),
+                        cb.isTrue(variantJoin.get("active")));
+            }
+
+            case "size" -> {
+                query.distinct(true);
+                Join<Product, ProductVariant> variantJoin = root.join("variants");
+                // A deactivated variant must not keep its product in a public facet result.
+                yield cb.and(
+                        cb.equal(cb.lower(variantJoin.get("sizeDisplay")), value.toString().toLowerCase()),
                         cb.isTrue(variantJoin.get("active")));
             }
 

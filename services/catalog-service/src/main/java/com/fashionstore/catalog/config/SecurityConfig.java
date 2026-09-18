@@ -24,6 +24,9 @@ import java.util.List;
 @EnableMethodSecurity
 public class SecurityConfig {
 
+    @org.springframework.beans.factory.annotation.Value("${app.internal.secret-token:fashion-store-internal-secret-token}")
+    private String internalSecretToken;
+
     @Bean
     public SecurityFilterChain securityFilterChain(
             HttpSecurity http,
@@ -40,14 +43,14 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/actuator/health/**").permitAll()
                         .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
+                        .requestMatchers("/internal/**").permitAll()
 
                         // 2. Domain Media / File: Xem ảnh công khai, các thao tác file khác chỉ cần đăng nhập
                         .requestMatchers(HttpMethod.GET, "/api/v1/files/*/content").permitAll()
                         .requestMatchers("/api/v1/files/**").authenticated()
 
-                        // 3. Domain Inventory: Khách xem giỏ hàng checkStock cần đăng nhập, internal Saga cần quyền internal
+                        // 3. Domain Inventory: Khách xem giỏ hàng checkStock cần đăng nhập
                         .requestMatchers(HttpMethod.POST, "/api/v1/inventory/check").authenticated()
-                        .requestMatchers("/internal/v1/**").hasAuthority("internal")
                         .requestMatchers(HttpMethod.GET, "/api/v1/inventory/**").hasRole("ADMIN")
 
                         // 4. Domain Product / Catalog: Khách xem sản phẩm, danh mục công khai
@@ -70,6 +73,8 @@ public class SecurityConfig {
                         // 6. Mọi thao tác còn lại (Thêm/Sửa/Xóa sản phẩm, cập nhật kho...): Bắt buộc quyền ADMIN
                         .anyRequest().hasRole("ADMIN")
                 )
+                // Filter kiểm tra Token nội bộ giữa các microservices
+                .addFilterBefore(new InternalTokenAuthFilter(internalSecretToken), AuthorizationFilter.class)
                 // Filter nhận diện User từ Gateway (Header: X-User-Id, X-User-Roles)
                 .addFilterBefore(new GatewayHeaderAuthenticationFilter(), AuthorizationFilter.class)
                 .exceptionHandling(exceptions -> exceptions

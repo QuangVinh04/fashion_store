@@ -754,4 +754,69 @@ class ProductServiceImplTest {
         assertThat(response.getWidthMm()).isEqualTo(200);
         assertThat(response.getHeightMm()).isEqualTo(50);
     }
+
+    @Test
+    void advanceSearchWithRequest_withDirectFilters_returnsPageResponse() {
+        com.fashionstore.catalog.dto.ProductAdvanceSearchRequest request = com.fashionstore.catalog.dto.ProductAdvanceSearchRequest.builder()
+                .minPrice(new BigDecimal("100000"))
+                .maxPrice(new BigDecimal("500000"))
+                .size("M")
+                .color("Đen")
+                .brandId("brand-1")
+                .gender("MEN")
+                .material("cotton")
+                .build();
+
+        Pageable pageable = PageRequest.of(0, 10);
+        Product product = Product.builder().name("Áo Polo").build();
+        product.setId("prod-1");
+        org.springframework.data.domain.Page<Product> page = new PageImpl<>(List.of(product), pageable, 1);
+
+        when(productRepository.findAll(any(Specification.class), eq(pageable))).thenReturn(page);
+        when(productMapper.toProductSummaryResponse(product))
+                .thenReturn(com.fashionstore.catalog.dto.ProductSummaryResponse.builder().id("prod-1").name("Áo Polo").build());
+
+        com.fashionstore.common.dto.PageResponse<List<com.fashionstore.catalog.dto.ProductSummaryResponse>> response =
+                productService.advanceSearchWithRequest(pageable, request);
+
+        assertThat(response.getItems()).hasSize(1);
+        assertThat(response.getItems().get(0).getId()).isEqualTo("prod-1");
+        verify(productRepository).findAll(any(Specification.class), eq(pageable));
+    }
+
+    @Test
+    void advanceSearchWithRequest_whenMinPriceGreaterThanMaxPrice_throwsInvalidSearchCriteria() {
+        com.fashionstore.catalog.dto.ProductAdvanceSearchRequest request = com.fashionstore.catalog.dto.ProductAdvanceSearchRequest.builder()
+                .minPrice(new BigDecimal("500000"))
+                .maxPrice(new BigDecimal("100000"))
+                .build();
+        Pageable pageable = PageRequest.of(0, 10);
+
+        assertThatThrownBy(() -> productService.advanceSearchWithRequest(pageable, request))
+                .isInstanceOf(AppException.class)
+                .extracting("errorCode")
+                .isEqualTo(ProductErrorCode.INVALID_SEARCH_CRITERIA);
+    }
+
+    @Test
+    void advanceSearchWithRequest_whenInvalidGender_throwsInvalidSearchCriteria() {
+        com.fashionstore.catalog.dto.ProductAdvanceSearchRequest request = com.fashionstore.catalog.dto.ProductAdvanceSearchRequest.builder()
+                .gender("UNKNOWN_GENDER")
+                .build();
+        Pageable pageable = PageRequest.of(0, 10);
+
+        assertThatThrownBy(() -> productService.advanceSearchWithRequest(pageable, request))
+                .isInstanceOf(AppException.class)
+                .extracting("errorCode")
+                .isEqualTo(ProductErrorCode.INVALID_SEARCH_CRITERIA);
+    }
+
+    @Test
+    void advanceSearchWithSpecifications_whenInvalidGenderField_throwsInvalidSearchCriteria() {
+        Pageable pageable = PageRequest.of(0, 10);
+        assertThatThrownBy(() -> productService.advanceSearchWithSpecifications(pageable, new String[]{"gender:UNKNOWN"}))
+                .isInstanceOf(AppException.class)
+                .extracting("errorCode")
+                .isEqualTo(ProductErrorCode.INVALID_SEARCH_CRITERIA);
+    }
 }

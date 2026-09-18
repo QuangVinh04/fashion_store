@@ -21,7 +21,7 @@ import java.util.List;
 @FeignClient(
         name = "catalog-service",
         url = "${app.clients.catalog-base-url}",
-        configuration = FeignGlobalConfig.class
+        configuration = {FeignGlobalConfig.class, CatalogFeignClientConfig.class}
 )
 public interface CatalogFeignClient {
 
@@ -38,4 +38,8 @@ public interface CatalogFeignClient {
     /** Hoàn trả tồn kho khi duyệt trả hàng (RETURN_APPROVED). */
     @PostMapping("/api/v1/inventory/restock/{orderId}")
     ApiResponse<Void> restock(@PathVariable("orderId") String orderId);
+
+    /** Đếm số lượng variant sắp hết hàng phục vụ Dashboard */
+    @GetMapping("/internal/inventory/low-stock/count")
+    ApiResponse<Long> countLowStock(@RequestParam(value = "threshold", defaultValue = "10") int threshold);
 }

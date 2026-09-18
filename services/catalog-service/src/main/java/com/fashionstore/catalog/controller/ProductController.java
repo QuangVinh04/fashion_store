@@ -178,15 +178,35 @@ public class ProductController {
 
     @GetMapping({"/api/v1/products/advance-search", "/api/v1/product/advance-search"})
     public ApiResponse<PageResponse<List<ProductSummaryResponse>>> advanceSearch(
-            @RequestParam(value = "search", required = false) String[] product,
+            @RequestParam(value = "search", required = false) String[] search,
+            @RequestParam(required = false) java.math.BigDecimal minPrice,
+            @RequestParam(required = false) java.math.BigDecimal maxPrice,
+            @RequestParam(required = false) String size,
+            @RequestParam(required = false) String color,
+            @RequestParam(required = false) String brandId,
+            @RequestParam(required = false) String gender,
+            @RequestParam(required = false) String material,
+            @RequestParam(required = false) String categoryId,
+            @RequestParam(required = false) String keyword,
             @PageableDefault(page = 0, size = 10, sort = "createdAt", direction = Sort.Direction.DESC)
             Pageable pageable) {
-        PageResponse<List<ProductSummaryResponse>> response = productService.advanceSearchWithSpecifications(pageable, product);
+        com.fashionstore.catalog.dto.ProductAdvanceSearchRequest request = com.fashionstore.catalog.dto.ProductAdvanceSearchRequest.builder()
+                .search(search)
+                .minPrice(minPrice)
+                .maxPrice(maxPrice)
+                .size(size)
+                .color(color)
+                .brandId(brandId)
+                .gender(gender)
+                .material(material)
+                .categoryId(categoryId)
+                .keyword(keyword)
+                .build();
+        PageResponse<List<ProductSummaryResponse>> response = productService.advanceSearchWithRequest(pageable, request);
         return ApiResponse.<PageResponse<List<ProductSummaryResponse>>>builder()
                 .message("Search product successfully")
                 .data(response)
                 .build();
-
     }
 
     @GetMapping("/admin/products")

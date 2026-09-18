@@ -44,6 +44,15 @@ public class AdminInventoryController {
                 .build();
     }
 
+    @Operation(summary = "Đếm số lượng variant sắp hết hàng")
+    @GetMapping("/low-stock/count")
+    public ApiResponse<Long> countLowStock(@RequestParam(defaultValue = "10") int threshold) {
+        return ApiResponse.<Long>builder()
+                .message("Count low stock inventory successfully")
+                .data(inventoryService.countLowStock(threshold))
+                .build();
+    }
+
     @Operation(summary = "Lấy lịch sử biến động sổ cái kho (Ledger)",
             description = "Trả về lịch sử các giao dịch RESERVE, CONFIRM, RELEASE, RESTOCK, ADJUST.")
     @GetMapping("/ledger")

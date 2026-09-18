@@ -33,4 +33,6 @@ public interface InventoryService {
             int threshold,
             org.springframework.data.domain.Pageable pageable
     );
+
+    long countLowStock(int threshold);
 }

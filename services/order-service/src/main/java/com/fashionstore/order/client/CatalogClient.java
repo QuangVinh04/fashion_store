@@ -64,6 +64,18 @@ public class CatalogClient {
         catalogFeignClient.restock(orderId);
     }
 
+    @CircuitBreaker(name = "catalogService", fallbackMethod = "countLowStockFallback")
+    @Retry(name = "catalogService")
+    public long getLowStockCount(int threshold) {
+        var response = catalogFeignClient.countLowStock(threshold);
+        return response != null && response.getData() != null ? response.getData() : 0L;
+    }
+
+    private long countLowStockFallback(int threshold, Throwable ex) {
+        log.warn("[CircuitBreaker] Failed to count low-stock on catalog-service: {}", ex.getMessage());
+        return 0L;
+    }
+
     private void restockFallback(String orderId, Exception ex) {
         log.error("[CircuitBreaker] Failed to restock orderId={} on catalog-service: {}", orderId, ex.getMessage());
     }

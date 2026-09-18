@@ -69,6 +69,21 @@ public class GlobalExceptionHandler {
         return response(ErrorCode.VALIDATION_FAILED, request, fieldErrors);
     }
 
+    @ExceptionHandler(org.springframework.web.method.annotation.HandlerMethodValidationException.class)
+    public ResponseEntity<ApiErrorResponse> handleHandlerMethodValidation(
+            org.springframework.web.method.annotation.HandlerMethodValidationException exception,
+            HttpServletRequest request
+    ) {
+        Map<String, String> fieldErrors = new LinkedHashMap<>();
+        exception.getAllValidationResults().forEach(result -> {
+            String paramName = result.getMethodParameter().getParameterName();
+            result.getResolvableErrors().forEach(error ->
+                    fieldErrors.putIfAbsent(paramName != null ? paramName : "parameter", error.getDefaultMessage())
+            );
+        });
+        return response(ErrorCode.VALIDATION_FAILED, request, fieldErrors);
+    }
+
     @ExceptionHandler({
             HttpMessageNotReadableException.class,
             MissingServletRequestParameterException.class,

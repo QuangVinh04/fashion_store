@@ -43,7 +43,8 @@ import java.util.regex.Pattern;
 public class ProductServiceImpl implements ProductService {
 
     private static final Set<String> SEARCHABLE_FIELDS =
-            Set.of("name", "description", "price", "basePrice", "category", "priceRange", "color", "size");
+            Set.of("name", "description", "price", "basePrice", "category", "categoryId", "priceRange", "color", "size",
+                    "minPrice", "maxPrice", "brand", "brandId", "gender", "material");
     private static final Pattern SEARCH_PATTERN =
             Pattern.compile("(\\w+?)([<:>~!])(\\p{Punct}?)(.*)(\\p{Punct}?)");
 
@@ -411,21 +412,68 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     public PageResponse<List<ProductSummaryResponse>> advanceSearchWithSpecifications (Pageable pageable, String[] product) {
+        return advanceSearchWithRequest(pageable, com.fashionstore.catalog.dto.ProductAdvanceSearchRequest.builder().search(product).build());
+    }
+
+    @Override
+    public PageResponse<List<ProductSummaryResponse>> advanceSearchWithRequest(Pageable pageable, com.fashionstore.catalog.dto.ProductAdvanceSearchRequest request) {
         log.info("Search product by specifications");
 
-        if (product == null || product.length == 0) {
+        if (request == null || isEmptyRequest(request)) {
             return getPageResponse(pageable, productRepository.findAllByStatus(ProductStatus.PUBLISHED, pageable));
         }
 
         ProductSpecificationsBuilder builder = new ProductSpecificationsBuilder();
 
-        for (String s : product) {
-            Matcher matcher = SEARCH_PATTERN.matcher(s);
-            if (!matcher.matches() || !SEARCHABLE_FIELDS.contains(matcher.group(1))) {
-                throw new AppException(ProductErrorCode.INVALID_SEARCH_CRITERIA);
+        if (request != null && request.getSearch() != null) {
+            for (String s : request.getSearch()) {
+                if (s == null || s.isBlank()) continue;
+                Matcher matcher = SEARCH_PATTERN.matcher(s);
+                if (!matcher.matches() || !SEARCHABLE_FIELDS.contains(matcher.group(1))) {
+                    throw new AppException(ProductErrorCode.INVALID_SEARCH_CRITERIA);
+                }
+                validateSearchValue(matcher.group(1), matcher.group(4));
+                builder.with(matcher.group(1), matcher.group(2), matcher.group(4), matcher.group(3), matcher.group(5));
             }
-            validateSearchValue(matcher.group(1), matcher.group(4));
-            builder.with(matcher.group(1), matcher.group(2), matcher.group(4), matcher.group(3), matcher.group(5));
+        }
+
+        if (request != null) {
+            if (request.getMinPrice() != null && request.getMaxPrice() != null
+                    && request.getMinPrice().compareTo(request.getMaxPrice()) > 0) {
+                throw new AppException(ProductErrorCode.INVALID_SEARCH_CRITERIA, "minPrice cannot be greater than maxPrice");
+            }
+            if (request.getMinPrice() != null) {
+                builder.with("minPrice", ">", request.getMinPrice(), null, null);
+            }
+            if (request.getMaxPrice() != null) {
+                builder.with("maxPrice", "<", request.getMaxPrice(), null, null);
+            }
+            if (request.getSize() != null && !request.getSize().isBlank()) {
+                builder.with("size", ":", request.getSize().trim(), null, null);
+            }
+            if (request.getColor() != null && !request.getColor().isBlank()) {
+                builder.with("color", ":", request.getColor().trim(), null, null);
+            }
+            if (request.getBrandId() != null && !request.getBrandId().isBlank()) {
+                builder.with("brandId", ":", request.getBrandId().trim(), null, null);
+            }
+            if (request.getGender() != null && !request.getGender().isBlank()) {
+                try {
+                    com.fashionstore.catalog.entity.enumeration.Gender.valueOf(request.getGender().trim().toUpperCase());
+                } catch (IllegalArgumentException ex) {
+                    throw new AppException(ProductErrorCode.INVALID_SEARCH_CRITERIA, "Invalid gender: " + request.getGender());
+                }
+                builder.with("gender", ":", request.getGender().trim(), null, null);
+            }
+            if (request.getMaterial() != null && !request.getMaterial().isBlank()) {
+                builder.with("material", ":", request.getMaterial().trim(), null, null);
+            }
+            if (request.getCategoryId() != null && !request.getCategoryId().isBlank()) {
+                builder.with("categoryId", ":", request.getCategoryId().trim(), null, null);
+            }
+            if (request.getKeyword() != null && !request.getKeyword().isBlank()) {
+                builder.with("name", ":", "*" + request.getKeyword().trim() + "*", null, null);
+            }
         }
 
         // build() is null when no criterion survived parsing; the visibility filter still applies.
@@ -835,8 +883,10 @@ public class ProductServiceImpl implements ProductService {
         }
 
         try {
-            if ("price".equals(field) || "basePrice".equals(field)) {
+            if ("price".equals(field) || "basePrice".equals(field) || "minPrice".equals(field) || "maxPrice".equals(field)) {
                 new BigDecimal(value);
+            } else if ("gender".equals(field)) {
+                com.fashionstore.catalog.entity.enumeration.Gender.valueOf(value.toUpperCase());
             } else if ("priceRange".equals(field)) {
                 if (value.endsWith("+")) {
                     new BigDecimal(value.substring(0, value.length() - 1));
@@ -852,7 +902,7 @@ public class ProductServiceImpl implements ProductService {
                     }
                 }
             }
-        } catch (NumberFormatException exception) {
+        } catch (IllegalArgumentException exception) {
             throw new AppException(ProductErrorCode.INVALID_SEARCH_CRITERIA);
         }
     }
@@ -873,4 +923,16 @@ public class ProductServiceImpl implements ProductService {
             boolean publishImmediately) {
     }
 
+    private boolean isEmptyRequest(com.fashionstore.catalog.dto.ProductAdvanceSearchRequest request) {
+        return (request.getSearch() == null || request.getSearch().length == 0)
+                && request.getMinPrice() == null
+                && request.getMaxPrice() == null
+                && (request.getSize() == null || request.getSize().isBlank())
+                && (request.getColor() == null || request.getColor().isBlank())
+                && (request.getBrandId() == null || request.getBrandId().isBlank())
+                && (request.getGender() == null || request.getGender().isBlank())
+                && (request.getMaterial() == null || request.getMaterial().isBlank())
+                && (request.getCategoryId() == null || request.getCategoryId().isBlank())
+                && (request.getKeyword() == null || request.getKeyword().isBlank());
+    }
 }

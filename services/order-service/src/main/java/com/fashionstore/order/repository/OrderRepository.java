@@ -62,4 +62,24 @@ public interface OrderRepository extends JpaRepository<Order, String> {
             @Param("variantIds") java.util.List<String> variantIds,
             @Param("statuses") java.util.List<OrderStatus> statuses
     );
+
+    @Query("SELECT new com.fashionstore.order.dto.dashboard.OrderStatusCountResponse(o.status, COUNT(o)) " +
+           "FROM Order o GROUP BY o.status")
+    java.util.List<com.fashionstore.order.dto.dashboard.OrderStatusCountResponse> countOrdersByStatus();
+
+    @Query("SELECT CAST(o.createdAt AS LocalDate) as orderDate, SUM(o.totalAmount) as totalRevenue, COUNT(o) as orderCount " +
+           "FROM Order o " +
+           "WHERE o.status IN :validStatuses AND o.createdAt >= :startDate " +
+           "GROUP BY CAST(o.createdAt AS LocalDate) " +
+           "ORDER BY CAST(o.createdAt AS LocalDate) ASC")
+    java.util.List<Object[]> findRevenueByDay(
+            @Param("validStatuses") java.util.Collection<OrderStatus> validStatuses,
+            @Param("startDate") java.time.LocalDateTime startDate
+    );
+
+    @Query("SELECT COALESCE(SUM(o.totalAmount), 0) FROM Order o WHERE o.status IN :validStatuses")
+    java.math.BigDecimal calculateTotalRevenue(@Param("validStatuses") java.util.Collection<OrderStatus> validStatuses);
+
+    @Query("SELECT COUNT(o) FROM Order o WHERE o.status IN :validStatuses")
+    long countOrdersByStatuses(@Param("validStatuses") java.util.Collection<OrderStatus> validStatuses);
 }

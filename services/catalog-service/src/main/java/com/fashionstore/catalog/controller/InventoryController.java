@@ -128,6 +128,14 @@ public class InventoryController {
                 .build();
     }
 
+    @GetMapping("/low-stock/count")
+    public ApiResponse<Long> countLowStock(@RequestParam(defaultValue = "10") int threshold) {
+        return ApiResponse.<Long>builder()
+                .message("Count low stock inventory successfully")
+                .data(inventoryService.countLowStock(threshold))
+                .build();
+    }
+
     @GetMapping("/ledger")
     public ApiResponse<com.fashionstore.common.dto.PageResponse<List<com.fashionstore.catalog.dto.inventory.InventoryLedgerResponse>>> getLedger(
             @RequestParam(required = false) String variantId,

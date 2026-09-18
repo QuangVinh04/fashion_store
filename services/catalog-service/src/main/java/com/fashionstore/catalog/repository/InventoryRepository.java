@@ -34,4 +34,7 @@ public interface InventoryRepository extends JpaRepository<Inventory, String> {
             @org.springframework.data.repository.query.Param("threshold") int threshold,
             org.springframework.data.domain.Pageable pageable
     );
+
+    @Query("SELECT COUNT(i) FROM Inventory i WHERE (i.quantity - i.reservedQuantity) <= :threshold")
+    long countLowStockInventories(@org.springframework.data.repository.query.Param("threshold") int threshold);
 }
