@@ -32,6 +32,21 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import com.fashionstore.catalog.dto.inventory.InventoryLedgerResponse;
+import com.fashionstore.catalog.dto.inventory.LowStockItemResponse;
+import com.fashionstore.catalog.entity.InventoryLedger;
+import com.fashionstore.catalog.entity.Product;
+import com.fashionstore.catalog.entity.ProductVariant;
+import com.fashionstore.catalog.entity.enumeration.InventoryLedgerType;
+import com.fashionstore.catalog.repository.InventoryLedgerRepository;
+import com.fashionstore.catalog.repository.ProductRepository;
+import com.fashionstore.catalog.repository.ProductVariantRepository;
+import com.fashionstore.common.dto.PageResponse;
+import com.fashionstore.common.security.CurrentUserProvider;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -45,6 +60,10 @@ public class InventoryServiceImpl implements InventoryService {
     InventoryRepository inventoryRepository;
     InventoryReservationRepository reservationRepository;
     InventoryReservationItemRepository reservationItemRepository;
+    InventoryLedgerRepository inventoryLedgerRepository;
+    ProductVariantRepository productVariantRepository;
+    ProductRepository productRepository;
+    CurrentUserProvider currentUserProvider;
     InventoryMapper inventoryMapper;
     OutboxService outboxService;
 
@@ -199,6 +218,7 @@ public class InventoryServiceImpl implements InventoryService {
                     .quantity(item.quantity())
                     .build();
             reservationItemRepository.save(row);
+            recordLedger(item.variantId(), InventoryLedgerType.RESERVE, item.quantity(), orderId);
         }
         return reservation.getId();
     }
@@ -242,7 +262,7 @@ public class InventoryServiceImpl implements InventoryService {
             return null;
         }
 
-        List<InventoryReservationItem> items = reservationItemRepository.findByReservationId(reservation.getId());
+        List<InventoryReservationItem> items = new ArrayList<>(reservationItemRepository.findByReservationId(reservation.getId()));
         // Lock sorted
         items.sort(Comparator.comparing(InventoryReservationItem::getVariantId));
         for (InventoryReservationItem item : items) {
@@ -250,6 +270,7 @@ public class InventoryServiceImpl implements InventoryService {
                     .orElseThrow(() -> new AppException(InventoryErrorCode.INVENTORY_NOT_FOUND));
             inv.setReservedQuantity(Math.max(0, inv.getReservedQuantity() - item.getQuantity()));
             inventoryRepository.save(inv);
+            recordLedger(item.getVariantId(), InventoryLedgerType.RELEASE, item.getQuantity(), orderId);
         }
         reservation.setStatus(InventoryReservationStatus.RELEASED);
         reservation.setUpdatedAt(LocalDateTime.now());
@@ -294,7 +315,7 @@ public class InventoryServiceImpl implements InventoryService {
                     orderId, expectedReservationId, reservation.getId());
             return null;
         }
-        List<InventoryReservationItem> items = reservationItemRepository.findByReservationId(reservation.getId());
+        List<InventoryReservationItem> items = new ArrayList<>(reservationItemRepository.findByReservationId(reservation.getId()));
         items.sort(Comparator.comparing(InventoryReservationItem::getVariantId));
         for (InventoryReservationItem item : items) {
             Inventory inv = inventoryRepository.findByVariantIdWithLock(item.getVariantId())
@@ -302,6 +323,7 @@ public class InventoryServiceImpl implements InventoryService {
             inv.setQuantity(Math.max(0, inv.getQuantity() - item.getQuantity()));
             inv.setReservedQuantity(Math.max(0, inv.getReservedQuantity() - item.getQuantity()));
             inventoryRepository.save(inv);
+            recordLedger(item.getVariantId(), InventoryLedgerType.CONFIRM, item.getQuantity(), orderId);
         }
         reservation.setStatus(InventoryReservationStatus.CONFIRMED);
         reservation.setUpdatedAt(LocalDateTime.now());
@@ -330,13 +352,14 @@ public class InventoryServiceImpl implements InventoryService {
             return;
         }
 
-        List<InventoryReservationItem> items = reservationItemRepository.findByReservationId(reservation.getId());
+        List<InventoryReservationItem> items = new ArrayList<>(reservationItemRepository.findByReservationId(reservation.getId()));
         items.sort(Comparator.comparing(InventoryReservationItem::getVariantId));
         for (InventoryReservationItem item : items) {
             Inventory inv = inventoryRepository.findByVariantIdWithLock(item.getVariantId())
                     .orElseThrow(() -> new AppException(InventoryErrorCode.INVENTORY_NOT_FOUND));
             inv.setQuantity(inv.getQuantity() + item.getQuantity());
             inventoryRepository.save(inv);
+            recordLedger(item.getVariantId(), InventoryLedgerType.RESTOCK, item.getQuantity(), orderId);
         }
         reservation.setStatus(InventoryReservationStatus.RELEASED);
         reservation.setUpdatedAt(LocalDateTime.now());
@@ -372,8 +395,11 @@ public class InventoryServiceImpl implements InventoryService {
         if (quantity < inventory.getReservedQuantity()) {
             throw new AppException(InventoryErrorCode.STOCK_BELOW_RESERVED);
         }
+        int diff = quantity - inventory.getQuantity();
         inventory.setQuantity(quantity);
-        return inventoryMapper.toResponse(inventoryRepository.save(inventory));
+        Inventory saved = inventoryRepository.save(inventory);
+        recordLedger(variantId, InventoryLedgerType.ADJUST, diff, null);
+        return inventoryMapper.toResponse(saved);
     }
 
     @Override
@@ -397,5 +423,95 @@ public class InventoryServiceImpl implements InventoryService {
     @Transactional
     public void deleteStock(String variantId) {
         inventoryRepository.findByVariantId(variantId).ifPresent(inventoryRepository::delete);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<List<InventoryLedgerResponse>> getLedger(String variantId, Pageable pageable) {
+        Page<InventoryLedger> page = (variantId != null && !variantId.isBlank())
+                ? inventoryLedgerRepository.findByVariantId(variantId, pageable)
+                : inventoryLedgerRepository.findAll(pageable);
+
+        List<InventoryLedgerResponse> items = page.getContent().stream()
+                .map(l -> InventoryLedgerResponse.builder()
+                        .id(l.getId())
+                        .variantId(l.getVariantId())
+                        .type(l.getType())
+                        .quantity(l.getQuantity())
+                        .refOrderId(l.getRefOrderId())
+                        .createdBy(l.getCreatedBy())
+                        .createdAt(l.getCreatedAt())
+                        .build())
+                .toList();
+
+        return PageResponse.<List<InventoryLedgerResponse>>builder()
+                .pageNo(pageable.getPageNumber())
+                .pageSize(pageable.getPageSize())
+                .totalPage(page.getTotalPages())
+                .items(items)
+                .build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<List<LowStockItemResponse>> getLowStock(int threshold, Pageable pageable) {
+        Page<Inventory> page = inventoryRepository.findLowStockInventories(threshold, pageable);
+
+        List<String> variantIds = page.getContent().stream().map(Inventory::getVariantId).toList();
+        Map<String, ProductVariant> variantMap = productVariantRepository.findAllById(variantIds).stream()
+                .collect(Collectors.toMap(ProductVariant::getId, Function.identity()));
+
+        List<String> productIds = page.getContent().stream().map(Inventory::getProductId).distinct().toList();
+        Map<String, Product> productMap = productRepository.findAllById(productIds).stream()
+                .collect(Collectors.toMap(Product::getId, Function.identity()));
+
+        List<LowStockItemResponse> items = page.getContent().stream().map(inv -> {
+            ProductVariant variant = variantMap.get(inv.getVariantId());
+            Product product = productMap.get(inv.getProductId());
+            String sku = variant != null ? variant.getSku() : null;
+            String productName = product != null ? product.getName() : null;
+
+            return LowStockItemResponse.builder()
+                    .variantId(inv.getVariantId())
+                    .productId(inv.getProductId())
+                    .productName(productName)
+                    .sku(sku)
+                    .quantity(inv.getQuantity())
+                    .reservedQuantity(inv.getReservedQuantity())
+                    .availableQuantity(inv.getQuantityAvailable())
+                    .threshold(threshold)
+                    .build();
+        }).toList();
+
+        return PageResponse.<List<LowStockItemResponse>>builder()
+                .pageNo(pageable.getPageNumber())
+                .pageSize(pageable.getPageSize())
+                .totalPage(page.getTotalPages())
+                .items(items)
+                .build();
+    }
+
+    private void recordLedger(String variantId, InventoryLedgerType type, int quantity, String refOrderId) {
+        String createdBy = null;
+        try {
+            createdBy = currentUserProvider.getCurrentUserId();
+        } catch (Exception ignored) {
+        }
+        if (createdBy == null || createdBy.isBlank()) {
+            createdBy = "SYSTEM";
+        }
+
+        InventoryLedger ledger = InventoryLedger.builder()
+                .variantId(variantId)
+                .type(type)
+                .quantity(quantity)
+                .refOrderId(refOrderId)
+                .createdBy(createdBy)
+                .createdAt(LocalDateTime.now())
+                .build();
+
+        inventoryLedgerRepository.save(ledger);
+        log.info("[InventoryLedger] Recorded {} of qty {} for variant {} (order={})",
+                type, quantity, variantId, refOrderId);
     }
 }

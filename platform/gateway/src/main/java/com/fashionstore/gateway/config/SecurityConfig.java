@@ -35,7 +35,17 @@ public class SecurityConfig {
                         .pathMatchers("/api/v1/auth/logout").authenticated()
                         .pathMatchers("/api/v1/auth/**").permitAll()
                         .pathMatchers("/internal/**").denyAll()
-                        .pathMatchers(HttpMethod.GET, "/api/v1/product/**", "/api/v1/category/**").permitAll()
+                        .pathMatchers(HttpMethod.GET,
+                                "/api/v1/product/**",
+                                "/api/v1/products/**",
+                                "/api/v1/category/**",
+                                "/api/v1/categories/**",
+                                "/api/v1/brands/**",
+                                "/api/v1/color-options/**",
+                                "/api/v1/size-options/**",
+                                "/api/v1/size-charts/**",
+                                "/api/v1/wishlist/check/**"
+                        ).permitAll()
                         .pathMatchers(HttpMethod.GET, "/api/v1/files/*/content").permitAll()
                         .pathMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .anyExchange().authenticated())

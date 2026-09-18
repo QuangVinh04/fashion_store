@@ -24,11 +24,14 @@ public class SecurityConfig {
 
     private final ApiAuthenticationEntryPoint authenticationEntryPoint;
     private final ApiAccessDeniedHandler accessDeniedHandler;
+    private final String internalSecretToken;
 
     public SecurityConfig(ApiAuthenticationEntryPoint authenticationEntryPoint,
-                          ApiAccessDeniedHandler accessDeniedHandler) {
+                          ApiAccessDeniedHandler accessDeniedHandler,
+                          @org.springframework.beans.factory.annotation.Value("${app.internal.secret-token:fashion-store-internal-secret-token}") String internalSecretToken) {
         this.authenticationEntryPoint = authenticationEntryPoint;
         this.accessDeniedHandler = accessDeniedHandler;
+        this.internalSecretToken = internalSecretToken;
     }
 
     @Bean
@@ -39,6 +42,8 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 .anyRequest().authenticated()
         );
+        http.addFilterBefore(new InternalTokenAuthFilter(internalSecretToken),
+            org.springframework.security.web.access.intercept.AuthorizationFilter.class);
         http.addFilterBefore(new GatewayHeaderAuthenticationFilter(),
             org.springframework.security.web.access.intercept.AuthorizationFilter.class);
         http.exceptionHandling(exceptions -> exceptions

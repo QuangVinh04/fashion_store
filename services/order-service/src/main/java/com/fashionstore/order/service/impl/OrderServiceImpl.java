@@ -15,6 +15,9 @@ import com.fashionstore.contracts.common.EventEnvelope;
 import com.fashionstore.contracts.common.EventTypes;
 import com.fashionstore.contracts.inventory.command.InventoryItem;
 import com.fashionstore.contracts.inventory.command.ReservationInventoryCommand;
+import com.fashionstore.contracts.order.dto.VerifyPurchaseRequest;
+import com.fashionstore.contracts.order.dto.VerifyPurchaseResponse;
+import java.util.Optional;
 import com.fashionstore.order.entity.enumeration.CheckoutStatus;
 import com.fashionstore.order.entity.enumeration.OrderStatus;
 import com.fashionstore.order.repository.CheckoutRepository;
@@ -503,6 +506,39 @@ public class OrderServiceImpl implements OrderService {
                 .reason(history.getReason())
                 .createdAt(history.getCreatedAt())
                 .build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public VerifyPurchaseResponse verifyPurchase(VerifyPurchaseRequest request) {
+        if (request == null || request.userId() == null || request.variantIds() == null || request.variantIds().isEmpty()) {
+            return new VerifyPurchaseResponse(false, null);
+        }
+
+        List<OrderStatus> eligibleStatuses = List.of(OrderStatus.DELIVERED, OrderStatus.COMPLETED);
+
+        if (request.orderId() != null && !request.orderId().isBlank()) {
+            Optional<Order> orderOpt = orderRepository.findEligibleOrderForReviewById(
+                    request.orderId().trim(),
+                    request.userId(),
+                    request.variantIds(),
+                    eligibleStatuses
+            );
+            return orderOpt.map(order -> new VerifyPurchaseResponse(true, order.getId()))
+                    .orElseGet(() -> new VerifyPurchaseResponse(false, null));
+        }
+
+        List<Order> orders = orderRepository.findEligibleOrdersForReview(
+                request.userId(),
+                request.variantIds(),
+                eligibleStatuses
+        );
+
+        if (orders.isEmpty()) {
+            return new VerifyPurchaseResponse(false, null);
+        }
+
+        return new VerifyPurchaseResponse(true, orders.get(0).getId());
     }
 }
 

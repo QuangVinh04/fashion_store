@@ -28,4 +28,10 @@ public interface InventoryRepository extends JpaRepository<Inventory, String> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT i FROM Inventory i WHERE i.variantId = :variantId")
     Optional<Inventory> findByVariantIdWithLock(String variantId);
+
+    @Query("SELECT i FROM Inventory i WHERE (i.quantity - i.reservedQuantity) <= :threshold ORDER BY (i.quantity - i.reservedQuantity) ASC")
+    org.springframework.data.domain.Page<Inventory> findLowStockInventories(
+            @org.springframework.data.repository.query.Param("threshold") int threshold,
+            org.springframework.data.domain.Pageable pageable
+    );
 }

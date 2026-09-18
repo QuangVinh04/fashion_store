@@ -61,7 +61,13 @@ public class SecurityConfig {
                                 "/api/v1/size-options/**",
                                 "/api/v1/size-charts/**").permitAll()
 
-                        // 5. Mọi thao tác còn lại (Thêm/Sửa/Xóa sản phẩm, cập nhật kho...): Bắt buộc quyền ADMIN
+                        // 5. Domain Review & Wishlist: Khách đăng nhập đánh giá sản phẩm và quản lý wishlist
+                        .requestMatchers(HttpMethod.GET, "/api/v1/wishlist/check/**").permitAll()
+                        .requestMatchers("/api/v1/wishlist/**").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/products/*/reviews").authenticated()
+                        .requestMatchers(HttpMethod.DELETE, "/api/v1/products/*/reviews/*").authenticated()
+
+                        // 6. Mọi thao tác còn lại (Thêm/Sửa/Xóa sản phẩm, cập nhật kho...): Bắt buộc quyền ADMIN
                         .anyRequest().hasRole("ADMIN")
                 )
                 // Filter nhận diện User từ Gateway (Header: X-User-Id, X-User-Roles)

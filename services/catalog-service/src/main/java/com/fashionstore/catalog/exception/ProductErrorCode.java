@@ -40,6 +40,12 @@ public enum ProductErrorCode implements BaseErrorCode {
     MEDIA_FILE_NOT_FOUND(1032, "Media file not found", HttpStatus.BAD_REQUEST),
     BARCODE_INVALID(1033, "Barcode must be a GTIN of 8, 12, 13 or 14 digits", HttpStatus.BAD_REQUEST),
     BARCODE_ALREADY_EXISTED_OR_DUPLICATED(1034, "Barcode already exists or duplicated", HttpStatus.BAD_REQUEST),
+    REVIEW_NOT_FOUND(1035, "Review not found", HttpStatus.NOT_FOUND),
+    REVIEW_ALREADY_EXISTS(1036, "Review already exists for this order", HttpStatus.CONFLICT),
+    REVIEW_NOT_ELIGIBLE(1037, "Only customers who purchased and received this product can review", HttpStatus.BAD_REQUEST),
+    REVIEW_ACTION_FORBIDDEN(1038, "You can only modify or delete your own review", HttpStatus.FORBIDDEN),
+    WISHLIST_ITEM_ALREADY_EXISTS(1039, "Product is already in wishlist", HttpStatus.CONFLICT),
+    WISHLIST_ITEM_NOT_FOUND(1040, "Product is not in wishlist", HttpStatus.NOT_FOUND),
     ;
 
     private final int code;

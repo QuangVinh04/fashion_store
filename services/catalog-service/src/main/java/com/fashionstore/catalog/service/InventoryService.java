@@ -23,4 +23,14 @@ public interface InventoryService {
     void reserveSaga(ReservationInventoryCommand command, String correlationId);
     void confirmSaga(ConfirmInventoryCommand command);
     void releaseSaga(ReleaseInventoryCommand command);
+
+    com.fashionstore.common.dto.PageResponse<List<com.fashionstore.catalog.dto.inventory.InventoryLedgerResponse>> getLedger(
+            String variantId,
+            org.springframework.data.domain.Pageable pageable
+    );
+
+    com.fashionstore.common.dto.PageResponse<List<com.fashionstore.catalog.dto.inventory.LowStockItemResponse>> getLowStock(
+            int threshold,
+            org.springframework.data.domain.Pageable pageable
+    );
 }

@@ -9,6 +9,7 @@ x-service-environment: &service-environment
   RABBITMQ_PASSWORD: guest
   REDIS_HOST: redis
   REDIS_PORT: 6379
+  INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-fashion-store-internal-secret-token}
 
 services:
   api-gateway:
@@ -94,6 +95,7 @@ services:
     environment:
       <<: *service-environment
       SERVER_PORT: 8087
+      ORDER_BASE_URL: http://order-service:8089
       CATALOG_POSTGRES_HOST: catalog-postgres
       CATALOG_POSTGRES_DB: catalog_database
       CATALOG_POSTGRES_USER: root

@@ -45,5 +45,7 @@ public interface OrderService {
     List<com.fashionstore.order.dto.OrderStatusHistoryResponse> getOrderHistory(String orderId);
 
     List<com.fashionstore.order.dto.OrderStatusHistoryResponse> getMyOrderHistory(String orderId);
+
+    com.fashionstore.contracts.order.dto.VerifyPurchaseResponse verifyPurchase(com.fashionstore.contracts.order.dto.VerifyPurchaseRequest request);
 }
 

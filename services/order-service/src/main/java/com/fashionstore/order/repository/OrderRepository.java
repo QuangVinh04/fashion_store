@@ -33,4 +33,33 @@ public interface OrderRepository extends JpaRepository<Order, String> {
     Page<Order> findByUserIdAndStatus(String userId, OrderStatus status, Pageable pageable);
 
     Page<Order> findByStatus(OrderStatus status, Pageable pageable);
+
+    @Query("""
+        select distinct o from Order o
+        join o.items item
+        where o.userId = :userId
+          and o.status in (:statuses)
+          and item.variantId in (:variantIds)
+        order by o.createdAt desc
+    """)
+    java.util.List<Order> findEligibleOrdersForReview(
+            @Param("userId") String userId,
+            @Param("variantIds") java.util.List<String> variantIds,
+            @Param("statuses") java.util.List<OrderStatus> statuses
+    );
+
+    @Query("""
+        select distinct o from Order o
+        join o.items item
+        where o.id = :orderId
+          and o.userId = :userId
+          and o.status in (:statuses)
+          and item.variantId in (:variantIds)
+    """)
+    Optional<Order> findEligibleOrderForReviewById(
+            @Param("orderId") String orderId,
+            @Param("userId") String userId,
+            @Param("variantIds") java.util.List<String> variantIds,
+            @Param("statuses") java.util.List<OrderStatus> statuses
+    );
 }

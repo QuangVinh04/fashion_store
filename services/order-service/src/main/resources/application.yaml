@@ -35,6 +35,8 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
 app:
+  internal:
+    secret-token: ${INTERNAL_SERVICE_TOKEN:fashion-store-internal-secret-token}
   clients:
     # product + inventory đã gộp thành catalog-service, chung một base URL.
     catalog-base-url: ${CATALOG_BASE_URL:http://localhost:8087}

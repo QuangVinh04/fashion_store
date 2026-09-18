@@ -116,4 +116,27 @@ public class InventoryController {
                 .build();
     }
 
+    @GetMapping("/low-stock")
+    public ApiResponse<com.fashionstore.common.dto.PageResponse<List<com.fashionstore.catalog.dto.inventory.LowStockItemResponse>>> getLowStock(
+            @RequestParam(defaultValue = "10") int threshold,
+            @org.springdoc.core.annotations.ParameterObject
+            @org.springframework.data.web.PageableDefault(page = 0, size = 20) org.springframework.data.domain.Pageable pageable
+    ) {
+        return ApiResponse.<com.fashionstore.common.dto.PageResponse<List<com.fashionstore.catalog.dto.inventory.LowStockItemResponse>>>builder()
+                .message("Get low stock inventory successfully")
+                .data(inventoryService.getLowStock(threshold, pageable))
+                .build();
+    }
+
+    @GetMapping("/ledger")
+    public ApiResponse<com.fashionstore.common.dto.PageResponse<List<com.fashionstore.catalog.dto.inventory.InventoryLedgerResponse>>> getLedger(
+            @RequestParam(required = false) String variantId,
+            @org.springdoc.core.annotations.ParameterObject
+            @org.springframework.data.web.PageableDefault(page = 0, size = 20, sort = "createdAt", direction = org.springframework.data.domain.Sort.Direction.DESC) org.springframework.data.domain.Pageable pageable
+    ) {
+        return ApiResponse.<com.fashionstore.common.dto.PageResponse<List<com.fashionstore.catalog.dto.inventory.InventoryLedgerResponse>>>builder()
+                .message("Get inventory ledger successfully")
+                .data(inventoryService.getLedger(variantId, pageable))
+                .build();
+    }
 }

@@ -6,6 +6,8 @@ import com.fashionstore.common.payment.PaymentMethod;
 import com.fashionstore.common.payment.PaymentProvider;
 import com.fashionstore.common.security.CurrentUserProvider;
 import com.fashionstore.contracts.common.EventTypes;
+import com.fashionstore.contracts.order.dto.VerifyPurchaseRequest;
+import com.fashionstore.contracts.order.dto.VerifyPurchaseResponse;
 import com.fashionstore.order.exception.OrderErrorCode;
 import com.fashionstore.order.client.IdentityClient;
 import com.fashionstore.order.dto.CancelOrderRequest;
@@ -538,5 +540,53 @@ class OrderServiceImplTest {
                 .build();
         order.setId("order-1");
         return order;
+    }
+
+    @Test
+    void verifyPurchase_whenEligibleOrderExists_returnsPurchasedTrue() {
+        Order deliveredOrder = order(OrderStatus.DELIVERED);
+        when(orderRepository.findEligibleOrdersForReview(
+                eq("user-1"),
+                eq(List.of("var-1", "var-2")),
+                eq(List.of(OrderStatus.DELIVERED, OrderStatus.COMPLETED))
+        )).thenReturn(List.of(deliveredOrder));
+
+        VerifyPurchaseRequest request = new VerifyPurchaseRequest("user-1", null, List.of("var-1", "var-2"));
+        VerifyPurchaseResponse response = service.verifyPurchase(request);
+
+        assertEquals(true, response.purchased());
+        assertEquals("order-1", response.orderId());
+    }
+
+    @Test
+    void verifyPurchase_whenSpecificOrderIdEligible_returnsPurchasedTrue() {
+        Order deliveredOrder = order(OrderStatus.DELIVERED);
+        when(orderRepository.findEligibleOrderForReviewById(
+                eq("order-1"),
+                eq("user-1"),
+                eq(List.of("var-1")),
+                eq(List.of(OrderStatus.DELIVERED, OrderStatus.COMPLETED))
+        )).thenReturn(Optional.of(deliveredOrder));
+
+        VerifyPurchaseRequest request = new VerifyPurchaseRequest("user-1", "order-1", List.of("var-1"));
+        VerifyPurchaseResponse response = service.verifyPurchase(request);
+
+        assertEquals(true, response.purchased());
+        assertEquals("order-1", response.orderId());
+    }
+
+    @Test
+    void verifyPurchase_whenNoOrderEligible_returnsPurchasedFalse() {
+        when(orderRepository.findEligibleOrdersForReview(
+                eq("user-1"),
+                eq(List.of("var-1")),
+                eq(List.of(OrderStatus.DELIVERED, OrderStatus.COMPLETED))
+        )).thenReturn(List.of());
+
+        VerifyPurchaseRequest request = new VerifyPurchaseRequest("user-1", null, List.of("var-1"));
+        VerifyPurchaseResponse response = service.verifyPurchase(request);
+
+        assertEquals(false, response.purchased());
+        assertEquals(null, response.orderId());
     }
 }
