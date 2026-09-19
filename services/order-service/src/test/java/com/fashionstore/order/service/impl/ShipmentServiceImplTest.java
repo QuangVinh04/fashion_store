@@ -75,11 +75,14 @@ class ShipmentServiceImplTest {
     @Mock
     OrderStatusHistoryRepository orderStatusHistoryRepository;
 
+    @Mock
+    com.fashionstore.order.service.OrderNotificationService orderNotificationService;
+
     ShipmentServiceImpl service;
 
     @BeforeEach
     void setUp() {
-        service = new ShipmentServiceImpl(shipmentRepository, orderRepository, checkoutRepository, identityClient, ghnClient, catalogClient, currentUserProvider, orderStatusHistoryRepository);
+        service = new ShipmentServiceImpl(shipmentRepository, orderRepository, checkoutRepository, identityClient, ghnClient, catalogClient, currentUserProvider, orderStatusHistoryRepository, orderNotificationService);
         when(currentUserProvider.getCurrentUserId()).thenReturn("user-1");
         when(shipmentRepository.save(any(Shipment.class))).thenAnswer(i -> i.getArgument(0));
         when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
@@ -285,6 +288,7 @@ class ShipmentServiceImplTest {
         assertThat(historyCaptor.getValue().getToStatus()).isEqualTo(OrderStatus.SHIPPING);
         assertThat(historyCaptor.getValue().getAction()).isEqualTo("GHN_WEBHOOK");
         assertThat(historyCaptor.getValue().getChangedBy()).isEqualTo("GHN");
+        verify(orderNotificationService, times(1)).sendOrderShippedNotification(order, shipment);
     }
 
     @Test
@@ -322,6 +326,7 @@ class ShipmentServiceImplTest {
         assertThat(historyCaptor.getValue().getToStatus()).isEqualTo(OrderStatus.DELIVERED);
         assertThat(historyCaptor.getValue().getAction()).isEqualTo("GHN_WEBHOOK");
         assertThat(historyCaptor.getValue().getChangedBy()).isEqualTo("GHN");
+        verify(orderNotificationService, times(1)).sendOrderDeliveredNotification(order);
     }
 
     @Test

@@ -42,17 +42,23 @@ import java.nio.file.Path;
 @EnableMethodSecurity
 public class SecurityConfig {
 
+    @Value("${app.internal.secret-token:fashion-store-internal-secret-token}")
+    private String internalSecretToken;
+
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http, JwtDecoder jwtDecoder) throws Exception {
         return http
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers("/api/v1/auth/logout").authenticated()
                         .requestMatchers("/api/v1/auth/**", "/actuator/health/**", "/error").permitAll()
+                        .requestMatchers("/internal/**").permitAll()
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(resourceServer -> resourceServer
                         .jwt(jwt -> jwt
                                 .decoder(jwtDecoder)
                                 .jwtAuthenticationConverter(jwtAuthenticationConverter())))
+                .addFilterBefore(new InternalTokenAuthFilter(internalSecretToken),
+                        org.springframework.security.web.access.intercept.AuthorizationFilter.class)
                 .addFilterBefore(new GatewayHeaderAuthenticationFilter(),
                         org.springframework.security.web.access.intercept.AuthorizationFilter.class)
                 .csrf(csrf -> csrf.disable())

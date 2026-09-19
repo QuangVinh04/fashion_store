@@ -26,6 +26,7 @@ import com.fashionstore.order.repository.OrderStatusHistoryRepository;
 import com.fashionstore.order.repository.ShipmentRepository;
 import com.fashionstore.order.service.ShipmentService;
 
+import com.fashionstore.order.service.OrderNotificationService;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -53,6 +54,7 @@ public class ShipmentServiceImpl implements ShipmentService {
     CatalogClient catalogClient;
     CurrentUserProvider currentUserProvider;
     OrderStatusHistoryRepository orderStatusHistoryRepository;
+    OrderNotificationService orderNotificationService;
 
 
     @Override
@@ -209,12 +211,14 @@ public class ShipmentServiceImpl implements ShipmentService {
                 orderRepository.save(order);
                 recordHistory(order, oldStatus, OrderStatus.SHIPPING, "GHN_WEBHOOK", "GHN", "Status updated from GHN webhook: " + payload.getStatus());
                 log.info("[GHN Webhook] Order {} transitioned to SHIPPING", order.getId());
+                orderNotificationService.sendOrderShippedNotification(order, shipment);
             } else if (newStatus == ShipmentStatus.DELIVERED && (order.getStatus() == OrderStatus.SHIPPING || order.getStatus() == OrderStatus.PACKED || order.getStatus() == OrderStatus.CONFIRMED || order.getStatus() == OrderStatus.PROCESSING)) {
                 OrderStatus oldStatus = order.getStatus();
                 order.setStatus(OrderStatus.DELIVERED);
                 orderRepository.save(order);
                 recordHistory(order, oldStatus, OrderStatus.DELIVERED, "GHN_WEBHOOK", "GHN", "Status updated from GHN webhook: " + payload.getStatus());
                 log.info("[GHN Webhook] Order {} transitioned to DELIVERED", order.getId());
+                orderNotificationService.sendOrderDeliveredNotification(order);
             } else if (newStatus == ShipmentStatus.RETURNED && order.getStatus() != OrderStatus.RETURNED && order.getStatus() != OrderStatus.CANCELLED) {
                 OrderStatus oldStatus = order.getStatus();
                 order.setStatus(OrderStatus.RETURNED);

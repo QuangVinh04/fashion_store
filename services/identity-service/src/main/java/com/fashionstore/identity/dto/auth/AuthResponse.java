@@ -13,6 +13,7 @@ import java.util.Set;
 @Builder
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class AuthResponse {
+    String userId;
     String accessToken;
     String email;
     String fullName;

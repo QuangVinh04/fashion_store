@@ -3,16 +3,24 @@ package com.fashionstore.order.controller;
 import com.fashionstore.common.dto.ApiResponse;
 import com.fashionstore.order.dto.AddToCartRequest;
 import com.fashionstore.order.dto.CartResponse;
+import com.fashionstore.order.dto.MergeCartRequest;
 import com.fashionstore.order.dto.UpdateCartRequest;
 import com.fashionstore.order.service.CartService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseCookie;
 import org.springframework.web.bind.annotation.*;
+
+import java.time.Duration;
+import java.util.UUID;
 
 @Tag(name = "Cart", description = "Giỏ hàng của người dùng đang đăng nhập. Mỗi user có đúng một giỏ ACTIVE.")
 @RestController
@@ -30,7 +38,11 @@ public class CartController {
                     snapshot đã lưu trong DB và `available` = `null` (nghĩa là *không xác định*, không phải hết hàng).
                     Chưa có giỏ thì trả về giỏ rỗng chứ không phải 404.""")
     @GetMapping
-    public ApiResponse<CartResponse> getMyCart() {
+    public ApiResponse<CartResponse> getMyCart(
+            HttpServletRequest request,
+            HttpServletResponse response
+    ) {
+        ensureAnonymousCookieIfGuest(request, response);
         return ApiResponse.<CartResponse>builder()
                 .message("Lay gio hang thanh cong")
                 .data(cartService.getMyCart())
@@ -65,18 +77,20 @@ public class CartController {
     @PutMapping("/items/{id}")
     public ApiResponse<CartResponse> updateCartItem(
             @Parameter(description = "Id của dòng giỏ hàng (cart_item.id), không phải variantId") @PathVariable String id,
-                                                    @Valid @RequestBody UpdateCartRequest request) {
+            @Valid @RequestBody UpdateCartRequest request
+    ) {
         return ApiResponse.<CartResponse>builder()
                 .message("Cap nhat gio hang thanh cong")
                 .data(cartService.updateCartItem(id, request))
                 .build();
     }
 
-    @Operation(summary = "Xoá một dòng giỏ hàng",
+    @Operation(summary = "Xoá một dòng khỏi giỏ",
             description = "Mã lỗi: `3001` dòng giỏ không tồn tại (404) · `3004` giỏ không còn ACTIVE (403).")
     @DeleteMapping("/items/{id}")
     public ApiResponse<CartResponse> removeCartItem(
-            @Parameter(description = "Id của dòng giỏ hàng (cart_item.id)") @PathVariable String id) {
+            @Parameter(description = "Id của dòng giỏ hàng (cart_item.id)") @PathVariable String id
+    ) {
         return ApiResponse.<CartResponse>builder()
                 .message("Xoa san pham khoi gio hang thanh cong")
                 .data(cartService.removeCartItem(id))
@@ -91,5 +105,56 @@ public class CartController {
                 .message("Xoa toan bo gio hang thanh cong")
                 .data(cartService.clearCart())
                 .build();
+    }
+
+    @Operation(summary = "Gộp giỏ hàng khách vãng lai vào tài khoản sau khi đăng nhập",
+            description = "Chuyển các mặt hàng từ giỏ hàng tạm (anonymousId) sang giỏ hàng của user đang đăng nhập.")
+    @PostMapping("/merge")
+    public ApiResponse<CartResponse> mergeCart(
+            @Parameter(description = "Mã giỏ hàng khách vãng lai gửi qua header")
+            @RequestHeader(value = "X-Anonymous-Id", required = false) String headerAnonId,
+            @CookieValue(value = "anonymous_id", required = false) String cookieAnonId,
+            @RequestBody(required = false) MergeCartRequest request
+    ) {
+        String anonymousId = (request != null && request.getAnonymousId() != null && !request.getAnonymousId().isBlank())
+                ? request.getAnonymousId().trim()
+                : (headerAnonId != null && !headerAnonId.isBlank() ? headerAnonId.trim() : cookieAnonId);
+
+        return ApiResponse.<CartResponse>builder()
+                .message("Gộp giỏ hàng thành công")
+                .data(cartService.mergeCart(anonymousId))
+                .build();
+    }
+
+    private void ensureAnonymousCookieIfGuest(HttpServletRequest request, HttpServletResponse response) {
+        if (request == null) return;
+        String header = request.getHeader("X-Anonymous-Id");
+        if (header != null && !header.isBlank()) {
+            request.setAttribute("ANONYMOUS_ID", header.trim());
+            return;
+        }
+        if (request.getCookies() != null) {
+            for (var c : request.getCookies()) {
+                if ("anonymous_id".equalsIgnoreCase(c.getName()) || "anonymousId".equalsIgnoreCase(c.getName())) {
+                    if (c.getValue() != null && !c.getValue().isBlank()) {
+                        request.setAttribute("ANONYMOUS_ID", c.getValue().trim());
+                        return;
+                    }
+                }
+            }
+        }
+        String authHeader = request.getHeader("Authorization");
+        if (authHeader != null && !authHeader.isBlank()) return;
+
+        String newAnonId = UUID.randomUUID().toString();
+        request.setAttribute("ANONYMOUS_ID", newAnonId);
+        if (response != null) {
+            ResponseCookie cookie = ResponseCookie.from("anonymous_id", newAnonId)
+                    .path("/")
+                    .maxAge(Duration.ofDays(30))
+                    .sameSite("Lax")
+                    .build();
+            response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
+        }
     }
 }

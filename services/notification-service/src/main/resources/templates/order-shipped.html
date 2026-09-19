@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Đơn hàng đang được giao</title>
+</head>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+    <div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
+        <h2 style="color: #2b6cb0;">Đơn hàng của bạn đang trên đường giao!</h2>
+        <p>Xin chào <strong th:text="${recipientName}">Khách hàng</strong>,</p>
+        <p>Đơn hàng <strong th:text="${orderCode}">ORD-123456</strong> đã được bàn giao cho đơn vị vận chuyển và đang trên đường tới bạn.</p>
+        
+        <div style="background-color: #f7fafc; padding: 15px; border-radius: 6px; margin: 20px 0;">
+            <p><strong>Đơn vị vận chuyển:</strong> <span th:text="${shippingProvider}">GHN</span></p>
+            <p><strong>Mã vận đơn (Tracking Code):</strong> <span style="font-size: 16px; color: #e53e3e; font-weight: bold;" th:text="${trackingCode}">TRACK-123</span></p>
+            <p><strong>Địa chỉ giao hàng:</strong> <span th:text="${shippingAddress}">Địa chỉ</span></p>
+        </div>
+        
+        <p>Vui lòng chú ý điện thoại để shipper có thể liên hệ giao hàng thuận tiện nhất.</p>
+        <p>Trân trọng,<br><strong>Đội ngũ Fashion Store</strong></p>
+    </div>
+</body>
+</html>

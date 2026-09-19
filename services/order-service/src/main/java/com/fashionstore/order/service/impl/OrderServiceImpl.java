@@ -124,6 +124,7 @@ public class OrderServiceImpl implements OrderService {
                 .checkoutId(checkout.getId())
                 .recipientName(recipientName)
                 .recipientPhone(recipientPhone)
+                .recipientEmail(checkout.getRecipientEmail())
                 .shippingAddress(shippingAddress)
                 .subtotalAmount(checkout.getSubtotalAmount())
                 .discountAmount(checkout.getDiscountAmount())

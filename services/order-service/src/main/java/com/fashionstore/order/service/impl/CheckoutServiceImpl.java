@@ -84,8 +84,19 @@ public class CheckoutServiceImpl implements CheckoutService {
         BigDecimal total = subtotal.subtract(discount).add(shippingFee);
         validateAmounts(subtotal, discount, shippingFee, total);
 
+        String userEmail = null;
+        try {
+            var userDto = identityClient.getUser(userId);
+            if (userDto != null) {
+                userEmail = userDto.email();
+            }
+        } catch (Exception e) {
+            log.warn("[Checkout] Could not resolve email for userId={}: {}", userId, e.getMessage());
+        }
+
         Checkout checkout = Checkout.builder()
                 .userId(userId)
+                .recipientEmail(userEmail)
                 .status(CheckoutStatus.SUBMITTED)
                 .paymentMethod(request.getPaymentMethod())
                 .paymentProvider(resolvePaymentProvider(request.getPaymentMethod(), request.getPaymentProvider()))

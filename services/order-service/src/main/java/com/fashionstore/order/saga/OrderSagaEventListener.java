@@ -46,6 +46,7 @@ public class OrderSagaEventListener {
     private final CartRepository cartRepository;
     private final PromotionService promotionService;
     private final OrderStatusHistoryRepository orderStatusHistoryRepository;
+    private final com.fashionstore.order.service.OrderNotificationService orderNotificationService;
 
 
     // 1. Giữ kho xong -> xin thanh toán
@@ -209,6 +210,7 @@ public class OrderSagaEventListener {
                     // không cần đi vòng qua message. Đổi lại: xoá hỏng thì đơn rollback theo —
                     // trước đây phát event nên hỏng cũng không ảnh hưởng đơn.
                     removeOrderedCartItems(order);
+                    orderNotificationService.sendOrderConfirmedNotification(order);
 
                     return List.of(SagaCommands.orderConfirmed(order));
                 })

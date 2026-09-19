@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Giao hàng thành công</title>
+</head>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+    <div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
+        <h2 style="color: #38a169;">Đơn hàng đã được giao thành công!</h2>
+        <p>Xin chào <strong th:text="${recipientName}">Khách hàng</strong>,</p>
+        <p>Đơn hàng <strong th:text="${orderCode}">ORD-123456</strong> đã được giao thành công đến bạn.</p>
+        
+        <p>Hy vọng bạn hài lòng với các sản phẩm từ <strong>Fashion Store</strong>. Nếu bạn yêu thích sản phẩm, hãy dành chút thời gian đánh giá sản phẩm để nhận thêm ưu đãi nhé!</p>
+        
+        <p>Nếu có bất kỳ thắc mắc hoặc cần hỗ trợ đổi trả, vui lòng liên hệ bộ phận hỗ trợ khách hàng của chúng tôi.</p>
+        <p>Trân trọng cảm ơn,<br><strong>Đội ngũ Fashion Store</strong></p>
+    </div>
+</body>
+</html>

@@ -27,16 +27,20 @@ spring:
 security:
   jwt:
     issuer: ${JWT_ISSUER:http://localhost:8082}
-  cookie-secure: ${SECURITY_COOKIE_SECURE:false}
     access-token-ttl-seconds: ${JWT_ACCESS_TOKEN_TTL_SECONDS:900}       # 15 phút
     refresh-token-ttl-days: ${JWT_REFRESH_TOKEN_TTL_DAYS:7}
     private-key-file: ${JWT_PRIVATE_KEY_FILE:.data/identity-private.pem}
     public-key-file: ${JWT_PUBLIC_KEY_FILE:.data/identity-public.pem}
     legacy-jwk-file: ${JWT_LEGACY_JWK_FILE:.data/identity-rsa.jwk}
+  cookie-secure: ${SECURITY_COOKIE_SECURE:false}
 
 app:
   outbox:
     relay-delay-ms: ${OUTBOX_RELAY_DELAY_MS:3000}
+  services:
+    order-service-url: ${ORDER_SERVICE_URL:${ORDER_BASE_URL:http://order-service:8089}}
+  internal:
+    secret-token: ${INTERNAL_SECRET_TOKEN:fashion-store-internal-secret-token}
 
 management:
   endpoints:

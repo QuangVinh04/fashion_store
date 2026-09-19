@@ -350,6 +350,7 @@ public class AuthServiceImpl implements AuthService {
                 .map(Role::getName)
                 .collect(Collectors.toSet());
         return AuthResponse.builder()
+                .userId(user.getId())
                 .accessToken(token)
                 .email(user.getEmail())
                 .fullName(user.getFullName())

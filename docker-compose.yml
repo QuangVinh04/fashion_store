@@ -50,6 +50,7 @@ services:
       JWT_PRIVATE_KEY_FILE: /var/lib/identity/identity-private.pem
       JWT_PUBLIC_KEY_FILE: /var/lib/identity/identity-public.pem
       JWT_LEGACY_JWK_FILE: /var/lib/identity/identity-rsa.jwk
+      ORDER_BASE_URL: http://order-service:8089
     depends_on:
       identity-postgres:
         condition: service_healthy

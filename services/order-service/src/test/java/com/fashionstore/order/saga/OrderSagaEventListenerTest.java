@@ -80,6 +80,9 @@ class OrderSagaEventListenerTest {
     @Mock
     private OrderStatusHistoryRepository orderStatusHistoryRepository;
 
+    @Mock
+    private com.fashionstore.order.service.OrderNotificationService orderNotificationService;
+
     private OrderSagaEventListener listener;
 
     @BeforeEach
@@ -95,7 +98,7 @@ class OrderSagaEventListenerTest {
                 sagaOutbox,
                 new ObjectMapper()
         );
-        listener = new OrderSagaEventListener(processor, orderRepository, cartRepository, promotionService, orderStatusHistoryRepository);
+        listener = new OrderSagaEventListener(processor, orderRepository, cartRepository, promotionService, orderStatusHistoryRepository, orderNotificationService);
         when(cartRepository.findByUserIdAndStatus(anyString(), any())).thenReturn(Optional.empty());
     }
 

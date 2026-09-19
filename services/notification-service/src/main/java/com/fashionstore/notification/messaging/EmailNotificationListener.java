@@ -50,16 +50,32 @@ public class EmailNotificationListener {
 
     private void send(EmailNotificationRequested request) throws Exception {
         Context context = new Context();
-        request.variables().forEach(context::setVariable);
-        String token = request.variables().getOrDefault("verifyCode", "");
+        if (request.variables() != null) {
+            request.variables().forEach(context::setVariable);
+        }
+        String token = request.variables() != null ? request.variables().getOrDefault("verifyCode", "") : "";
         context.setVariable("verifyLink", frontendUrl + "/verify-email?token=" + token);
 
         String html = templateEngine.process(request.template(), context);
         MimeMessage mimeMessage = mailSender.createMimeMessage();
         MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, true, "UTF-8");
         helper.setTo(request.recipient());
-        helper.setSubject("Xác nhận email - Fashion Store");
+        helper.setSubject(resolveSubject(request));
         helper.setText(html, true);
         mailSender.send(mimeMessage);
+    }
+
+    private String resolveSubject(EmailNotificationRequested request) {
+        if (request.variables() != null && request.variables().containsKey("subject")) {
+            return request.variables().get("subject");
+        }
+        String orderCode = request.variables() != null ? request.variables().getOrDefault("orderCode", "") : "";
+        return switch (request.template()) {
+            case "order-confirmed" -> "Xác nhận đơn hàng #" + orderCode + " - Fashion Store";
+            case "order-shipped" -> "Đơn hàng #" + orderCode + " đang được giao - Fashion Store";
+            case "order-delivered" -> "Đơn hàng #" + orderCode + " đã giao thành công - Fashion Store";
+            case "verify-email" -> "Xác nhận email - Fashion Store";
+            default -> "Thông báo từ Fashion Store";
+        };
     }
 }

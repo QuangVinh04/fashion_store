@@ -37,6 +37,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -67,6 +68,10 @@ class CartServiceImplTest {
                 cartRepository, cartItemRepository, catalogClient, currentUserProvider, mapper
         );
         when(currentUserProvider.getCurrentUserId()).thenReturn("user-1");
+        when(cartRepository.findByUserId(any())).thenAnswer(invocation -> {
+            String uid = invocation.getArgument(0);
+            return cartRepository.findByUserIdAndStatus(uid, CartStatus.ACTIVE);
+        });
     }
 
     @Test
@@ -508,5 +513,163 @@ class CartServiceImplTest {
                         .requestedQty(requestedQty)
                         .build()))
                 .build();
+    }
+
+    @Test
+    void mergeCart_whenGuestCartDoesNotExist_returnsUserCart() {
+        String validUuid = "11111111-1111-1111-1111-111111111111";
+        when(cartRepository.findByUserIdAndStatus("anon:" + validUuid, CartStatus.ACTIVE)).thenReturn(Optional.empty());
+        Cart userCart = cart();
+        when(cartRepository.findByUserIdAndStatus("user-1", CartStatus.ACTIVE)).thenReturn(Optional.of(userCart));
+
+        CartResponse response = service.mergeCart(validUuid);
+
+        assertThat(response).isNotNull();
+        assertThat(response.getUserId()).isEqualTo("user-1");
+        verify(cartRepository, never()).save(argThat(c -> ("anon:" + validUuid).equals(c.getUserId())));
+    }
+
+    @Test
+    void mergeCart_whenInvalidUuid_throwsInvalidRequest() {
+        AppException ex = assertThrows(AppException.class, () -> service.mergeCart("not-a-valid-uuid"));
+        assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.MALFORMED_REQUEST);
+    }
+
+    @Test
+    void mergeCart_insufficientStock_throwsExceptionAndDoesNotAlterGuestCart() {
+        String validUuid = "22222222-2222-2222-2222-222222222222";
+        Cart userCart = cart();
+        CartItem userItem = cartItem(userCart, "variant-1", 1, "20.00");
+        userCart.addItem(userItem);
+
+        Cart guestCart = Cart.builder()
+                .userId("anon:" + validUuid)
+                .status(CartStatus.ACTIVE)
+                .items(new ArrayList<>())
+                .build();
+        guestCart.setId("cart-guest");
+        CartItem guestItem1 = cartItem(guestCart, "variant-1", 2, "20.00");
+        guestCart.addItem(guestItem1);
+
+        when(cartRepository.findByUserIdAndStatus("anon:" + validUuid, CartStatus.ACTIVE)).thenReturn(Optional.of(guestCart));
+        when(cartRepository.findByUserIdAndStatus("user-1", CartStatus.ACTIVE)).thenReturn(Optional.of(userCart));
+
+        // requested: 1 + 2 = 3, available: 2 -> NOT ENOUGH
+        when(catalogClient.checkStock(anyList())).thenReturn(notEnoughStock("variant-1", 3, 2));
+
+        AppException ex = assertThrows(AppException.class, () -> service.mergeCart(validUuid));
+        assertThat(ex.getErrorCode()).isEqualTo(OrderErrorCode.STOCK_INSUFFICIENT);
+
+        // Guest cart phải giữ nguyên vẹn 100%
+        assertThat(guestCart.getStatus()).isEqualTo(CartStatus.ACTIVE);
+        assertThat(guestCart.getItems()).hasSize(1);
+    }
+
+    @Test
+    void mergeCart_success_mergesItemsAndMarksGuestCartAbandoned() {
+        String validUuid = "33333333-3333-3333-3333-333333333333";
+        Cart userCart = cart();
+        CartItem userItem = cartItem(userCart, "variant-1", 1, "20.00");
+        userCart.addItem(userItem);
+
+        Cart guestCart = Cart.builder()
+                .userId("anon:" + validUuid)
+                .status(CartStatus.ACTIVE)
+                .items(new ArrayList<>())
+                .build();
+        guestCart.setId("cart-guest");
+        CartItem guestItem1 = cartItem(guestCart, "variant-1", 2, "20.00");
+        CartItem guestItem2 = cartItem(guestCart, "variant-2", 1, "30.00");
+        guestCart.addItem(guestItem1);
+        guestCart.addItem(guestItem2);
+
+        when(cartRepository.findByUserIdAndStatus("anon:" + validUuid, CartStatus.ACTIVE)).thenReturn(Optional.of(guestCart));
+        when(cartRepository.findByUserIdAndStatus("user-1", CartStatus.ACTIVE)).thenReturn(Optional.of(userCart));
+        StockCheckResult allAvailableStock = StockCheckResult.builder()
+                .allAvailable(true)
+                .items(List.of(
+                        StockCheckItemResult.builder().variantId("variant-1").available(true).requestedQty(3).availableQty(10).build(),
+                        StockCheckItemResult.builder().variantId("variant-2").available(true).requestedQty(1).availableQty(10).build()
+                ))
+                .build();
+        when(catalogClient.checkStock(anyList())).thenReturn(allAvailableStock);
+        when(catalogClient.getVariantsBatch(anyList())).thenReturn(List.of(
+                variant("variant-1", "20.00"),
+                variant("variant-2", "30.00")
+        ));
+        when(cartRepository.save(any(Cart.class))).thenAnswer(i -> i.getArgument(0));
+
+        CartResponse response = service.mergeCart(validUuid);
+
+        assertThat(response).isNotNull();
+        assertThat(guestCart.getStatus()).isEqualTo(CartStatus.ABANDONED);
+        assertThat(userCart.getItems()).hasSize(2);
+        // variant-1 item quantity: 1 + 2 = 3
+        CartItem mergedItem1 = userCart.getItems().stream()
+                .filter(i -> "variant-1".equals(i.getVariantId()))
+                .findFirst().orElseThrow();
+        assertThat(mergedItem1.getQuantity()).isEqualTo(3);
+        // variant-2 item added: 1
+        CartItem mergedItem2 = userCart.getItems().stream()
+                .filter(i -> "variant-2".equals(i.getVariantId()))
+                .findFirst().orElseThrow();
+        assertThat(mergedItem2.getQuantity()).isEqualTo(1);
+    }
+
+    @Test
+    void guestCart_whenNotAuthenticated_resolvesAnonymousIdFromHeader() {
+        String validUuid = "44444444-4444-4444-4444-444444444444";
+        when(currentUserProvider.getCurrentUserId()).thenReturn(null);
+        org.springframework.mock.web.MockHttpServletRequest request = new org.springframework.mock.web.MockHttpServletRequest();
+        request.addHeader("X-Anonymous-Id", validUuid);
+        org.springframework.web.context.request.RequestContextHolder.setRequestAttributes(
+                new org.springframework.web.context.request.ServletRequestAttributes(request));
+
+        Cart anonCart = Cart.builder()
+                .userId("anon:" + validUuid)
+                .status(CartStatus.ACTIVE)
+                .items(new ArrayList<>())
+                .build();
+        anonCart.setId("cart-anon");
+        when(cartRepository.findByUserIdAndStatus("anon:" + validUuid, CartStatus.ACTIVE)).thenReturn(Optional.of(anonCart));
+
+        CartResponse response = service.getMyCart();
+
+        assertThat(response).isNotNull();
+        assertThat(response.getUserId()).isEqualTo("anon:" + validUuid);
+        org.springframework.web.context.request.RequestContextHolder.resetRequestAttributes();
+    }
+
+    @Test
+    void guestCart_whenHeaderMissing_resolvesAnonymousIdFromCookie() {
+        String validUuid = "55555555-5555-5555-5555-555555555555";
+        when(currentUserProvider.getCurrentUserId()).thenReturn(null);
+        org.springframework.mock.web.MockHttpServletRequest request = new org.springframework.mock.web.MockHttpServletRequest();
+        request.setCookies(new jakarta.servlet.http.Cookie("anonymous_id", validUuid));
+        org.springframework.web.context.request.RequestContextHolder.setRequestAttributes(
+                new org.springframework.web.context.request.ServletRequestAttributes(request));
+
+        Cart anonCart = Cart.builder()
+                .userId("anon:" + validUuid)
+                .status(CartStatus.ACTIVE)
+                .items(new ArrayList<>())
+                .build();
+        anonCart.setId("cart-anon");
+        when(cartRepository.findByUserIdAndStatus("anon:" + validUuid, CartStatus.ACTIVE)).thenReturn(Optional.of(anonCart));
+
+        CartResponse response = service.getMyCart();
+
+        assertThat(response).isNotNull();
+        assertThat(response.getUserId()).isEqualTo("anon:" + validUuid);
+        org.springframework.web.context.request.RequestContextHolder.resetRequestAttributes();
+    }
+
+    @Test
+    void guestCart_whenNoAuthAndNoHeader_throwsUnauthenticated() {
+        when(currentUserProvider.getCurrentUserId()).thenReturn(null);
+        org.springframework.web.context.request.RequestContextHolder.resetRequestAttributes();
+
+        AppException ex = assertThrows(AppException.class, () -> service.getMyCart());
+        assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.UNAUTHENTICATED);
     }
 }

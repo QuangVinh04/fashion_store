@@ -19,5 +19,12 @@ public interface CartRepository extends JpaRepository<Cart, String> {
             WHERE c.userId = :userId AND c.status = :status
             """)
     Optional<Cart> findByUserIdAndStatus(@Param("userId") String userId,
-                                     @Param("status") CartStatus status);
+                                         @Param("status") CartStatus status);
+
+    @Query("""
+            SELECT c FROM Cart c
+            LEFT JOIN FETCH c.items
+            WHERE c.userId = :userId
+            """)
+    Optional<Cart> findByUserId(@Param("userId") String userId);
 }

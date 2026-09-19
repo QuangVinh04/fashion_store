@@ -1,6 +1,7 @@
 package com.fashionstore.identity.controller;
 
 import com.fashionstore.common.dto.ApiResponse;
+import com.fashionstore.identity.client.OrderServiceClient;
 import com.fashionstore.identity.dto.auth.AuthResponse;
 import com.fashionstore.identity.dto.auth.AuthResult;
 import com.fashionstore.identity.dto.auth.LoginRequest;
@@ -14,8 +15,10 @@ import jakarta.validation.Valid;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
+import lombok.experimental.NonFinal;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -29,36 +32,60 @@ import org.springframework.web.bind.annotation.*;
 public class AuthController {
 
     AuthService authService;
+    OrderServiceClient orderServiceClient;
 
+    @NonFinal
     @Value("${security.jwt.refresh-token-ttl-days:7}")
-    long refreshTokenTtlDays;
+    long refreshTokenTtlDays = 7;
 
-        @Value("${security.cookie-secure:false}")
-        boolean secureCookies;
+    @NonFinal
+    @Value("${security.cookie-secure:false}")
+    boolean secureCookies = false;
 
     @PostMapping("/register")
     public ApiResponse<Void> register(@Valid @RequestBody RegisterRequest request) {
         authService.register(request);
         return ApiResponse.<Void>builder()
-                        .message("Đăng ký thành công")
-                        .build();
+                .message("Đăng ký thành công")
+                .build();
     }
+
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<AuthResponse>> login(
             @Valid @RequestBody LoginRequest request,
-                        HttpServletRequest httpRequest,
-                        @RequestHeader(value = "X-Forwarded-For", required = false) String forwardedFor) {
-                String clientIp = forwardedFor == null || forwardedFor.isBlank()
-                                ? httpRequest.getRemoteAddr()
-                                : forwardedFor.split(",", 2)[0].trim();
-                AuthResult result = authService.login(request, clientIp);
-        return ResponseEntity.ok()
+            @CookieValue(value = "anonymous_id", required = false) String anonCookie,
+            @RequestHeader(value = "X-Anonymous-Id", required = false) String anonHeader,
+            HttpServletRequest httpRequest,
+            @RequestHeader(value = "X-Forwarded-For", required = false) String forwardedFor) {
+        String clientIp = forwardedFor == null || forwardedFor.isBlank()
+                ? httpRequest.getRemoteAddr()
+                : forwardedFor.split(",", 2)[0].trim();
+        AuthResult result = authService.login(request, clientIp);
+
+        String anonymousId = (anonHeader != null && !anonHeader.isBlank()) ? anonHeader.trim() : anonCookie;
+        boolean mergeSuccess = false;
+        if (anonymousId != null && !anonymousId.isBlank() && result.response() != null && result.response().getUserId() != null) {
+            mergeSuccess = orderServiceClient.triggerCartMerge(result.response().getUserId(), anonymousId);
+        }
+
+        var responseBuilder = ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE,
-                        CookieUtils.createRefreshTokenCookie(result.refreshToken(), refreshTokenTtlDays, secureCookies).toString())
-                .body(ApiResponse.<AuthResponse>builder()
-                        .message("Đăng nhập thành công")
-                        .data(result.response())
-                        .build());
+                        CookieUtils.createRefreshTokenCookie(result.refreshToken(), refreshTokenTtlDays, secureCookies).toString());
+
+        // Chỉ dọn cookie guest khi merge xác nhận thành công
+        if (mergeSuccess && anonCookie != null && !anonCookie.isBlank()) {
+            ResponseCookie clearAnonCookie = ResponseCookie.from("anonymous_id", "")
+                    .path("/")
+                    .maxAge(0)
+                    .sameSite("Lax")
+                    .build();
+            responseBuilder.header(HttpHeaders.SET_COOKIE, clearAnonCookie.toString());
+        }
+
+        return responseBuilder.body(ApiResponse.<AuthResponse>builder()
+                .message("Đăng nhập thành công")
+                .data(result.response())
+                .build());
     }
 
     @PostMapping("/verify-email")

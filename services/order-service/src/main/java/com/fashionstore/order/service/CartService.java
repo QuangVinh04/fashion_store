@@ -16,6 +16,10 @@ public interface CartService {
 
     CartResponse clearCart();
 
+    CartResponse mergeCart(String anonymousId);
+
+    CartResponse mergeCartForUser(String userId, String anonymousId);
+
     /**
      * Xác nhận lại giỏ đang hoạt động với catalog (còn bán, giá hiện tại, kho còn đủ), ghi lại snapshot
      * rồi trả về giỏ đã cập nhật. Dùng bởi checkout — nơi bản chụp giá bắt đầu có giá trị thu tiền.

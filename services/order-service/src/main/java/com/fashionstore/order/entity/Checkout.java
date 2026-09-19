@@ -31,6 +31,9 @@ public class Checkout extends BaseEntity {
     @Column(name = "user_id", nullable = false)
     String userId;
 
+    @Column(name = "recipient_email", length = 255)
+    String recipientEmail;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
     @Builder.Default

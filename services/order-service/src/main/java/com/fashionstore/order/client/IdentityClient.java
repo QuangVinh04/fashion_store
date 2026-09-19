@@ -34,4 +34,17 @@ public class IdentityClient {
             throw e;
         }
     }
+
+    public InternalUserDto getUser(String userId) {
+        try {
+            ApiResponse<InternalUserDto> response = identityFeignClient.getUserById(userId);
+            return response != null ? response.getData() : null;
+        } catch (FeignException.NotFound e) {
+            log.warn("[IdentityClient] User not found: {}", userId);
+            return null;
+        } catch (Exception e) {
+            log.warn("[IdentityClient] Failed to fetch user from identity-service: {}", e.getMessage());
+            return null;
+        }
+    }
 }

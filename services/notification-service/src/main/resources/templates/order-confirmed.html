@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Xác nhận đơn hàng</title>
+</head>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+    <div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
+        <h2 style="color: #2b6cb0;">Cảm ơn bạn đã đặt hàng tại Fashion Store!</h2>
+        <p>Xin chào <strong th:text="${recipientName}">Khách hàng</strong>,</p>
+        <p>Đơn hàng của bạn đã được xác nhận thành công và đang được chuẩn bị để đóng gói.</p>
+        
+        <div style="background-color: #f7fafc; padding: 15px; border-radius: 6px; margin: 20px 0;">
+            <p><strong>Mã đơn hàng:</strong> <span th:text="${orderCode}">ORD-123456</span></p>
+            <p><strong>Tổng thanh toán:</strong> <span th:text="${totalAmount}">0</span> VND</p>
+            <p><strong>Phương thức thanh toán:</strong> <span th:text="${paymentMethod}">COD</span></p>
+            <p><strong>Địa chỉ nhận hàng:</strong> <span th:text="${shippingAddress}">Địa chỉ</span></p>
+        </div>
+        
+        <p>Fashion Store sẽ thông báo cho bạn ngay khi đơn hàng được bàn giao cho đơn vị vận chuyển.</p>
+        <p>Trân trọng,<br><strong>Đội ngũ Fashion Store</strong></p>
+    </div>
+</body>
+</html>

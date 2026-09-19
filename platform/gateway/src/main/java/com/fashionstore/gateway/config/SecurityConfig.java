@@ -47,6 +47,7 @@ public class SecurityConfig {
                                 "/api/v1/wishlist/check/**"
                         ).permitAll()
                         .pathMatchers(HttpMethod.GET, "/api/v1/files/*/content").permitAll()
+                        .pathMatchers("/api/v1/cart/**").permitAll()
                         .pathMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .anyExchange().authenticated())
                 .oauth2ResourceServer(resourceServer -> resourceServer

@@ -66,6 +66,9 @@ public class Order extends BaseEntity {
     @Column(name = "recipient_phone", nullable = false, length = 20)
     String recipientPhone;
 
+    @Column(name = "recipient_email", length = 255)
+    String recipientEmail;
+
     @Column(name = "shipping_address", nullable = false, length = 500)
     String shippingAddress;
 
