@@ -27,6 +27,15 @@ public class VnPayProperties {
     @NotBlank
     private String returnUrl;
 
+    @NotBlank
+    private String apiUrl;
+
+    @NotBlank
+    private String createBy;
+
+    @NotBlank
+    private String serverIp;
+
     private String version = "2.1.0";
     private String command = "pay";
     private String currency = "VND";

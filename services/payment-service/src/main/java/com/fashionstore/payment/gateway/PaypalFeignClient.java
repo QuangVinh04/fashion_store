@@ -33,4 +33,13 @@ public interface PaypalFeignClient {
             @RequestHeader("PayPal-Request-Id") String requestId,
             @RequestBody Object body
     );
+
+    /** Refunds a captured PayPal payment. */
+    @PostMapping(value = "/v2/payments/captures/{captureId}/refund", consumes = MediaType.APPLICATION_JSON_VALUE)
+    JsonNode refundCapture(
+            @PathVariable String captureId,
+            @RequestHeader(HttpHeaders.AUTHORIZATION) String authorization,
+            @RequestHeader("PayPal-Request-Id") String requestId,
+            @RequestBody Object body
+    );
 }

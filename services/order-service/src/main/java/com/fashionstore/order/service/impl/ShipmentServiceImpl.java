@@ -3,6 +3,9 @@ package com.fashionstore.order.service.impl;
 import com.fashionstore.common.exception.AppException;
 import com.fashionstore.common.exception.ErrorCode;
 import com.fashionstore.common.security.CurrentUserProvider;
+import com.fashionstore.contracts.common.EventEnvelope;
+import com.fashionstore.contracts.common.EventTypes;
+import com.fashionstore.contracts.order.OrderDeliveredEvent;
 import com.fashionstore.order.client.CatalogClient;
 import com.fashionstore.order.client.GhnClient;
 import com.fashionstore.order.client.IdentityClient;
@@ -24,6 +27,7 @@ import com.fashionstore.order.repository.CheckoutRepository;
 import com.fashionstore.order.repository.OrderRepository;
 import com.fashionstore.order.repository.OrderStatusHistoryRepository;
 import com.fashionstore.order.repository.ShipmentRepository;
+import com.fashionstore.order.outbox.OutboxService;
 import com.fashionstore.order.service.ShipmentService;
 
 import com.fashionstore.order.service.OrderNotificationService;
@@ -55,6 +59,7 @@ public class ShipmentServiceImpl implements ShipmentService {
     CurrentUserProvider currentUserProvider;
     OrderStatusHistoryRepository orderStatusHistoryRepository;
     OrderNotificationService orderNotificationService;
+    OutboxService outboxService;
 
 
     @Override
@@ -219,6 +224,16 @@ public class ShipmentServiceImpl implements ShipmentService {
                 recordHistory(order, oldStatus, OrderStatus.DELIVERED, "GHN_WEBHOOK", "GHN", "Status updated from GHN webhook: " + payload.getStatus());
                 log.info("[GHN Webhook] Order {} transitioned to DELIVERED", order.getId());
                 orderNotificationService.sendOrderDeliveredNotification(order);
+                outboxService.saveMessage(
+                        order.getId(),
+                        EventTypes.ORDER_DELIVERED,
+                        EventEnvelope.v1(
+                                EventTypes.ORDER_DELIVERED,
+                                order.getId(),
+                                order.getId(),
+                                new OrderDeliveredEvent(order.getId(), java.time.LocalDateTime.now())
+                        )
+                );
             } else if (newStatus == ShipmentStatus.RETURNED && order.getStatus() != OrderStatus.RETURNED && order.getStatus() != OrderStatus.CANCELLED) {
                 OrderStatus oldStatus = order.getStatus();
                 order.setStatus(OrderStatus.RETURNED);
@@ -326,4 +341,3 @@ public class ShipmentServiceImpl implements ShipmentService {
         }
     }
 }
-

@@ -31,6 +31,11 @@ public class RabbitMQConfig {
     }
 
     @Bean
+    Queue paymentOrderDeliveredQueue() {
+        return new Queue(RabbitMQNames.PAYMENT_ORDER_DELIVERED_QUEUE, true);
+    }
+
+    @Bean
     Binding inventoryProductVariantStockBinding(Queue inventoryProductVariantStockQueue,
                                                 DirectExchange fashionEventsExchange) {
         return BindingBuilder.bind(inventoryProductVariantStockQueue)
@@ -64,6 +69,16 @@ public class RabbitMQConfig {
         return BindingBuilder.bind(paymentSagaCommandQueue)
                 .to(fashionEventsExchange)
                 .with(EventTypes.PAYMENT_REFUND_REQUESTED);
+    }
+
+    @Bean
+    Binding paymentOrderDeliveredBinding(
+            Queue paymentOrderDeliveredQueue,
+            DirectExchange fashionEventsExchange
+    ) {
+        return BindingBuilder.bind(paymentOrderDeliveredQueue)
+                .to(fashionEventsExchange)
+                .with(EventTypes.ORDER_DELIVERED);
     }
 
     @Bean

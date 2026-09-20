@@ -12,6 +12,7 @@ public final class RabbitMQNames {
 
     public static final String INVENTORY_PRODUCT_VARIANT_STOCK_QUEUE = "inventory.product-variant-stock";
     public static final String PAYMENT_SAGA_COMMAND_QUEUE = "payment.saga-command-v1";
+    public static final String PAYMENT_ORDER_DELIVERED_QUEUE = "payment.order-delivered-v1";
 
     public static final String INVENTORY_STOCK_CONSUMER = "inventory-stock-consumer";
 

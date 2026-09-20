@@ -1,11 +1,17 @@
 package com.fashionstore.payment.gateway;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fashionstore.common.exception.AppException;
+import com.fashionstore.common.payment.PaymentProvider;
+import com.fashionstore.payment.common.exception.ErrorCode;
 import com.fashionstore.payment.config.payment.VnPayProperties;
 import com.fashionstore.payment.dto.PaymentCallbackResult;
 import com.fashionstore.payment.dto.PaymentInitiationResult;
+import com.fashionstore.payment.dto.PaymentRefundResult;
 import com.fashionstore.payment.entity.Payment;
-import com.fashionstore.common.payment.PaymentProvider;
+import com.fashionstore.payment.entity.PaymentRefund;
 import com.fashionstore.payment.entity.PaymentStatus;
+import feign.FeignException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -27,11 +33,12 @@ import java.util.stream.Collectors;
 
 @Component
 @RequiredArgsConstructor
-public class VnPayPaymentGateway implements CallbackPaymentGateway {
+public class VnPayPaymentGateway implements CallbackPaymentGateway, RefundablePaymentGateway {
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
     private static final ZoneId VN_TIME_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
 
     private final VnPayProperties properties;
+    private final VnPayFeignClient vnPayFeignClient;
 
     @Override
     public PaymentProvider provider() {
@@ -63,6 +70,7 @@ public class VnPayPaymentGateway implements CallbackPaymentGateway {
                 .merchantReference(payment.getMerchantReference())
                 .providerAmount(payment.getAmount())
                 .providerCurrency(properties.getCurrency())
+                .providerTransactionDate(now.format(DATE_FORMATTER))
                 .build();
     }
 
@@ -97,6 +105,68 @@ public class VnPayPaymentGateway implements CallbackPaymentGateway {
                 .failureReason(successful ? null : "VNPay response code: " + payload.get("vnp_ResponseCode"))
                 .signatureValid(signatureValid)
                 .build();
+    }
+
+    @Override
+    public PaymentRefundResult refund(Payment payment, PaymentRefund refund) {
+        if (!StringUtils.hasText(payment.getTransactionId())
+                || !StringUtils.hasText(payment.getProviderTransactionDate())) {
+            throw new AppException(ErrorCode.PAYMENT_STATUS_INVALID);
+        }
+
+        String createDate = LocalDateTime.now(VN_TIME_ZONE).format(DATE_FORMATTER);
+        String requestId = vnPayRequestId(refund.getIdempotencyKey());
+        String transactionType = refund.getAmount().compareTo(payment.getAmount()) == 0 ? "02" : "03";
+        String orderInfo = "Hoan tien don hang " + payment.getOrderId();
+        String amount = toVnPayAmount(refund.getAmount());
+        String hashData = String.join("|",
+                requestId,
+                properties.getVersion(),
+                "refund",
+                properties.getTmnCode(),
+                transactionType,
+                payment.getMerchantReference(),
+                amount,
+                payment.getTransactionId(),
+                payment.getProviderTransactionDate(),
+                properties.getCreateBy(),
+                createDate,
+                properties.getServerIp(),
+                orderInfo);
+
+        Map<String, String> request = new LinkedHashMap<>();
+        request.put("vnp_RequestId", requestId);
+        request.put("vnp_Version", properties.getVersion());
+        request.put("vnp_Command", "refund");
+        request.put("vnp_TmnCode", properties.getTmnCode());
+        request.put("vnp_TransactionType", transactionType);
+        request.put("vnp_TxnRef", payment.getMerchantReference());
+        request.put("vnp_Amount", amount);
+        request.put("vnp_TransactionNo", payment.getTransactionId());
+        request.put("vnp_TransactionDate", payment.getProviderTransactionDate());
+        request.put("vnp_CreateBy", properties.getCreateBy());
+        request.put("vnp_CreateDate", createDate);
+        request.put("vnp_IpAddr", properties.getServerIp());
+        request.put("vnp_OrderInfo", orderInfo);
+        request.put("vnp_SecureHash", hmacSha512(hashData));
+
+        try {
+            JsonNode response = vnPayFeignClient.refund(request);
+            String responseCode = response.path("vnp_ResponseCode").asText();
+            String transactionStatus = response.path("vnp_TransactionStatus").asText();
+            String providerRefundId = response.path("vnp_TransactionNo").asText(null);
+            if ("00".equals(responseCode) && "00".equals(transactionStatus)) {
+                return PaymentRefundResult.completed(providerRefundId);
+            }
+            if ("00".equals(responseCode)
+                    && ("05".equals(transactionStatus) || "06".equals(transactionStatus))) {
+                return PaymentRefundResult.pending(providerRefundId);
+            }
+            return PaymentRefundResult.failed(providerRefundId,
+                    "VNPay refund response/status: " + responseCode + "/" + transactionStatus);
+        } catch (FeignException exception) {
+            throw new AppException(ErrorCode.PAYMENT_PROVIDER_ERROR, exception);
+        }
     }
 
     private String toVnPayAmount(BigDecimal amount) {
@@ -142,5 +212,10 @@ public class VnPayPaymentGateway implements CallbackPaymentGateway {
             result.append(String.format("%02x", value));
         }
         return result.toString();
+    }
+
+    private String vnPayRequestId(String idempotencyKey) {
+        String normalized = idempotencyKey.replace("-", "");
+        return normalized.substring(0, Math.min(normalized.length(), 32));
     }
 }

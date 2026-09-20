@@ -5,7 +5,9 @@ import com.fashionstore.common.exception.AppException;
 import com.fashionstore.payment.common.exception.ErrorCode;
 import com.fashionstore.payment.dto.PaymentCallbackResult;
 import com.fashionstore.payment.dto.PaymentInitiationResult;
+import com.fashionstore.payment.dto.PaymentRefundResult;
 import com.fashionstore.payment.entity.Payment;
+import com.fashionstore.payment.entity.PaymentRefund;
 import com.fashionstore.common.payment.PaymentProvider;
 import com.fashionstore.payment.entity.PaymentStatus;
 import feign.FeignException;
@@ -23,7 +25,7 @@ import java.util.List;
 import java.util.Map;
 
 @Component
-public class PaypalPaymentGateway implements CapturablePaymentGateway {
+public class PaypalPaymentGateway implements CapturablePaymentGateway, RefundablePaymentGateway {
     private static final int PAYPAL_AMOUNT_SCALE = 2;
 
     private final PaypalFeignClient paypalFeignClient;
@@ -126,6 +128,36 @@ public class PaypalPaymentGateway implements CapturablePaymentGateway {
                 .build();
     }
 
+    @Override
+    public PaymentRefundResult refund(Payment payment, PaymentRefund refund) {
+        validateConfiguration();
+        if (!StringUtils.hasText(payment.getTransactionId())) {
+            throw new AppException(ErrorCode.PAYMENT_STATUS_INVALID);
+        }
+
+        BigDecimal providerRefundAmount = toPaypalAmount(refund.getAmount());
+        String reason = StringUtils.hasText(refund.getReason())
+                ? refund.getReason().substring(0, Math.min(refund.getReason().length(), 255))
+                : "Fashion Store order refund";
+        JsonNode response = refundCapture(
+                payment.getTransactionId(),
+                getAccessToken(),
+                refund.getIdempotencyKey(),
+                Map.of(
+                        "amount", Map.of(
+                                "currency_code", currency,
+                                "value", providerRefundAmount.toPlainString()),
+                        "note_to_payer", reason));
+
+        String refundId = requiredText(response, "id");
+        String status = requiredText(response, "status");
+        return switch (status) {
+            case "COMPLETED" -> PaymentRefundResult.completed(refundId);
+            case "PENDING" -> PaymentRefundResult.pending(refundId);
+            default -> PaymentRefundResult.failed(refundId, "PayPal refund status: " + status);
+        };
+    }
+
     private String getAccessToken() {
         MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
         form.add("grant_type", "client_credentials");
@@ -148,6 +180,14 @@ public class PaypalPaymentGateway implements CapturablePaymentGateway {
     private JsonNode captureOrder(String orderId, String accessToken, String requestId, Object body) {
         try {
             return paypalFeignClient.captureOrder(orderId, bearerAuth(accessToken), requestId, body);
+        } catch (FeignException exception) {
+            throw new AppException(ErrorCode.PAYMENT_PROVIDER_ERROR, exception);
+        }
+    }
+
+    private JsonNode refundCapture(String captureId, String accessToken, String requestId, Object body) {
+        try {
+            return paypalFeignClient.refundCapture(captureId, bearerAuth(accessToken), requestId, body);
         } catch (FeignException exception) {
             throw new AppException(ErrorCode.PAYMENT_PROVIDER_ERROR, exception);
         }

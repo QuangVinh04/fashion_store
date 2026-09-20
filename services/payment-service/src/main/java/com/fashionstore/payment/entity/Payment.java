@@ -62,6 +62,10 @@ public class Payment extends AuditedEntity {
     @Column(name = "merchant_reference", unique = true, length = 100)
     String merchantReference;
 
+    /** Provider timestamp of the original payment request, required by VNPay refunds. */
+    @Column(name = "provider_transaction_date", length = 14)
+    String providerTransactionDate;
+
     @Column(name = "failure_reason", length = 500)
     String failureReason;
 

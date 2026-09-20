@@ -43,4 +43,13 @@ public class PaymentGatewayRegistry {
         }
         return capturableGateway;
     }
+
+    /** Returns a provider gateway that supports refunds. */
+    public RefundablePaymentGateway getRefundableGateway(PaymentProvider provider) {
+        PaymentGateway gateway = get(provider);
+        if (!(gateway instanceof RefundablePaymentGateway refundableGateway)) {
+            throw new AppException(ErrorCode.PAYMENT_PROVIDER_UNSUPPORTED);
+        }
+        return refundableGateway;
+    }
 }

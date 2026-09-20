@@ -56,6 +56,7 @@ public class PaymentServiceImpl implements PaymentService {
         }
         payment.setProviderAmount(result.getProviderAmount());
         payment.setProviderCurrency(result.getProviderCurrency());
+        payment.setProviderTransactionDate(result.getProviderTransactionDate());
         paymentRepository.save(payment);
         return result;
     }

@@ -3,6 +3,8 @@ package com.fashionstore.order.service.impl;
 import com.fashionstore.common.exception.AppException;
 import com.fashionstore.common.exception.ErrorCode;
 import com.fashionstore.common.security.CurrentUserProvider;
+import com.fashionstore.contracts.common.EventEnvelope;
+import com.fashionstore.contracts.common.EventTypes;
 import com.fashionstore.order.client.CatalogClient;
 import com.fashionstore.order.client.GhnClient;
 import com.fashionstore.order.client.IdentityClient;
@@ -24,6 +26,7 @@ import com.fashionstore.order.repository.CheckoutRepository;
 import com.fashionstore.order.repository.OrderRepository;
 import com.fashionstore.order.repository.OrderStatusHistoryRepository;
 import com.fashionstore.order.repository.ShipmentRepository;
+import com.fashionstore.order.outbox.OutboxService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -78,11 +81,14 @@ class ShipmentServiceImplTest {
     @Mock
     com.fashionstore.order.service.OrderNotificationService orderNotificationService;
 
+    @Mock
+    OutboxService outboxService;
+
     ShipmentServiceImpl service;
 
     @BeforeEach
     void setUp() {
-        service = new ShipmentServiceImpl(shipmentRepository, orderRepository, checkoutRepository, identityClient, ghnClient, catalogClient, currentUserProvider, orderStatusHistoryRepository, orderNotificationService);
+        service = new ShipmentServiceImpl(shipmentRepository, orderRepository, checkoutRepository, identityClient, ghnClient, catalogClient, currentUserProvider, orderStatusHistoryRepository, orderNotificationService, outboxService);
         when(currentUserProvider.getCurrentUserId()).thenReturn("user-1");
         when(shipmentRepository.save(any(Shipment.class))).thenAnswer(i -> i.getArgument(0));
         when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
@@ -327,6 +333,11 @@ class ShipmentServiceImplTest {
         assertThat(historyCaptor.getValue().getAction()).isEqualTo("GHN_WEBHOOK");
         assertThat(historyCaptor.getValue().getChangedBy()).isEqualTo("GHN");
         verify(orderNotificationService, times(1)).sendOrderDeliveredNotification(order);
+        verify(outboxService, times(1)).saveMessage(
+                eq("order-1"),
+                eq(EventTypes.ORDER_DELIVERED),
+                any(EventEnvelope.class)
+        );
     }
 
     @Test
@@ -359,4 +370,3 @@ class ShipmentServiceImplTest {
         verify(orderRepository, never()).save(any(Order.class));
     }
 }
-
