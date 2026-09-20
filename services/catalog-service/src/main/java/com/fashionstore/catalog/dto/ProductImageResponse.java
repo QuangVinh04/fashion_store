@@ -9,6 +9,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.FieldDefaults;
 
+/** Storefront representation of a product image and its optional color scope. */
 @Getter
 @Setter
 @Builder
@@ -19,6 +20,7 @@ import lombok.experimental.FieldDefaults;
 public class ProductImageResponse {
     String id;
     String mediaId;
+    String colorOptionId;
     String color;
     String url;
     String altText;

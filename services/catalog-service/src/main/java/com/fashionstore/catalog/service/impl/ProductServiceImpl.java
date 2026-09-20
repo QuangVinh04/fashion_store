@@ -140,8 +140,8 @@ public class ProductServiceImpl implements ProductService {
         product.setBrand(validateBrand(request.getBrandId()));
         product.setSizeChartId(resolveSizeChartId(request.getSizeChartId()));
         assignCategories(product, validation.categories());
-        assignImages(product, request.getImages());
         synchronizeVariants(product, request.getVariants(), validation.variantOptions());
+        assignImages(product, request.getImages());
         assignAttributes(product, request.getAttributes(), validation.attributesById());
 
         if (validation.publishImmediately()) {
@@ -548,22 +548,33 @@ public class ProductServiceImpl implements ProductService {
             return;
         }
 
+        Map<String, ColorOption> productColorsById = product.getVariants().stream()
+                .map(ProductVariant::getColorOption)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toMap(ColorOption::getId, option -> option, (left, right) -> left));
+
         for (ProductImageItem item : images) {
             // PENDING = da cap presigned URL nhung chua upload xong, chua duoc gan vao san pham.
             if (item.getMediaId() != null
                     && !mediaFileRepository.existsByIdAndStatus(item.getMediaId(), MediaStatus.ACTIVE)) {
                 throw new AppException(ProductErrorCode.MEDIA_FILE_NOT_FOUND);
             }
+            String colorOptionId = StringUtils.cleanText(item.getColorOptionId());
+            if (colorOptionId != null && !productColorsById.containsKey(colorOptionId)) {
+                throw new AppException(ProductErrorCode.IMAGE_COLOR_INVALID);
+            }
         }
 
         product.getImages().clear();
         for (int i = 0; i < images.size(); i++) {
             ProductImageItem item = images.get(i);
+            ColorOption colorOption = productColorsById.get(StringUtils.cleanText(item.getColorOptionId()));
             product.getImages().add(ProductImage.builder()
                     .product(product)
                     .mediaId(item.getMediaId())
                     .url(item.getUrl())
-                    .color(StringUtils.cleanText(item.getColor()))
+                    .color(colorOption == null ? StringUtils.cleanText(item.getColor()) : colorOption.getName())
+                    .colorOption(colorOption)
                     .altText(StringUtils.cleanText(item.getAltText()))
                     .sortOrder(item.getSortOrder() != null ? item.getSortOrder() : i)
                     .isPrimary(Boolean.TRUE.equals(item.getIsPrimary()) || i == 0)

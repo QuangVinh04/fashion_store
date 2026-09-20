@@ -1,5 +1,6 @@
 package com.fashionstore.catalog.entity;
 
+import com.fashionstore.catalog.entity.option.ColorOption;
 import com.fashionstore.common.persistence.BaseEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -15,6 +16,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.FieldDefaults;
 
+/** Product gallery image that can be shared or associated with one canonical color option. */
 @Getter
 @Setter
 @Builder
@@ -37,6 +39,10 @@ public class ProductImage extends BaseEntity {
 
     @Column(length = 100)
     String color; // nullable — null = ảnh chung, có giá trị = ảnh riêng theo màu
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "color_option_id")
+    ColorOption colorOption;
 
     @Column(name = "alt_text", length = 255)
     String altText;

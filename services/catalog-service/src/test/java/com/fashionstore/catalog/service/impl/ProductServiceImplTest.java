@@ -612,6 +612,85 @@ class ProductServiceImplTest {
     }
 
     @Test
+    void persistsCanonicalColorOptionForProductImage() {
+        Category category = Category.builder().name("Tops").build();
+        category.setId("category-1");
+        ColorOption black = ColorOption.builder().name("Black").normalizedName("BLACK").active(true).build();
+        black.setId("color-black");
+        SizeOption medium = SizeOption.builder().name("M").normalizedName("M").active(true).build();
+        medium.setId("size-m");
+        ProductRequest request = ProductRequest.builder()
+                .name("Basic Tee")
+                .categoryIds(List.of("category-1"))
+                .basePrice(new BigDecimal("20.00"))
+                .variants(List.of(ProductVariantRequest.builder()
+                        .colorOptionId("color-black")
+                        .sizeOptionId("size-m")
+                        .active(true)
+                        .build()))
+                .images(List.of(ProductImageItem.builder()
+                        .mediaId("media-1")
+                        .url("https://cdn.example.com/black-front.jpg")
+                        .colorOptionId("color-black")
+                        .isPrimary(true)
+                        .build()))
+                .build();
+
+        when(productRepository.existsBySlug("basic-tee")).thenReturn(false);
+        when(categoryRepository.findAllById(List.of("category-1"))).thenReturn(List.of(category));
+        when(colorOptionRepository.findAllById(List.of("color-black"))).thenReturn(List.of(black));
+        when(sizeOptionRepository.findAllById(List.of("size-m"))).thenReturn(List.of(medium));
+        when(mediaFileRepository.existsByIdAndStatus("media-1", MediaStatus.ACTIVE)).thenReturn(true);
+        when(productRepository.save(any(Product.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        productService.createProduct(request);
+
+        ArgumentCaptor<Product> productCaptor = ArgumentCaptor.forClass(Product.class);
+        verify(productRepository).save(productCaptor.capture());
+        ProductImage image = productCaptor.getValue().getImages().getFirst();
+        assertThat(image.getColorOption()).isSameAs(black);
+        assertThat(image.getColor()).isEqualTo("Black");
+    }
+
+    @Test
+    void rejectsImageColorOptionNotUsedByProductVariants() {
+        Category category = Category.builder().name("Tops").build();
+        category.setId("category-1");
+        ColorOption black = ColorOption.builder().name("Black").normalizedName("BLACK").active(true).build();
+        black.setId("color-black");
+        SizeOption medium = SizeOption.builder().name("M").normalizedName("M").active(true).build();
+        medium.setId("size-m");
+        ProductRequest request = ProductRequest.builder()
+                .name("Basic Tee")
+                .categoryIds(List.of("category-1"))
+                .basePrice(new BigDecimal("20.00"))
+                .variants(List.of(ProductVariantRequest.builder()
+                        .colorOptionId("color-black")
+                        .sizeOptionId("size-m")
+                        .active(true)
+                        .build()))
+                .images(List.of(ProductImageItem.builder()
+                        .mediaId("media-1")
+                        .url("https://cdn.example.com/white-front.jpg")
+                        .colorOptionId("color-white")
+                        .build()))
+                .build();
+
+        when(productRepository.existsBySlug("basic-tee")).thenReturn(false);
+        when(categoryRepository.findAllById(List.of("category-1"))).thenReturn(List.of(category));
+        when(colorOptionRepository.findAllById(List.of("color-black"))).thenReturn(List.of(black));
+        when(sizeOptionRepository.findAllById(List.of("size-m"))).thenReturn(List.of(medium));
+        when(mediaFileRepository.existsByIdAndStatus("media-1", MediaStatus.ACTIVE)).thenReturn(true);
+
+        assertThatThrownBy(() -> productService.createProduct(request))
+                .isInstanceOfSatisfying(AppException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ProductErrorCode.IMAGE_COLOR_INVALID));
+
+        verify(productRepository, never()).save(any(Product.class));
+    }
+
+    @Test
     void rejectsABarcodeThatIsNotAGtin() {
         Category category = Category.builder().name("Tops").build();
         category.setId("category-1");

@@ -30,6 +30,7 @@ public interface ProductRepository extends JpaRepository<Product, String>, JpaSp
             "variants.colorOption",
             "variants.sizeOption",
             "images",
+            "images.colorOption",
             "attributeValues.attribute"
     })
     Optional<Product> findDetailProductById(String id);
@@ -44,6 +45,7 @@ public interface ProductRepository extends JpaRepository<Product, String>, JpaSp
             "variants.colorOption",
             "variants.sizeOption",
             "images",
+            "images.colorOption",
             "attributeValues.attribute"
     })
     Optional<Product> findBySlug(String slug);
@@ -55,6 +57,7 @@ public interface ProductRepository extends JpaRepository<Product, String>, JpaSp
             "variants.colorOption",
             "variants.sizeOption",
             "images",
+            "images.colorOption",
             "attributeValues.attribute"
     })
     Optional<Product> findBySlugAndStatus(String slug, ProductStatus status);

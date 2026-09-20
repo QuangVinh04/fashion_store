@@ -164,6 +164,7 @@ public interface ProductMapper {
                 .map(image -> ProductImageResponse.builder()
                         .id(image.getId())
                         .mediaId(image.getMediaId())
+                        .colorOptionId(image.getColorOption() == null ? null : image.getColorOption().getId())
                         .color(image.getColor())
                         .url(image.getUrl())
                         .altText(image.getAltText())
