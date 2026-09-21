@@ -11,6 +11,9 @@ import lombok.experimental.FieldDefaults;
 
 import java.math.BigDecimal;
 
+/**
+ * Exposes measurements and fit-finder ranges for one clothing size.
+ */
 @Getter
 @Setter
 @Builder
@@ -27,4 +30,8 @@ public class SizeChartRowResponse {
     BigDecimal shoulder;
     BigDecimal length;
     BigDecimal inseam;
+    BigDecimal heightMin;
+    BigDecimal heightMax;
+    BigDecimal weightMin;
+    BigDecimal weightMax;
 }

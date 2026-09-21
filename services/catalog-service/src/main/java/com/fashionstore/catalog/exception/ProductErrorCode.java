@@ -46,6 +46,7 @@ public enum ProductErrorCode implements BaseErrorCode {
     REVIEW_ACTION_FORBIDDEN(1038, "You can only modify or delete your own review", HttpStatus.FORBIDDEN),
     WISHLIST_ITEM_ALREADY_EXISTS(1039, "Product is already in wishlist", HttpStatus.CONFLICT),
     WISHLIST_ITEM_NOT_FOUND(1040, "Product is not in wishlist", HttpStatus.NOT_FOUND),
+    SIZE_CHART_RANGE_INVALID(1041, "Size chart minimum value cannot exceed maximum value", HttpStatus.BAD_REQUEST),
     ;
 
     private final int code;

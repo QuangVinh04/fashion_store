@@ -16,8 +16,12 @@ import lombok.experimental.FieldDefaults;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.util.List;
 
+/**
+ * Manages size charts and their measurement rows for storefront and backoffice use.
+ */
 @Service
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
@@ -80,8 +84,16 @@ public class SizeChartService {
         sizeChartRepository.save(sizeChart);
     }
 
+    /**
+     * Adds a measurement row after validating its optional fit-finder ranges.
+     *
+     * @param sizeChartId owning size-chart identifier
+     * @param request row measurements and fit ranges
+     * @return the persisted row
+     */
     @Transactional
     public SizeChartRowResponse addRow(String sizeChartId, SizeChartRowRequest request) {
+        validateFitRanges(request);
         SizeChart sizeChart = findDetail(sizeChartId);
         SizeChartRow row = SizeChartRow.builder()
                 .sizeChart(sizeChart)
@@ -92,12 +104,25 @@ public class SizeChartService {
                 .shoulder(request.getShoulder())
                 .length(request.getLength())
                 .inseam(request.getInseam())
+                .heightMin(request.getHeightMin())
+                .heightMax(request.getHeightMax())
+                .weightMin(request.getWeightMin())
+                .weightMax(request.getWeightMax())
                 .build();
         return toRowResponse(sizeChartRowRepository.save(row));
     }
 
+    /**
+     * Updates a measurement row after validating its optional fit-finder ranges.
+     *
+     * @param sizeChartId owning size-chart identifier
+     * @param rowId row identifier
+     * @param request replacement measurements and fit ranges
+     * @return the updated row
+     */
     @Transactional
     public SizeChartRowResponse updateRow(String sizeChartId, String rowId, SizeChartRowRequest request) {
+        validateFitRanges(request);
         SizeChartRow row = findOwnedRow(sizeChartId, rowId);
         row.setSizeCode(request.getSizeCode());
         row.setChest(request.getChest());
@@ -106,6 +131,10 @@ public class SizeChartService {
         row.setShoulder(request.getShoulder());
         row.setLength(request.getLength());
         row.setInseam(request.getInseam());
+        row.setHeightMin(request.getHeightMin());
+        row.setHeightMax(request.getHeightMax());
+        row.setWeightMin(request.getWeightMin());
+        row.setWeightMax(request.getWeightMax());
         return toRowResponse(sizeChartRowRepository.save(row));
     }
 
@@ -154,6 +183,21 @@ public class SizeChartService {
                 .shoulder(row.getShoulder())
                 .length(row.getLength())
                 .inseam(row.getInseam())
+                .heightMin(row.getHeightMin())
+                .heightMax(row.getHeightMax())
+                .weightMin(row.getWeightMin())
+                .weightMax(row.getWeightMax())
                 .build();
+    }
+
+    private void validateFitRanges(SizeChartRowRequest request) {
+        validateRange(request.getHeightMin(), request.getHeightMax());
+        validateRange(request.getWeightMin(), request.getWeightMax());
+    }
+
+    private void validateRange(BigDecimal minimum, BigDecimal maximum) {
+        if (minimum != null && maximum != null && minimum.compareTo(maximum) > 0) {
+            throw new AppException(ProductErrorCode.SIZE_CHART_RANGE_INVALID);
+        }
     }
 }

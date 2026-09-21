@@ -17,6 +17,9 @@ import lombok.experimental.FieldDefaults;
 
 import java.math.BigDecimal;
 
+/**
+ * Stores body measurements and optional fit-finder ranges for one size code.
+ */
 @Getter
 @Setter
 @Builder
@@ -51,4 +54,16 @@ public class SizeChartRow extends BaseEntity {
 
     @Column(precision = 10, scale = 2)
     BigDecimal inseam;
+
+    @Column(name = "height_min", precision = 10, scale = 2)
+    BigDecimal heightMin;
+
+    @Column(name = "height_max", precision = 10, scale = 2)
+    BigDecimal heightMax;
+
+    @Column(name = "weight_min", precision = 10, scale = 2)
+    BigDecimal weightMin;
+
+    @Column(name = "weight_max", precision = 10, scale = 2)
+    BigDecimal weightMax;
 }
