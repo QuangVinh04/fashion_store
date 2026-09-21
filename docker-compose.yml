@@ -31,6 +31,7 @@ services:
       - catalog-service
       - order-service
       - payment-service
+      - redis
     ports:
       - "8080:8080"
     networks:
@@ -44,6 +45,7 @@ services:
       <<: *service-environment
       SERVER_PORT: 8082
       IDENTITY_POSTGRES_HOST: identity-postgres
+      IDENTITY_POSTGRES_PORT: 5432
       IDENTITY_POSTGRES_DB: identity_database
       IDENTITY_POSTGRES_USER: root
       IDENTITY_POSTGRES_PASSWORD: root
@@ -71,6 +73,7 @@ services:
       <<: *service-environment
       SERVER_PORT: 8090
       NOTIFICATION_POSTGRES_HOST: notification-postgres
+      NOTIFICATION_POSTGRES_PORT: 5432
       NOTIFICATION_POSTGRES_DB: notification_database
       NOTIFICATION_POSTGRES_USER: root
       NOTIFICATION_POSTGRES_PASSWORD: root
@@ -98,6 +101,7 @@ services:
       SERVER_PORT: 8087
       ORDER_BASE_URL: http://order-service:8089
       CATALOG_POSTGRES_HOST: catalog-postgres
+      CATALOG_POSTGRES_PORT: 5432
       CATALOG_POSTGRES_DB: catalog_database
       CATALOG_POSTGRES_USER: root
       CATALOG_POSTGRES_PASSWORD: root
@@ -129,6 +133,7 @@ services:
       <<: *service-environment
       SERVER_PORT: 8089
       ORDER_POSTGRES_HOST: order-postgres
+      ORDER_POSTGRES_PORT: 5432
       ORDER_POSTGRES_DB: order_database
       ORDER_POSTGRES_USER: root
       ORDER_POSTGRES_PASSWORD: root
@@ -153,12 +158,13 @@ services:
       <<: *service-environment
       SERVER_PORT: 8085
       PAYMENT_POSTGRES_HOST: payment-postgres
+      PAYMENT_POSTGRES_PORT: 5432
       PAYMENT_POSTGRES_DB: payment_database
       PAYMENT_POSTGRES_USER: root
       PAYMENT_POSTGRES_PASSWORD: root
       VNPAY_RETURN_URL: ${VNPAY_RETURN_URL:-http://localhost:8080/api/v1/payments/vnpay/return}
-      VNPAY_TMN_CODE: ${VNPAY_TMN_CODE:-}
-      VNPAY_HASH_SECRET: ${VNPAY_HASH_SECRET:-}
+      VNPAY_TMN_CODE: ${VNPAY_TMN_CODE:-DEMOTMN0}
+      VNPAY_HASH_SECRET: ${VNPAY_HASH_SECRET:-DEMOHASHSECRETKEY1234567890123}
       PAYPAL_CLIENT_ID: ${PAYPAL_CLIENT_ID:-}
       PAYPAL_CLIENT_SECRET: ${PAYPAL_CLIENT_SECRET:-}
     depends_on:
@@ -187,7 +193,7 @@ services:
       - fashion-network
 
   minio:
-    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    image: quay.io/minio/minio:latest
     container_name: fashion_minio
     command: server /data --console-address ":9001"
     environment:

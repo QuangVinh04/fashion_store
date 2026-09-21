@@ -4,6 +4,7 @@ import com.fashionstore.catalog.dto.ProductAttributeValueRequest;
 import com.fashionstore.catalog.dto.ProductImageItem;
 import com.fashionstore.catalog.dto.ProductRequest;
 import com.fashionstore.catalog.dto.ProductUpdateRequest;
+import com.fashionstore.catalog.dto.ProductVariantBatchRequest;
 import com.fashionstore.catalog.dto.ProductVariantRequest;
 import com.fashionstore.catalog.dto.ProductVariantSnapshotResponse;
 import com.fashionstore.catalog.exception.ProductErrorCode;
@@ -59,6 +60,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -138,12 +140,12 @@ class ProductServiceImplTest {
 
     @Test
     void createsProductWithVariantsInSingleRequest() {
+        ColorOption black = color("color-black", "Black", "#111111");
+        SizeOption medium = size("size-m", "M");
         Brand brand = Brand.builder().name("Brand").build();
         brand.setId("brand-1");
         Category category = Category.builder().name("Tops").build();
         category.setId("category-1");
-        ColorOption black = color("color-black", "Black", "#111111");
-        SizeOption medium = size("size-m", "M");
 
         ProductRequest request = ProductRequest.builder()
                 .name("Basic Tee")
@@ -186,6 +188,64 @@ class ProductServiceImplTest {
         assertThat(savedProduct.getVariants()).hasSize(1);
         assertThat(savedProduct.getVariants().get(0).getOptionSignature())
                 .isEqualTo("COLOR:color-black|SIZE:size-m");
+    }
+
+    @Test
+    void rejectsDuplicateColorAndSizeCombinationWhenCreatingProduct() {
+        Category category = Category.builder().name("Tops").build();
+        category.setId("category-1");
+        ProductRequest request = ProductRequest.builder()
+                .name("Basic Tee")
+                .categoryIds(List.of("category-1"))
+                .basePrice(new BigDecimal("20.00"))
+                .variants(List.of(
+                        ProductVariantRequest.builder()
+                                .colorOptionId("color-black")
+                                .sizeOptionId("size-m")
+                                .sku("TEE-BLK-M-1")
+                                .build(),
+                        ProductVariantRequest.builder()
+                                .colorOptionId(" color-black ")
+                                .sizeOptionId(" size-m ")
+                                .sku("TEE-BLK-M-2")
+                                .build()))
+                .build();
+        when(productRepository.existsBySlug("basic-tee")).thenReturn(false);
+        when(categoryRepository.findAllById(List.of("category-1"))).thenReturn(List.of(category));
+
+        assertThatThrownBy(() -> productService.createProduct(request))
+                .isInstanceOfSatisfying(AppException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ProductErrorCode.DUPLICATE_VARIANT_COMBINATION));
+
+        verify(productRepository, never()).save(any(Product.class));
+        verifyNoInteractions(colorOptionRepository, sizeOptionRepository, productVariantRepository);
+    }
+
+    @Test
+    void rejectsVariantSalePriceAboveInheritedProductPrice() {
+        Category category = Category.builder().name("Tops").build();
+        category.setId("category-1");
+        ProductRequest request = ProductRequest.builder()
+                .name("Basic Tee")
+                .categoryIds(List.of("category-1"))
+                .basePrice(new BigDecimal("20.00"))
+                .variants(List.of(ProductVariantRequest.builder()
+                        .colorOptionId("color-black")
+                        .sizeOptionId("size-m")
+                        .salePrice(new BigDecimal("21.00"))
+                        .build()))
+                .build();
+        when(productRepository.existsBySlug("basic-tee")).thenReturn(false);
+        when(categoryRepository.findAllById(List.of("category-1"))).thenReturn(List.of(category));
+
+        assertThatThrownBy(() -> productService.createProduct(request))
+                .isInstanceOfSatisfying(AppException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ProductErrorCode.INVALID_PRICE));
+
+        verify(productRepository, never()).save(any(Product.class));
+        verifyNoInteractions(colorOptionRepository, sizeOptionRepository, productVariantRepository);
     }
 
     @Test
@@ -309,6 +369,37 @@ class ProductServiceImplTest {
         assertThat(product.getLengthMm()).isEqualTo(330);
         assertThat(product.getWidthMm()).isEqualTo(250);
         assertThat(product.getHeightMm()).isEqualTo(70);
+    }
+
+    @Test
+    void rejectsDuplicateColorAndSizeCombinationWhenUpdatingVariantBatch() {
+        Product product = Product.builder()
+                .name("Basic Tee")
+                .slug("basic-tee")
+                .basePrice(new BigDecimal("20.00"))
+                .variants(new ArrayList<>())
+                .build();
+        product.setId("product-1");
+        ProductVariantBatchRequest request = ProductVariantBatchRequest.builder()
+                .variants(List.of(
+                        ProductVariantRequest.builder()
+                                .colorOptionId("color-black")
+                                .sizeOptionId("size-m")
+                                .build(),
+                        ProductVariantRequest.builder()
+                                .colorOptionId("color-black")
+                                .sizeOptionId("size-m")
+                                .build()))
+                .build();
+        when(productRepository.findDetailProductById("product-1")).thenReturn(Optional.of(product));
+
+        assertThatThrownBy(() -> productService.updateProductVariants("product-1", request))
+                .isInstanceOfSatisfying(AppException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ProductErrorCode.DUPLICATE_VARIANT_COMBINATION));
+
+        verify(productRepository, never()).save(any(Product.class));
+        verifyNoInteractions(colorOptionRepository, sizeOptionRepository, productVariantRepository);
     }
 
     @Test
@@ -555,8 +646,6 @@ class ProductServiceImplTest {
     void rejectsTwoVariantsSharingTheSameColorAndSizeInOneRequest() {
         Category category = Category.builder().name("Tops").build();
         category.setId("category-1");
-        ColorOption black = color("color-black", "Black", "#111111");
-        SizeOption medium = size("size-m", "M");
 
         ProductRequest request = ProductRequest.builder()
                 .name("Basic Tee")
@@ -577,15 +666,12 @@ class ProductServiceImplTest {
 
         when(productRepository.existsBySlug("basic-tee")).thenReturn(false);
         when(categoryRepository.findAllById(List.of("category-1"))).thenReturn(List.of(category));
-        when(colorOptionRepository.findAllById(List.of("color-black"))).thenReturn(List.of(black));
-        when(sizeOptionRepository.findAllById(List.of("size-m"))).thenReturn(List.of(medium));
-        when(productVariantRepository.findBySku(any())).thenReturn(Optional.empty());
 
-        // uk_product_variant_product_signature would reject this at flush time with a 500.
+        // Reject before querying options or relying on the database unique constraint at flush time.
         assertThatThrownBy(() -> productService.createProduct(request))
                 .isInstanceOfSatisfying(AppException.class,
                         exception -> assertThat(exception.getErrorCode())
-                                .isEqualTo(ProductErrorCode.PRODUCT_VARIANT_ALREADY_EXIST));
+                                .isEqualTo(ProductErrorCode.DUPLICATE_VARIANT_COMBINATION));
 
         verify(productRepository, never()).save(any(Product.class));
     }

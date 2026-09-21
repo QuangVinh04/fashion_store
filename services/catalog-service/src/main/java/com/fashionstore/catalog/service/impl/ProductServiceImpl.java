@@ -175,6 +175,7 @@ public class ProductServiceImpl implements ProductService {
         List<ProductVariantRequest> variants =
                 request.getVariants() == null ? List.of() : request.getVariants();
         validateVariantRequestDuplicates(variants);
+        validateVariantPrices(variants, basePrice);
         VariantOptionsValidation variantOptions = validateVariantOptions(variants, null);
 
         // validate attribute
@@ -243,6 +244,9 @@ public class ProductServiceImpl implements ProductService {
 
         BigDecimal basePrice = request.getBasePrice() != null ? request.getBasePrice() : request.getPrice();
         validatePrices(basePrice, request.getSalePrice());
+        if (request.getVariants() != null) {
+            validateVariantPrices(request.getVariants(), basePrice);
+        }
 
         product.setName(request.getName());
         product.setSlug(slug);
@@ -542,9 +546,15 @@ public class ProductServiceImpl implements ProductService {
         }
     }
 
+    /**
+     * Rejects duplicate SKU values and duplicate color-size combinations in one request.
+     *
+     * @param requests variant requests to validate
+     */
     private void validateVariantRequestDuplicates(List<ProductVariantRequest> requests) {
         Set<String> skus = new HashSet<>();
-        for (ProductVariantRequest request : requests) {
+        Set<String> optionCombinations = new HashSet<>();
+        for (ProductVariantRequest request : requests == null ? List.<ProductVariantRequest>of() : requests) {
             if (request == null
                     || StringUtils.cleanText(request.getColorOptionId()) == null
                     || StringUtils.cleanText(request.getSizeOptionId()) == null) {
@@ -555,6 +565,28 @@ public class ProductServiceImpl implements ProductService {
             if (sku != null && !skus.add(sku)) {
                 throw new AppException(ProductErrorCode.SKU_ALREADY_EXISTED_OR_DUPLICATED);
             }
+
+            String optionCombination = StringUtils.cleanText(request.getColorOptionId())
+                    + "\u0000" + StringUtils.cleanText(request.getSizeOptionId());
+            if (!optionCombinations.add(optionCombination)) {
+                throw new AppException(ProductErrorCode.DUPLICATE_VARIANT_COMBINATION);
+            }
+        }
+    }
+
+    /**
+     * Validates a variant's sale price against its explicit or inherited effective price.
+     *
+     * @param requests variant requests to validate
+     * @param productBasePrice price inherited when a variant has no explicit price
+     */
+    private void validateVariantPrices(List<ProductVariantRequest> requests, BigDecimal productBasePrice) {
+        for (ProductVariantRequest request : requests == null ? List.<ProductVariantRequest>of() : requests) {
+            BigDecimal effectivePrice = request.getPrice() == null ? productBasePrice : request.getPrice();
+            if (request.getSalePrice() != null && effectivePrice == null) {
+                throw new AppException(ProductErrorCode.INVALID_PRICE);
+            }
+            validatePrices(effectivePrice, request.getSalePrice());
         }
     }
 
@@ -598,6 +630,8 @@ public class ProductServiceImpl implements ProductService {
     }
 
     private void synchronizeVariants(Product product, List<ProductVariantRequest> variantRequests) {
+        validateVariantRequestDuplicates(variantRequests);
+        validateVariantPrices(variantRequests, product.getBasePrice());
         synchronizeVariants(product, variantRequests, validateVariantOptions(variantRequests, product));
     }
 
@@ -642,7 +676,6 @@ public class ProductServiceImpl implements ProductService {
                     throw new AppException(ProductErrorCode.BARCODE_ALREADY_EXISTED_OR_DUPLICATED);
                 }
             }
-            validatePrices(request.getPrice(), request.getSalePrice());
             // validate mediaId if provided
             String mediaId = StringUtils.cleanText(request.getThumbnailMediaId());
             if (mediaId == null) {

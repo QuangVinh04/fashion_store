@@ -16,7 +16,7 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 public class CommonSecurityAutoConfiguration {
 
     @Bean
-    @ConditionalOnMissingBean
+    @ConditionalOnMissingBean(name = "currentUserProvider")
     CurrentUserProvider currentUserProvider() {
         return new CurrentUserProvider();
     }

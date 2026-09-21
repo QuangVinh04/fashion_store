@@ -47,6 +47,7 @@ public enum ProductErrorCode implements BaseErrorCode {
     WISHLIST_ITEM_ALREADY_EXISTS(1039, "Product is already in wishlist", HttpStatus.CONFLICT),
     WISHLIST_ITEM_NOT_FOUND(1040, "Product is not in wishlist", HttpStatus.NOT_FOUND),
     SIZE_CHART_RANGE_INVALID(1041, "Size chart minimum value cannot exceed maximum value", HttpStatus.BAD_REQUEST),
+    DUPLICATE_VARIANT_COMBINATION(1042, "Duplicate variant combination", HttpStatus.BAD_REQUEST),
     ;
 
     private final int code;

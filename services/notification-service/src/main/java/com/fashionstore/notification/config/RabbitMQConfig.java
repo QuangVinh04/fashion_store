@@ -1,6 +1,7 @@
 package com.fashionstore.notification.config;
 
 import com.fashionstore.contracts.common.EventTypes;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.amqp.core.Binding;
 import org.springframework.amqp.core.BindingBuilder;
 import org.springframework.amqp.core.DirectExchange;
@@ -11,6 +12,13 @@ import org.springframework.context.annotation.Configuration;
 
 @Configuration
 public class RabbitMQConfig {
+
+    @Bean
+    public ObjectMapper objectMapper() {
+        ObjectMapper mapper = new ObjectMapper();
+        mapper.findAndRegisterModules();
+        return mapper;
+    }
 
     public static final String EXCHANGE = "fashion.events";
     public static final String DEAD_LETTER_EXCHANGE = "fashion.events.dlx";
