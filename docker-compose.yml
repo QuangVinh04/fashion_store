@@ -14,8 +14,8 @@ x-service-environment: &service-environment
 services:
   api-gateway:
     build:
-      context: .
-      dockerfile: platform/gateway/Dockerfile
+      context: platform/gateway
+      dockerfile: Dockerfile
     environment:
       SERVER_PORT: 8080
       JWT_ISSUER: http://localhost:8080
@@ -39,8 +39,8 @@ services:
 
   identity-service:
     build:
-      context: .
-      dockerfile: services/identity-service/Dockerfile
+      context: services/identity-service
+      dockerfile: Dockerfile
     environment:
       <<: *service-environment
       SERVER_PORT: 8082
@@ -53,6 +53,7 @@ services:
       JWT_PUBLIC_KEY_FILE: /var/lib/identity/identity-public.pem
       JWT_LEGACY_JWK_FILE: /var/lib/identity/identity-rsa.jwk
       ORDER_BASE_URL: http://order-service:8089
+      SPRING_MAIN_ALLOW_BEAN_DEFINITION_OVERRIDING: "true"
     depends_on:
       identity-postgres:
         condition: service_healthy
@@ -67,8 +68,8 @@ services:
 
   notification-service:
     build:
-      context: .
-      dockerfile: services/notification-service/Dockerfile
+      context: services/notification-service
+      dockerfile: Dockerfile
     environment:
       <<: *service-environment
       SERVER_PORT: 8090
@@ -94,8 +95,8 @@ services:
 
   catalog-service:
     build:
-      context: .
-      dockerfile: services/catalog-service/Dockerfile
+      context: services/catalog-service
+      dockerfile: Dockerfile
     environment:
       <<: *service-environment
       SERVER_PORT: 8087
@@ -127,8 +128,8 @@ services:
 
   order-service:
     build:
-      context: .
-      dockerfile: services/order-service/Dockerfile
+      context: services/order-service
+      dockerfile: Dockerfile
     environment:
       <<: *service-environment
       SERVER_PORT: 8089
@@ -152,8 +153,8 @@ services:
 
   payment-service:
     build:
-      context: .
-      dockerfile: services/payment-service/Dockerfile
+      context: services/payment-service
+      dockerfile: Dockerfile
     environment:
       <<: *service-environment
       SERVER_PORT: 8085

@@ -2,7 +2,8 @@
 .idea
 .vscode
 .codex
-**/target
+**/target/*
+!**/target/*.jar
 **/.classpath
 **/.project
 **/.settings

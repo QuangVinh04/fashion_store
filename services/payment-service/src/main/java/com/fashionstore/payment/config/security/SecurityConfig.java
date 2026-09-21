@@ -1,7 +1,9 @@
 package com.fashionstore.payment.config.security;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fashionstore.common.security.ApiAccessDeniedHandler;
 import com.fashionstore.common.security.ApiAuthenticationEntryPoint;
+import com.fashionstore.common.security.CurrentUserProvider;
 import com.fashionstore.common.security.GatewayHeaderAuthenticationFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -12,6 +14,21 @@ import org.springframework.security.web.SecurityFilterChain;
 @Configuration
 @EnableMethodSecurity
 public class SecurityConfig {
+
+    @Bean
+    public CurrentUserProvider currentUserProvider() {
+        return new CurrentUserProvider();
+    }
+
+    @Bean
+    public ApiAuthenticationEntryPoint apiAuthenticationEntryPoint(ObjectMapper objectMapper) {
+        return new ApiAuthenticationEntryPoint(objectMapper);
+    }
+
+    @Bean
+    public ApiAccessDeniedHandler apiAccessDeniedHandler(ObjectMapper objectMapper) {
+        return new ApiAccessDeniedHandler(objectMapper);
+    }
 
     @Bean
     SecurityFilterChain securityFilterChain(

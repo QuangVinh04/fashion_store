@@ -1,0 +1,2 @@
+﻿ALTER TABLE product ADD COLUMN IF NOT EXISTS thumbnail_url VARCHAR(1000);
+ALTER TABLE outbox_event ADD COLUMN IF NOT EXISTS aggregate_id VARCHAR(255);
