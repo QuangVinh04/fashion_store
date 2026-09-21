@@ -107,12 +107,22 @@ public class ProductController {
                 .build();
     }
 
+    /**
+     * Returns the assigned size chart, or a successful response without data when the product has none.
+     *
+     * @param id product identifier
+     * @return API response containing the optional size chart
+     */
     @GetMapping({"/api/v1/products/{id}/size-chart", "/api/v1/product/{id}/size-chart"})
     public ApiResponse<SizeChartResponse> getSizeChart(@PathVariable String id) {
         ProductResponse product = productService.getProductById(id);
+        String sizeChartId = product.getSizeChartId();
+        SizeChartResponse sizeChart = sizeChartId == null || sizeChartId.isBlank()
+                ? null
+                : sizeChartService.getById(sizeChartId);
         return ApiResponse.<SizeChartResponse>builder()
                 .message("Get product size chart successfully")
-                .data(sizeChartService.getById(product.getSizeChartId()))
+                .data(sizeChart)
                 .build();
     }
 
