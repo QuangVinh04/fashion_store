@@ -3,6 +3,7 @@ package com.fashionstore.identity.config.security;
 import com.fashionstore.common.redis.RedisService;
 import com.fashionstore.common.security.JwtBlacklistValidator;
 import com.fashionstore.common.security.GatewayHeaderAuthenticationFilter;
+import com.fashionstore.common.security.InternalTokenAuthFilter;
 import com.fashionstore.identity.service.CustomUserDetailsService;
 import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.jwk.JWKSet;

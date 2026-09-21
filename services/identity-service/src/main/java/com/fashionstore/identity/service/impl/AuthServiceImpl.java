@@ -2,7 +2,7 @@ package com.fashionstore.identity.service.impl;
 
 import com.fashionstore.common.exception.AppException;
 import com.fashionstore.common.redis.RedisService;
-import com.fashionstore.identity.config.ErrorCode;
+import com.fashionstore.identity.exception.IdentityErrorCode;
 import com.fashionstore.common.util.VerificationCodeGenerator;
 import com.fashionstore.identity.constant.PredefinedRole;
 import com.fashionstore.identity.dto.auth.*;
@@ -82,11 +82,11 @@ public class AuthServiceImpl implements AuthService {
     public void register(RegisterRequest request) {
         // Kiểm tra email đã tồn tại chưa
         if (userRepository.existsByEmail(request.email())) {
-            throw new AppException(ErrorCode.EMAIL_ALREADY_EXISTS);
+            throw new AppException(IdentityErrorCode.EMAIL_ALREADY_EXISTS);
         }
         // Lấy role USER mặc định
         Role userRole = roleRepository.findByName(PredefinedRole.USER_ROLE)
-                .orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_FOUND));
+                .orElseThrow(() -> new AppException(IdentityErrorCode.ROLE_NOT_FOUND));
         // Tạo user mới
         User user = User.builder()
                 .email(request.email())
@@ -118,12 +118,12 @@ public class AuthServiceImpl implements AuthService {
         if (attempts >= MAX_ATTEMPTS) {
             // Xóa luôn OTP để ép người dùng phải gửi lại mã mới
             redisService.deleteValue(otpKey);
-            throw new AppException(ErrorCode.OTP_MAX_ATTEMPTS_EXCEEDED);
+            throw new AppException(IdentityErrorCode.OTP_MAX_ATTEMPTS_EXCEEDED);
         }
         // 2. Lấy OTP đang lưu trong Redis
         String cachedOtp = redisService.getValue(otpKey, String.class);
         if (cachedOtp == null) {
-            throw new AppException(ErrorCode.OTP_INVALID_OR_EXPIRED);
+            throw new AppException(IdentityErrorCode.OTP_INVALID_OR_EXPIRED);
         }
         // 3. So sánh OTP
         if (!cachedOtp.equals(inputOtp)) {
@@ -133,13 +133,13 @@ public class AuthServiceImpl implements AuthService {
             }
             if (currentAttempts != null && currentAttempts >= MAX_ATTEMPTS) {
                 redisService.deleteValue(otpKey);
-                throw new AppException(ErrorCode.OTP_MAX_ATTEMPTS_EXCEEDED);
+                throw new AppException(IdentityErrorCode.OTP_MAX_ATTEMPTS_EXCEEDED);
             }
-            throw new AppException(ErrorCode.OTP_INVALID_OR_EXPIRED);
+            throw new AppException(IdentityErrorCode.OTP_INVALID_OR_EXPIRED);
         }
         // 4. Xác minh thành công -> Kích hoạt tài khoản
         User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+                .orElseThrow(() -> new AppException(IdentityErrorCode.USER_NOT_FOUND));
         user.setIsEmailVerified(true);
         userRepository.save(user);
 
@@ -153,17 +153,17 @@ public class AuthServiceImpl implements AuthService {
     public void resendVerification(String email) {
         // 1. Tìm user
         User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+                .orElseThrow(() -> new AppException(IdentityErrorCode.USER_NOT_FOUND));
 
         // 2. Kiểm tra trạng thái verified
         if (Boolean.TRUE.equals(user.getIsEmailVerified())) {
-            throw new AppException(ErrorCode.EMAIL_ALREADY_VERIFIED);
+            throw new AppException(IdentityErrorCode.EMAIL_ALREADY_VERIFIED);
         }
 
         // Kiểm tra Cooldown 60s
         String cooldownKey = COOLDOWN_KEY_PREFIX + email;
         if (redisService.existsValue(cooldownKey)) {
-            throw new AppException(ErrorCode.RESEND_COOLDOWN_ACTIVE);
+            throw new AppException(IdentityErrorCode.RESEND_COOLDOWN_ACTIVE);
         }
 
         redisService.deleteValue(ATTEMPTS_KEY_PREFIX + email);
@@ -183,7 +183,7 @@ public class AuthServiceImpl implements AuthService {
                 + sha256Hex(clientIp + "|" + request.getEmail().toLowerCase());
         Object attemptsValue = redisService.getValue(loginKey);
         if (attemptsValue != null && Long.parseLong(attemptsValue.toString()) >= MAX_LOGIN_ATTEMPTS) {
-            throw new AppException(ErrorCode.LOGIN_RATE_LIMITED);
+            throw new AppException(IdentityErrorCode.LOGIN_RATE_LIMITED);
         }
 
         // Spring Security tự: load user từ DB + so sánh password
@@ -198,9 +198,9 @@ public class AuthServiceImpl implements AuthService {
             }
             log.warn("Login failed for email {} from {}", request.getEmail(), clientIp);
             if (attempts != null && attempts >= MAX_LOGIN_ATTEMPTS) {
-                throw new AppException(ErrorCode.LOGIN_RATE_LIMITED);
+                throw new AppException(IdentityErrorCode.LOGIN_RATE_LIMITED);
             }
-            throw new AppException(ErrorCode.INVALID_CREDENTIALS);
+            throw new AppException(IdentityErrorCode.INVALID_CREDENTIALS);
         }
         redisService.deleteValue(loginKey);
 
@@ -209,7 +209,7 @@ public class AuthServiceImpl implements AuthService {
         User user = userDetails.getUser();
 
         if(!Boolean.TRUE.equals(user.getIsEmailVerified())) {
-            throw new AppException(ErrorCode.EMAIL_NOT_VERIFIED);
+            throw new AppException(IdentityErrorCode.EMAIL_NOT_VERIFIED);
         }
 
         // 1. Sinh Access Token và Refresh Token qua JwtService
@@ -229,17 +229,17 @@ public class AuthServiceImpl implements AuthService {
     @Transactional(readOnly = true)
     public AuthResult refresh(String oldRefreshToken) {
         if (oldRefreshToken == null || oldRefreshToken.isBlank()) {
-            throw new AppException(ErrorCode.REFRESH_TOKEN_INVALID);
+            throw new AppException(IdentityErrorCode.REFRESH_TOKEN_INVALID);
         }
         // 1. Xác minh chữ ký + claims trước khi tin tưởng token (JwtDecoder dùng public key local)
         Jwt decoded;
         try {
             decoded = jwtDecoder.decode(oldRefreshToken);
         } catch (JwtException e) {
-            throw new AppException(ErrorCode.REFRESH_TOKEN_INVALID);
+            throw new AppException(IdentityErrorCode.REFRESH_TOKEN_INVALID);
         }
         if (!"REFRESH_TOKEN".equals(decoded.getClaimAsString("token_type")) || decoded.getSubject() == null) {
-            throw new AppException(ErrorCode.REFRESH_TOKEN_INVALID);
+            throw new AppException(IdentityErrorCode.REFRESH_TOKEN_INVALID);
         }
         String subject = decoded.getSubject();
         String refreshHash = sha256Hex(oldRefreshToken);
@@ -256,17 +256,17 @@ public class AuthServiceImpl implements AuthService {
                 redisService.deleteValue(USER_REFRESH_KEY_PREFIX + subject);
                 log.warn("Refresh token reuse detected, session revoked for user {}", subject);
             }
-            throw new AppException(ErrorCode.REFRESH_TOKEN_INVALID);
+            throw new AppException(IdentityErrorCode.REFRESH_TOKEN_INVALID);
         }
         if (!subject.equals(userId)) {
-            throw new AppException(ErrorCode.REFRESH_TOKEN_INVALID);
+            throw new AppException(IdentityErrorCode.REFRESH_TOKEN_INVALID);
         }
 
         // 3. Tìm User
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+                .orElseThrow(() -> new AppException(IdentityErrorCode.USER_NOT_FOUND));
         if (!Boolean.TRUE.equals(user.getIsActive())) {
-            throw new AppException(ErrorCode.ACCOUNT_DISABLED);
+            throw new AppException(IdentityErrorCode.ACCOUNT_DISABLED);
         }
 
         // 4. REFRESH TOKEN ROTATION: Xóa token cũ ngay lập tức

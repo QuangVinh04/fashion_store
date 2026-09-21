@@ -1,7 +1,7 @@
 package com.fashionstore.payment.service.impl;
 
 import com.fashionstore.common.exception.AppException;
-import com.fashionstore.payment.common.exception.ErrorCode;
+import com.fashionstore.payment.exception.PaymentErrorCode;
 import com.fashionstore.common.security.CurrentUserProvider;
 import com.fashionstore.payment.dto.PaymentCallbackResult;
 import com.fashionstore.payment.dto.PaymentResponse;
@@ -32,10 +32,10 @@ public class PaypalPaymentServiceImpl implements PaypalPaymentService {
     @Transactional
     public PaymentResponse capture(String paymentId) {
         Payment payment = paymentRepository.findByIdForUpdate(paymentId)
-                .orElseThrow(() -> new AppException(ErrorCode.PAYMENT_NOT_FOUND));
+                .orElseThrow(() -> new AppException(PaymentErrorCode.PAYMENT_NOT_FOUND));
         assertPaymentOwner(payment);
         if (payment.getProvider() != PaymentProvider.PAYPAL || payment.getStatus() != PaymentStatus.PENDING) {
-            throw new AppException(ErrorCode.PAYMENT_STATUS_INVALID);
+            throw new AppException(PaymentErrorCode.PAYMENT_STATUS_INVALID);
         }
 
         PaymentCallbackResult result = paymentGatewayRegistry
@@ -46,7 +46,7 @@ public class PaypalPaymentServiceImpl implements PaypalPaymentService {
 
     private void assertPaymentOwner(Payment payment) {
         if (!payment.getUserId().equals(currentUserProvider.getCurrentUserId())) {
-            throw new AppException(ErrorCode.PAYMENT_NOT_FOUND);
+            throw new AppException(PaymentErrorCode.PAYMENT_NOT_FOUND);
         }
     }
 }

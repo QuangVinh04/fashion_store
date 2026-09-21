@@ -1,4 +1,4 @@
-package com.fashionstore.identity.config.security;
+package com.fashionstore.common.security;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.FilterChain;
@@ -25,7 +25,7 @@ public class InternalTokenAuthFilter extends OncePerRequestFilter {
     }
 
     @Override
-    protected void doFilterInternal(
+    public void doFilterInternal(
             HttpServletRequest request,
             HttpServletResponse response,
             FilterChain filterChain

@@ -1,8 +1,9 @@
-package com.fashionstore.catalog.config;
+package com.fashionstore.catalog.config.security;
 
 import com.fashionstore.common.security.ApiAccessDeniedHandler;
 import com.fashionstore.common.security.ApiAuthenticationEntryPoint;
 import com.fashionstore.common.security.GatewayHeaderAuthenticationFilter;
+import com.fashionstore.common.security.InternalTokenAuthFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -60,12 +61,14 @@ public class SecurityConfig {
                                 "/api/v1/categories/**",
                                 "/api/v1/category/**",
                                 "/api/v1/brands/**",
+                                "/api/v1/product-attributes/**",
                                 "/api/v1/color-options/**",
                                 "/api/v1/size-options/**",
-                                "/api/v1/size-charts/**").permitAll()
+                                "/api/v1/size-charts/**",
+                                "/api/v1/products/*/reviews"
+                        ).permitAll()
 
-                        // 5. Domain Review & Wishlist: Khách đăng nhập đánh giá sản phẩm và quản lý wishlist
-                        .requestMatchers(HttpMethod.GET, "/api/v1/wishlist/check/**").permitAll()
+                        // 5. Wishlist & Review tương tác: Yêu cầu đăng nhập
                         .requestMatchers("/api/v1/wishlist/**").authenticated()
                         .requestMatchers(HttpMethod.POST, "/api/v1/products/*/reviews").authenticated()
                         .requestMatchers(HttpMethod.DELETE, "/api/v1/products/*/reviews/*").authenticated()

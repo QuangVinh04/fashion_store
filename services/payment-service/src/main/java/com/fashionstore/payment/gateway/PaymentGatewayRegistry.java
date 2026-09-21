@@ -1,7 +1,7 @@
 package com.fashionstore.payment.gateway;
 
 import com.fashionstore.common.exception.AppException;
-import com.fashionstore.payment.common.exception.ErrorCode;
+import com.fashionstore.payment.exception.PaymentErrorCode;
 import com.fashionstore.common.payment.PaymentProvider;
 import org.springframework.stereotype.Component;
 
@@ -23,7 +23,7 @@ public class PaymentGatewayRegistry {
     public PaymentGateway get(PaymentProvider provider) {
         PaymentGateway gateway = gateways.get(provider);
         if (gateway == null) {
-            throw new AppException(ErrorCode.PAYMENT_PROVIDER_UNSUPPORTED);
+            throw new AppException(PaymentErrorCode.PAYMENT_PROVIDER_UNSUPPORTED);
         }
         return gateway;
     }
@@ -31,7 +31,7 @@ public class PaymentGatewayRegistry {
     public CallbackPaymentGateway getCallbackGateway(PaymentProvider provider) {
         PaymentGateway gateway = get(provider);
         if (!(gateway instanceof CallbackPaymentGateway callbackGateway)) {
-            throw new AppException(ErrorCode.PAYMENT_PROVIDER_UNSUPPORTED);
+            throw new AppException(PaymentErrorCode.PAYMENT_PROVIDER_UNSUPPORTED);
         }
         return callbackGateway;
     }
@@ -39,7 +39,7 @@ public class PaymentGatewayRegistry {
     public CapturablePaymentGateway getCapturableGateway(PaymentProvider provider) {
         PaymentGateway gateway = get(provider);
         if (!(gateway instanceof CapturablePaymentGateway capturableGateway)) {
-            throw new AppException(ErrorCode.PAYMENT_PROVIDER_UNSUPPORTED);
+            throw new AppException(PaymentErrorCode.PAYMENT_PROVIDER_UNSUPPORTED);
         }
         return capturableGateway;
     }
@@ -48,7 +48,7 @@ public class PaymentGatewayRegistry {
     public RefundablePaymentGateway getRefundableGateway(PaymentProvider provider) {
         PaymentGateway gateway = get(provider);
         if (!(gateway instanceof RefundablePaymentGateway refundableGateway)) {
-            throw new AppException(ErrorCode.PAYMENT_PROVIDER_UNSUPPORTED);
+            throw new AppException(PaymentErrorCode.PAYMENT_PROVIDER_UNSUPPORTED);
         }
         return refundableGateway;
     }

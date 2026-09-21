@@ -3,6 +3,7 @@ package com.fashionstore.order.config.security;
 import com.fashionstore.common.security.ApiAccessDeniedHandler;
 import com.fashionstore.common.security.ApiAuthenticationEntryPoint;
 import com.fashionstore.common.security.GatewayHeaderAuthenticationFilter;
+import com.fashionstore.common.security.InternalTokenAuthFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;

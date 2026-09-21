@@ -1,7 +1,7 @@
 package com.fashionstore.payment.service.impl;
 
 import com.fashionstore.common.exception.AppException;
-import com.fashionstore.payment.common.exception.ErrorCode;
+import com.fashionstore.payment.exception.PaymentErrorCode;
 import com.fashionstore.payment.dto.PaymentCallbackResult;
 import com.fashionstore.payment.dto.PaymentResponse;
 import com.fashionstore.payment.entity.Payment;
@@ -35,10 +35,10 @@ public class PaymentStateServiceImpl implements PaymentStateService {
     @Transactional
     public PaymentResponse applyResult(Payment payment, PaymentCallbackResult result) {
         if (payment.getStatus() != PaymentStatus.PENDING) {
-            throw new AppException(ErrorCode.PAYMENT_STATUS_INVALID);
+            throw new AppException(PaymentErrorCode.PAYMENT_STATUS_INVALID);
         }
         if (!isProviderAmountValid(payment, result)) {
-            throw new AppException(ErrorCode.PAYMENT_AMOUNT_INVALID);
+            throw new AppException(PaymentErrorCode.PAYMENT_AMOUNT_INVALID);
         }
 
         payment.setStatus(result.getStatus());

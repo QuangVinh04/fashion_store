@@ -3,7 +3,7 @@ package com.fashionstore.payment.gateway;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fashionstore.common.exception.AppException;
 import com.fashionstore.common.payment.PaymentProvider;
-import com.fashionstore.payment.common.exception.ErrorCode;
+import com.fashionstore.payment.exception.PaymentErrorCode;
 import com.fashionstore.payment.config.payment.VnPayProperties;
 import com.fashionstore.payment.dto.PaymentCallbackResult;
 import com.fashionstore.payment.dto.PaymentInitiationResult;
@@ -111,7 +111,7 @@ public class VnPayPaymentGateway implements CallbackPaymentGateway, RefundablePa
     public PaymentRefundResult refund(Payment payment, PaymentRefund refund) {
         if (!StringUtils.hasText(payment.getTransactionId())
                 || !StringUtils.hasText(payment.getProviderTransactionDate())) {
-            throw new AppException(ErrorCode.PAYMENT_STATUS_INVALID);
+            throw new AppException(PaymentErrorCode.PAYMENT_STATUS_INVALID);
         }
 
         String createDate = LocalDateTime.now(VN_TIME_ZONE).format(DATE_FORMATTER);
@@ -165,7 +165,7 @@ public class VnPayPaymentGateway implements CallbackPaymentGateway, RefundablePa
             return PaymentRefundResult.failed(providerRefundId,
                     "VNPay refund response/status: " + responseCode + "/" + transactionStatus);
         } catch (FeignException exception) {
-            throw new AppException(ErrorCode.PAYMENT_PROVIDER_ERROR, exception);
+            throw new AppException(PaymentErrorCode.PAYMENT_PROVIDER_ERROR, exception);
         }
     }
 

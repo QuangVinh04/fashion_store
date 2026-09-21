@@ -1,6 +1,6 @@
 package com.fashionstore.catalog.controller;
 
-import com.fashionstore.catalog.config.InternalTokenAuthFilter;
+import com.fashionstore.common.security.InternalTokenAuthFilter;
 import com.fashionstore.catalog.service.InventoryService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

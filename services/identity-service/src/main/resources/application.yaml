@@ -43,7 +43,7 @@ app:
   services:
     order-service-url: ${ORDER_SERVICE_URL:${ORDER_BASE_URL:http://order-service:8089}}
   internal:
-    secret-token: ${INTERNAL_SECRET_TOKEN:fashion-store-internal-secret-token}
+    secret-token: ${INTERNAL_SERVICE_TOKEN:${INTERNAL_SECRET_TOKEN:fashion-store-internal-secret-token}}
 
 management:
   endpoints:

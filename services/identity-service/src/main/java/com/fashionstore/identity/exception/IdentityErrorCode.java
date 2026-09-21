@@ -1,4 +1,4 @@
-package com.fashionstore.identity.config;
+package com.fashionstore.identity.exception;
 
 import com.fashionstore.common.exception.BaseErrorCode;
 import lombok.Getter;
@@ -6,14 +6,12 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 
 @Getter
-public enum ErrorCode implements BaseErrorCode {
+public enum IdentityErrorCode implements BaseErrorCode {
     USER_NOT_FOUND(2001, "User not found", HttpStatus.NOT_FOUND),
     EMAIL_ALREADY_EXISTS(2002, "Email already exists", HttpStatus.CONFLICT),
     INVALID_CREDENTIALS(2003, "Invalid email or password", HttpStatus.UNAUTHORIZED),
     ACCOUNT_DISABLED(2004, "Account is disabled", HttpStatus.FORBIDDEN),
     UNAUTHENTICATED(2005, "Unauthenticated", HttpStatus.UNAUTHORIZED),
-    ROLE_NOT_FOUND(2006, "Role not found", HttpStatus.NOT_FOUND),
-    EMAIL_NOT_VERIFIED(2007, "Email not verified", HttpStatus.FORBIDDEN),
     VERIFICATION_TOKEN_EXPIRED(2008, "Verification link has expired", HttpStatus.BAD_REQUEST),
     VERIFICATION_TOKEN_INVALID(2009, "Verification link is invalid", HttpStatus.BAD_REQUEST),
     EMAIL_ALREADY_VERIFIED(2010, "Email is already verified", HttpStatus.CONFLICT),
@@ -23,16 +21,15 @@ public enum ErrorCode implements BaseErrorCode {
     REFRESH_TOKEN_INVALID(2014, "Refresh token không hợp lệ hoặc đã hết hạn", HttpStatus.UNAUTHORIZED),
     LOGIN_RATE_LIMITED(2015, "Quá nhiều lần đăng nhập thất bại. Vui lòng thử lại sau 5 phút", HttpStatus.TOO_MANY_REQUESTS),
     ADDRESS_NOT_FOUND(2016, "Địa chỉ không tồn tại", HttpStatus.NOT_FOUND),
-    CANNOT_DELETE_DEFAULT_ADDRESS(2017, "Không thể xóa địa chỉ mặc định khi vẫn còn địa chỉ khác", HttpStatus.BAD_REQUEST)
-
-
-    ;
+    CANNOT_DELETE_DEFAULT_ADDRESS(2017, "Không thể xóa địa chỉ mặc định khi vẫn còn địa chỉ khác", HttpStatus.BAD_REQUEST),
+    ROLE_NOT_FOUND(2018, "Role not found", HttpStatus.NOT_FOUND),
+    EMAIL_NOT_VERIFIED(2019, "Email not verified", HttpStatus.FORBIDDEN);
 
     private final int code;
     private final String message;
     private final HttpStatusCode statusCode;
 
-    ErrorCode(int code, String message, HttpStatusCode statusCode) {
+    IdentityErrorCode(int code, String message, HttpStatusCode statusCode) {
         this.code = code;
         this.message = message;
         this.statusCode = statusCode;

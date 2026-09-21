@@ -1,7 +1,7 @@
 package com.fashionstore.identity.service.impl;
 
 import com.fashionstore.common.exception.AppException;
-import com.fashionstore.identity.config.ErrorCode;
+import com.fashionstore.identity.exception.IdentityErrorCode;
 import com.fashionstore.identity.entity.User;
 import com.fashionstore.identity.repository.UserRepository;
 import com.fashionstore.identity.dto.auth.ChangePasswordRequest;
@@ -49,7 +49,7 @@ public class UserServiceImpl implements UserService {
         User user = currentUserProvider.getCurrentUser();
 
         if (!passwordEncoder.matches(request.getOldPassword(), user.getPassword())) {
-            throw new AppException(ErrorCode.INVALID_CREDENTIALS);
+            throw new AppException(IdentityErrorCode.INVALID_CREDENTIALS);
         }
 
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));

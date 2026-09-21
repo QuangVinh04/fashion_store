@@ -1,5 +1,6 @@
 package com.fashionstore.identity.config.security;
 
+import com.fashionstore.common.security.InternalTokenAuthFilter;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import org.junit.jupiter.api.BeforeEach;

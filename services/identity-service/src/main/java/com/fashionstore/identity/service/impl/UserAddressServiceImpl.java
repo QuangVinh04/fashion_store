@@ -1,7 +1,7 @@
 package com.fashionstore.identity.service.impl;
 
 import com.fashionstore.common.exception.AppException;
-import com.fashionstore.identity.config.ErrorCode;
+import com.fashionstore.identity.exception.IdentityErrorCode;
 import com.fashionstore.identity.dto.auth.ChangePasswordRequest;
 import com.fashionstore.identity.dto.user.UpdateProfileRequest;
 import com.fashionstore.identity.dto.user.UserAddressRequest;
@@ -71,7 +71,7 @@ public class UserAddressServiceImpl implements UserAddressService {
     @Transactional(readOnly = true)
     public UserAddressResponse getAddressById(String id) {
         UserAddress address = userAddressRepository.findById(id)
-                .orElseThrow(() -> new AppException(ErrorCode.ADDRESS_NOT_FOUND));
+                .orElseThrow(() -> new AppException(IdentityErrorCode.ADDRESS_NOT_FOUND));
         return userAddressMapper.toResponse(address);
     }
 
@@ -80,7 +80,7 @@ public class UserAddressServiceImpl implements UserAddressService {
     public UserAddressResponse updateAddress(String id, UserAddressRequest request) {
         String userId = currentUserProvider.getCurrentUserId();
         UserAddress address = userAddressRepository.findByIdAndUserId(id, userId)
-                .orElseThrow(() -> new AppException(ErrorCode.ADDRESS_NOT_FOUND));
+                .orElseThrow(() -> new AppException(IdentityErrorCode.ADDRESS_NOT_FOUND));
 
         userAddressMapper.updateEntityFromRequest(request, address);
 
@@ -96,7 +96,7 @@ public class UserAddressServiceImpl implements UserAddressService {
     public void deleteAddress(String id) {
         String userId = currentUserProvider.getCurrentUserId();
         UserAddress address = userAddressRepository.findByIdAndUserId(id, userId)
-                .orElseThrow(() -> new AppException(ErrorCode.ADDRESS_NOT_FOUND));
+                .orElseThrow(() -> new AppException(IdentityErrorCode.ADDRESS_NOT_FOUND));
 
         if (Boolean.TRUE.equals(address.getIsDefault())) {
             // Nếu xóa địa chỉ default nhưng user vẫn còn địa chỉ khác, chọn địa chỉ cũ nhất tiếp theo làm default
@@ -114,7 +114,7 @@ public class UserAddressServiceImpl implements UserAddressService {
     public UserAddressResponse setDefaultAddress(String id) {
         String userId = currentUserProvider.getCurrentUserId();
         UserAddress address = userAddressRepository.findByIdAndUserId(id, userId)
-                .orElseThrow(() -> new AppException(ErrorCode.ADDRESS_NOT_FOUND));
+                .orElseThrow(() -> new AppException(IdentityErrorCode.ADDRESS_NOT_FOUND));
 
         userAddressRepository.resetOtherDefaultAddresses(userId, id);
 

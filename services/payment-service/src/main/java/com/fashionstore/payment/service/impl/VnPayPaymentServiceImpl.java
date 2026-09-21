@@ -1,7 +1,7 @@
 package com.fashionstore.payment.service.impl;
 
 import com.fashionstore.common.exception.AppException;
-import com.fashionstore.payment.common.exception.ErrorCode;
+import com.fashionstore.payment.exception.PaymentErrorCode;
 import com.fashionstore.payment.dto.PaymentCallbackResult;
 import com.fashionstore.payment.dto.VnPayIpnResponse;
 import com.fashionstore.payment.entity.Payment;
@@ -33,7 +33,7 @@ public class VnPayPaymentServiceImpl implements VnPayPaymentService {
     public PaymentCallbackResult verifyReturn(Map<String, String> payload) {
         PaymentCallbackResult result = verifyCallback(payload);
         if (!result.isSignatureValid()) {
-            throw new AppException(ErrorCode.PAYMENT_SIGNATURE_INVALID);
+            throw new AppException(PaymentErrorCode.PAYMENT_SIGNATURE_INVALID);
         }
         return result;
     }

@@ -21,11 +21,6 @@ public class RabbitMQConfig {
     }
 
     @Bean
-    Queue inventoryProductVariantStockQueue() {
-        return new Queue(RabbitMQNames.INVENTORY_PRODUCT_VARIANT_STOCK_QUEUE, true);
-    }
-
-    @Bean
     Queue paymentSagaCommandQueue() {
         return new Queue(RabbitMQNames.PAYMENT_SAGA_COMMAND_QUEUE, true);
     }
@@ -33,14 +28,6 @@ public class RabbitMQConfig {
     @Bean
     Queue paymentOrderDeliveredQueue() {
         return new Queue(RabbitMQNames.PAYMENT_ORDER_DELIVERED_QUEUE, true);
-    }
-
-    @Bean
-    Binding inventoryProductVariantStockBinding(Queue inventoryProductVariantStockQueue,
-                                                DirectExchange fashionEventsExchange) {
-        return BindingBuilder.bind(inventoryProductVariantStockQueue)
-                .to(fashionEventsExchange)
-                .with(RabbitMQNames.PRODUCT_VARIANT_STOCK_ROUTING_KEY);
     }
 
     @Bean

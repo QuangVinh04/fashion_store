@@ -8,6 +8,21 @@ Audit nghiệp vụ (2026-09-16) chấm hệ thống **42%** — xương sống 
 
 **Ràng buộc (CLAUDE.md):** Java 21 (`JAVA_HOME="C:/Program Files/Java/jdk-21"`), `./mvnw -o -pl ... clean test` + `clean` sau đổi package, DB-per-service Flyway `V<n>__*.sql` mới (Catalog: V1–19 product, V20–39 inventory, V40+ file), layer package phẳng `controller/dto/entity/repository/service+impl/mapper/...`, cross-service = RabbitMQ (`contracts.*` + `EventTypes`) hoặc HTTP qua gateway, không `git push` khi chưa yêu cầu.
 
+## Tiến độ hiện tại (cập nhật 2026-09-20)
+
+| Phase | Trạng thái | Hoàn tất |
+|---|---|---|
+| 1. Checkout & Promotion | ✅ Hoàn thành | 2026-09-16 |
+| 2. Shipping GHN | ✅ Hoàn thành | 2026-09-17 |
+| 3. Fulfillment & Audit | ✅ Hoàn thành | 2026-09-18 |
+| 4. Return/Refund | ✅ Hoàn thành | 2026-09-18 |
+| 5. Review & Wishlist | ✅ Hoàn thành | 2026-09-18 |
+| 6. Inventory ledger & low-stock | ✅ Hoàn thành | 2026-09-18 |
+| 7. Search & Admin Dashboard | ✅ Hoàn thành | 2026-09-19 |
+| 8. Polish | 🟡 Hoàn thành một phần | 2026-09-20 |
+
+> Phase 2 hiện tích hợp GHN; GHTK chưa được triển khai. Phase 8 đã có guest-cart merge và thông báo đơn hàng; recommendation vẫn để sau khi tích lũy đủ dữ liệu review và order.
+
 ---
 
 ## Quyết định kiến trúc (đã chốt)
@@ -58,7 +73,9 @@ export JAVA_HOME="C:/Program Files/Java/jdk-21"
 
 ---
 
-## Phase 2 — Shipping thực GHN/GHTK (P0, 2 tuần)
+## Phase 2 — Shipping thực GHN (P0, 2 tuần) — ✅ Hoàn thành (2026-09-17)
+
+> **Kết quả đạt được:** Đã bổ sung trọng lượng/kích thước variant, lấy phí và tạo vận đơn GHN, lưu tracking, webhook có token xác thực và guard chống callback sai thứ tự. Có pessimistic lock khi tạo shipment, cấu hình mock chỉ dùng khi được cho phép, và test cho GHN client/shipment/checkout.
 
 **DB:**
 
@@ -77,7 +94,9 @@ export JAVA_HOME="C:/Program Files/Java/jdk-21"
 
 ---
 
-## Phase 3 — Fulfillment & Audit (P0, 1–2 tuần)
+## Phase 3 — Fulfillment & Audit (P0, 1–2 tuần) — ✅ Hoàn thành (2026-09-18)
+
+> **Kết quả đạt được:** Đã lưu audit trail cho toàn bộ chuyển trạng thái đơn (bao gồm saga, timeout, shipment, GHN webhook, return/refund), có API lịch sử đơn hàng, guard SHIPPING yêu cầu shipment/tracking hợp lệ, và bảo vệ idempotency để không sinh lịch sử trùng.
 
 **DB — order-service:**
 
@@ -92,7 +111,9 @@ export JAVA_HOME="C:/Program Files/Java/jdk-21"
 
 ---
 
-## Phase 4 — Return/Refund hoàn chỉnh (P0, 2 tuần)
+## Phase 4 — Return/Refund hoàn chỉnh (P0, 2 tuần) — ✅ Hoàn thành (2026-09-18)
+
+> **Kết quả đạt được:** Đã có return request với luồng duyệt/từ chối, restock theo message, saga outbox yêu cầu refund, gọi refund thật qua VNPay/PayPal và lưu audit từng lần hoàn tiền. COD được giữ ở `COD_PENDING` và chỉ ghi nhận đã thu tiền sau khi GHN báo giao thành công. Các tình huống chính được bao phủ bởi test return, refund gateway và COD settlement.
 
 **DB — order-service:**
 
@@ -103,14 +124,18 @@ export JAVA_HOME="C:/Program Files/Java/jdk-21"
 - `order/entity/ReturnRequest.java`, `repository/ReturnRequestRepository.java`.
 - `order/service/ReturnService.java` + `impl/ReturnServiceImpl.java` — `requestReturn` tạo `PENDING` (không đổi Order ngay), `approve` → `order.setStatus(RETURNED)` + restock (`InventoryService.releaseStock` qua saga hoặc trực tiếp) + `sagaOutbox.emit(refundPayment)`, `reject` → lý do.
 - `order/controller/OrderController.java` — `POST /{id}/return-request` tạo `PENDING`; `AdminOrderController` — `POST /returns/{id}/approve` | `/reject`.
-- `payment/event/PaymentRequestedEventListener.java` — `refundPayment` hiện đổi status, bổ sung gọi VNPay refund API thật nếu có config merchant; nếu không giữ đổi status + log để kế toán xử lý tay.
+- `payment/event/PaymentRequestedEventListener.java` — `refundPayment` kiểm tra số tiền, chống gọi trùng theo message ID, gọi refund thật qua VNPay/PayPal và cập nhật `REFUND_PENDING/REFUNDED/REFUND_FAILED`.
+- `payment/entity/PaymentRefund.java` + migration `V6__add_payment_refund.sql` — lưu audit độc lập cho từng lần hoàn tiền, provider refund ID, lỗi và thời điểm hoàn tất.
+- `order.delivered` outbox event + `OrderDeliveredEventListener` — payment COD chỉ chuyển từ `COD_PENDING` sang `COMPLETED` sau khi giao thành công.
 - `order/saga/RefundEventListener.java` — đã có, mở rộng xử lý `PAYMENT_REFUND_REJECTED`.
 
 **Verify:** test approve → restock + refund emitted; reject → không đổi gì.
 
 ---
 
-## Phase 5 — Review & Wishlist (P1, 2 tuần)
+## Phase 5 — Review & Wishlist (P1, 2 tuần) — ✅ Hoàn thành (2026-09-18)
+
+> **Kết quả đạt được:** Đã có review với xác thực verified purchase qua order-service, tổng hợp rating, và wishlist thêm/xóa/liệt kê/kiểm tra. Gateway và internal endpoint cần thiết đã được bảo vệ bằng internal token.
 
 **DB:**
 
@@ -127,7 +152,9 @@ export JAVA_HOME="C:/Program Files/Java/jdk-21"
 
 ---
 
-## Phase 6 — Inventory ledger & low-stock (P1, 1 tuần)
+## Phase 6 — Inventory ledger & low-stock (P1, 1 tuần) — ✅ Hoàn thành (2026-09-18)
+
+> **Kết quả đạt được:** Inventory ghi ledger cho các thao tác reserve/confirm/release/restock/adjust; admin có API ledger và low-stock. Low-stock count nội bộ được cung cấp an toàn cho dashboard.
 
 **DB — catalog:**
 
@@ -141,7 +168,9 @@ export JAVA_HOME="C:/Program Files/Java/jdk-21"
 
 ---
 
-## Phase 7 — Search & Admin Dashboard (P1, 1–2 tuần)
+## Phase 7 — Search & Admin Dashboard (P1, 1–2 tuần) — ✅ Hoàn thành (2026-09-19)
+
+> **Kết quả đạt được:** Advanced search đã hỗ trợ price range, size, color, brand, gender, material, category và chỉ trả product/variant hợp lệ. Dashboard admin đã có doanh thu theo ngày, phân bố trạng thái đơn, top products và low-stock count, kèm validation và circuit-breaker fallback cho catalog call.
 
 - `catalog/repository/ProductSpecificationsBuilder.java` — mở rộng filter: price range, sizeOption, colorOption, brand, gender, material (`ProductAttributeValue`), chỉ `PUBLISHED` + variant `active`.
 - `catalog/controller/ProductController.java` — `GET /api/v1/products/advance-search` thêm param `minPrice,maxPrice,size,color,brandId,gender`.
@@ -150,7 +179,9 @@ export JAVA_HOME="C:/Program Files/Java/jdk-21"
 
 ---
 
-## Phase 8 — Polish (P2/P3)
+## Phase 8 — Polish (P2/P3) — 🟡 Hoàn thành một phần (2026-09-20)
+
+> **Đã hoàn thành:** Guest cart dùng `anonymousId`, merge không mất dữ liệu khi đăng nhập, cùng các template/thông báo `order-confirmed`, `order-shipped`, `order-delivered`. **Còn lại:** recommendation, chỉ nên triển khai sau khi có đủ review và dữ liệu đơn hàng.
 
 - Guest cart merge: `CartServiceImpl` + `AuthServiceImpl.login` — lưu `anonymousId` cookie, merge khi login.
 - Notification mở rộng: thêm template `order-confirmed/shipped/delivered` trong `notification-service`, trigger từ `OrderSagaEventListener` / GHN webhook.

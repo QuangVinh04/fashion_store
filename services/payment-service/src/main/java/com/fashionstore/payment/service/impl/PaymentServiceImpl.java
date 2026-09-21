@@ -1,7 +1,7 @@
 package com.fashionstore.payment.service.impl;
 
 import com.fashionstore.common.exception.AppException;
-import com.fashionstore.payment.common.exception.ErrorCode;
+import com.fashionstore.payment.exception.PaymentErrorCode;
 import com.fashionstore.common.security.CurrentUserProvider;
 import com.fashionstore.payment.dto.PaymentInitiationResult;
 import com.fashionstore.payment.dto.PaymentResponse;
@@ -31,7 +31,7 @@ public class PaymentServiceImpl implements PaymentService {
     @Transactional(readOnly = true)
     public PaymentResponse getByOrderId(String orderId) {
         Payment payment = paymentRepository.findByOrderId(orderId)
-                .orElseThrow(() -> new AppException(ErrorCode.PAYMENT_NOT_FOUND));
+                .orElseThrow(() -> new AppException(PaymentErrorCode.PAYMENT_NOT_FOUND));
         assertPaymentOwner(payment);
         return paymentResponseMapper.toResponse(payment);
     }
@@ -40,10 +40,10 @@ public class PaymentServiceImpl implements PaymentService {
     @Transactional
     public PaymentInitiationResult initiate(String paymentId, String clientIp) {
         Payment payment = paymentRepository.findByIdForUpdate(paymentId)
-                .orElseThrow(() -> new AppException(ErrorCode.PAYMENT_NOT_FOUND));
+                .orElseThrow(() -> new AppException(PaymentErrorCode.PAYMENT_NOT_FOUND));
         assertPaymentOwner(payment);
         if (payment.getStatus() != PaymentStatus.PENDING) {
-            throw new AppException(ErrorCode.PAYMENT_STATUS_INVALID);
+            throw new AppException(PaymentErrorCode.PAYMENT_STATUS_INVALID);
         }
         if (payment.getMerchantReference() == null) {
             payment.setMerchantReference(payment.getId().replace("-", ""));
@@ -63,7 +63,7 @@ public class PaymentServiceImpl implements PaymentService {
 
     private void assertPaymentOwner(Payment payment) {
         if (!payment.getUserId().equals(currentUserProvider.getCurrentUserId())) {
-            throw new AppException(ErrorCode.PAYMENT_NOT_FOUND);
+            throw new AppException(PaymentErrorCode.PAYMENT_NOT_FOUND);
         }
     }
 }

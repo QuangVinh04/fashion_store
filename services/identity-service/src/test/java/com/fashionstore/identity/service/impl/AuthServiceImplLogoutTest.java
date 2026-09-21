@@ -2,7 +2,6 @@ package com.fashionstore.identity.service.impl;
 
 import com.fashionstore.common.exception.AppException;
 import com.fashionstore.common.redis.RedisService;
-import com.fashionstore.identity.config.ErrorCode;
 import com.fashionstore.identity.repository.RoleRepository;
 import com.fashionstore.identity.repository.UserRepository;
 import com.fashionstore.identity.service.EmailService;

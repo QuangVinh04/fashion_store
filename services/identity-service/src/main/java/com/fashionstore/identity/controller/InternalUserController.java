@@ -2,7 +2,7 @@ package com.fashionstore.identity.controller;
 
 import com.fashionstore.common.dto.ApiResponse;
 import com.fashionstore.common.exception.AppException;
-import com.fashionstore.identity.config.ErrorCode;
+import com.fashionstore.identity.exception.IdentityErrorCode;
 import com.fashionstore.identity.dto.user.InternalUserResponse;
 import com.fashionstore.identity.entity.User;
 import com.fashionstore.identity.repository.UserRepository;
@@ -25,7 +25,7 @@ public class InternalUserController {
     @GetMapping("/{userId}")
     public ApiResponse<InternalUserResponse> getUserById(@PathVariable String userId) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+                .orElseThrow(() -> new AppException(IdentityErrorCode.USER_NOT_FOUND));
 
         InternalUserResponse response = new InternalUserResponse(
                 user.getId(),

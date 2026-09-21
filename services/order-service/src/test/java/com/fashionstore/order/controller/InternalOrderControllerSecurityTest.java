@@ -2,7 +2,7 @@ package com.fashionstore.order.controller;
 
 import com.fashionstore.contracts.order.dto.VerifyPurchaseRequest;
 import com.fashionstore.contracts.order.dto.VerifyPurchaseResponse;
-import com.fashionstore.order.config.security.InternalTokenAuthFilter;
+import com.fashionstore.common.security.InternalTokenAuthFilter;
 import com.fashionstore.order.service.OrderService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;

@@ -2,7 +2,7 @@ package com.fashionstore.payment.gateway;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fashionstore.common.exception.AppException;
-import com.fashionstore.payment.common.exception.ErrorCode;
+import com.fashionstore.payment.exception.PaymentErrorCode;
 import com.fashionstore.payment.dto.PaymentCallbackResult;
 import com.fashionstore.payment.dto.PaymentInitiationResult;
 import com.fashionstore.payment.dto.PaymentRefundResult;
@@ -86,7 +86,7 @@ public class PaypalPaymentGateway implements CapturablePaymentGateway, Refundabl
                 .map(link -> link.path("href").asText())
                 .filter(StringUtils::hasText)
                 .findFirst()
-                .orElseThrow(() -> new AppException(ErrorCode.PAYMENT_PROVIDER_ERROR));
+                .orElseThrow(() -> new AppException(PaymentErrorCode.PAYMENT_PROVIDER_ERROR));
         BigDecimal providerAmount = toPaypalAmount(payment.getAmount());
 
         return PaymentInitiationResult.builder()
@@ -102,7 +102,7 @@ public class PaypalPaymentGateway implements CapturablePaymentGateway, Refundabl
     public PaymentCallbackResult capture(Payment payment) {
         validateConfiguration();
         if (!StringUtils.hasText(payment.getTransactionId())) {
-            throw new AppException(ErrorCode.PAYMENT_STATUS_INVALID);
+            throw new AppException(PaymentErrorCode.PAYMENT_STATUS_INVALID);
         }
 
         JsonNode response = captureOrder(
@@ -132,7 +132,7 @@ public class PaypalPaymentGateway implements CapturablePaymentGateway, Refundabl
     public PaymentRefundResult refund(Payment payment, PaymentRefund refund) {
         validateConfiguration();
         if (!StringUtils.hasText(payment.getTransactionId())) {
-            throw new AppException(ErrorCode.PAYMENT_STATUS_INVALID);
+            throw new AppException(PaymentErrorCode.PAYMENT_STATUS_INVALID);
         }
 
         BigDecimal providerRefundAmount = toPaypalAmount(refund.getAmount());
@@ -165,7 +165,7 @@ public class PaypalPaymentGateway implements CapturablePaymentGateway, Refundabl
             JsonNode response = paypalFeignClient.getAccessToken(basicAuth(), form);
             return requiredText(response, "access_token");
         } catch (FeignException exception) {
-            throw new AppException(ErrorCode.PAYMENT_PROVIDER_ERROR, exception);
+            throw new AppException(PaymentErrorCode.PAYMENT_PROVIDER_ERROR, exception);
         }
     }
 
@@ -173,7 +173,7 @@ public class PaypalPaymentGateway implements CapturablePaymentGateway, Refundabl
         try {
             return paypalFeignClient.createOrder(bearerAuth(accessToken), requestId, body);
         } catch (FeignException exception) {
-            throw new AppException(ErrorCode.PAYMENT_PROVIDER_ERROR, exception);
+            throw new AppException(PaymentErrorCode.PAYMENT_PROVIDER_ERROR, exception);
         }
     }
 
@@ -181,7 +181,7 @@ public class PaypalPaymentGateway implements CapturablePaymentGateway, Refundabl
         try {
             return paypalFeignClient.captureOrder(orderId, bearerAuth(accessToken), requestId, body);
         } catch (FeignException exception) {
-            throw new AppException(ErrorCode.PAYMENT_PROVIDER_ERROR, exception);
+            throw new AppException(PaymentErrorCode.PAYMENT_PROVIDER_ERROR, exception);
         }
     }
 
@@ -189,7 +189,7 @@ public class PaypalPaymentGateway implements CapturablePaymentGateway, Refundabl
         try {
             return paypalFeignClient.refundCapture(captureId, bearerAuth(accessToken), requestId, body);
         } catch (FeignException exception) {
-            throw new AppException(ErrorCode.PAYMENT_PROVIDER_ERROR, exception);
+            throw new AppException(PaymentErrorCode.PAYMENT_PROVIDER_ERROR, exception);
         }
     }
 
@@ -204,7 +204,7 @@ public class PaypalPaymentGateway implements CapturablePaymentGateway, Refundabl
 
     private String requiredText(JsonNode node, String field) {
         if (node == null || !node.hasNonNull(field) || !StringUtils.hasText(node.path(field).asText())) {
-            throw new AppException(ErrorCode.PAYMENT_PROVIDER_ERROR);
+            throw new AppException(PaymentErrorCode.PAYMENT_PROVIDER_ERROR);
         }
         return node.path(field).asText();
     }
@@ -229,7 +229,7 @@ public class PaypalPaymentGateway implements CapturablePaymentGateway, Refundabl
                 || vndPerCurrencyUnit.compareTo(BigDecimal.ZERO) <= 0
                 || !StringUtils.hasText(returnUrl)
                 || !StringUtils.hasText(cancelUrl)) {
-            throw new AppException(ErrorCode.PAYMENT_PROVIDER_ERROR);
+            throw new AppException(PaymentErrorCode.PAYMENT_PROVIDER_ERROR);
         }
     }
 }
