@@ -16,6 +16,9 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
+/**
+ * Exposes product details, variant matrix and shared logistics defaults.
+ */
 @Getter
 @Setter
 @Builder
@@ -41,6 +44,10 @@ public class ProductResponse {
     BigDecimal basePrice;
     BigDecimal salePrice;
     BigDecimal price;
+    Integer weightGram;
+    Integer lengthMm;
+    Integer widthMm;
+    Integer heightMm;
     String thumbnailMediaId;
     String sizeChartId;
     String metaTitle;

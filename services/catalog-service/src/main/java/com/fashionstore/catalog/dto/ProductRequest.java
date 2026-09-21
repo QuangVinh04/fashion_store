@@ -5,6 +5,7 @@ import com.fashionstore.catalog.entity.enumeration.ProductStatus;
 import com.fashionstore.catalog.entity.enumeration.ProductType;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Size;
@@ -14,6 +15,9 @@ import lombok.experimental.FieldDefaults;
 import java.math.BigDecimal;
 import java.util.List;
 
+/**
+ * Defines the complete product aggregate accepted by the product creation API.
+ */
 @Getter
 @Setter
 @Builder
@@ -53,6 +57,18 @@ public class ProductRequest {
 
     @DecimalMin(value = "0.0", inclusive = true, message = "Sale price cannot be negative")
     BigDecimal salePrice;
+
+    @Min(value = 1, message = "Default weight must be greater than zero")
+    Integer weightGram;
+
+    @Min(value = 1, message = "Default length must be greater than zero")
+    Integer lengthMm;
+
+    @Min(value = 1, message = "Default width must be greater than zero")
+    Integer widthMm;
+
+    @Min(value = 1, message = "Default height must be greater than zero")
+    Integer heightMm;
 
     List<ProductImageItem> images;
 

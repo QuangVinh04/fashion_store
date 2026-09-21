@@ -28,6 +28,9 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Represents a sellable fashion product and its shared defaults for variants.
+ */
 @Getter
 @Setter
 @Builder
@@ -86,6 +89,18 @@ public class Product extends BaseEntity {
 
     @Column(name = "sale_price", precision = 12, scale = 2)
     BigDecimal salePrice;
+
+    @Column(name = "weight_gram")
+    Integer weightGram;
+
+    @Column(name = "length_mm")
+    Integer lengthMm;
+
+    @Column(name = "width_mm")
+    Integer widthMm;
+
+    @Column(name = "height_mm")
+    Integer heightMm;
 
     @Column(name = "thumbnail_media_id", length = 36)
     String thumbnailMediaId;

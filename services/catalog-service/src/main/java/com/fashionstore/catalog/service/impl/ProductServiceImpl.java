@@ -37,6 +37,9 @@ import java.util.regex.Pattern;
 
 
 @Slf4j
+/**
+ * Implements product aggregate lifecycle, validation, search and internal snapshots.
+ */
 @Service
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
@@ -250,6 +253,10 @@ public class ProductServiceImpl implements ProductService {
         product.setProductType(request.getProductType());
         product.setBasePrice(basePrice);
         product.setSalePrice(request.getSalePrice());
+        product.setWeightGram(request.getWeightGram());
+        product.setLengthMm(request.getLengthMm());
+        product.setWidthMm(request.getWidthMm());
+        product.setHeightMm(request.getHeightMm());
         product.setSizeChartId(resolveSizeChartId(request.getSizeChartId()));
         product.setMetaTitle(request.getMetaTitle());
         product.setMetaKeyword(request.getMetaKeyword());
@@ -400,10 +407,10 @@ public class ProductServiceImpl implements ProductService {
                 .price(variant.getPrice())
                 .salePrice(variant.getSalePrice())
                 .active(variant.getActive())
-                .weightGram(variant.getWeightGram())
-                .lengthMm(variant.getLengthMm())
-                .widthMm(variant.getWidthMm())
-                .heightMm(variant.getHeightMm())
+                .weightGram(resolveLogisticsValue(variant.getWeightGram(), product.getWeightGram()))
+                .lengthMm(resolveLogisticsValue(variant.getLengthMm(), product.getLengthMm()))
+                .widthMm(resolveLogisticsValue(variant.getWidthMm(), product.getWidthMm()))
+                .heightMm(resolveLogisticsValue(variant.getHeightMm(), product.getHeightMm()))
                 .optionSignature(variant.getOptionSignature())
                 .displayName(variant.getDisplayName())
                 .build();
@@ -502,10 +509,18 @@ public class ProductServiceImpl implements ProductService {
                 .productType(request.getProductType())
                 .basePrice(request.getBasePrice())
                 .salePrice(request.getSalePrice())
+                .weightGram(request.getWeightGram())
+                .lengthMm(request.getLengthMm())
+                .widthMm(request.getWidthMm())
+                .heightMm(request.getHeightMm())
                 .metaTitle(request.getMetaTitle())
                 .metaKeyword(request.getMetaKeyword())
                 .metaDescription(request.getMetaDescription())
                 .build();
+    }
+
+    private Integer resolveLogisticsValue(Integer variantValue, Integer productDefault) {
+        return variantValue != null && variantValue > 0 ? variantValue : productDefault;
     }
 
     private void validateUpdateProductRequest(ProductUpdateRequest request, Product product) {

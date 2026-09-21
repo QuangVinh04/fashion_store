@@ -151,6 +151,10 @@ class ProductServiceImplTest {
                 .categoryIds(List.of("category-1"))
                 .basePrice(new BigDecimal("20.00"))
                 .salePrice(new BigDecimal("18.00"))
+                .weightGram(300)
+                .lengthMm(320)
+                .widthMm(240)
+                .heightMm(60)
                 .variants(List.of(ProductVariantRequest.builder()
                         .sizeOptionId("size-m")
                         .colorOptionId("color-black")
@@ -174,6 +178,10 @@ class ProductServiceImplTest {
         Product savedProduct = productCaptor.getValue();
         assertThat(savedProduct.getBasePrice()).isEqualByComparingTo("20.00");
         assertThat(savedProduct.getSalePrice()).isEqualByComparingTo("18.00");
+        assertThat(savedProduct.getWeightGram()).isEqualTo(300);
+        assertThat(savedProduct.getLengthMm()).isEqualTo(320);
+        assertThat(savedProduct.getWidthMm()).isEqualTo(240);
+        assertThat(savedProduct.getHeightMm()).isEqualTo(60);
         assertThat(savedProduct.getProductCategories()).hasSize(1);
         assertThat(savedProduct.getVariants()).hasSize(1);
         assertThat(savedProduct.getVariants().get(0).getOptionSignature())
@@ -261,6 +269,10 @@ class ProductServiceImplTest {
         ProductUpdateRequest request = ProductUpdateRequest.builder()
                 .name("Basic Tee")
                 .basePrice(new BigDecimal("20.00"))
+                .weightGram(350)
+                .lengthMm(330)
+                .widthMm(250)
+                .heightMm(70)
                 .categoryIds(List.of("category-1"))
                 .variants(List.of(ProductVariantRequest.builder()
                         .id("variant-1")
@@ -293,6 +305,10 @@ class ProductServiceImplTest {
         assertThat(variant.getThumbnailMediaId()).isEqualTo("media-1");
         assertThat(variant.getColor()).isEqualTo("Black");
         assertThat(variant.getSize()).isEqualTo("M");
+        assertThat(product.getWeightGram()).isEqualTo(350);
+        assertThat(product.getLengthMm()).isEqualTo(330);
+        assertThat(product.getWidthMm()).isEqualTo(250);
+        assertThat(product.getHeightMm()).isEqualTo(70);
     }
 
     @Test
@@ -832,6 +848,33 @@ class ProductServiceImplTest {
         assertThat(response.getLengthMm()).isEqualTo(300);
         assertThat(response.getWidthMm()).isEqualTo(200);
         assertThat(response.getHeightMm()).isEqualTo(50);
+    }
+
+    @Test
+    void getProductVariantSnapshot_usesProductLogisticsDefaults() {
+        Product product = Product.builder()
+                .name("Basic Tee")
+                .weightGram(280)
+                .lengthMm(310)
+                .widthMm(220)
+                .heightMm(55)
+                .build();
+        product.setId("prod-1");
+        ProductVariant variant = ProductVariant.builder()
+                .product(product)
+                .sku("SKU-1")
+                .price(BigDecimal.valueOf(100000))
+                .active(true)
+                .build();
+        variant.setId("var-1");
+        when(productVariantRepository.findById("var-1")).thenReturn(Optional.of(variant));
+
+        ProductVariantSnapshotResponse response = productService.getProductVariantSnapshot("var-1");
+
+        assertThat(response.getWeightGram()).isEqualTo(280);
+        assertThat(response.getLengthMm()).isEqualTo(310);
+        assertThat(response.getWidthMm()).isEqualTo(220);
+        assertThat(response.getHeightMm()).isEqualTo(55);
     }
 
     @Test

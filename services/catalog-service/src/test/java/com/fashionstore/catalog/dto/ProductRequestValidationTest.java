@@ -29,4 +29,22 @@ class ProductRequestValidationTest {
                 .extracting(violation -> violation.getPropertyPath().toString())
                 .contains("variants[0].price");
     }
+
+    @Test
+    void rejectsNonPositiveProductLogisticsDefaults() {
+        ProductRequest request = ProductRequest.builder()
+                .name("Basic Shirt")
+                .weightGram(0)
+                .lengthMm(-1)
+                .categoryIds(List.of("category-1"))
+                .variants(List.of(ProductVariantRequest.builder()
+                        .colorOptionId("black")
+                        .sizeOptionId("m")
+                        .build()))
+                .build();
+
+        assertThat(validator.validate(request))
+                .extracting(violation -> violation.getPropertyPath().toString())
+                .contains("weightGram", "lengthMm");
+    }
 }

@@ -17,6 +17,9 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
+/**
+ * Maps catalog product aggregates to API response models.
+ */
 @Mapper(componentModel = "spring")
 public interface ProductMapper {
 
@@ -70,6 +73,10 @@ public interface ProductMapper {
                 .basePrice(product.getBasePrice())
                 .salePrice(product.getSalePrice())
                 .price(product.getBasePrice())
+                .weightGram(product.getWeightGram())
+                .lengthMm(product.getLengthMm())
+                .widthMm(product.getWidthMm())
+                .heightMm(product.getHeightMm())
                 .thumbnailMediaId(product.getThumbnailMediaId())
                 .sizeChartId(product.getSizeChartId())
                 .metaTitle(product.getMetaTitle())
@@ -121,6 +128,10 @@ public interface ProductMapper {
                 .barcode(variant.getBarcode())
                 .price(variant.getPrice())
                 .salePrice(variant.getSalePrice())
+                .weightGram(variant.getWeightGram())
+                .lengthMm(variant.getLengthMm())
+                .widthMm(variant.getWidthMm())
+                .heightMm(variant.getHeightMm())
                 .active(variant.getActive())
                 .optionSignature(variant.getOptionSignature())
                 .displayName(variant.getDisplayName())
