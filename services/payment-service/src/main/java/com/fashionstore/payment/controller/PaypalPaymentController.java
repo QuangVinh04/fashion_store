@@ -3,6 +3,7 @@ package com.fashionstore.payment.controller;
 import com.fashionstore.common.dto.ApiResponse;
 import com.fashionstore.payment.dto.PaymentResponse;
 import com.fashionstore.payment.service.PaypalPaymentService;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -13,6 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/v1/payments")
+@Tag(name = "PayPal", description = "Capture giao dịch PayPal sau khi khách phê duyệt")
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class PaypalPaymentController {

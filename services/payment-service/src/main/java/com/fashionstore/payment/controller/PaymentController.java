@@ -4,6 +4,7 @@ import com.fashionstore.common.dto.ApiResponse;
 import com.fashionstore.payment.dto.PaymentInitiationResult;
 import com.fashionstore.payment.dto.PaymentResponse;
 import com.fashionstore.payment.service.PaymentService;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -12,6 +13,7 @@ import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/v1/payments")
+@Tag(name = "Payments", description = "Tra cứu và khởi tạo thanh toán của khách hàng")
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class PaymentController {

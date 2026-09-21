@@ -4,6 +4,7 @@ import com.fashionstore.common.dto.ApiResponse;
 import com.fashionstore.payment.dto.PaymentCallbackResult;
 import com.fashionstore.payment.dto.VnPayIpnResponse;
 import com.fashionstore.payment.service.VnPayPaymentService;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -16,6 +17,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1/payments/vnpay")
+@Tag(name = "VNPay", description = "Return URL và IPN callback của VNPay")
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class VnPayPaymentController {

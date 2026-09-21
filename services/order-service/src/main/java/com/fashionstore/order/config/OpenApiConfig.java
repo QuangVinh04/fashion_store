@@ -43,6 +43,7 @@ public class OpenApiConfig {
                 // origin nên chạy được ngay. Gateway là đường đi thật của client, nhưng gọi từ UI này sang
                 // 8080 là cross-origin và gateway hiện chưa khai báo CORS cho nó.
                 .servers(List.of(
+                        new Server().url("/").description("Current request origin"),
                         new Server().url("http://localhost:8089").description("Cổng service — dùng để thử trực tiếp từ trang này"),
                         new Server().url("http://localhost:8080").description("API gateway — đường đi thật của client")))
                 .components(new Components()

@@ -11,6 +11,7 @@ import com.fashionstore.identity.dto.auth.RegisterRequest;
 import com.fashionstore.identity.dto.auth.VerifyEmailRequest;
 import com.fashionstore.identity.service.AuthService;
 import com.fashionstore.identity.util.CookieUtils;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -27,6 +28,7 @@ import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/v1/auth")
+@Tag(name = "Authentication", description = "Đăng ký, đăng nhập, xác minh email, refresh và logout")
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class AuthController {

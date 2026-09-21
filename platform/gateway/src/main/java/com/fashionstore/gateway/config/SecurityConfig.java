@@ -29,6 +29,13 @@ public class SecurityConfig {
                 .authorizeExchange(authorize -> authorize
                         .pathMatchers(
                                 "/actuator/health/**",
+                                "/swagger-ui/**",
+                                "/swagger-ui.html",
+                                "/v3/api-docs/**",
+                                "/identity/v3/api-docs/**",
+                                "/catalog/v3/api-docs/**",
+                                "/order/v3/api-docs/**",
+                                "/payment/v3/api-docs/**",
                                 "/api/v1/payments/vnpay/return",
                                 "/api/v1/payments/vnpay/ipn"
                         ).permitAll()

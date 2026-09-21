@@ -8,6 +8,7 @@ import com.fashionstore.identity.dto.user.UserAddressResponse;
 import com.fashionstore.identity.dto.user.UserProfileResponse;
 import com.fashionstore.identity.service.UserAddressService;
 import com.fashionstore.identity.service.UserService;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +20,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/users/addresses")
+@Tag(name = "User Addresses", description = "Sổ địa chỉ giao hàng của người dùng")
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class UserAddressController {

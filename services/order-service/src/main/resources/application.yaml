@@ -1,6 +1,9 @@
 server:
   port: ${SERVER_PORT:8089}
 
+springdoc:
+  paths-to-match: /api/**
+
 spring:
   application:
     name: order-service

@@ -25,18 +25,54 @@ spring:
               uri: ${IDENTITY_BASE_URL:http://identity-service:8082}
               predicates:
                 - Path=/api/v1/auth/**,/api/v1/users/**
+            - id: identity-openapi
+              uri: ${IDENTITY_BASE_URL:http://identity-service:8082}
+              predicates:
+                - Path=/identity/v3/api-docs/**
+              filters:
+                - StripPrefix=1
             - id: catalog
               uri: ${CATALOG_BASE_URL:http://catalog-service:8087}
               predicates:
                 - Path=/api/v1/product/**,/api/v1/products/**,/api/v1/category/**,/api/v1/categories/**,/api/v1/inventory/**,/api/v1/brands/**,/api/v1/product-attributes/**,/api/v1/color-options/**,/api/v1/size-options/**,/api/v1/size-charts/**,/admin/products,/admin/products/**,/admin/brands/**,/admin/product-attributes/**,/admin/color-options/**,/admin/size-options/**,/admin/size-charts/**,/admin/inventory/**,/api/v1/files/**,/api/v1/wishlist/**
+            - id: catalog-openapi
+              uri: ${CATALOG_BASE_URL:http://catalog-service:8087}
+              predicates:
+                - Path=/catalog/v3/api-docs/**
+              filters:
+                - StripPrefix=1
             - id: order
               uri: ${ORDER_BASE_URL:http://order-service:8089}
               predicates:
-                - Path=/api/v1/orders/**,/api/v1/checkouts/**,/api/v1/admin/orders/**,/api/v1/admin/dashboard/**,/api/v1/cart/**
+                - Path=/api/v1/orders/**,/api/v1/checkouts/**,/api/v1/admin/orders/**,/api/v1/admin/dashboard/**,/api/v1/admin/promotions/**,/api/v1/promotions/**,/api/v1/cart/**
+            - id: order-openapi
+              uri: ${ORDER_BASE_URL:http://order-service:8089}
+              predicates:
+                - Path=/order/v3/api-docs/**
+              filters:
+                - StripPrefix=1
             - id: payment
               uri: ${PAYMENT_BASE_URL:http://payment-service:8085}
               predicates:
                 - Path=/api/v1/payments/**
+            - id: payment-openapi
+              uri: ${PAYMENT_BASE_URL:http://payment-service:8085}
+              predicates:
+                - Path=/payment/v3/api-docs/**
+              filters:
+                - StripPrefix=1
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    urls:
+      - name: Identity Service
+        url: /identity/v3/api-docs
+      - name: Catalog Service
+        url: /catalog/v3/api-docs
+      - name: Order Service
+        url: /order/v3/api-docs
+      - name: Payment Service
+        url: /payment/v3/api-docs
 management:
   endpoints:
     web:

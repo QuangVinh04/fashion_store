@@ -1,6 +1,9 @@
 server:
   port: ${SERVER_PORT:8087}
 
+springdoc:
+  paths-to-match: /api/**, /admin/**
+
 spring:
   application:
     name: catalog-service

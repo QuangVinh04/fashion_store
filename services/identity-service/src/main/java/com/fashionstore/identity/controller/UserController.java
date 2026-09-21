@@ -5,6 +5,7 @@ import com.fashionstore.identity.dto.auth.ChangePasswordRequest;
 import com.fashionstore.identity.dto.user.UpdateProfileRequest;
 import com.fashionstore.identity.dto.user.UserProfileResponse;
 import com.fashionstore.identity.service.UserService;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -13,6 +14,7 @@ import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/v1/users")
+@Tag(name = "User Profile", description = "Hồ sơ và mật khẩu của người dùng đang đăng nhập")
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class UserController {
