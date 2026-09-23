@@ -1,4 +1,4 @@
-package com.fashionstore.payment.entity;
+package com.fashionstore.payment.entity.enumeration;
 
 public enum PaymentStatus {
     PENDING,

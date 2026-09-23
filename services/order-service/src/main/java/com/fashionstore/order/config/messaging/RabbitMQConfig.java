@@ -65,6 +65,11 @@ public class RabbitMQConfig {
     }
 
     @Bean
+    public Queue orderPaymentInitiatedQueue() {
+        return sagaQueue(RabbitMQNames.ORDER_PAYMENT_INITIATED_QUEUE);
+    }
+
+    @Bean
     public Queue orderPaymentCompletedQueue() {
         return sagaQueue(RabbitMQNames.ORDER_PAYMENT_COMPLETED_QUEUE);
     }
@@ -120,6 +125,13 @@ public class RabbitMQConfig {
         return BindingBuilder.bind(orderInventoryReleasedQueue)
                 .to(directExchange)
                 .with(EventTypes.INVENTORY_RELEASED);
+    }
+
+    @Bean
+    public Binding orderPaymentInitiatedBinding(DirectExchange directExchange, Queue orderPaymentInitiatedQueue) {
+        return BindingBuilder.bind(orderPaymentInitiatedQueue)
+                .to(directExchange)
+                .with(EventTypes.PAYMENT_INITIATED);
     }
 
     @Bean

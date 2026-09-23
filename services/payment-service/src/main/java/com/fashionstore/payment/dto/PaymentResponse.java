@@ -2,7 +2,7 @@ package com.fashionstore.payment.dto;
 
 import com.fashionstore.common.payment.PaymentMethod;
 import com.fashionstore.common.payment.PaymentProvider;
-import com.fashionstore.payment.entity.PaymentStatus;
+import com.fashionstore.payment.entity.enumeration.PaymentStatus;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 

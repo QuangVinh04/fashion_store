@@ -25,6 +25,7 @@ public class OrderResponse {
     String paymentId;
     PaymentMethod paymentMethod;
     PaymentProvider paymentProvider;
+    String paymentUrl;
     String currency;
     /** Lý do hủy viết cho người đọc; mã lỗi kỹ thuật của saga không lộ ra API. */
     String cancelReason;

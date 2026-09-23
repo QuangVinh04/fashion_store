@@ -5,18 +5,18 @@ import com.fashionstore.payment.exception.PaymentErrorCode;
 import com.fashionstore.payment.dto.PaymentCallbackResult;
 import com.fashionstore.payment.dto.PaymentResponse;
 import com.fashionstore.payment.entity.Payment;
-import com.fashionstore.payment.entity.PaymentStatus;
+import com.fashionstore.payment.entity.enumeration.PaymentStatus;
 import com.fashionstore.contracts.common.EventEnvelope;
 import com.fashionstore.contracts.common.EventTypes;
 import com.fashionstore.contracts.payment.event.PaymentFailedEvent;
 import com.fashionstore.contracts.payment.event.PaymentSuccessEvent;
 import com.fashionstore.payment.mapper.PaymentResponseMapper;
+import com.fashionstore.payment.outbox.OutboxService;
 import com.fashionstore.payment.repository.PaymentRepository;
 import com.fashionstore.payment.service.PaymentStateService;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,7 +29,7 @@ public class PaymentStateServiceImpl implements PaymentStateService {
 
     PaymentRepository paymentRepository;
     PaymentResponseMapper paymentResponseMapper;
-    ApplicationEventPublisher eventPublisher;
+    OutboxService outboxService;
 
     @Override
     @Transactional
@@ -66,7 +66,7 @@ public class PaymentStateServiceImpl implements PaymentStateService {
 
     private void publishOrderStatusEvent(Payment payment) {
         if (payment.getStatus() == PaymentStatus.COMPLETED) {
-            eventPublisher.publishEvent(EventEnvelope.v1(
+            outboxService.saveMessage(payment.getOrderId(), EventTypes.PAYMENT_COMPLETED, EventEnvelope.v1(
                     EventTypes.PAYMENT_COMPLETED,
                     payment.getOrderId(),
                     correlationId(payment),
@@ -76,7 +76,7 @@ public class PaymentStateServiceImpl implements PaymentStateService {
         }
 
         if (payment.getStatus() == PaymentStatus.FAILED) {
-            eventPublisher.publishEvent(EventEnvelope.v1(
+            outboxService.saveMessage(payment.getOrderId(), EventTypes.PAYMENT_FAILED, EventEnvelope.v1(
                     EventTypes.PAYMENT_FAILED,
                     payment.getOrderId(),
                     correlationId(payment),

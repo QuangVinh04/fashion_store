@@ -8,6 +8,7 @@ public record AuthorizePaymentCommand(
         String method,
         String provider,
         BigDecimal amount,
-        String currency
+        String currency,
+        String clientIp
 ) {
 }

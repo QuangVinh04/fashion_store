@@ -1,6 +1,6 @@
 package com.fashionstore.payment.dto;
 
-import com.fashionstore.payment.entity.PaymentRefundStatus;
+import com.fashionstore.payment.entity.enumeration.PaymentRefundStatus;
 
 /** Result returned by a payment provider after a refund request. */
 public record PaymentRefundResult(

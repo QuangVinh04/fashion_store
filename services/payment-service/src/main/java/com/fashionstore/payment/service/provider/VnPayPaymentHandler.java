@@ -1,16 +1,17 @@
-package com.fashionstore.payment.gateway;
+package com.fashionstore.payment.service.provider;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fashionstore.common.exception.AppException;
 import com.fashionstore.common.payment.PaymentProvider;
-import com.fashionstore.payment.exception.PaymentErrorCode;
-import com.fashionstore.payment.config.payment.VnPayProperties;
+import com.fashionstore.payment.config.payment.VnPayConfig;
 import com.fashionstore.payment.dto.PaymentCallbackResult;
 import com.fashionstore.payment.dto.PaymentInitiationResult;
 import com.fashionstore.payment.dto.PaymentRefundResult;
 import com.fashionstore.payment.entity.Payment;
 import com.fashionstore.payment.entity.PaymentRefund;
-import com.fashionstore.payment.entity.PaymentStatus;
+import com.fashionstore.payment.entity.enumeration.PaymentStatus;
+import com.fashionstore.payment.exception.PaymentErrorCode;
+import com.fashionstore.payment.gateway.VnPayFeignClient;
 import feign.FeignException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -33,11 +34,11 @@ import java.util.stream.Collectors;
 
 @Component
 @RequiredArgsConstructor
-public class VnPayPaymentGateway implements CallbackPaymentGateway, RefundablePaymentGateway {
+public class VnPayPaymentHandler implements PaymentHandler {
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
     private static final ZoneId VN_TIME_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
 
-    private final VnPayProperties properties;
+    private final VnPayConfig properties;
     private final VnPayFeignClient vnPayFeignClient;
 
     @Override
@@ -75,7 +76,8 @@ public class VnPayPaymentGateway implements CallbackPaymentGateway, RefundablePa
     }
 
     @Override
-    public PaymentCallbackResult verifyCallback(Map<String, String> payload) {
+    public PaymentCallbackResult verifyCallback(Map<String, String> queryParams, String rawBody) {
+        Map<String, String> payload = queryParams == null ? Map.of() : queryParams;
         String secureHash = payload.get("vnp_SecureHash");
         Map<String, String> signedParams = payload.entrySet().stream()
                 .filter(entry -> entry.getKey().startsWith("vnp_"))

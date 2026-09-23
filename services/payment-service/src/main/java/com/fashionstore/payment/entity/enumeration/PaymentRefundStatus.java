@@ -1,4 +1,4 @@
-package com.fashionstore.payment.entity;
+package com.fashionstore.payment.entity.enumeration;
 
 /** Represents the provider-facing lifecycle of a refund attempt. */
 public enum PaymentRefundStatus {

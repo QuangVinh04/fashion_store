@@ -61,7 +61,7 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     @Transactional
-    public OrderResponse createOrder(String checkoutId, String idempotencyKey, CreateOrderRequest request) {
+    public OrderResponse createOrder(String checkoutId, String idempotencyKey, CreateOrderRequest request, String clientIp) {
         String userId = currentUserProvider.getCurrentUserId();
         String effectiveIdempotencyKey = idempotencyKey == null || idempotencyKey.isBlank()
                 ? checkoutId
@@ -122,6 +122,7 @@ public class OrderServiceImpl implements OrderService {
                 .idempotencyKey(effectiveIdempotencyKey)
                 .status(OrderStatus.PENDING)
                 .checkoutId(checkout.getId())
+                .clientIp(clientIp)
                 .recipientName(recipientName)
                 .recipientPhone(recipientPhone)
                 .recipientEmail(checkout.getRecipientEmail())
@@ -440,6 +441,7 @@ public class OrderServiceImpl implements OrderService {
                 .paymentId(order.getPaymentId())
                 .paymentMethod(order.getPaymentMethod())
                 .paymentProvider(order.getPaymentProvider())
+                .paymentUrl(order.getPaymentUrl())
                 .currency(order.getCurrency())
                 .cancelReason(order.getCancelReason())
                 .recipientName(order.getRecipientName())

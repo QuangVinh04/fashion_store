@@ -6,11 +6,11 @@ import com.fashionstore.common.security.CurrentUserProvider;
 import com.fashionstore.payment.dto.PaymentInitiationResult;
 import com.fashionstore.payment.dto.PaymentResponse;
 import com.fashionstore.payment.entity.Payment;
-import com.fashionstore.payment.entity.PaymentStatus;
-import com.fashionstore.payment.gateway.PaymentGatewayRegistry;
+import com.fashionstore.payment.entity.enumeration.PaymentStatus;
 import com.fashionstore.payment.mapper.PaymentResponseMapper;
 import com.fashionstore.payment.repository.PaymentRepository;
 import com.fashionstore.payment.service.PaymentService;
+import com.fashionstore.payment.service.provider.PaymentHandlerRegistry;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -23,7 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class PaymentServiceImpl implements PaymentService {
 
     PaymentRepository paymentRepository;
-    PaymentGatewayRegistry paymentGatewayRegistry;
+    PaymentHandlerRegistry paymentHandlerRegistry;
     PaymentResponseMapper paymentResponseMapper;
     CurrentUserProvider currentUserProvider;
 
@@ -50,7 +50,7 @@ public class PaymentServiceImpl implements PaymentService {
             paymentRepository.save(payment);
         }
 
-        PaymentInitiationResult result = paymentGatewayRegistry.get(payment.getProvider()).initiate(payment, clientIp);
+        PaymentInitiationResult result = paymentHandlerRegistry.get(payment.getProvider()).initiate(payment, clientIp);
         if (result.getProviderTransactionId() != null) {
             payment.setTransactionId(result.getProviderTransactionId());
         }

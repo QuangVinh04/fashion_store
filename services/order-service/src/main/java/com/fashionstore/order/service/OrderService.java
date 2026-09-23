@@ -15,7 +15,7 @@ import java.util.List;
 
 public interface OrderService {
 
-    OrderResponse createOrder(String checkoutId, String idempotencyKey, CreateOrderRequest request);
+    OrderResponse createOrder(String checkoutId, String idempotencyKey, CreateOrderRequest request, String clientIp);
 
     OrderResponse getMyOrderById(String orderId);
 

@@ -9,6 +9,7 @@ import com.fashionstore.contracts.inventory.event.InventoryConfirmedEvent;
 import com.fashionstore.contracts.inventory.event.InventoryReservationEvent;
 import com.fashionstore.contracts.payment.event.PaymentCancellationRejectedEvent;
 import com.fashionstore.contracts.payment.event.PaymentFailedEvent;
+import com.fashionstore.contracts.payment.event.PaymentInitiatedEvent;
 import com.fashionstore.contracts.payment.event.PaymentSuccessEvent;
 import com.fashionstore.order.entity.Cart;
 import com.fashionstore.order.entity.CartItem;
@@ -118,6 +119,43 @@ class OrderSagaEventListenerTest {
         assertEquals(EventTypes.PAYMENT_REQUESTED, emittedCommands().getFirst().eventType());
         // Bảng orders không bị saga chạm tới giữa chừng.
         assertEquals(OrderStatus.PENDING, order.getStatus());
+    }
+
+    @Test
+    void paymentInitiatedStoresUrlWithoutAdvancingTheSagaStep() {
+        OrderSaga saga = runningSaga();
+        saga.inventoryReserved("res-1");   // saga đứng ở AUTHORIZE_PAYMENT, đúng bước chờ payment
+        Order order = order();
+        registerSaga(saga, order);
+
+        listener.paymentInitiated(
+                envelope(saga, EventTypes.PAYMENT_INITIATED,
+                        new PaymentInitiatedEvent("order-1", "payment-1", "https://sandbox.vnpayment.vn/pay?...")),
+                "message-initiated-1"
+        );
+
+        assertEquals("https://sandbox.vnpayment.vn/pay?...", order.getPaymentUrl());
+        // Chỉ ghi chú thông tin, không đổi bước saga — vẫn chờ PAYMENT_COMPLETED thật.
+        assertEquals(OrderSagaStep.AUTHORIZE_PAYMENT, saga.getCurrentStep());
+        verify(sagaOutbox, never()).emit(any(), any());
+    }
+
+    @Test
+    void lateOrDuplicatePaymentInitiatedReplyIsIgnoredWhenSagaAlreadyMovedOn() {
+        OrderSaga saga = runningSaga();
+        saga.inventoryReserved("res-1");
+        saga.paymentAuthorized("pay-1");   // đã sang CONFIRM_INVENTORY — reply initiated tới trễ
+        Order order = order();
+        registerSaga(saga, order);
+
+        listener.paymentInitiated(
+                envelope(saga, EventTypes.PAYMENT_INITIATED,
+                        new PaymentInitiatedEvent("order-1", "payment-1", "https://sandbox.vnpayment.vn/pay?...")),
+                "message-initiated-2"
+        );
+
+        assertNull(order.getPaymentUrl());
+        verify(orderRepository, never()).save(any());
     }
 
     @Test

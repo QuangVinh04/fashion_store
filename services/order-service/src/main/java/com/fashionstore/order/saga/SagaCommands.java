@@ -32,7 +32,8 @@ public final class SagaCommands {
                         order.getPaymentMethod().name(),
                         order.getPaymentProvider().name(),
                         order.getTotalAmount(),
-                        order.getCurrency()
+                        order.getCurrency(),
+                        order.getClientIp()
                 )
         );
     }

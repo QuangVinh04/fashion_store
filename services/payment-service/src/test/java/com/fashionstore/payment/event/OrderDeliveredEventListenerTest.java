@@ -9,7 +9,7 @@ import com.fashionstore.contracts.common.EventEnvelope;
 import com.fashionstore.contracts.common.EventTypes;
 import com.fashionstore.contracts.order.OrderDeliveredEvent;
 import com.fashionstore.payment.entity.Payment;
-import com.fashionstore.payment.entity.PaymentStatus;
+import com.fashionstore.payment.entity.enumeration.PaymentStatus;
 import com.fashionstore.payment.repository.PaymentRepository;
 import org.junit.jupiter.api.Test;
 

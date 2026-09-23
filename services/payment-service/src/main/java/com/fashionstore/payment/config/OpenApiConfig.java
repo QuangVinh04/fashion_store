@@ -19,7 +19,7 @@ public class OpenApiConfig {
                 .info(new Info()
                         .title("Payment Service API")
                         .version("v1")
-                        .description("Khởi tạo thanh toán, tra cứu payment và xử lý callback từ VNPay/PayPal."))
+                        .description("Khởi tạo thanh toán, tra cứu payment và xử lý callback từ VNPay/PayOS."))
                 .components(new Components().addSecuritySchemes(BEARER_AUTH, new SecurityScheme()
                         .type(SecurityScheme.Type.HTTP)
                         .scheme("bearer")

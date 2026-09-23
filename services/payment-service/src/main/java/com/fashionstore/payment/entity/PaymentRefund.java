@@ -2,6 +2,7 @@ package com.fashionstore.payment.entity;
 
 import com.fashionstore.common.payment.PaymentProvider;
 import com.fashionstore.common.persistence.AuditedEntity;
+import com.fashionstore.payment.entity.enumeration.PaymentRefundStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;

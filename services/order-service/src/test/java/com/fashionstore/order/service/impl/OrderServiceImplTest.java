@@ -129,7 +129,7 @@ class OrderServiceImplTest {
         when(orderRepository.findByUserIdAndIdempotencyKey("user-1", "checkout-1"))
                 .thenReturn(Optional.of(existing));
 
-        OrderResponse response = service.createOrder("checkout-1", null, new CreateOrderRequest());
+        OrderResponse response = service.createOrder("checkout-1", null, new CreateOrderRequest(), "127.0.0.1");
 
         assertEquals("order-1", response.getId());
         assertEquals("checkout-1", response.getCheckoutId());
@@ -178,7 +178,7 @@ class OrderServiceImplTest {
                 .shippingAddress("123 Street")
                 .build();
 
-        OrderResponse response = service.createOrder("checkout-1", null, request);
+        OrderResponse response = service.createOrder("checkout-1", null, request, "127.0.0.1");
 
         assertEquals("order-1", response.getId());
         ArgumentCaptor<List<com.fashionstore.order.dto.PromotionItemDto>> itemsCaptor = ArgumentCaptor.forClass(List.class);

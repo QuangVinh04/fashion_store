@@ -8,6 +8,7 @@ import com.fashionstore.contracts.inventory.event.InventoryReservationFailedEven
 import com.fashionstore.contracts.payment.event.PaymentCancellationRejectedEvent;
 import com.fashionstore.contracts.payment.event.PaymentCancelledEvent;
 import com.fashionstore.contracts.payment.event.PaymentFailedEvent;
+import com.fashionstore.contracts.payment.event.PaymentInitiatedEvent;
 import com.fashionstore.contracts.payment.event.PaymentSuccessEvent;
 import com.fashionstore.order.config.messaging.RabbitMQNames;
 import com.fashionstore.order.entity.Cart;
@@ -74,6 +75,31 @@ public class OrderSagaEventListener {
                     }
                     saga.recordOrphanReservation(event.reservationId());
                     return List.of(SagaCommands.releaseInventory(saga.getOrderId(), event.reservationId()));
+                })
+                .build());
+    }
+
+    // 1b. Đã có URL/QR thanh toán — chỉ ghi chú cho FE đọc, KHÔNG đổi bước saga (saga vẫn đứng ở
+    // AUTHORIZE_PAYMENT chờ PAYMENT_COMPLETED thật). Guard theo đúng expectedStep để không ghi đè
+    // paymentUrl bằng reply cũ nếu saga đã đi tiếp hoặc đã bị hủy.
+    @Transactional
+    @RabbitListener(queues = RabbitMQNames.ORDER_PAYMENT_INITIATED_QUEUE)
+    public void paymentInitiated(
+            EventEnvelope<?> envelope,
+            @Header(RabbitMQNames.OUTBOX_EVENT_ID_HEADER) String messageId
+    ) {
+        sagaReplies.process(SagaReply.<PaymentInitiatedEvent>builder()
+                .messageId(messageId)
+                .consumer(SagaConsumers.PAYMENT_INITIATED)
+                .envelope(envelope)
+                .payloadType(PaymentInitiatedEvent.class)
+                .orderIdOf(PaymentInitiatedEvent::orderId)
+                .expectedStep(OrderSagaStep.AUTHORIZE_PAYMENT)
+                .onStep((saga, event) -> {
+                    Order order = order(saga);
+                    order.setPaymentUrl(event.paymentUrl());
+                    orderRepository.save(order);
+                    return List.of();
                 })
                 .build());
     }

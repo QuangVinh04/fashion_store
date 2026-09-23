@@ -1,18 +1,21 @@
-package com.fashionstore.payment.gateway;
+package com.fashionstore.payment.service.provider;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fashionstore.common.payment.PaymentMethod;
 import com.fashionstore.common.payment.PaymentProvider;
-import com.fashionstore.payment.config.payment.VnPayProperties;
+import com.fashionstore.payment.config.payment.VnPayConfig;
+import com.fashionstore.payment.dto.PaymentCallbackResult;
 import com.fashionstore.payment.dto.PaymentRefundResult;
 import com.fashionstore.payment.entity.Payment;
 import com.fashionstore.payment.entity.PaymentRefund;
-import com.fashionstore.payment.entity.PaymentRefundStatus;
-import com.fashionstore.payment.entity.PaymentStatus;
+import com.fashionstore.payment.entity.enumeration.PaymentRefundStatus;
+import com.fashionstore.payment.entity.enumeration.PaymentStatus;
+import com.fashionstore.payment.gateway.VnPayFeignClient;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 import java.math.BigDecimal;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -21,7 +24,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-class VnPayPaymentGatewayTest {
+class VnPayPaymentHandlerTest {
 
     @Test
     void refundBuildsSignedVnPayRequest() throws Exception {
@@ -29,7 +32,7 @@ class VnPayPaymentGatewayTest {
         when(client.refund(any())).thenReturn(new ObjectMapper().readTree("""
                 {"vnp_ResponseCode":"00","vnp_TransactionStatus":"00","vnp_TransactionNo":"refund-1"}
                 """));
-        VnPayPaymentGateway gateway = new VnPayPaymentGateway(properties(), client);
+        VnPayPaymentHandler handler = new VnPayPaymentHandler(properties(), client);
         Payment payment = Payment.builder()
                 .orderId("order-1")
                 .userId("user-1")
@@ -50,7 +53,7 @@ class VnPayPaymentGatewayTest {
                 .idempotencyKey("refund-message-1")
                 .build();
 
-        PaymentRefundResult result = gateway.refund(payment, refund);
+        PaymentRefundResult result = handler.refund(payment, refund);
 
         assertThat(result.status()).isEqualTo(PaymentRefundStatus.COMPLETED);
         ArgumentCaptor<Map<String, String>> request = ArgumentCaptor.forClass(Map.class);
@@ -62,8 +65,25 @@ class VnPayPaymentGatewayTest {
                 .containsKey("vnp_SecureHash");
     }
 
-    private VnPayProperties properties() {
-        VnPayProperties properties = new VnPayProperties();
+    @Test
+    void verifyCallbackRejectsTamperedSignature() {
+        VnPayFeignClient client = mock(VnPayFeignClient.class);
+        VnPayPaymentHandler handler = new VnPayPaymentHandler(properties(), client);
+        Map<String, String> payload = new LinkedHashMap<>();
+        payload.put("vnp_TxnRef", "merchant-1");
+        payload.put("vnp_ResponseCode", "00");
+        payload.put("vnp_TransactionStatus", "00");
+        payload.put("vnp_TransactionNo", "txn-1");
+        payload.put("vnp_Amount", "50000000");
+        payload.put("vnp_SecureHash", "not-a-real-hash");
+
+        PaymentCallbackResult result = handler.verifyCallback(payload, null);
+
+        assertThat(result.isSignatureValid()).isFalse();
+    }
+
+    private VnPayConfig properties() {
+        VnPayConfig properties = new VnPayConfig();
         properties.setPayUrl("https://sandbox.vnpayment.vn/paymentv2/vpcpay.html");
         properties.setApiUrl("https://sandbox.vnpayment.vn");
         properties.setTmnCode("tmn-code");

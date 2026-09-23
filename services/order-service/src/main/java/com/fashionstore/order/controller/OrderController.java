@@ -14,6 +14,7 @@ import com.fashionstore.order.service.OrderService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springdoc.core.annotations.ParameterObject;
 import lombok.AccessLevel;
@@ -65,10 +66,11 @@ public class OrderController {
                                                          đơn đã tạo, không tạo đơn thứ hai. Bỏ trống thì
                                                          `checkoutId` được dùng làm khoá.""")
                                                  @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
-                                                 @Valid @RequestBody CreateOrderRequest request) {
+                                                 @Valid @RequestBody CreateOrderRequest request,
+                                                 HttpServletRequest httpServletRequest) {
         return ApiResponse.<OrderResponse>builder()
                 .message("Place order successfully")
-                .data(orderService.createOrder(checkoutId, idempotencyKey, request))
+                .data(orderService.createOrder(checkoutId, idempotencyKey, request, httpServletRequest.getRemoteAddr()))
                 .build();
     }
 

@@ -44,7 +44,8 @@ public class SecurityConfig {
                                 "/swagger-ui/**",
                                 "/swagger-ui.html",
                                 "/api/v1/payments/vnpay/return",
-                                "/api/v1/payments/vnpay/ipn"
+                                "/api/v1/payments/vnpay/ipn",
+                                "/api/v1/payments/payos/webhook"
                         ).permitAll()
                         .anyRequest().authenticated())
                 .addFilterBefore(new GatewayHeaderAuthenticationFilter(),

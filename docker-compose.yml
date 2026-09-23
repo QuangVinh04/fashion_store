@@ -166,8 +166,9 @@ services:
       VNPAY_RETURN_URL: ${VNPAY_RETURN_URL:-http://localhost:8080/api/v1/payments/vnpay/return}
       VNPAY_TMN_CODE: ${VNPAY_TMN_CODE:-DEMOTMN0}
       VNPAY_HASH_SECRET: ${VNPAY_HASH_SECRET:-DEMOHASHSECRETKEY1234567890123}
-      PAYPAL_CLIENT_ID: ${PAYPAL_CLIENT_ID:-}
-      PAYPAL_CLIENT_SECRET: ${PAYPAL_CLIENT_SECRET:-}
+      PAYOS_CLIENT_ID: ${PAYOS_CLIENT_ID:-}
+      PAYOS_API_KEY: ${PAYOS_API_KEY:-}
+      PAYOS_CHECKSUM_KEY: ${PAYOS_CHECKSUM_KEY:-}
     depends_on:
       payment-postgres:
         condition: service_healthy

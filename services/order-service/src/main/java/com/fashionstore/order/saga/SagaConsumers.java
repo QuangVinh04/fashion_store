@@ -12,6 +12,7 @@ public final class SagaConsumers {
     public static final String INVENTORY_REJECTED = "order.inventory-rejected.v3";
     public static final String INVENTORY_CONFIRMED = "order.inventory-confirmed.v2";
     public static final String INVENTORY_RELEASED = "order.inventory-released.v2";
+    public static final String PAYMENT_INITIATED = "order.payment-initiated.v1";
     public static final String PAYMENT_COMPLETED = "order.payment-completed.v3";
     public static final String PAYMENT_FAILED = "order.payment-failed.v3";
     public static final String PAYMENT_CANCELLED = "order.payment-cancelled.v2";

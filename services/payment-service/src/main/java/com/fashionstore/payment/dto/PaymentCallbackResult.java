@@ -1,6 +1,6 @@
 package com.fashionstore.payment.dto;
 
-import com.fashionstore.payment.entity.PaymentStatus;
+import com.fashionstore.payment.entity.enumeration.PaymentStatus;
 import lombok.Builder;
 import lombok.Getter;
 

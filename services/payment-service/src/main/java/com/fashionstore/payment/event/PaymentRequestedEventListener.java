@@ -11,21 +11,23 @@ import com.fashionstore.contracts.payment.command.CancelPaymentCommand;
 import com.fashionstore.contracts.payment.command.RefundPaymentCommand;
 import com.fashionstore.contracts.payment.event.PaymentCancellationRejectedEvent;
 import com.fashionstore.contracts.payment.event.PaymentCancelledEvent;
+import com.fashionstore.contracts.payment.event.PaymentInitiatedEvent;
 import com.fashionstore.contracts.payment.event.PaymentRefundRejectedEvent;
 import com.fashionstore.contracts.payment.event.PaymentRefundedEvent;
 import com.fashionstore.contracts.payment.event.PaymentSuccessEvent;
 import com.fashionstore.payment.config.messaging.RabbitMQNames;
+import com.fashionstore.payment.dto.PaymentInitiationResult;
 import com.fashionstore.payment.dto.PaymentRefundResult;
 import com.fashionstore.payment.entity.Payment;
 import com.fashionstore.payment.entity.PaymentRefund;
-import com.fashionstore.payment.entity.PaymentRefundStatus;
-import com.fashionstore.payment.entity.PaymentStatus;
-import com.fashionstore.payment.gateway.PaymentGatewayRegistry;
+import com.fashionstore.payment.entity.enumeration.PaymentRefundStatus;
+import com.fashionstore.payment.entity.enumeration.PaymentStatus;
+import com.fashionstore.payment.outbox.OutboxService;
 import com.fashionstore.payment.repository.PaymentRefundRepository;
 import com.fashionstore.payment.repository.PaymentRepository;
+import com.fashionstore.payment.service.provider.PaymentHandlerRegistry;
 import lombok.RequiredArgsConstructor;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -41,8 +43,8 @@ public class PaymentRequestedEventListener {
     private final PaymentRefundRepository paymentRefundRepository;
     private final ProcessedMessageService processedMessageService;
     private final ObjectMapper objectMapper;
-    private final ApplicationEventPublisher eventPublisher;
-    private final PaymentGatewayRegistry paymentGatewayRegistry;
+    private final OutboxService outboxService;
+    private final PaymentHandlerRegistry paymentHandlerRegistry;
 
     @Transactional
     @RabbitListener(queues = RabbitMQNames.PAYMENT_SAGA_COMMAND_QUEUE)
@@ -75,6 +77,11 @@ public class PaymentRequestedEventListener {
             if (existing.getStatus() == PaymentStatus.COMPLETED
                     || existing.getStatus() == PaymentStatus.COD_PENDING) {
                 publishCompleted(existing, envelope.correlationId());
+            } else if (existing.getStatus() == PaymentStatus.PENDING
+                    && existing.getMethod() != PaymentMethod.COD) {
+                // Saga timeout đã phát lại AUTHORIZE_PAYMENT (PAYMENT_INITIATED lần trước có thể đã thất
+                // lạc) — thử khởi tạo lại, cùng merchantReference nên vẫn idempotent phía cổng thanh toán.
+                initiateOnlinePayment(existing, request.clientIp(), envelope.correlationId());
             }
             return;
         }
@@ -91,10 +98,37 @@ public class PaymentRequestedEventListener {
                 .status(method == PaymentMethod.COD ? PaymentStatus.COD_PENDING : PaymentStatus.PENDING)
                 .build();
         Payment saved = paymentRepository.save(payment);
-        if (saved.getStatus() == PaymentStatus.COMPLETED
-                || saved.getStatus() == PaymentStatus.COD_PENDING) {
+        if (saved.getStatus() == PaymentStatus.COD_PENDING) {
             publishCompleted(saved, envelope.correlationId());
+        } else {
+            initiateOnlinePayment(saved, request.clientIp(), envelope.correlationId());
         }
+    }
+
+    /**
+     * Khởi tạo giao dịch với cổng ngay khi vừa xin thanh toán, thay vì đợi client gọi
+     * {@code POST /payments/{id}/initiate} riêng — bớt 2 vòng round-trip cho frontend. Endpoint initiate
+     * cũ vẫn giữ nguyên, dùng khi cần tạo lại link đã hết hạn.
+     */
+    private void initiateOnlinePayment(Payment payment, String clientIp, String correlationId) {
+        if (payment.getMerchantReference() == null) {
+            payment.setMerchantReference(payment.getId().replace("-", ""));
+        }
+        PaymentInitiationResult result = paymentHandlerRegistry.get(payment.getProvider()).initiate(payment, clientIp);
+        if (result.getProviderTransactionId() != null) {
+            payment.setTransactionId(result.getProviderTransactionId());
+        }
+        payment.setProviderAmount(result.getProviderAmount());
+        payment.setProviderCurrency(result.getProviderCurrency());
+        payment.setProviderTransactionDate(result.getProviderTransactionDate());
+        Payment saved = paymentRepository.save(payment);
+
+        outboxService.saveMessage(saved.getOrderId(), EventTypes.PAYMENT_INITIATED, EventEnvelope.v1(
+                EventTypes.PAYMENT_INITIATED,
+                saved.getOrderId(),
+                correlationId,
+                new PaymentInitiatedEvent(saved.getOrderId(), saved.getId(), result.getPaymentUrl())
+        ));
     }
 
     private void cancelPayment(EventEnvelope<?> envelope) {
@@ -201,8 +235,8 @@ public class PaymentRequestedEventListener {
         paymentRepository.save(payment);
 
         try {
-            PaymentRefundResult result = paymentGatewayRegistry
-                    .getRefundableGateway(payment.getProvider())
+            PaymentRefundResult result = paymentHandlerRegistry
+                    .get(payment.getProvider())
                     .refund(payment, refund);
             applyRefundResult(payment, refund, result, refundedAmount, envelope.correlationId());
         } catch (RuntimeException exception) {
@@ -274,7 +308,7 @@ public class PaymentRequestedEventListener {
     }
 
     private void publishRefunded(Payment payment, String reason, String correlationId) {
-        eventPublisher.publishEvent(EventEnvelope.v1(
+        outboxService.saveMessage(payment.getOrderId(), EventTypes.PAYMENT_REFUNDED, EventEnvelope.v1(
                 EventTypes.PAYMENT_REFUNDED,
                 payment.getOrderId(),
                 correlationId,
@@ -289,7 +323,7 @@ public class PaymentRequestedEventListener {
             String failureMessage,
             String correlationId
     ) {
-        eventPublisher.publishEvent(EventEnvelope.v1(
+        outboxService.saveMessage(orderId, EventTypes.PAYMENT_REFUND_REJECTED, EventEnvelope.v1(
                 EventTypes.PAYMENT_REFUND_REJECTED,
                 orderId,
                 correlationId,
@@ -298,7 +332,7 @@ public class PaymentRequestedEventListener {
     }
 
     private void publishCompleted(Payment payment, String correlationId) {
-        eventPublisher.publishEvent(EventEnvelope.v1(
+        outboxService.saveMessage(payment.getOrderId(), EventTypes.PAYMENT_COMPLETED, EventEnvelope.v1(
                 EventTypes.PAYMENT_COMPLETED,
                 payment.getOrderId(),
                 correlationId,
@@ -307,7 +341,7 @@ public class PaymentRequestedEventListener {
     }
 
     private void publishCancelled(Payment payment, String reason, String correlationId) {
-        eventPublisher.publishEvent(EventEnvelope.v1(
+        outboxService.saveMessage(payment.getOrderId(), EventTypes.PAYMENT_CANCELLED, EventEnvelope.v1(
                 EventTypes.PAYMENT_CANCELLED,
                 payment.getOrderId(),
                 correlationId,
@@ -321,7 +355,7 @@ public class PaymentRequestedEventListener {
             String failureMessage,
             String correlationId
     ) {
-        eventPublisher.publishEvent(EventEnvelope.v1(
+        outboxService.saveMessage(payment.getOrderId(), EventTypes.PAYMENT_CANCELLATION_REJECTED, EventEnvelope.v1(
                 EventTypes.PAYMENT_CANCELLATION_REJECTED,
                 payment.getOrderId(),
                 correlationId,

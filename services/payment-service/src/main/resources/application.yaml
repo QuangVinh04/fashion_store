@@ -34,7 +34,7 @@ spring:
 
 app:
   outbox:
-    relay-delay-ms: ${OUTBOX_RELAY_DELAY_MS:5000}
+    publisher-delay-ms: ${OUTBOX_PUBLISHER_DELAY_MS:15000}
 
 payment:
   vnpay:
@@ -46,14 +46,12 @@ payment:
     create-by: ${VNPAY_REFUND_CREATE_BY:fashion-store}
     server-ip: ${VNPAY_SERVER_IP:127.0.0.1}
     expiration-minutes: ${VNPAY_EXPIRATION_MINUTES:15}
-  paypal:
-    base-url: ${PAYPAL_BASE_URL:https://api-m.sandbox.paypal.com}
-    client-id: ${PAYPAL_CLIENT_ID:}
-    client-secret: ${PAYPAL_CLIENT_SECRET:}
-    currency: ${PAYPAL_CURRENCY:USD}
-    vnd-per-currency-unit: ${PAYPAL_VND_PER_CURRENCY_UNIT:25000}
-    return-url: ${PAYPAL_RETURN_URL:http://localhost:3000/payment/paypal/success}
-    cancel-url: ${PAYPAL_CANCEL_URL:http://localhost:3000/payment/paypal/cancel}
+  payos:
+    client-id: ${PAYOS_CLIENT_ID:}
+    api-key: ${PAYOS_API_KEY:}
+    checksum-key: ${PAYOS_CHECKSUM_KEY:}
+    return-url: ${PAYOS_RETURN_URL:http://localhost:3000/payment/payos/success}
+    cancel-url: ${PAYOS_CANCEL_URL:http://localhost:3000/payment/payos/cancel}
 
 management:
   endpoints:

@@ -99,6 +99,15 @@ public class Order extends BaseEntity {
     @Column(name = "checkout_id", nullable = false, unique = true)
     String checkoutId;
 
+    /** IP của khách lúc đặt hàng — cần lại lúc saga xin thanh toán (VNPay yêu cầu vnp_IpAddr), lúc đó đã
+     * không còn HttpServletRequest gốc nên phải snapshot ngay tại đây. */
+    @Column(name = "client_ip", length = 45)
+    String clientIp;
+
+    /** URL/QR thanh toán, set khi saga có PAYMENT_INITIATED — chỉ để FE đọc, không phải trạng thái saga. */
+    @Column(name = "payment_url", length = 1000)
+    String paymentUrl;
+
 
     // Saga chỉ chạm vào orders tại ba thời điểm: tạo đơn (PENDING), saga xong (CONFIRMED),
     // saga bù trừ xong (CANCELLED). Ngoài ba mốc đó, tiến độ điều phối nằm hết ở OrderSaga.

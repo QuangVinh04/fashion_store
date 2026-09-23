@@ -3,6 +3,7 @@ package com.fashionstore.payment.entity;
 import com.fashionstore.common.persistence.AuditedEntity;
 import com.fashionstore.common.payment.PaymentMethod;
 import com.fashionstore.common.payment.PaymentProvider;
+import com.fashionstore.payment.entity.enumeration.PaymentStatus;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;

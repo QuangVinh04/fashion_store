@@ -7,7 +7,7 @@ import com.fashionstore.contracts.common.EventEnvelope;
 import com.fashionstore.contracts.order.OrderDeliveredEvent;
 import com.fashionstore.payment.config.messaging.RabbitMQNames;
 import com.fashionstore.payment.entity.Payment;
-import com.fashionstore.payment.entity.PaymentStatus;
+import com.fashionstore.payment.entity.enumeration.PaymentStatus;
 import com.fashionstore.payment.repository.PaymentRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
