@@ -19,7 +19,7 @@ public interface PaymentRefundRepository extends JpaRepository<PaymentRefund, St
             select coalesce(sum(refund.amount), 0)
             from PaymentRefund refund
             where refund.payment.id = :paymentId
-              and refund.status = com.fashionstore.payment.entity.PaymentRefundStatus.COMPLETED
+              and refund.status = com.fashionstore.payment.entity.enumeration.PaymentRefundStatus.COMPLETED
             """)
     BigDecimal sumCompletedAmountByPaymentId(@Param("paymentId") String paymentId);
 }

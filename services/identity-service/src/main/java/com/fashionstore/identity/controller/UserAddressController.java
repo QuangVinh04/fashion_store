@@ -1,7 +1,6 @@
 package com.fashionstore.identity.controller;
 
 import com.fashionstore.common.dto.ApiResponse;
-import com.fashionstore.identity.dto.auth.ChangePasswordRequest;
 import com.fashionstore.identity.dto.user.UpdateProfileRequest;
 import com.fashionstore.identity.dto.user.UserAddressRequest;
 import com.fashionstore.identity.dto.user.UserAddressResponse;

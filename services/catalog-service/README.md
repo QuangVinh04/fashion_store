@@ -187,7 +187,7 @@ Publish qua outbox (`OutboxService.saveMessage` → `OutboxPublisher`, relay the
 | `SERVER_PORT` | `8087` |
 | `CATALOG_POSTGRES_HOST/PORT/DB/USER/PASSWORD` | `localhost` / `5435` / `catalog_database` / `root` / `root` |
 | `RABBITMQ_HOST/PORT/USERNAME/PASSWORD` | `localhost` / `5672` / `guest` / `guest` |
-| `JWT_ISSUER`, `JWT_JWK_SET_URI` | identity-service `:8082` |
+| `KEYCLOAK_ISSUER`, `KEYCLOAK_JWK_SET_URI` | `http://localhost:8180/realms/fashion-store` (+ `/protocol/openid-connect/certs`) |
 | `FILE_PUBLIC_BASE_URL` | `http://localhost:8087` |
 | `MINIO_ENDPOINT` / `MINIO_PUBLIC_ENDPOINT` | `http://localhost:9000` / `http://localhost:9000` |
 | `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY`, `MINIO_BUCKET` | `minioadmin` / `minioadmin` / `fashion-media` |

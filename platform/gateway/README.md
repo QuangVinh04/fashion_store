@@ -1,8 +1,18 @@
 # API Gateway
 
-Spring Cloud Gateway is the only backend component exposed to clients. It
-preserves the existing `/api/v1/...` routes and forwards them to the owning
-service.
+Spring Cloud Gateway is the only route to the services. It preserves the existing
+`/api/v1/...` routes and forwards them to the owning service.
+
+Browsers do not call it directly: they go through `storefront-bff` / `backoffice-bff`,
+which relay the Keycloak access token (`TokenRelay`). Port 8080 stays open for
+Bearer calls from Swagger UI / Postman.
+
+## Authentication
+
+- Resource server for Keycloak tokens only (`KEYCLOAK_ISSUER`, JWKS `KEYCLOAK_JWK_SET_URI`, `aud` must contain `fashion-api`).
+- The `Authorization` header is forwarded unchanged; every service validates the JWT again (zero trust).
+  No `X-User-*` headers are set or trusted anywhere.
+- `/internal/**` is always denied at the gateway.
 
 ## OpenAPI / Swagger UI
 

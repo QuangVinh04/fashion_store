@@ -20,9 +20,9 @@ class ApplicationYamlTest {
 
         assertThat(propertySources).isNotEmpty();
         PropertySource<?> source = propertySources.getFirst();
-        assertThat(source.getProperty("security.jwt.issuer")).isNotNull();
-        assertThat(source.getProperty("security.cookie-secure")).isNotNull();
-        assertThat(source.getProperty("security.jwt.access-token-ttl-seconds")).isNotNull();
-        assertThat(source.getProperty("security.jwt.refresh-token-ttl-days")).isNotNull();
+        assertThat(source.getProperty("spring.security.oauth2.resourceserver.jwt.issuer-uri")).isNotNull();
+        assertThat(source.getProperty("spring.security.oauth2.resourceserver.jwt.jwk-set-uri")).isNotNull();
+        assertThat(source.getProperty("spring.security.oauth2.resourceserver.jwt.audiences")).isNotNull();
+        assertThat(source.getProperty("security.jwt.issuer")).isNull();
     }
 }

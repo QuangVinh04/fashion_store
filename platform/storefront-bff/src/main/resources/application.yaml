@@ -1,0 +1,67 @@
+server:
+  port: ${SERVER_PORT:8083}
+  reactive:
+    session:
+      timeout: 30m
+      cookie:
+        # Cookie không phân biệt port: tên riêng cho từng BFF trên cùng host
+        name: FS_STOREFRONT_SESSION
+        http-only: true
+        same-site: lax
+        secure: ${SESSION_COOKIE_SECURE:false}
+
+spring:
+  application:
+    name: storefront-bff
+  autoconfigure:
+    # BFF chỉ dùng Redis cho session, không cần RedisService của common-library
+    exclude: com.fashionstore.common.autoconfigure.CommonRedisAutoConfiguration
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 3000ms
+  session:
+    redis:
+      namespace: fashion-store:storefront-bff
+  cloud:
+    gateway:
+      server:
+        webflux:
+          default-filters:
+            - SaveSession
+          routes:
+            - id: api
+              uri: ${API_GATEWAY_URL:http://localhost:8080}
+              predicates:
+                - Path=/api/**
+              filters:
+                - TokenRelay=
+            # SPA chạy cùng origin với BFF (giống YAS) — không cần CORS
+            - id: storefront-ui
+              uri: ${STOREFRONT_UI_URL:http://localhost:3000}
+              order: 1
+              predicates:
+                - Path=/**
+
+app:
+  keycloak:
+    public-url: ${KEYCLOAK_PUBLIC_URL:http://localhost:8180/realms/fashion-store}
+    internal-url: ${KEYCLOAK_INTERNAL_URL:http://localhost:8180/realms/fashion-store}
+    client-id: storefront-bff
+    client-secret: ${STOREFRONT_BFF_CLIENT_SECRET:dev-storefront-bff-secret}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+logging:
+  pattern:
+    level: "%5p [${spring.application.name:},%X{traceId:-},%X{spanId:-}]"

@@ -1,15 +1,15 @@
 name: fashion-store
 
 x-service-environment: &service-environment
-  JWT_ISSUER: http://localhost:8080
-  JWT_JWK_SET_URI: http://identity-service:8082/api/v1/auth/jwks
+  KEYCLOAK_ISSUER: http://localhost:8180/realms/fashion-store
+  KEYCLOAK_JWK_SET_URI: http://keycloak:8080/realms/fashion-store/protocol/openid-connect/certs
   RABBITMQ_HOST: rabbitmq
   RABBITMQ_PORT: 5672
   RABBITMQ_USERNAME: guest
   RABBITMQ_PASSWORD: guest
   REDIS_HOST: redis
   REDIS_PORT: 6379
-  INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-fashion-store-internal-secret-token}
+  KEYCLOAK_TOKEN_URI: http://keycloak:8080/realms/fashion-store/protocol/openid-connect/token
 
 services:
   api-gateway:
@@ -18,24 +18,82 @@ services:
       dockerfile: Dockerfile
     environment:
       SERVER_PORT: 8080
-      JWT_ISSUER: http://localhost:8080
-      JWT_JWK_SET_URI: http://identity-service:8082/api/v1/auth/jwks
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
+      KEYCLOAK_ISSUER: http://localhost:8180/realms/fashion-store
+      KEYCLOAK_JWK_SET_URI: http://keycloak:8080/realms/fashion-store/protocol/openid-connect/certs
       IDENTITY_BASE_URL: http://identity-service:8082
       CATALOG_BASE_URL: http://catalog-service:8087
       ORDER_BASE_URL: http://order-service:8089
       PAYMENT_BASE_URL: http://payment-service:8085
     depends_on:
-      - identity-service
-      - catalog-service
-      - order-service
-      - payment-service
-      - redis
+      identity-service:
+        condition: service_started
+      catalog-service:
+        condition: service_started
+      order-service:
+        condition: service_started
+      payment-service:
+        condition: service_started
+      keycloak:
+        condition: service_healthy
     ports:
-      - "8080:8080"
+      - "8080:8080"   # Bearer cho Swagger/dev; browser đi qua BFF
     networks:
       - fashion-network
+
+  storefront-bff:
+    build:
+      context: platform/storefront-bff
+      dockerfile: Dockerfile
+    environment:
+      SERVER_PORT: 8083
+      API_GATEWAY_URL: http://api-gateway:8080
+      STOREFRONT_UI_URL: ${STOREFRONT_UI_URL:-http://host.docker.internal:3000}
+      KEYCLOAK_PUBLIC_URL: http://localhost:8180/realms/fashion-store
+      KEYCLOAK_INTERNAL_URL: http://keycloak:8080/realms/fashion-store
+      STOREFRONT_BFF_CLIENT_SECRET: ${STOREFRONT_BFF_CLIENT_SECRET:-dev-storefront-bff-secret}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    extra_hosts:
+      - "host.docker.internal:host-gateway"   # UI dev server chạy trên máy host
+    depends_on:
+      api-gateway:
+        condition: service_started
+      keycloak:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    ports:
+      - "8083:8083"
+    networks:
+      - fashion-network
+
+  backoffice-bff:
+    build:
+      context: platform/backoffice-bff
+      dockerfile: Dockerfile
+    environment:
+      SERVER_PORT: 8084
+      API_GATEWAY_URL: http://api-gateway:8080
+      BACKOFFICE_UI_URL: ${BACKOFFICE_UI_URL:-http://host.docker.internal:5173}
+      KEYCLOAK_PUBLIC_URL: http://localhost:8180/realms/fashion-store
+      KEYCLOAK_INTERNAL_URL: http://keycloak:8080/realms/fashion-store
+      BACKOFFICE_BFF_CLIENT_SECRET: ${BACKOFFICE_BFF_CLIENT_SECRET:-dev-backoffice-bff-secret}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    extra_hosts:
+      - "host.docker.internal:host-gateway"   # UI dev server chạy trên máy host
+    depends_on:
+      api-gateway:
+        condition: service_started
+      keycloak:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    ports:
+      - "8084:8084"
+    networks:
+      - fashion-network
+
 
   identity-service:
     build:
@@ -49,10 +107,6 @@ services:
       IDENTITY_POSTGRES_DB: identity_database
       IDENTITY_POSTGRES_USER: root
       IDENTITY_POSTGRES_PASSWORD: root
-      JWT_PRIVATE_KEY_FILE: /var/lib/identity/identity-private.pem
-      JWT_PUBLIC_KEY_FILE: /var/lib/identity/identity-public.pem
-      JWT_LEGACY_JWK_FILE: /var/lib/identity/identity-rsa.jwk
-      ORDER_BASE_URL: http://order-service:8089
       SPRING_MAIN_ALLOW_BEAN_DEFINITION_OVERRIDING: "true"
     depends_on:
       identity-postgres:
@@ -61,8 +115,6 @@ services:
         condition: service_healthy
     expose:
       - "8082"
-    volumes:
-      - identity-key:/var/lib/identity
     networks:
       - fashion-network
 
@@ -100,6 +152,7 @@ services:
     environment:
       <<: *service-environment
       SERVER_PORT: 8087
+      CATALOG_SERVICE_CLIENT_SECRET: ${CATALOG_SERVICE_CLIENT_SECRET:-dev-catalog-service-secret}
       ORDER_BASE_URL: http://order-service:8089
       CATALOG_POSTGRES_HOST: catalog-postgres
       CATALOG_POSTGRES_PORT: 5432
@@ -133,6 +186,7 @@ services:
     environment:
       <<: *service-environment
       SERVER_PORT: 8089
+      ORDER_SERVICE_CLIENT_SECRET: ${ORDER_SERVICE_CLIENT_SECRET:-dev-order-service-secret}
       ORDER_POSTGRES_HOST: order-postgres
       ORDER_POSTGRES_PORT: 5432
       ORDER_POSTGRES_DB: order_database
@@ -176,6 +230,47 @@ services:
         condition: service_healthy
     expose:
       - "8085"
+    networks:
+      - fashion-network
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.7.4
+    command: start-dev --import-realm
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://keycloak-postgres:5432/keycloak_database
+      KC_DB_USERNAME: root
+      KC_DB_PASSWORD: root
+      # iss của token = URL mà browser thấy; service gọi nội bộ qua http://keycloak:8080
+      KC_HOSTNAME: http://localhost:8180
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
+      KC_HEALTH_ENABLED: "true"
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USERNAME:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      # Placeholder trong realm-fashion-store.json
+      STOREFRONT_BFF_CLIENT_SECRET: ${STOREFRONT_BFF_CLIENT_SECRET:-dev-storefront-bff-secret}
+      BACKOFFICE_BFF_CLIENT_SECRET: ${BACKOFFICE_BFF_CLIENT_SECRET:-dev-backoffice-bff-secret}
+      ORDER_SERVICE_CLIENT_SECRET: ${ORDER_SERVICE_CLIENT_SECRET:-dev-order-service-secret}
+      CATALOG_SERVICE_CLIENT_SECRET: ${CATALOG_SERVICE_CLIENT_SECRET:-dev-catalog-service-secret}
+      IDENTITY_SERVICE_CLIENT_SECRET: ${IDENTITY_SERVICE_CLIENT_SECRET:-dev-identity-service-secret}
+      MAIL_HOST: ${MAIL_HOST:-smtp.gmail.com}
+      MAIL_PORT: ${MAIL_PORT:-587}
+      MAIL_FROM: ${MAIL_FROM:-no-reply@fashion.local}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/9000 && printf 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q UP <&3"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    depends_on:
+      keycloak-postgres:
+        condition: service_healthy
+    ports:
+      - "8180:8080"   # Trang đăng nhập — browser phải tới được
+    volumes:
+      - ./platform/keycloak/realm-fashion-store.json:/opt/keycloak/data/import/realm-fashion-store.json:ro
     networks:
       - fashion-network
 
@@ -290,12 +385,23 @@ services:
     networks:
       - fashion-network
 
+  keycloak-postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: keycloak_database
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: root
+    healthcheck: *postgres-healthcheck
+    volumes:
+      - keycloak_postgres_data:/var/lib/postgresql/data
+    networks:
+      - fashion-network
+
 networks:
   fashion-network:
     driver: bridge
 
 volumes:
-  identity-key:
   rabbitmq_data:
   redis_data:
   identity_postgres_data:
@@ -304,3 +410,4 @@ volumes:
   minio_data:
   order_postgres_data:
   payment_postgres_data:
+  keycloak_postgres_data:

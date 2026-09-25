@@ -2,18 +2,17 @@ package com.fashionstore.catalog.config.security;
 
 import com.fashionstore.common.security.ApiAccessDeniedHandler;
 import com.fashionstore.common.security.ApiAuthenticationEntryPoint;
-import com.fashionstore.common.security.GatewayHeaderAuthenticationFilter;
-import com.fashionstore.common.security.InternalTokenAuthFilter;
+import com.fashionstore.common.security.KeycloakJwtAuthoritiesConverter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
+import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.access.intercept.AuthorizationFilter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -24,9 +23,6 @@ import java.util.List;
 @EnableWebSecurity
 @EnableMethodSecurity
 public class SecurityConfig {
-
-    @org.springframework.beans.factory.annotation.Value("${app.internal.secret-token:fashion-store-internal-secret-token}")
-    private String internalSecretToken;
 
     @Bean
     public SecurityFilterChain securityFilterChain(
@@ -44,7 +40,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/actuator/health/**").permitAll()
                         .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
-                        .requestMatchers("/internal/**").permitAll()
+                        .requestMatchers("/internal/**").hasAuthority(KeycloakJwtAuthoritiesConverter.INTERNAL_CALLER)
 
                         // 2. Domain Media / File: Xem ảnh công khai, các thao tác file khác chỉ cần đăng nhập
                         .requestMatchers(HttpMethod.GET, "/api/v1/files/*/content").permitAll()
@@ -76,10 +72,11 @@ public class SecurityConfig {
                         // 6. Mọi thao tác còn lại (Thêm/Sửa/Xóa sản phẩm, cập nhật kho...): Bắt buộc quyền ADMIN
                         .anyRequest().hasRole("ADMIN")
                 )
-                // Filter kiểm tra Token nội bộ giữa các microservices
-                .addFilterBefore(new InternalTokenAuthFilter(internalSecretToken), AuthorizationFilter.class)
-                // Filter nhận diện User từ Gateway (Header: X-User-Id, X-User-Roles)
-                .addFilterBefore(new GatewayHeaderAuthenticationFilter(), AuthorizationFilter.class)
+                // JWT Keycloak do gateway chuyển tiếp; role qua KeycloakJwtAuthoritiesConverter (common-library)
+                .oauth2ResourceServer(resourceServer -> resourceServer
+                        .jwt(Customizer.withDefaults())
+                        .authenticationEntryPoint(authenticationEntryPoint)
+                        .accessDeniedHandler(accessDeniedHandler))
                 .exceptionHandling(exceptions -> exceptions
                         .authenticationEntryPoint(authenticationEntryPoint)
                         .accessDeniedHandler(accessDeniedHandler)

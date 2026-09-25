@@ -5,6 +5,14 @@ springdoc:
   paths-to-match: /api/**
 
 spring:
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # JWT Keycloak: iss = URL browser thấy, JWKS lấy qua đường nội bộ (không dùng discovery)
+          issuer-uri: ${KEYCLOAK_ISSUER:http://localhost:8180/realms/fashion-store}
+          jwk-set-uri: ${KEYCLOAK_JWK_SET_URI:http://localhost:8180/realms/fashion-store/protocol/openid-connect/certs}
+          audiences: fashion-api
   application:
     name: payment-service
   datasource:

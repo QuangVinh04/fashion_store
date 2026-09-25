@@ -2,12 +2,10 @@ package com.fashionstore.identity.service.impl;
 
 import com.fashionstore.common.exception.AppException;
 import com.fashionstore.identity.exception.IdentityErrorCode;
-import com.fashionstore.identity.dto.auth.ChangePasswordRequest;
 import com.fashionstore.identity.dto.user.UpdateProfileRequest;
 import com.fashionstore.identity.dto.user.UserAddressRequest;
 import com.fashionstore.identity.dto.user.UserAddressResponse;
 import com.fashionstore.identity.dto.user.UserProfileResponse;
-import com.fashionstore.identity.entity.CustomUserDetails;
 import com.fashionstore.identity.entity.User;
 import com.fashionstore.identity.entity.UserAddress;
 import com.fashionstore.identity.mapper.UserAddressMapper;

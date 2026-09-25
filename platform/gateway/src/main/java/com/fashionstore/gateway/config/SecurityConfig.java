@@ -1,30 +1,19 @@
 package com.fashionstore.gateway.config;
 
-import com.fashionstore.common.redis.RedisService;
-import com.fashionstore.common.security.JwtBlacklistValidator;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
+import org.springframework.security.config.Customizer;
 import org.springframework.security.config.web.server.ServerHttpSecurity;
-import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
-import org.springframework.security.oauth2.core.OAuth2TokenValidator;
-import org.springframework.security.oauth2.jwt.JwtClaimNames;
-import org.springframework.security.oauth2.jwt.JwtClaimValidator;
-import org.springframework.security.oauth2.jwt.ReactiveJwtDecoder;
-import org.springframework.security.oauth2.jwt.JwtValidators;
-import org.springframework.security.oauth2.jwt.NimbusReactiveJwtDecoder;
 import org.springframework.security.web.server.SecurityWebFilterChain;
-
-import java.util.List;
 
 @Configuration
 public class SecurityConfig {
 
+    // JWT Keycloak (iss, aud=fashion-api, JWKS) cấu hình qua spring.security.oauth2.resourceserver.jwt.*;
+    // token được chuyển tiếp nguyên vẹn, mỗi service tự kiểm tra lại
     @Bean
-    SecurityWebFilterChain securityWebFilterChain(
-            ServerHttpSecurity http,
-            ReactiveJwtDecoder jwtDecoder) {
+    SecurityWebFilterChain securityWebFilterChain(ServerHttpSecurity http) {
         return http
                 .authorizeExchange(authorize -> authorize
                         .pathMatchers(
@@ -39,8 +28,6 @@ public class SecurityConfig {
                                 "/api/v1/payments/vnpay/return",
                                 "/api/v1/payments/vnpay/ipn"
                         ).permitAll()
-                        .pathMatchers("/api/v1/auth/logout").authenticated()
-                        .pathMatchers("/api/v1/auth/**").permitAll()
                         .pathMatchers("/internal/**").denyAll()
                         .pathMatchers(HttpMethod.GET,
                                 "/api/v1/product/**",
@@ -57,25 +44,8 @@ public class SecurityConfig {
                         .pathMatchers("/api/v1/cart/**").permitAll()
                         .pathMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .anyExchange().authenticated())
-                .oauth2ResourceServer(resourceServer -> resourceServer
-                        .jwt(jwt -> jwt.jwtDecoder(jwtDecoder)))
+                .oauth2ResourceServer(resourceServer -> resourceServer.jwt(Customizer.withDefaults()))
                 .csrf(ServerHttpSecurity.CsrfSpec::disable)
                 .build();
-    }
-
-    @Bean
-    ReactiveJwtDecoder jwtDecoder(
-            @Value("${spring.security.oauth2.resourceserver.jwt.jwk-set-uri}") String jwkSetUri,
-            @Value("${spring.security.oauth2.resourceserver.jwt.issuer-uri}") String issuer,
-            RedisService redisService) {
-        NimbusReactiveJwtDecoder decoder = NimbusReactiveJwtDecoder.withJwkSetUri(jwkSetUri).build();
-        OAuth2TokenValidator<org.springframework.security.oauth2.jwt.Jwt> blacklistValidator =
-                new JwtBlacklistValidator(redisService);
-        decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(
-                JwtValidators.createDefaultWithIssuer(issuer),
-                new JwtClaimValidator<List<String>>(JwtClaimNames.AUD,
-                        aud -> aud != null && aud.contains("fashion-api")),
-                blacklistValidator));
-        return decoder;
     }
 }

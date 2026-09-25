@@ -1,7 +1,6 @@
 package com.fashionstore.identity.controller;
 
 import com.fashionstore.common.dto.ApiResponse;
-import com.fashionstore.identity.dto.auth.ChangePasswordRequest;
 import com.fashionstore.identity.dto.user.UpdateProfileRequest;
 import com.fashionstore.identity.dto.user.UserProfileResponse;
 import com.fashionstore.identity.service.UserService;
@@ -34,14 +33,6 @@ public class UserController {
         return ApiResponse.<UserProfileResponse>builder()
                 .message("Cập nhật hồ sơ thành công")
                 .data(userService.updateMyProfile(request))
-                .build();
-    }
-
-    @PutMapping("/change-password")
-    public ApiResponse<Void> changePassword(@Valid @RequestBody ChangePasswordRequest request) {
-        userService.changePassword(request);
-        return ApiResponse.<Void>builder()
-                .message("Đổi mật khẩu thành công")
                 .build();
     }
 }

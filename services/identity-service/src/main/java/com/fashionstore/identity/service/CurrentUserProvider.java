@@ -1,10 +1,11 @@
 package com.fashionstore.identity.service;
 
 import com.fashionstore.common.exception.AppException;
-import com.fashionstore.identity.exception.IdentityErrorCode;
 import com.fashionstore.identity.entity.User;
+import com.fashionstore.identity.exception.IdentityErrorCode;
 import com.fashionstore.identity.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -14,24 +15,20 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class CurrentUserProvider {
     private final UserRepository userRepository;
+    private final UserProvisioningService userProvisioningService;
 
     public User getCurrentUser() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || authentication.getPrincipal() == null) {
+        if (authentication == null || !(authentication.getPrincipal() instanceof Jwt jwt)) {
             throw new AppException(IdentityErrorCode.UNAUTHENTICATED);
         }
-
-        if (authentication.getPrincipal() instanceof Jwt jwt) {
-            String email = jwt.getClaimAsString("email");
-            if (email != null && !email.isBlank()) {
-                return userRepository.findByEmail(email)
-                        .orElseThrow(() -> new AppException(IdentityErrorCode.USER_NOT_FOUND));
-            }
-            return userRepository.findById(jwt.getSubject())
-                    .orElseThrow(() -> new AppException(IdentityErrorCode.USER_NOT_FOUND));
+        try {
+            userProvisioningService.provision(jwt);
+        } catch (DataIntegrityViolationException concurrentFirstRequest) {
+            // Request song song đã tạo user này trước — đọc lại bên dưới
         }
-
-        return userRepository.findByEmail(authentication.getName())
+        // Nạp trong transaction của caller để caller sửa/lưu được entity
+        return userRepository.findById(jwt.getSubject())
                 .orElseThrow(() -> new AppException(IdentityErrorCode.USER_NOT_FOUND));
     }
 

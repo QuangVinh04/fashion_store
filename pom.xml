@@ -22,6 +22,8 @@
         <module>packages/common-library</module>
         <module>packages/test-utils</module>
         <module>platform/gateway</module>
+        <module>platform/storefront-bff</module>
+        <module>platform/backoffice-bff</module>
         <module>services/identity-service</module>
         <module>services/notification-service</module>
         <module>services/catalog-service</module>

@@ -23,7 +23,8 @@ public enum IdentityErrorCode implements BaseErrorCode {
     ADDRESS_NOT_FOUND(2016, "Địa chỉ không tồn tại", HttpStatus.NOT_FOUND),
     CANNOT_DELETE_DEFAULT_ADDRESS(2017, "Không thể xóa địa chỉ mặc định khi vẫn còn địa chỉ khác", HttpStatus.BAD_REQUEST),
     ROLE_NOT_FOUND(2018, "Role not found", HttpStatus.NOT_FOUND),
-    EMAIL_NOT_VERIFIED(2019, "Email not verified", HttpStatus.FORBIDDEN);
+    EMAIL_NOT_VERIFIED(2019, "Email not verified", HttpStatus.FORBIDDEN),
+    ACCOUNT_LINK_CONFLICT(2020, "Email đã thuộc về một tài khoản cũ chưa được chuyển sang Keycloak", HttpStatus.CONFLICT);
 
     private final int code;
     private final String message;

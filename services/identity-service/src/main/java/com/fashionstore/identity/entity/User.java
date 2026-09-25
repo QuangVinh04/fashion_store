@@ -23,9 +23,6 @@ public class User extends AuditedEntity {
     String email;
 
     @Column(nullable = false)
-    String password;
-
-    @Column(nullable = false)
     String fullName;
 
     String phone;

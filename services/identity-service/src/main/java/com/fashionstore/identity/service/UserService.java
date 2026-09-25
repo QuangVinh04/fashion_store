@@ -1,6 +1,5 @@
 package com.fashionstore.identity.service;
 
-import com.fashionstore.identity.dto.auth.ChangePasswordRequest;
 import com.fashionstore.identity.dto.user.UpdateProfileRequest;
 import com.fashionstore.identity.dto.user.UserProfileResponse;
 
@@ -9,5 +8,4 @@ public interface UserService {
 
     UserProfileResponse updateMyProfile(UpdateProfileRequest request);
 
-    void changePassword(ChangePasswordRequest request);
 }

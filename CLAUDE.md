@@ -15,7 +15,7 @@ docker compose up -d
 Targeted runs from bash — **must** pin JDK 21 (`java` on PATH is 1.8, `JAVA_HOME` defaults to jdk-17):
 
 ```bash
-export JAVA_HOME="C:/Program Files/Java/jdk-21"
+export JAVA_HOME="C:/Program Files/Java/jdk-21"          # Linux: /usr/lib/jvm/java-21-openjdk-amd64
 
 ./mvnw -o -pl services/catalog-service -am clean test     # one service + its deps
 ./mvnw -o -pl services/catalog-service clean test         # one service (deps installed)
@@ -25,11 +25,15 @@ export JAVA_HOME="C:/Program Files/Java/jdk-21"
 ```
 
 - `-o` (offline) works, local repo is warm — drop it only if a dep is missing.
-- All client traffic enters via gateway `http://localhost:8080`. Do not call service ports from a client.
+- Browsers enter via `storefront-bff` `http://localhost:8083` / `backoffice-bff` `http://localhost:8084` (OAuth2 client, session cookie, `TokenRelay`). `api-gateway` `http://localhost:8080` is the only route to services (BFF traffic + Bearer for Swagger/dev). Do not call service ports from a client.
+- Auth: Keycloak realm `fashion-store` at `http://localhost:8180` (`platform/keycloak/README.md`) is the only token issuer. api-gateway and every service validate the relayed Keycloak JWT themselves (resource server, `aud=fashion-api`). identity-service no longer logs users in or issues tokens; it JIT-provisions its `users` row on the first authenticated request (`users.id` = Keycloak `sub`). `/internal/**` requires a service-account token with client role `internal-caller` (Feign: `InternalServiceTokenInterceptor`, `client_credentials`). Attach it only to internal Feign clients, never to external ones (GHN, VNPay…).
 
 | module | port | database | host port |
 |---|---|---|---|
+| `platform/storefront-bff` | 8083 | — (session in Redis) | — |
+| `platform/backoffice-bff` | 8084 | — (session in Redis) | — |
 | `platform/gateway` (`api-gateway`) | 8080 | — | — |
+| `keycloak` (image, `platform/keycloak`) | 8180→8080 | `keycloak_database` | — |
 | `identity-service` | 8082 | `identity_database` | 5438 |
 | `payment-service` | 8085 | `payment_database` | 5433 |
 | `catalog-service` | 8087 | `catalog_database` | 5435 |
@@ -45,7 +49,7 @@ packages/
   api-contracts  artifactId event-contracts, package com.fashionstore.contracts
   common-library artifactId common-library,  package com.fashionstore.common
   test-utils     artifactId test-utils (declared in reactor, unused by services)
-platform/        gateway/ (Spring Cloud Gateway) + docker, helm, kubernetes, kafka, keycloak, observability
+platform/        gateway/, storefront-bff/, backoffice-bff/ (Spring Cloud Gateway) + keycloak (realm export) + docker, helm, kubernetes, kafka, observability
 docs/            microservices-roadmap.md, refactor-plan.md
 scripts/         build.ps1, test.ps1
 ```
@@ -69,7 +73,7 @@ scripts/         build.ps1, test.ps1
 | REST envelope / paging | `dto.ApiResponse`, `dto.PageResponse` |
 | errors | `exception.AppException`, `BaseErrorCode`, `ErrorCode`, `GlobalExceptionHandler` |
 | JPA base classes | `persistence.BaseEntity`, `persistence.AuditedEntity` |
-| security | `security.CurrentUserProvider`, `ApiAuthenticationEntryPoint`, `ApiAccessDeniedHandler` |
+| security | `security.CurrentUserProvider`, `ApiAuthenticationEntryPoint`, `ApiAccessDeniedHandler`, `KeycloakJwtAuthoritiesConverter` (auto-configured `JwtAuthenticationConverter` bean — services just use `.oauth2ResourceServer(rs -> rs.jwt(withDefaults()))`) |
 | messaging infra | `messaging.outbox.OutboxEventStatus`, `messaging.processed.@EnableProcessedMessages` + `ProcessedMessageService` |
 | misc | `util.SlugUtils`, `web.CorrelationIdFilter`, `payment.PaymentMethod/PaymentProvider` |
 

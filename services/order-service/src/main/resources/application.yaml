@@ -5,6 +5,25 @@ springdoc:
   paths-to-match: /api/**
 
 spring:
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # JWT Keycloak: iss = URL browser thấy, JWKS lấy qua đường nội bộ (không dùng discovery)
+          issuer-uri: ${KEYCLOAK_ISSUER:http://localhost:8180/realms/fashion-store}
+          jwk-set-uri: ${KEYCLOAK_JWK_SET_URI:http://localhost:8180/realms/fashion-store/protocol/openid-connect/certs}
+          audiences: fashion-api
+      client:
+        # Service account (client_credentials) cho Feign gọi /internal/** của service khác
+        registration:
+          keycloak:
+            provider: keycloak
+            client-id: order-service
+            client-secret: ${ORDER_SERVICE_CLIENT_SECRET:dev-order-service-secret}
+            authorization-grant-type: client_credentials
+        provider:
+          keycloak:
+            token-uri: ${KEYCLOAK_TOKEN_URI:http://localhost:8180/realms/fashion-store/protocol/openid-connect/token}
   application:
     name: order-service
   datasource:
@@ -38,8 +57,6 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
 app:
-  internal:
-    secret-token: ${INTERNAL_SERVICE_TOKEN:fashion-store-internal-secret-token}
   clients:
     # product + inventory đã gộp thành catalog-service, chung một base URL.
     catalog-base-url: ${CATALOG_BASE_URL:http://localhost:8087}
