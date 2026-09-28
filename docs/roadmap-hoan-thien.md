@@ -21,6 +21,9 @@ Audit nghiệp vụ (2026-09-16) chấm hệ thống **42%** — xương sống 
 | 7. Search & Admin Dashboard | ✅ Hoàn thành | 2026-09-19 |
 | 8. Polish | 🟡 Hoàn thành một phần | 2026-09-20 |
 
+> Tiếp theo: các nghiệp vụ còn thiếu sau audit 2026-09-23 được theo dõi ở
+> [roadmap-nghiep-vu-bo-sung.md](roadmap-nghiep-vu-bo-sung.md) (Phase 9–15).
+
 > Phase 2 hiện tích hợp GHN; GHTK chưa được triển khai. Phase 8 đã có guest-cart merge và thông báo đơn hàng; recommendation vẫn để sau khi tích lũy đủ dữ liệu review và order.
 
 ---

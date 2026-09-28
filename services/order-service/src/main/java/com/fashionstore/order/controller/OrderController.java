@@ -3,7 +3,6 @@ package com.fashionstore.order.controller;
 import com.fashionstore.common.dto.ApiResponse;
 import com.fashionstore.common.dto.PageResponse;
 import com.fashionstore.order.dto.CancelOrderRequest;
-import com.fashionstore.order.dto.CreateOrderRequest;
 import com.fashionstore.order.dto.OrderResponse;
 import com.fashionstore.order.dto.OrderStatusHistoryResponse;
 import com.fashionstore.order.dto.OrderSummaryResponse;
@@ -56,9 +55,13 @@ public class OrderController {
                     Chốt checkout thành đơn (`PENDING`), mở saga: giữ kho → thu tiền → chốt kho. Đơn xác nhận
                     xong thì các dòng đã mua tự rời khỏi giỏ hàng.
 
+                    Địa chỉ giao hàng là bản chụp trên checkout (chụp cùng lúc tính phí ship), chép nguyên vào
+                    đơn — không đọc lại sổ địa chỉ, sửa sổ địa chỉ sau đó không ảnh hưởng tới đơn.
+
                     Một checkout chỉ sinh được đúng một đơn; gọi lại trả về đơn đã có thay vì lỗi.
 
-                    Mã lỗi: `4003` không tìm thấy checkout (404) · `4004` checkout đã CANCELLED/EXPIRED (400).""")
+                    Mã lỗi: `4003` không tìm thấy checkout (404) · `4004` checkout đã CANCELLED/EXPIRED (400) ·
+                    `4017` checkout chưa có địa chỉ giao hàng (400).""")
     @PostMapping("/{checkoutId}")
     public ApiResponse<OrderResponse> createOrder(@PathVariable String checkoutId,
                                                  @Parameter(description = """
@@ -66,11 +69,10 @@ public class OrderController {
                                                          đơn đã tạo, không tạo đơn thứ hai. Bỏ trống thì
                                                          `checkoutId` được dùng làm khoá.""")
                                                  @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
-                                                 @Valid @RequestBody CreateOrderRequest request,
                                                  HttpServletRequest httpServletRequest) {
         return ApiResponse.<OrderResponse>builder()
                 .message("Place order successfully")
-                .data(orderService.createOrder(checkoutId, idempotencyKey, request, httpServletRequest.getRemoteAddr()))
+                .data(orderService.createOrder(checkoutId, idempotencyKey, httpServletRequest.getRemoteAddr()))
                 .build();
     }
 

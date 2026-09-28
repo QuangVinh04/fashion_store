@@ -7,22 +7,19 @@ import com.fashionstore.contracts.common.EventEnvelope;
 import com.fashionstore.contracts.common.EventTypes;
 import com.fashionstore.order.client.CatalogClient;
 import com.fashionstore.order.client.GhnClient;
-import com.fashionstore.order.client.IdentityClient;
 import com.fashionstore.order.dto.CreateShipmentRequest;
 import com.fashionstore.order.dto.ProductVariantDto;
 import com.fashionstore.order.dto.ShipmentResponse;
-import com.fashionstore.order.dto.UserAddressDto;
 import com.fashionstore.order.dto.ghn.GhnWebhookPayload;
-import com.fashionstore.order.entity.Checkout;
 import com.fashionstore.order.entity.Order;
 import com.fashionstore.order.entity.OrderItem;
+import com.fashionstore.order.entity.ShippingAddress;
 import com.fashionstore.order.entity.OrderStatusHistory;
 import com.fashionstore.order.entity.Shipment;
 import com.fashionstore.order.entity.enumeration.OrderStatus;
 import com.fashionstore.order.entity.enumeration.ShipmentProvider;
 import com.fashionstore.order.entity.enumeration.ShipmentStatus;
 import com.fashionstore.order.exception.OrderErrorCode;
-import com.fashionstore.order.repository.CheckoutRepository;
 import com.fashionstore.order.repository.OrderRepository;
 import com.fashionstore.order.repository.OrderStatusHistoryRepository;
 import com.fashionstore.order.repository.ShipmentRepository;
@@ -61,12 +58,6 @@ class ShipmentServiceImplTest {
     OrderRepository orderRepository;
 
     @Mock
-    CheckoutRepository checkoutRepository;
-
-    @Mock
-    IdentityClient identityClient;
-
-    @Mock
     GhnClient ghnClient;
 
     @Mock
@@ -88,49 +79,27 @@ class ShipmentServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = new ShipmentServiceImpl(shipmentRepository, orderRepository, checkoutRepository, identityClient, ghnClient, catalogClient, currentUserProvider, orderStatusHistoryRepository, orderNotificationService, outboxService);
+        service = new ShipmentServiceImpl(shipmentRepository, orderRepository, ghnClient, catalogClient, currentUserProvider, orderStatusHistoryRepository, orderNotificationService, outboxService);
         when(currentUserProvider.getCurrentUserId()).thenReturn("user-1");
         when(shipmentRepository.save(any(Shipment.class))).thenAnswer(i -> i.getArgument(0));
         when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
     }
 
     @Test
-    void createShipment_success() {
-        Order order = Order.builder()
-                .orderCode("ORD123")
-                .userId("user-1")
-                .status(OrderStatus.CONFIRMED)
-                .checkoutId("chk-1")
+    void createShipment_success_usesOrderAddressSnapshotOnly() {
+        Order order = confirmedOrder(ShippingAddress.builder()
                 .recipientName("Nguyen Van A")
                 .recipientPhone("0987654321")
-                .shippingAddress("123 Le Loi, Q1, HCM")
-                .shippingFee(BigDecimal.valueOf(30000))
-                .items(new ArrayList<>(List.of(OrderItem.builder()
-                        .variantId("var-1")
-                        .productName("Áo Khoác")
-                        .quantity(1)
-                        .unitPrice(BigDecimal.valueOf(300000))
-                        .build())))
-                .build();
-        order.setId("order-1");
-
-        Checkout checkout = Checkout.builder()
-                .addressId("addr-1")
-                .build();
-        checkout.setId("chk-1");
-
-        UserAddressDto addressDto = UserAddressDto.builder()
+                .province("Ho Chi Minh")
+                .district("Quan 1")
+                .ward("Ben Nghe")
+                .detailAddress("123 Le Loi")
                 .districtId(1444)
                 .wardCode("20308")
-                .recipientName("Nguyen Van A")
-                .phone("0987654321")
-                .fullAddress("123 Le Loi, Q1, HCM")
-                .build();
+                .build());
 
         when(orderRepository.findByIdForUpdate("order-1")).thenReturn(Optional.of(order));
         when(shipmentRepository.findByOrderId("order-1")).thenReturn(Optional.empty());
-        when(checkoutRepository.findById("chk-1")).thenReturn(Optional.of(checkout));
-        when(identityClient.getAddress("addr-1")).thenReturn(addressDto);
         when(catalogClient.getVariantsBatch(List.of("var-1")))
                 .thenReturn(List.of(ProductVariantDto.builder().variantId("var-1").weightGram(500).build()));
         when(ghnClient.createOrder(eq(order), any(), eq(500))).thenReturn("GHN_TRACK_123");
@@ -143,13 +112,67 @@ class ShipmentServiceImplTest {
         assertThat(response.getStatus()).isEqualTo(ShipmentStatus.PENDING);
         assertThat(order.getTrackingCode()).isEqualTo("GHN_TRACK_123");
         assertThat(order.getStatus()).isEqualTo(OrderStatus.PACKED);
-        verify(shipmentRepository, times(1)).save(any(Shipment.class));
+
+        ArgumentCaptor<Shipment> shipmentCaptor = ArgumentCaptor.forClass(Shipment.class);
+        verify(shipmentRepository, times(1)).save(shipmentCaptor.capture());
+        assertThat(shipmentCaptor.getValue().getToDistrictId()).isEqualTo(1444);
+        assertThat(shipmentCaptor.getValue().getToWardCode()).isEqualTo("20308");
 
         ArgumentCaptor<OrderStatusHistory> historyCaptor = ArgumentCaptor.forClass(OrderStatusHistory.class);
         verify(orderStatusHistoryRepository, times(1)).save(historyCaptor.capture());
         assertThat(historyCaptor.getValue().getFromStatus()).isEqualTo(OrderStatus.CONFIRMED);
         assertThat(historyCaptor.getValue().getToStatus()).isEqualTo(OrderStatus.PACKED);
         assertThat(historyCaptor.getValue().getAction()).isEqualTo("SHIPMENT_CREATED");
+    }
+
+    @Test
+    void createShipment_whenOrderHasNoAddressSnapshot_throwsShippingAddressInvalid() {
+        Order order = confirmedOrder(null);
+        when(orderRepository.findByIdForUpdate("order-1")).thenReturn(Optional.of(order));
+        when(shipmentRepository.findByOrderId("order-1")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.createShipment("order-1", null))
+                .isInstanceOf(AppException.class)
+                .extracting("errorCode")
+                .isEqualTo(OrderErrorCode.SHIPPING_ADDRESS_INVALID);
+        verify(ghnClient, never()).createOrder(any(), any(), any(Integer.class));
+    }
+
+    /** Đơn tạo trước khi có snapshot: còn tên/SĐT (cột cũ) nhưng không có mã GHN. */
+    @Test
+    void createShipment_whenLegacyOrderHasNoGhnCodes_throwsShippingAddressInvalid() {
+        Order order = confirmedOrder(ShippingAddress.builder()
+                .recipientName("Nguyen Van A")
+                .recipientPhone("0987654321")
+                .build());
+        when(orderRepository.findByIdForUpdate("order-1")).thenReturn(Optional.of(order));
+        when(shipmentRepository.findByOrderId("order-1")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.createShipment("order-1", null))
+                .isInstanceOf(AppException.class)
+                .extracting("errorCode")
+                .isEqualTo(OrderErrorCode.SHIPPING_ADDRESS_INVALID);
+        verify(ghnClient, never()).createOrder(any(), any(), any(Integer.class));
+    }
+
+    private Order confirmedOrder(ShippingAddress address) {
+        Order order = Order.builder()
+                .orderCode("ORD123")
+                .userId("user-1")
+                .status(OrderStatus.CONFIRMED)
+                .checkoutId("chk-1")
+                .shippingAddress("123 Le Loi, Ben Nghe, Quan 1, Ho Chi Minh")
+                .address(address)
+                .shippingFee(BigDecimal.valueOf(30000))
+                .items(new ArrayList<>(List.of(OrderItem.builder()
+                        .variantId("var-1")
+                        .productName("Áo Khoác")
+                        .quantity(1)
+                        .unitPrice(BigDecimal.valueOf(300000))
+                        .build())))
+                .build();
+        order.setId("order-1");
+        return order;
     }
 
     @Test

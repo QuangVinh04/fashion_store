@@ -36,9 +36,13 @@ public class CheckoutController {
                     Phí ship: 25.000 (STANDARD) / 40.000 (EXPRESS), miễn phí khi subtotal ≥ 500.000.
                     Coupon: chỉ `WELCOME10` (10%, tối đa 50.000).
 
+                    `addressId` được chụp thành địa chỉ giao hàng của checkout; phí ship tính theo bản chụp đó và
+                    đơn đặt từ checkout này dùng đúng bản chụp đó.
+
                     Mã lỗi: `3002` giỏ trống (400) · `1004` (404) · `1006` (409) · `1005` (400) ·
                     `3003` dòng giỏ cũ thiếu snapshot, cần thêm lại (409) · `9006` (502) ·
-                    `5002` payment provider không hỗ trợ (415) · `4005` số tiền không hợp lệ (400).""")
+                    `5002` payment provider không hỗ trợ (415) · `4005` số tiền không hợp lệ (400) ·
+                    `4009` địa chỉ không thuộc sổ địa chỉ của bạn (404) · `4017` địa chỉ thiếu mã phường/quận GHN (400).""")
     @PostMapping
     public ApiResponse<CheckoutResponse> createCheckout(@Valid @RequestBody CreateCheckoutRequest request) {
         return ApiResponse.<CheckoutResponse>builder()
@@ -63,8 +67,11 @@ public class CheckoutController {
                     Chỉ các field gửi lên mới bị thay đổi; phí ship và giảm giá được tính lại theo subtotal đã
                     chụp (subtotal không đổi — muốn đổi hàng thì sửa giỏ rồi mở checkout mới).
 
+                    Gửi `addressId` (kể cả id đang chọn, sau khi sửa sổ địa chỉ) là chụp lại địa chỉ và tính lại
+                    phí ship theo nó; không gửi thì phí tính theo bản chụp hiện có.
+
                     Mã lỗi: `4003` (404) · `4004` checkout đã COMPLETED/CANCELLED/EXPIRED (400) ·
-                    `5002` (415) · `4005` (400).""")
+                    `5002` (415) · `4005` (400) · `4009` (404) · `4017` (400) · `9006` (502).""")
     @PutMapping("/{id}")
     public ApiResponse<CheckoutResponse> updateCheckout(@PathVariable("id") String id,
                                                         @RequestBody UpdateCheckoutRequest request) {

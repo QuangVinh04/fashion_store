@@ -10,6 +10,7 @@ public interface UserAddressService {
     UserAddressResponse createAddress(UserAddressRequest request);
     List<UserAddressResponse> getMyAddresses();
     UserAddressResponse getAddressById(String id);
+    UserAddressResponse getAddressOfUser(String userId, String id);
     UserAddressResponse updateAddress(String id, UserAddressRequest request);
     void deleteAddress(String id);
     UserAddressResponse setDefaultAddress(String id);

@@ -10,6 +10,7 @@ import com.fashionstore.order.dto.ghn.GhnCreateOrderResponse;
 import com.fashionstore.order.dto.ghn.GhnFeeRequest;
 import com.fashionstore.order.dto.ghn.GhnFeeResponse;
 import com.fashionstore.order.entity.Order;
+import com.fashionstore.order.entity.ShippingAddress;
 import com.fashionstore.order.entity.OrderItem;
 import com.fashionstore.order.entity.enumeration.ShippingMethod;
 import com.fashionstore.order.exception.OrderErrorCode;
@@ -137,8 +138,7 @@ class GhnClientTest {
 
         Order order = Order.builder()
                 .orderCode("ORD123456")
-                .recipientName("Nguyen Van A")
-                .recipientPhone("0987654321")
+                .address(ShippingAddress.builder().recipientName("Nguyen Van A").recipientPhone("0987654321").build())
                 .shippingAddress("123 Nguyen Trai")
                 .paymentMethod(PaymentMethod.COD)
                 .totalAmount(BigDecimal.valueOf(200000))
@@ -168,8 +168,7 @@ class GhnClientTest {
 
         Order order = Order.builder()
                 .orderCode("ORD123456")
-                .recipientName("Nguyen Van A")
-                .recipientPhone("0987654321")
+                .address(ShippingAddress.builder().recipientName("Nguyen Van A").recipientPhone("0987654321").build())
                 .shippingAddress("123 Nguyen Trai")
                 .paymentMethod(PaymentMethod.COD)
                 .totalAmount(BigDecimal.valueOf(200000))
@@ -220,8 +219,7 @@ class GhnClientTest {
 
         Order order = Order.builder()
                 .orderCode("ORD123456")
-                .recipientName("Nguyen Van A")
-                .recipientPhone("0987654321")
+                .address(ShippingAddress.builder().recipientName("Nguyen Van A").recipientPhone("0987654321").build())
                 .shippingAddress("123 Nguyen Trai")
                 .paymentMethod(PaymentMethod.ONLINE)
                 .totalAmount(BigDecimal.valueOf(200000))

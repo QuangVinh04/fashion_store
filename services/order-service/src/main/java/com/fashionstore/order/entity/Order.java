@@ -60,17 +60,15 @@ public class Order extends BaseEntity {
     @Builder.Default
     OrderStatus status = OrderStatus.PENDING;
 
-    @Column(name = "recipient_name", nullable = false, length = 120)
-    String recipientName;
-
-    @Column(name = "recipient_phone", nullable = false, length = 20)
-    String recipientPhone;
-
     @Column(name = "recipient_email", length = 255)
     String recipientEmail;
 
     @Column(name = "shipping_address", nullable = false, length = 500)
     String shippingAddress;
+
+    /** Chép từ checkout lúc đặt đơn. Đơn tạo trước V19 chỉ có tên/SĐT, thiếu mã GHN — không tạo được vận đơn. */
+    @Embedded
+    ShippingAddress address;
 
     @Column(name = "shipping_provider", length = 100)
     String shippingProvider;

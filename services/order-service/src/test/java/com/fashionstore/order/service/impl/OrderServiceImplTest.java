@@ -9,14 +9,13 @@ import com.fashionstore.contracts.common.EventTypes;
 import com.fashionstore.contracts.order.dto.VerifyPurchaseRequest;
 import com.fashionstore.contracts.order.dto.VerifyPurchaseResponse;
 import com.fashionstore.order.exception.OrderErrorCode;
-import com.fashionstore.order.client.IdentityClient;
 import com.fashionstore.order.dto.CancelOrderRequest;
-import com.fashionstore.order.dto.CreateOrderRequest;
 import com.fashionstore.order.dto.OrderResponse;
 import com.fashionstore.order.dto.OrderSagaResponse;
 import com.fashionstore.order.dto.OrderStatusHistoryResponse;
 import com.fashionstore.order.dto.OrderSummaryResponse;
 import com.fashionstore.order.dto.UpdateOrderStatusRequest;
+import com.fashionstore.order.entity.ShippingAddress;
 import com.fashionstore.order.entity.OrderStatusHistory;
 import com.fashionstore.order.entity.Shipment;
 import com.fashionstore.order.repository.OrderStatusHistoryRepository;
@@ -86,9 +85,6 @@ class OrderServiceImplTest {
     private CurrentUserProvider currentUserProvider;
 
     @Mock
-    private IdentityClient identityClient;
-
-    @Mock
     private com.fashionstore.order.service.PromotionService promotionService;
 
     @Mock
@@ -112,7 +108,6 @@ class OrderServiceImplTest {
                 sagaOutbox,
                 cancellationService,
                 currentUserProvider,
-                identityClient,
                 promotionService,
                 orderStatusHistoryRepository,
                 shipmentRepository
@@ -129,7 +124,7 @@ class OrderServiceImplTest {
         when(orderRepository.findByUserIdAndIdempotencyKey("user-1", "checkout-1"))
                 .thenReturn(Optional.of(existing));
 
-        OrderResponse response = service.createOrder("checkout-1", null, new CreateOrderRequest(), "127.0.0.1");
+        OrderResponse response = service.createOrder("checkout-1", null, "127.0.0.1");
 
         assertEquals("order-1", response.getId());
         assertEquals("checkout-1", response.getCheckoutId());
@@ -143,6 +138,176 @@ class OrderServiceImplTest {
 
     @Test
     void createOrder_withCoupon_reservesPromotion() {
+        Checkout checkout = submittedCheckout(snapshot());
+        checkout.setCouponCode("WELCOME10");
+        checkout.setDiscountAmount(new BigDecimal("10000"));
+        checkout.setTotalAmount(new BigDecimal("90000"));
+        stubCreateOrder(checkout);
+
+        OrderResponse response = service.createOrder("checkout-1", null, "127.0.0.1");
+
+        assertEquals("order-1", response.getId());
+        ArgumentCaptor<List<com.fashionstore.order.dto.PromotionItemDto>> itemsCaptor = ArgumentCaptor.forClass(List.class);
+        verify(promotionService).reserve(eq("WELCOME10"), eq("user-1"), eq("order-1"), eq(new BigDecimal("100000")), itemsCaptor.capture());
+        assertEquals("product-1", itemsCaptor.getValue().get(0).getProductId());
+    }
+
+    // ----- snapshot địa chỉ: đơn chỉ chép bản chụp của checkout -----
+
+    @Test
+    void createOrder_copiesCheckoutAddressSnapshotIntoOrder() {
+        stubCreateOrder(submittedCheckout(snapshot()));
+
+        service.createOrder("checkout-1", null, "127.0.0.1");
+
+        ArgumentCaptor<Order> orderCaptor = ArgumentCaptor.forClass(Order.class);
+        verify(orderRepository).save(orderCaptor.capture());
+        Order saved = orderCaptor.getValue();
+        ShippingAddress address = saved.getAddress();
+        assertEquals("Nguyen Van A", address.getRecipientName());
+        assertEquals("0987654321", address.getRecipientPhone());
+        assertEquals("Ho Chi Minh", address.getProvince());
+        assertEquals("Quan 1", address.getDistrict());
+        assertEquals("Ben Nghe", address.getWard());
+        assertEquals("123 Le Loi", address.getDetailAddress());
+        assertEquals(1444, address.getDistrictId());
+        assertEquals("20308", address.getWardCode());
+        assertEquals("123 Le Loi, Ben Nghe, Quan 1, Ho Chi Minh", saved.getShippingAddress());
+    }
+
+    /** Đơn và checkout giữ hai bản riêng: sửa bản của checkout sau khi đặt không chạm tới đơn. */
+    @Test
+    void createOrder_orderAddressIsACopyNotTheCheckoutSnapshotItself() {
+        Checkout checkout = submittedCheckout(snapshot());
+        stubCreateOrder(checkout);
+
+        service.createOrder("checkout-1", null, "127.0.0.1");
+        checkout.getShippingAddress().setDetailAddress("changed");
+
+        ArgumentCaptor<Order> orderCaptor = ArgumentCaptor.forClass(Order.class);
+        verify(orderRepository).save(orderCaptor.capture());
+        org.junit.jupiter.api.Assertions.assertNotSame(checkout.getShippingAddress(), orderCaptor.getValue().getAddress());
+        assertEquals("123 Le Loi", orderCaptor.getValue().getAddress().getDetailAddress());
+    }
+
+    /** Checkout không có địa chỉ (hoặc mở trước khi có snapshot) thì không đặt được đơn. */
+    @Test
+    void createOrder_whenCheckoutHasNoAddressSnapshot_rejects() {
+        stubCreateOrder(submittedCheckout(null));
+
+        AppException ex = assertThrows(AppException.class,
+                () -> service.createOrder("checkout-1", null, "127.0.0.1"));
+
+        assertEquals(OrderErrorCode.SHIPPING_ADDRESS_INVALID, ex.getErrorCode());
+        verify(orderRepository, never()).save(any(Order.class));
+        verify(outboxService, never()).saveMessage(anyString(), anyString(), any());
+    }
+
+    // ----- luồng đặt đơn: chép từ checkout, mở saga -----
+
+    @Test
+    void createOrder_copiesAmountsAndItemsFromCheckoutAndStartsSaga() {
+        Checkout checkout = submittedCheckout(snapshot());
+        checkout.setShippingFee(new BigDecimal("32000"));
+        checkout.setTotalAmount(new BigDecimal("132000"));
+        stubCreateOrder(checkout);
+
+        OrderResponse response = service.createOrder("checkout-1", null, "10.0.0.1");
+
+        assertEquals(OrderStatus.PENDING, response.getStatus());
+        ArgumentCaptor<Order> orderCaptor = ArgumentCaptor.forClass(Order.class);
+        verify(orderRepository).save(orderCaptor.capture());
+        Order saved = orderCaptor.getValue();
+        assertEquals("checkout-1", saved.getCheckoutId());
+        assertEquals("checkout-1", saved.getIdempotencyKey());
+        assertEquals("10.0.0.1", saved.getClientIp());
+        assertEquals(PaymentMethod.COD, saved.getPaymentMethod());
+        assertEquals(0, saved.getSubtotalAmount().compareTo(new BigDecimal("100000")));
+        assertEquals(0, saved.getDiscountAmount().compareTo(BigDecimal.ZERO));
+        assertEquals(0, saved.getShippingFee().compareTo(new BigDecimal("32000")));
+        assertEquals(0, saved.getTotalAmount().compareTo(new BigDecimal("132000")));
+        assertEquals(1, saved.getItems().size());
+        assertEquals("variant-1", saved.getItems().getFirst().getVariantId());
+        assertEquals(0, saved.getItems().getFirst().getUnitPrice().compareTo(new BigDecimal("100000")));
+
+        assertEquals(CheckoutStatus.COMPLETED, checkout.getStatus());
+        assertEquals(saved, checkout.getOrder());
+        verify(orderSagaRepository).save(any(OrderSaga.class));
+        verify(outboxService).saveMessage(eq("order-1"), eq(EventTypes.INVENTORY_RESERVATION_REQUESTED), any());
+        ArgumentCaptor<OrderStatusHistory> historyCaptor = ArgumentCaptor.forClass(OrderStatusHistory.class);
+        verify(orderStatusHistoryRepository).save(historyCaptor.capture());
+        assertEquals(OrderStatus.PENDING, historyCaptor.getValue().getToStatus());
+        assertEquals("ORDER_CREATED", historyCaptor.getValue().getAction());
+    }
+
+    @Test
+    void createOrder_withExplicitIdempotencyKey_returnsTheOrderAlreadyCreatedWithThatKey() {
+        Order existing = order(OrderStatus.PENDING);
+        when(orderRepository.findByUserIdAndIdempotencyKey("user-1", "key-1")).thenReturn(Optional.of(existing));
+
+        OrderResponse response = service.createOrder("checkout-1", " key-1 ", "127.0.0.1");
+
+        assertEquals("order-1", response.getId());
+        verify(checkoutRepository, never()).findForUpdateByIdAndUserId(anyString(), anyString());
+    }
+
+    /** Hai request đặt đơn song song: request sau lấy được khoá checkout thì thấy đơn đã có, trả lại đơn đó. */
+    @Test
+    void createOrder_whenCheckoutAlreadyProducedAnOrder_returnsItWithoutCreatingAnother() {
+        Checkout checkout = submittedCheckout(snapshot());
+        checkout.setOrder(order(OrderStatus.PENDING));
+        checkout.setStatus(CheckoutStatus.COMPLETED);
+        stubCreateOrder(checkout);
+
+        OrderResponse response = service.createOrder("checkout-1", "another-key", "127.0.0.1");
+
+        assertEquals("order-1", response.getId());
+        verify(orderRepository, never()).save(any(Order.class));
+        verify(outboxService, never()).saveMessage(anyString(), anyString(), any());
+    }
+
+    @Test
+    void createOrder_fromCancelledOrExpiredCheckout_rejects() {
+        for (CheckoutStatus status : List.of(CheckoutStatus.CANCELLED, CheckoutStatus.EXPIRED)) {
+            Checkout checkout = submittedCheckout(snapshot());
+            checkout.setStatus(status);
+            stubCreateOrder(checkout);
+
+            AppException ex = assertThrows(AppException.class,
+                    () -> service.createOrder("checkout-1", null, "127.0.0.1"));
+
+            assertEquals(OrderErrorCode.CHECKOUT_STATUS_INVALID, ex.getErrorCode(), status.name());
+        }
+        verify(orderRepository, never()).save(any(Order.class));
+    }
+
+    /** Checkout của user khác cũng không tìm thấy — repository lọc theo userId. */
+    @Test
+    void createOrder_whenCheckoutNotFoundForCurrentUser_throwsCheckoutNotFound() {
+        when(orderRepository.findByUserIdAndIdempotencyKey("user-1", "checkout-of-b")).thenReturn(Optional.empty());
+        when(checkoutRepository.findForUpdateByIdAndUserId("checkout-of-b", "user-1")).thenReturn(Optional.empty());
+
+        AppException ex = assertThrows(AppException.class,
+                () -> service.createOrder("checkout-of-b", null, "127.0.0.1"));
+
+        assertEquals(OrderErrorCode.CHECKOUT_NOT_FOUND, ex.getErrorCode());
+        verify(orderRepository, never()).save(any(Order.class));
+    }
+
+    @Test
+    void createOrder_whenCheckoutHasNoItems_rejects() {
+        Checkout checkout = submittedCheckout(snapshot());
+        checkout.setItems(new ArrayList<>());
+        stubCreateOrder(checkout);
+
+        AppException ex = assertThrows(AppException.class,
+                () -> service.createOrder("checkout-1", null, "127.0.0.1"));
+
+        assertEquals(OrderErrorCode.CHECKOUT_NOT_FOUND, ex.getErrorCode());
+        verify(orderRepository, never()).save(any(Order.class));
+    }
+
+    private Checkout submittedCheckout(ShippingAddress shippingAddress) {
         CheckoutItem item = CheckoutItem.builder()
                 .variantId("variant-1")
                 .productId("product-1")
@@ -156,14 +321,19 @@ class OrderServiceImplTest {
                 .status(CheckoutStatus.SUBMITTED)
                 .paymentMethod(PaymentMethod.COD)
                 .paymentProvider(PaymentProvider.COD)
-                .couponCode("WELCOME10")
                 .subtotalAmount(new BigDecimal("100000"))
-                .discountAmount(new BigDecimal("10000"))
+                .discountAmount(BigDecimal.ZERO)
                 .shippingFee(BigDecimal.ZERO)
-                .totalAmount(new BigDecimal("90000"))
+                .totalAmount(new BigDecimal("100000"))
+                .addressId(shippingAddress == null ? null : "addr-1")
+                .shippingAddress(shippingAddress)
                 .items(List.of(item))
                 .build();
         checkout.setId("checkout-1");
+        return checkout;
+    }
+
+    private void stubCreateOrder(Checkout checkout) {
         when(orderRepository.findByUserIdAndIdempotencyKey("user-1", "checkout-1")).thenReturn(Optional.empty());
         when(checkoutRepository.findForUpdateByIdAndUserId("checkout-1", "user-1")).thenReturn(Optional.of(checkout));
         when(orderRepository.save(any(Order.class))).thenAnswer(inv -> {
@@ -171,19 +341,19 @@ class OrderServiceImplTest {
             o.setId("order-1");
             return o;
         });
+    }
 
-        CreateOrderRequest request = CreateOrderRequest.builder()
-                .recipientName("John")
-                .recipientPhone("0912345678")
-                .shippingAddress("123 Street")
+    private ShippingAddress snapshot() {
+        return ShippingAddress.builder()
+                .recipientName("Nguyen Van A")
+                .recipientPhone("0987654321")
+                .province("Ho Chi Minh")
+                .district("Quan 1")
+                .ward("Ben Nghe")
+                .detailAddress("123 Le Loi")
+                .districtId(1444)
+                .wardCode("20308")
                 .build();
-
-        OrderResponse response = service.createOrder("checkout-1", null, request, "127.0.0.1");
-
-        assertEquals("order-1", response.getId());
-        ArgumentCaptor<List<com.fashionstore.order.dto.PromotionItemDto>> itemsCaptor = ArgumentCaptor.forClass(List.class);
-        verify(promotionService).reserve(eq("WELCOME10"), eq("user-1"), eq("order-1"), eq(new BigDecimal("100000")), itemsCaptor.capture());
-        assertEquals("product-1", itemsCaptor.getValue().get(0).getProductId());
     }
 
     // ----- GET /orders -----
@@ -529,8 +699,7 @@ class OrderServiceImplTest {
                 .paymentMethod(PaymentMethod.ONLINE)
                 .paymentProvider(PaymentProvider.VNPAY)
                 .status(status)
-                .recipientName("Customer")
-                .recipientPhone("0900000000")
+                .address(ShippingAddress.builder().recipientName("Customer").recipientPhone("0900000000").build())
                 .shippingAddress("Address")
                 .subtotalAmount(BigDecimal.TEN)
                 .discountAmount(BigDecimal.ZERO)

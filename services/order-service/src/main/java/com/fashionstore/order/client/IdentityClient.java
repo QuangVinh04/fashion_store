@@ -22,16 +22,18 @@ import java.util.List;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class IdentityClient {
     IdentityFeignClient identityFeignClient;
-    public UserAddressDto getAddress(String addressId) {
+    /** Địa chỉ không thuộc {@code userId} cũng là 404 → ADDRESS_NOT_FOUND. */
+    public UserAddressDto getAddress(String userId, String addressId) {
         try {
-            ApiResponse<UserAddressDto> response = identityFeignClient.getAddressById(addressId);
+            ApiResponse<UserAddressDto> response = identityFeignClient.getAddressOfUser(userId, addressId);
             return response != null ? response.getData() : null;
         } catch (FeignException.NotFound e) {
             log.warn("Address not found in identity-service: {}", addressId);
             throw new AppException(OrderErrorCode.ADDRESS_NOT_FOUND);
         } catch (Exception e) {
+            // Sự cố hạ tầng, không phải lỗi của khách — 502 như catalog, không để rơi xuống 500
             log.error("Failed to fetch address from identity-service: {}", addressId, e);
-            throw e;
+            throw new AppException(ErrorCode.UPSTREAM_SERVICE_ERROR);
         }
     }
 

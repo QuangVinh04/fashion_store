@@ -19,7 +19,5 @@ public class CreateShipmentRequest {
     @Builder.Default
     ShipmentProvider provider = ShipmentProvider.GHN;
     String note;
-    Integer toDistrictId;
-    String toWardCode;
 }
 

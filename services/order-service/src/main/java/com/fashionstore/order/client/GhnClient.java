@@ -130,8 +130,8 @@ public class GhnClient {
         GhnCreateOrderRequest request = GhnCreateOrderRequest.builder()
                 .paymentTypeId(1) // Shop trả cước vận chuyển
                 .clientOrderCode(order.getOrderCode())
-                .toName(order.getRecipientName())
-                .toPhone(order.getRecipientPhone())
+                .toName(order.getAddress().getRecipientName())
+                .toPhone(order.getAddress().getRecipientPhone())
                 .toAddress(order.getShippingAddress())
                 .toDistrictId(address.getDistrictId())
                 .toWardCode(address.getWardCode())

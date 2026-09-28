@@ -8,14 +8,13 @@ import com.fashionstore.contracts.common.EventTypes;
 import com.fashionstore.contracts.order.OrderDeliveredEvent;
 import com.fashionstore.order.client.CatalogClient;
 import com.fashionstore.order.client.GhnClient;
-import com.fashionstore.order.client.IdentityClient;
 import com.fashionstore.order.dto.CreateShipmentRequest;
 import com.fashionstore.order.dto.ProductVariantDto;
 import com.fashionstore.order.dto.ShipmentResponse;
 import com.fashionstore.order.dto.UserAddressDto;
 import com.fashionstore.order.dto.ghn.GhnWebhookPayload;
-import com.fashionstore.order.entity.Checkout;
 import com.fashionstore.order.entity.Order;
+import com.fashionstore.order.entity.ShippingAddress;
 import com.fashionstore.order.entity.OrderItem;
 import com.fashionstore.order.entity.Shipment;
 import com.fashionstore.order.entity.enumeration.OrderStatus;
@@ -23,7 +22,6 @@ import com.fashionstore.order.entity.enumeration.ShipmentProvider;
 import com.fashionstore.order.entity.enumeration.ShipmentStatus;
 import com.fashionstore.order.exception.OrderErrorCode;
 import com.fashionstore.order.entity.OrderStatusHistory;
-import com.fashionstore.order.repository.CheckoutRepository;
 import com.fashionstore.order.repository.OrderRepository;
 import com.fashionstore.order.repository.OrderStatusHistoryRepository;
 import com.fashionstore.order.repository.ShipmentRepository;
@@ -52,8 +50,6 @@ public class ShipmentServiceImpl implements ShipmentService {
 
     ShipmentRepository shipmentRepository;
     OrderRepository orderRepository;
-    CheckoutRepository checkoutRepository;
-    IdentityClient identityClient;
     GhnClient ghnClient;
     CatalogClient catalogClient;
     CurrentUserProvider currentUserProvider;
@@ -82,38 +78,19 @@ public class ShipmentServiceImpl implements ShipmentService {
             throw new AppException(OrderErrorCode.ORDER_STATUS_INVALID);
         }
 
-        Integer toDistrictId = (request != null) ? request.getToDistrictId() : null;
-        String toWardCode = (request != null && request.getToWardCode() != null && !request.getToWardCode().isBlank())
-                ? request.getToWardCode().trim() : null;
-
-        if ((toDistrictId == null || toWardCode == null) && order.getCheckoutId() != null) {
-            Checkout checkout = checkoutRepository.findById(order.getCheckoutId()).orElse(null);
-            if (checkout != null && checkout.getAddressId() != null && !checkout.getAddressId().isBlank()) {
-                try {
-                    UserAddressDto addressDto = identityClient.getAddress(checkout.getAddressId());
-                    if (addressDto != null) {
-                        if (toDistrictId == null) {
-                            toDistrictId = addressDto.getDistrictId();
-                        }
-                        if (toWardCode == null) {
-                            toWardCode = addressDto.getWardCode();
-                        }
-                    }
-                } catch (Exception e) {
-                    log.warn("[Shipment] Could not fetch address from identity-service for addressId={}: {}",
-                            checkout.getAddressId(), e.getMessage());
-                }
-            }
-        }
-
-        if (toDistrictId == null || toWardCode == null || toWardCode.isBlank()) {
+        // Chỉ đọc snapshot trên đơn — không gọi identity, sửa sổ địa chỉ sau khi đặt không đổi nơi giao
+        ShippingAddress snapshot = order.getAddress();
+        if (snapshot == null || snapshot.getDistrictId() == null
+                || snapshot.getWardCode() == null || snapshot.getWardCode().isBlank()) {
             throw new AppException(OrderErrorCode.SHIPPING_ADDRESS_INVALID);
         }
+        Integer toDistrictId = snapshot.getDistrictId();
+        String toWardCode = snapshot.getWardCode();
 
         int totalWeightGram = calculateTotalWeight(order.getItems());
         UserAddressDto addressDto = UserAddressDto.builder()
-                .recipientName(order.getRecipientName())
-                .phone(order.getRecipientPhone())
+                .recipientName(snapshot.getRecipientName())
+                .phone(snapshot.getRecipientPhone())
                 .fullAddress(order.getShippingAddress())
                 .districtId(toDistrictId)
                 .wardCode(toWardCode)

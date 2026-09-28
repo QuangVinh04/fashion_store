@@ -2,6 +2,7 @@ package com.fashionstore.order.saga;
 
 import com.fashionstore.contracts.common.EventTypes;
 import com.fashionstore.order.entity.Order;
+import com.fashionstore.order.entity.ShippingAddress;
 import com.fashionstore.order.entity.OrderSaga;
 import com.fashionstore.order.entity.OrderStatusHistory;
 import com.fashionstore.order.entity.enumeration.OrderSagaStatus;
@@ -141,8 +142,7 @@ class OrderSagaTimeoutScannerTest {
                 .idempotencyKey("checkout-1")
                 .checkoutId("checkout-1")
                 .status(OrderStatus.PENDING)
-                .recipientName("Customer")
-                .recipientPhone("0900000000")
+                .address(ShippingAddress.builder().recipientName("Customer").recipientPhone("0900000000").build())
                 .shippingAddress("Address")
                 .subtotalAmount(BigDecimal.TEN)
                 .discountAmount(BigDecimal.ZERO)

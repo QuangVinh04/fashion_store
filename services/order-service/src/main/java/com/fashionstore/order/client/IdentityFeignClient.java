@@ -18,8 +18,9 @@ import java.util.List;
         configuration = {FeignGlobalConfig.class, IdentityFeignClientConfig.class}
 )
 public interface IdentityFeignClient {
-    @GetMapping("/api/v1/users/addresses/{id}")
-    ApiResponse<UserAddressDto> getAddressById(@PathVariable("id") String id);
+    @GetMapping("/internal/v1/users/{userId}/addresses/{addressId}")
+    ApiResponse<UserAddressDto> getAddressOfUser(@PathVariable("userId") String userId,
+                                                 @PathVariable("addressId") String addressId);
 
     @GetMapping("/internal/v1/users/{id}")
     ApiResponse<com.fashionstore.order.dto.InternalUserDto> getUserById(@PathVariable("id") String id);

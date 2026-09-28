@@ -68,7 +68,13 @@ public class UserAddressServiceImpl implements UserAddressService {
     @Override
     @Transactional(readOnly = true)
     public UserAddressResponse getAddressById(String id) {
-        UserAddress address = userAddressRepository.findById(id)
+        return getAddressOfUser(currentUserProvider.getCurrentUserId(), id);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public UserAddressResponse getAddressOfUser(String userId, String id) {
+        UserAddress address = userAddressRepository.findByIdAndUserId(id, userId)
                 .orElseThrow(() -> new AppException(IdentityErrorCode.ADDRESS_NOT_FOUND));
         return userAddressMapper.toResponse(address);
     }

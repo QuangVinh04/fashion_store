@@ -72,6 +72,10 @@ public class Checkout extends BaseEntity {
     @Column(name = "address_id", length = 36)
     String addressId;
 
+    /** Null khi checkout chưa chọn địa chỉ. */
+    @Embedded
+    ShippingAddress shippingAddress;
+
     @Column(name = "submitted_at")
     LocalDateTime submittedAt;
 

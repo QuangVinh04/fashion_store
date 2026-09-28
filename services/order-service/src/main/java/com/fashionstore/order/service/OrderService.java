@@ -2,7 +2,6 @@ package com.fashionstore.order.service;
 
 import com.fashionstore.common.dto.PageResponse;
 import com.fashionstore.order.dto.CancelOrderRequest;
-import com.fashionstore.order.dto.CreateOrderRequest;
 import com.fashionstore.order.dto.OrderResponse;
 import com.fashionstore.order.dto.OrderSagaResponse;
 import com.fashionstore.order.dto.OrderSummaryResponse;
@@ -15,7 +14,7 @@ import java.util.List;
 
 public interface OrderService {
 
-    OrderResponse createOrder(String checkoutId, String idempotencyKey, CreateOrderRequest request, String clientIp);
+    OrderResponse createOrder(String checkoutId, String idempotencyKey, String clientIp);
 
     OrderResponse getMyOrderById(String orderId);
 

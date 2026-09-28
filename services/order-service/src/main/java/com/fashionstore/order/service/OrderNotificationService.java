@@ -36,7 +36,7 @@ public class OrderNotificationService {
 
         Map<String, String> variables = new HashMap<>();
         variables.put("orderCode", order.getOrderCode());
-        variables.put("recipientName", order.getRecipientName() != null ? order.getRecipientName() : "Quý khách");
+        variables.put("recipientName", recipientName(order));
         variables.put("totalAmount", order.getTotalAmount() != null ? order.getTotalAmount().toPlainString() : "0");
         variables.put("paymentMethod", order.getPaymentMethod() != null ? order.getPaymentMethod().name() : "COD");
         variables.put("shippingAddress", order.getShippingAddress() != null ? order.getShippingAddress() : "");
@@ -68,7 +68,7 @@ public class OrderNotificationService {
 
         Map<String, String> variables = new HashMap<>();
         variables.put("orderCode", order.getOrderCode());
-        variables.put("recipientName", order.getRecipientName() != null ? order.getRecipientName() : "Quý khách");
+        variables.put("recipientName", recipientName(order));
         variables.put("shippingProvider", shipment != null && shipment.getProvider() != null ? shipment.getProvider().name() : "GHN");
         variables.put("trackingCode", shipment != null && shipment.getTrackingCode() != null ? shipment.getTrackingCode() : (order.getTrackingCode() != null ? order.getTrackingCode() : "N/A"));
         variables.put("shippingAddress", order.getShippingAddress() != null ? order.getShippingAddress() : "");
@@ -100,7 +100,7 @@ public class OrderNotificationService {
 
         Map<String, String> variables = new HashMap<>();
         variables.put("orderCode", order.getOrderCode());
-        variables.put("recipientName", order.getRecipientName() != null ? order.getRecipientName() : "Quý khách");
+        variables.put("recipientName", recipientName(order));
         variables.put("shippingAddress", order.getShippingAddress() != null ? order.getShippingAddress() : "");
 
         EmailNotificationRequested payload = new EmailNotificationRequested(
@@ -136,5 +136,11 @@ public class OrderNotificationService {
             log.warn("[OrderNotification] Failed to resolve email for userId={}: {}", userId, e.getMessage());
             return null;
         }
+    }
+
+    private static String recipientName(Order order) {
+        return order.getAddress() != null && order.getAddress().getRecipientName() != null
+                ? order.getAddress().getRecipientName()
+                : "Quý khách";
     }
 }

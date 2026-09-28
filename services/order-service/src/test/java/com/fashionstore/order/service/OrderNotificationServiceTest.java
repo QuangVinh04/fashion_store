@@ -7,6 +7,7 @@ import com.fashionstore.contracts.notification.EmailNotificationRequested;
 import com.fashionstore.order.client.IdentityClient;
 import com.fashionstore.order.dto.InternalUserDto;
 import com.fashionstore.order.entity.Order;
+import com.fashionstore.order.entity.ShippingAddress;
 import com.fashionstore.order.entity.Shipment;
 import com.fashionstore.order.entity.enumeration.ShipmentProvider;
 import com.fashionstore.order.outbox.OutboxService;
@@ -48,8 +49,7 @@ class OrderNotificationServiceTest {
         Order order = Order.builder()
                 .orderCode("ORD-100")
                 .userId("user-uuid-1")
-                .recipientName("Nguyen Van A")
-                .recipientPhone("0901234567")
+                .address(ShippingAddress.builder().recipientName("Nguyen Van A").recipientPhone("0901234567").build())
                 .shippingAddress("123 Duong Le Loi, TP HCM")
                 .paymentMethod(PaymentMethod.COD)
                 .totalAmount(BigDecimal.valueOf(500000))
@@ -85,7 +85,7 @@ class OrderNotificationServiceTest {
                 .orderCode("ORD-101")
                 .userId("user-uuid-99")
                 .recipientEmail("direct-snapshot@fashionstore.com")
-                .recipientName("Snapshot User")
+                .address(ShippingAddress.builder().recipientName("Snapshot User").build())
                 .shippingAddress("123 Duong Le Loi, TP HCM")
                 .paymentMethod(PaymentMethod.COD)
                 .totalAmount(BigDecimal.valueOf(200000))
@@ -123,7 +123,7 @@ class OrderNotificationServiceTest {
         Order order = Order.builder()
                 .orderCode("ORD-200")
                 .userId("user-uuid-2")
-                .recipientName("Tran Thi B")
+                .address(ShippingAddress.builder().recipientName("Tran Thi B").build())
                 .shippingAddress("456 Nguyen Trai, Ha Noi")
                 .trackingCode("GHN-TRK-999")
                 .build();
@@ -161,7 +161,7 @@ class OrderNotificationServiceTest {
         Order order = Order.builder()
                 .orderCode("ORD-300")
                 .userId("user-uuid-3")
-                .recipientName("Le Van C")
+                .address(ShippingAddress.builder().recipientName("Le Van C").build())
                 .shippingAddress("789 Vo Van Tan, TP HCM")
                 .build();
         order.setId("order-uuid-3");

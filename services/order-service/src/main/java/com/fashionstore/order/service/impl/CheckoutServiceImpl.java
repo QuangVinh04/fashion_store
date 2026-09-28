@@ -11,6 +11,7 @@ import com.fashionstore.order.entity.Cart;
 import com.fashionstore.order.entity.CartItem;
 import com.fashionstore.order.entity.Checkout;
 import com.fashionstore.order.entity.CheckoutItem;
+import com.fashionstore.order.entity.ShippingAddress;
 import com.fashionstore.order.entity.enumeration.CheckoutStatus;
 import com.fashionstore.order.entity.enumeration.ShippingMethod;
 import com.fashionstore.order.repository.CheckoutRepository;
@@ -70,7 +71,8 @@ public class CheckoutServiceImpl implements CheckoutService {
 
         ShippingMethod shippingMethod = request.getShippingMethod() == null ? ShippingMethod.STANDARD : request.getShippingMethod();
         int totalWeightGram = calculateTotalWeightFromCartItems(cartItems);
-        BigDecimal shippingFee = calculateShippingFee(subtotal, shippingMethod, request.getAddressId(), totalWeightGram);
+        ShippingAddress shippingAddress = snapshotAddress(userId, request.getAddressId());
+        BigDecimal shippingFee = calculateShippingFee(subtotal, shippingMethod, shippingAddress, totalWeightGram);
         List<PromotionItemDto> promoItems = cartItems.stream()
                 .map(item -> PromotionItemDto.builder()
                         .variantId(item.getVariantId())
@@ -107,6 +109,7 @@ public class CheckoutServiceImpl implements CheckoutService {
                 .shippingFee(shippingFee)
                 .totalAmount(total)
                 .addressId(request.getAddressId())
+                .shippingAddress(shippingAddress)
                 .submittedAt(LocalDateTime.now())
                 .build();
 
@@ -131,6 +134,12 @@ public class CheckoutServiceImpl implements CheckoutService {
             throw new AppException(OrderErrorCode.CHECKOUT_STATUS_INVALID);
         }
 
+        // Gửi addressId (kể cả id đang chọn, sau khi khách sửa sổ địa chỉ) là chụp lại và tính lại phí theo nó
+        if (request.getAddressId() != null) {
+            ShippingAddress shippingAddress = snapshotAddress(userId, request.getAddressId());
+            checkout.setAddressId(request.getAddressId());
+            checkout.setShippingAddress(shippingAddress);
+        }
         if (request.getPaymentMethod() != null) {
             checkout.setPaymentMethod(request.getPaymentMethod());
         }
@@ -143,10 +152,6 @@ public class CheckoutServiceImpl implements CheckoutService {
         if (request.getCouponCode() != null) {
             checkout.setCouponCode(request.getCouponCode());
         }
-        if (request.getAddressId() != null) {
-            checkout.setAddressId(request.getAddressId());
-        }
-
         List<PromotionItemDto> promoItems = checkout.getItems() == null ? List.of() : checkout.getItems().stream()
                 .map(item -> PromotionItemDto.builder()
                         .variantId(item.getVariantId())
@@ -159,7 +164,7 @@ public class CheckoutServiceImpl implements CheckoutService {
                 .toList();
         BigDecimal discount = calculateDiscount(checkout.getCouponCode(), userId, checkout.getSubtotalAmount(), promoItems);
         int totalWeightGram = calculateTotalWeightFromCheckoutItems(checkout.getItems());
-        BigDecimal shippingFee = calculateShippingFee(checkout.getSubtotalAmount(), checkout.getShippingMethod(), checkout.getAddressId(), totalWeightGram);
+        BigDecimal shippingFee = calculateShippingFee(checkout.getSubtotalAmount(), checkout.getShippingMethod(), checkout.getShippingAddress(), totalWeightGram);
         BigDecimal total = checkout.getSubtotalAmount().subtract(discount).add(shippingFee);
         validateAmounts(checkout.getSubtotalAmount(), discount, shippingFee, total);
         checkout.setDiscountAmount(discount);
@@ -263,20 +268,39 @@ public class CheckoutServiceImpl implements CheckoutService {
                 .build();
     }
 
-    private BigDecimal calculateShippingFee(BigDecimal subtotal, ShippingMethod shippingMethod, String addressId, int totalWeightGram) {
-        if (subtotal.compareTo(BigDecimal.valueOf(500000)) >= 0) {
-            return BigDecimal.ZERO;
-        }
+    /**
+     * Lần duy nhất đọc sổ địa chỉ của khách (chỉ địa chỉ của chính {@code userId}). Kiểm tra đủ mã GHN cả
+     * khi miễn phí ship — để khách biết ngay ở checkout thay vì tới lúc đặt đơn mới bị từ chối.
+     */
+    private ShippingAddress snapshotAddress(String userId, String addressId) {
         if (addressId == null || addressId.isBlank()) {
-            return shippingMethod == ShippingMethod.EXPRESS ? BigDecimal.valueOf(40000) : BigDecimal.valueOf(25000);
+            return null;
         }
-        UserAddressDto address = identityClient.getAddress(addressId);
+        UserAddressDto address = identityClient.getAddress(userId, addressId);
         if (address == null || address.getDistrictId() == null || address.getWardCode() == null || address.getWardCode().isBlank()) {
             throw new AppException(OrderErrorCode.SHIPPING_ADDRESS_INVALID);
         }
-        return ghnClient.calculateFee(address.getDistrictId(), address.getWardCode(), totalWeightGram, shippingMethod);
+        return ShippingAddress.builder()
+                .recipientName(address.getRecipientName())
+                .recipientPhone(address.getPhone())
+                .province(address.getProvince())
+                .district(address.getDistrict())
+                .ward(address.getWard())
+                .detailAddress(address.getDetailAddress())
+                .districtId(address.getDistrictId())
+                .wardCode(address.getWardCode())
+                .build();
     }
 
+    private BigDecimal calculateShippingFee(BigDecimal subtotal, ShippingMethod shippingMethod, ShippingAddress address, int totalWeightGram) {
+        if (subtotal.compareTo(BigDecimal.valueOf(500000)) >= 0) {
+            return BigDecimal.ZERO;
+        }
+        if (address == null) {
+            return shippingMethod == ShippingMethod.EXPRESS ? BigDecimal.valueOf(40000) : BigDecimal.valueOf(25000);
+        }
+        return ghnClient.calculateFee(address.getDistrictId(), address.getWardCode(), totalWeightGram, shippingMethod);
+    }
 
     private int calculateTotalWeightFromCartItems(List<CartItem> cartItems) {
         if (cartItems == null || cartItems.isEmpty()) {

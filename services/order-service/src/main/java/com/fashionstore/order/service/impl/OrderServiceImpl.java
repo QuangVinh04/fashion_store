@@ -1,8 +1,6 @@
 package com.fashionstore.order.service.impl;
 
 import com.fashionstore.common.exception.AppException;
-import com.fashionstore.common.exception.ErrorCode;
-import com.fashionstore.order.client.IdentityClient;
 import com.fashionstore.order.dto.*;
 import com.fashionstore.order.exception.OrderErrorCode;
 import com.fashionstore.common.security.CurrentUserProvider;
@@ -53,7 +51,6 @@ public class OrderServiceImpl implements OrderService {
     SagaOutbox sagaOutbox;
     SagaCancellationService sagaCancellationService;
     CurrentUserProvider currentUserProvider;
-    IdentityClient identityClient;
     PromotionService promotionService;
     OrderStatusHistoryRepository orderStatusHistoryRepository;
     ShipmentRepository shipmentRepository;
@@ -61,7 +58,7 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     @Transactional
-    public OrderResponse createOrder(String checkoutId, String idempotencyKey, CreateOrderRequest request, String clientIp) {
+    public OrderResponse createOrder(String checkoutId, String idempotencyKey, String clientIp) {
         String userId = currentUserProvider.getCurrentUserId();
         String effectiveIdempotencyKey = idempotencyKey == null || idempotencyKey.isBlank()
                 ? checkoutId
@@ -88,31 +85,7 @@ public class OrderServiceImpl implements OrderService {
             throw new AppException(OrderErrorCode.CHECKOUT_NOT_FOUND);
         }
 
-        String recipientName = request.getRecipientName();
-        String recipientPhone = request.getRecipientPhone();
-        String shippingAddress = request.getShippingAddress();
-
-        // 1. Xác định addressId: ưu tiên từ CreateOrderRequest; nếu không có thì lấy từ Checkout
-        String effectiveAddressId = (request.getAddressId() != null && !request.getAddressId().isBlank())
-                ? request.getAddressId().trim()
-                : checkout.getAddressId();
-
-        // 2. Nếu có addressId, gọi sang identity-service để lấy thông tin chi tiết
-        if (effectiveAddressId != null && !effectiveAddressId.isBlank()) {
-            UserAddressDto addressDto = identityClient.getAddress(effectiveAddressId);
-            if (addressDto != null) {
-                recipientName = addressDto.getRecipientName();
-                recipientPhone = addressDto.getPhone();
-                shippingAddress = addressDto.getFullAddress();
-            }
-        }
-
-        // 3. Đảm bảo thông tin giao hàng bắt buộc phải có giá trị
-        if (recipientName == null || recipientName.isBlank()
-                || recipientPhone == null || recipientPhone.isBlank()
-                || shippingAddress == null || shippingAddress.isBlank()) {
-            throw new AppException(ErrorCode.VALIDATION_FAILED);
-        }
+        ShippingAddress address = copyAddress(checkout.getShippingAddress());
 
         Order order = Order.builder()
                 .orderCode(generateOrderCode())
@@ -123,10 +96,9 @@ public class OrderServiceImpl implements OrderService {
                 .status(OrderStatus.PENDING)
                 .checkoutId(checkout.getId())
                 .clientIp(clientIp)
-                .recipientName(recipientName)
-                .recipientPhone(recipientPhone)
                 .recipientEmail(checkout.getRecipientEmail())
-                .shippingAddress(shippingAddress)
+                .shippingAddress(fullAddress(address))
+                .address(address)
                 .subtotalAmount(checkout.getSubtotalAmount())
                 .discountAmount(checkout.getDiscountAmount())
                 .shippingFee(checkout.getShippingFee())
@@ -170,6 +142,21 @@ public class OrderServiceImpl implements OrderService {
         );
 
         return toResponse(order, checkoutId);
+    }
+
+    /**
+     * Đơn chỉ chép bản chụp địa chỉ của checkout (chụp cùng lúc tính phí ship) — không đọc lại identity.
+     * Chép ra object mới: hai entity không được dùng chung một instance embeddable.
+     */
+    private static ShippingAddress copyAddress(ShippingAddress source) {
+        if (source == null) {
+            throw new AppException(OrderErrorCode.SHIPPING_ADDRESS_INVALID);
+        }
+        return source.toBuilder().build();
+    }
+
+    private static String fullAddress(ShippingAddress address) {
+        return String.join(", ", address.getDetailAddress(), address.getWard(), address.getDistrict(), address.getProvince());
     }
 
     @Override
@@ -444,8 +431,8 @@ public class OrderServiceImpl implements OrderService {
                 .paymentUrl(order.getPaymentUrl())
                 .currency(order.getCurrency())
                 .cancelReason(order.getCancelReason())
-                .recipientName(order.getRecipientName())
-                .recipientPhone(order.getRecipientPhone())
+                .recipientName(order.getAddress() != null ? order.getAddress().getRecipientName() : null)
+                .recipientPhone(order.getAddress() != null ? order.getAddress().getRecipientPhone() : null)
                 .shippingAddress(order.getShippingAddress())
                 .shippingProvider(order.getShippingProvider())
                 .trackingCode(order.getTrackingCode())

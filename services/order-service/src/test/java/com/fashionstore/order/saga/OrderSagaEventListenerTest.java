@@ -14,6 +14,7 @@ import com.fashionstore.contracts.payment.event.PaymentSuccessEvent;
 import com.fashionstore.order.entity.Cart;
 import com.fashionstore.order.entity.CartItem;
 import com.fashionstore.order.entity.Order;
+import com.fashionstore.order.entity.ShippingAddress;
 import com.fashionstore.order.entity.OrderItem;
 import com.fashionstore.order.entity.OrderSaga;
 import com.fashionstore.order.entity.enumeration.CartStatus;
@@ -411,8 +412,7 @@ class OrderSagaEventListenerTest {
                 .paymentMethod(PaymentMethod.ONLINE)
                 .paymentProvider(PaymentProvider.VNPAY)
                 .status(OrderStatus.PENDING)
-                .recipientName("Customer")
-                .recipientPhone("0900000000")
+                .address(ShippingAddress.builder().recipientName("Customer").recipientPhone("0900000000").build())
                 .shippingAddress("Address")
                 .subtotalAmount(BigDecimal.TEN)
                 .discountAmount(BigDecimal.ZERO)
