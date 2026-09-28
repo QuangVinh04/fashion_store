@@ -2,6 +2,7 @@ package com.fashionstore.identity.service;
 
 import com.fashionstore.common.exception.AppException;
 import com.fashionstore.identity.entity.User;
+import com.fashionstore.identity.exception.IdentityErrorCode;
 import com.fashionstore.identity.repository.UserRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -58,6 +59,20 @@ class CurrentUserProviderTest {
         when(userRepository.findById("kc-1")).thenReturn(Optional.of(user("kc-1")));
 
         assertThat(currentUserProvider.getCurrentUserId()).isEqualTo("kc-1");
+    }
+
+    /** Admin khoá tài khoản: access token cũ còn hạn (≤ 5 phút) cũng không dùng được API của identity. */
+    @Test
+    void rejectsUserLockedByAdmin() {
+        authenticate("kc-1");
+        User locked = user("kc-1");
+        locked.setIsActive(false);
+        when(userRepository.findById("kc-1")).thenReturn(Optional.of(locked));
+
+        assertThatThrownBy(() -> currentUserProvider.getCurrentUser())
+                .isInstanceOf(AppException.class)
+                .extracting("errorCode")
+                .isEqualTo(IdentityErrorCode.ACCOUNT_DISABLED);
     }
 
     @Test

@@ -1,10 +1,14 @@
 package com.fashionstore.storefrontbff.config;
 
 import com.fashionstore.common.security.KeycloakJwtAuthoritiesConverter;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.config.web.server.OidcBackChannelServerLogoutHandler;
 import org.springframework.security.config.web.server.ServerHttpSecurity;
+import org.springframework.security.oauth2.client.oidc.server.session.InMemoryReactiveOidcSessionRegistry;
+import org.springframework.security.oauth2.client.oidc.server.session.ReactiveOidcSessionRegistry;
 import org.springframework.security.core.authority.mapping.GrantedAuthoritiesMapper;
 import org.springframework.security.oauth2.client.oidc.web.server.logout.OidcClientInitiatedServerLogoutSuccessHandler;
 import org.springframework.security.oauth2.client.registration.ReactiveClientRegistrationRepository;
@@ -30,7 +34,9 @@ public class SecurityConfig {
     @Bean
     SecurityWebFilterChain securityWebFilterChain(
             ServerHttpSecurity http,
-            ReactiveClientRegistrationRepository clientRegistrations) {
+            ReactiveClientRegistrationRepository clientRegistrations,
+            ReactiveOidcSessionRegistry oidcSessionRegistry,
+            @Value("${server.reactive.session.cookie.name}") String sessionCookieName) {
         return http
                 .authorizeExchange(authorize -> authorize
                         // Đăng ký / đăng nhập đi qua Keycloak, không mở API auth cũ cho browser
@@ -39,6 +45,11 @@ public class SecurityConfig {
                         .anyExchange().permitAll())
                 .oauth2Login(login -> login.authorizationRequestResolver(pkceAuthorizationRequestResolver(clientRegistrations)))
                 .logout(logout -> logout.logoutSuccessHandler(oidcLogoutSuccessHandler(clientRegistrations)))
+                // Keycloak huỷ phiên (admin khoá tài khoản, đăng xuất ở nơi khác) -> xoá session BFF ngay
+                .oidcLogout(oidc -> oidc
+                        .oidcSessionRegistry(oidcSessionRegistry)
+                        .backChannel(backChannel -> backChannel.logoutHandler(
+                                backChannelLogoutHandler(oidcSessionRegistry, sessionCookieName))))
                 .csrf(csrf -> csrf
                         .csrfTokenRepository(csrfTokenRepository())
                         // SPA gửi nguyên giá trị cookie qua header X-XSRF-TOKEN
@@ -46,6 +57,12 @@ public class SecurityConfig {
                 .exceptionHandling(exceptions -> exceptions
                         .authenticationEntryPoint(new HttpStatusServerEntryPoint(HttpStatus.UNAUTHORIZED)))
                 .build();
+    }
+
+    // sid Keycloak -> session BFF. Trong RAM: đủ cho một instance mỗi BFF; scale ngang thì cần registry dùng chung
+    @Bean
+    ReactiveOidcSessionRegistry oidcSessionRegistry() {
+        return new InMemoryReactiveOidcSessionRegistry();
     }
 
     @Bean
@@ -83,6 +100,14 @@ public class SecurityConfig {
         OidcClientInitiatedServerLogoutSuccessHandler handler =
                 new OidcClientInitiatedServerLogoutSuccessHandler(clientRegistrations);
         handler.setPostLogoutRedirectUri("{baseUrl}");
+        return handler;
+    }
+
+    // Mặc định handler tìm cookie SESSION; BFF đặt tên cookie riêng nên phải khai báo lại
+    private static OidcBackChannelServerLogoutHandler backChannelLogoutHandler(
+            ReactiveOidcSessionRegistry oidcSessionRegistry, String sessionCookieName) {
+        OidcBackChannelServerLogoutHandler handler = new OidcBackChannelServerLogoutHandler(oidcSessionRegistry);
+        handler.setSessionCookieName(sessionCookieName);
         return handler;
     }
 

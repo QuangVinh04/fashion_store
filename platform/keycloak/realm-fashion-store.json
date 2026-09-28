@@ -132,7 +132,9 @@
       ],
       "attributes": {
         "pkce.code.challenge.method": "S256",
-        "post.logout.redirect.uris": "http://localhost:8083/*"
+        "post.logout.redirect.uris": "http://localhost:8083/*",
+        "backchannel.logout.url": "${STOREFRONT_BFF_BACKCHANNEL_LOGOUT_URL:http://storefront-bff:8083/logout/connect/back-channel/keycloak}",
+        "backchannel.logout.session.required": "true"
       },
       "protocolMappers": [
         {
@@ -193,7 +195,9 @@
       ],
       "attributes": {
         "pkce.code.challenge.method": "S256",
-        "post.logout.redirect.uris": "http://localhost:8084/*"
+        "post.logout.redirect.uris": "http://localhost:8084/*",
+        "backchannel.logout.url": "${BACKOFFICE_BFF_BACKCHANNEL_LOGOUT_URL:http://backoffice-bff:8084/logout/connect/back-channel/keycloak}",
+        "backchannel.logout.session.required": "true"
       },
       "protocolMappers": [
         {
@@ -366,6 +370,10 @@
       "clientRoles": {
         "fashion-api": [
           "internal-caller"
+        ],
+        "realm-management": [
+          "view-users",
+          "manage-users"
         ]
       }
     },

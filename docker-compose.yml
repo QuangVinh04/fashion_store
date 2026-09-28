@@ -107,6 +107,8 @@ services:
       IDENTITY_POSTGRES_DB: identity_database
       IDENTITY_POSTGRES_USER: root
       IDENTITY_POSTGRES_PASSWORD: root
+      IDENTITY_SERVICE_CLIENT_SECRET: ${IDENTITY_SERVICE_CLIENT_SECRET:-dev-identity-service-secret}
+      KEYCLOAK_ADMIN_URL: http://keycloak:8080/admin/realms/fashion-store
       SPRING_MAIN_ALLOW_BEAN_DEFINITION_OVERRIDING: "true"
     depends_on:
       identity-postgres:

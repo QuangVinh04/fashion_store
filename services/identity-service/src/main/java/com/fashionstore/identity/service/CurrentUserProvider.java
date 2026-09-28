@@ -28,8 +28,13 @@ public class CurrentUserProvider {
             // Request song song đã tạo user này trước — đọc lại bên dưới
         }
         // Nạp trong transaction của caller để caller sửa/lưu được entity
-        return userRepository.findById(jwt.getSubject())
+        User user = userRepository.findById(jwt.getSubject())
                 .orElseThrow(() -> new AppException(IdentityErrorCode.USER_NOT_FOUND));
+        // Bị admin khoá: access token cũ còn hạn (≤ accessTokenLifespan) cũng không dùng được API của identity
+        if (!Boolean.TRUE.equals(user.getIsActive())) {
+            throw new AppException(IdentityErrorCode.ACCOUNT_DISABLED);
+        }
+        return user;
     }
 
     public String getCurrentUserId() {
