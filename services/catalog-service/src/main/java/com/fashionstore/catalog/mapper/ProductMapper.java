@@ -48,6 +48,7 @@ public interface ProductMapper {
                 .status(product.getStatus())
                 .published(product.getPublished())
                 .thumbnailMediaId(product.getThumbnailMediaId())
+                .thumbnailUrl(product.getThumbnailUrl())
                 .brandName(product.getBrand() == null ? null : product.getBrand().getName())
                 .categoryName(firstCategory == null ? null : firstCategory.getName())
                 .build();
@@ -78,6 +79,7 @@ public interface ProductMapper {
                 .widthMm(product.getWidthMm())
                 .heightMm(product.getHeightMm())
                 .thumbnailMediaId(product.getThumbnailMediaId())
+                .thumbnailUrl(product.getThumbnailUrl())
                 .sizeChartId(product.getSizeChartId())
                 .metaTitle(product.getMetaTitle())
                 .metaKeyword(product.getMetaKeyword())

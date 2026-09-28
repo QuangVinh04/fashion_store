@@ -102,7 +102,10 @@ public class SecurityConfig {
 
     private CorsConfiguration corsConfig(List<String> methods, List<String> exposedHeaders) {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(List.of("http://localhost:3000", "http://localhost:5173"));
+        config.setAllowedOrigins(List.of(
+                "http://localhost:3000", "http://localhost:5173",
+                "http://localhost:8083", "http://localhost:8084",
+                "http://127.0.0.1:8083", "http://127.0.0.1:8084"));
         config.setAllowedMethods(methods);
         config.setAllowedHeaders(List.of("*"));
         config.setExposedHeaders(exposedHeaders);

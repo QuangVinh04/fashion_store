@@ -120,6 +120,26 @@ class SecurityConfigTest {
     }
 
     @Test
+    void guestCartIsRejectedBeforeProxying() {
+        client.post().uri("/api/v1/cart/items").exchange().expectStatus().isUnauthorized();
+
+        assertThat(forwardedAuthorization.get()).isNull();
+    }
+
+    @Test
+    void storefrontBffOriginCanPostToCart() throws Exception {
+        String token = sign(keycloakKey, claims(KEYCLOAK_ISSUER, "fashion-api"));
+
+        client.post().uri("/api/v1/cart/items")
+                .header(HttpHeaders.ORIGIN, "http://localhost:8083")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .bodyValue("{\"variantId\":\"v-1\",\"quantity\":1}")
+                .exchange().expectStatus().isOk();
+
+        assertThat(forwardedAuthorization.get()).isEqualTo("Bearer " + token);
+    }
+
+    @Test
     void internalEndpointsStayClosedEvenWithValidToken() throws Exception {
         String token = sign(keycloakKey, claims(KEYCLOAK_ISSUER, "fashion-api"));
 

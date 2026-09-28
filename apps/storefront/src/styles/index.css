@@ -1,0 +1,6 @@
+@import './fonts.css';
+@import './tailwind.css';
+@import './theme.css';
+@layer utilities {
+  .font-display { font-family: 'Barlow Condensed', sans-serif; }
+}

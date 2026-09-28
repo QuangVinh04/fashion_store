@@ -49,7 +49,7 @@ payment:
     pay-url: ${VNPAY_PAY_URL:https://sandbox.vnpayment.vn/paymentv2/vpcpay.html}
     tmn-code: ${VNPAY_TMN_CODE:}
     hash-secret: ${VNPAY_HASH_SECRET:}
-    return-url: ${VNPAY_RETURN_URL:http://localhost:8085/api/v1/payments/vnpay/return}
+    return-url: ${VNPAY_RETURN_URL:http://localhost:8083/payment/vnpay/return}
     api-url: ${VNPAY_API_URL:https://sandbox.vnpayment.vn}
     create-by: ${VNPAY_REFUND_CREATE_BY:fashion-store}
     server-ip: ${VNPAY_SERVER_IP:127.0.0.1}
@@ -58,8 +58,8 @@ payment:
     client-id: ${PAYOS_CLIENT_ID:}
     api-key: ${PAYOS_API_KEY:}
     checksum-key: ${PAYOS_CHECKSUM_KEY:}
-    return-url: ${PAYOS_RETURN_URL:http://localhost:3000/payment/payos/success}
-    cancel-url: ${PAYOS_CANCEL_URL:http://localhost:3000/payment/payos/cancel}
+    return-url: ${PAYOS_RETURN_URL:http://localhost:8083/payment/payos/success}
+    cancel-url: ${PAYOS_CANCEL_URL:http://localhost:8083/payment/payos/cancel}
 
 management:
   endpoints:

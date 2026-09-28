@@ -29,6 +29,7 @@ public class ProductSummaryResponse {
     ProductStatus status;
     Boolean published;
     String thumbnailMediaId;
+    String thumbnailUrl;
     String brandName;
     String categoryName;
 }

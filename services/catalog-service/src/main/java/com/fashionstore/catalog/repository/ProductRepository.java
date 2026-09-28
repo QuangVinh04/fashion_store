@@ -23,43 +23,18 @@ public interface ProductRepository extends JpaRepository<Product, String>, JpaSp
     @EntityGraph(attributePaths = {"brand", "productCategories.category"})
     Page<Product> findAllByStatus(ProductStatus status, Pageable pageable);
 
-    @EntityGraph(attributePaths = {
-            "brand",
-            "productCategories.category",
-            "variants",
-            "variants.colorOption",
-            "variants.sizeOption",
-            "images",
-            "images.colorOption",
-            "attributeValues.attribute"
-    })
+    // Fetch one collection here; remaining collections load within the service transaction.
+    // Joining multiple List associations triggers Hibernate MultipleBagFetchException.
+    @EntityGraph(attributePaths = {"brand", "productCategories.category"})
     Optional<Product> findDetailProductById(String id);
 
     @EntityGraph(attributePaths = {"variants", "variants.colorOption", "variants.sizeOption"})
     Optional<Product> findProductWithVariantsById(String id);
 
-    @EntityGraph(attributePaths = {
-            "brand",
-            "productCategories.category",
-            "variants",
-            "variants.colorOption",
-            "variants.sizeOption",
-            "images",
-            "images.colorOption",
-            "attributeValues.attribute"
-    })
+    @EntityGraph(attributePaths = {"brand", "productCategories.category"})
     Optional<Product> findBySlug(String slug);
 
-    @EntityGraph(attributePaths = {
-            "brand",
-            "productCategories.category",
-            "variants",
-            "variants.colorOption",
-            "variants.sizeOption",
-            "images",
-            "images.colorOption",
-            "attributeValues.attribute"
-    })
+    @EntityGraph(attributePaths = {"brand", "productCategories.category"})
     Optional<Product> findBySlugAndStatus(String slug, ProductStatus status);
 
     boolean existsBySlug(String slug);

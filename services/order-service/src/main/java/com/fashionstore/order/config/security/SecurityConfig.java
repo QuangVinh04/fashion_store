@@ -37,7 +37,6 @@ public class SecurityConfig {
         http.authorizeHttpRequests(requests -> requests
                 .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                 .requestMatchers("/internal/**").hasAuthority(KeycloakJwtAuthoritiesConverter.INTERNAL_CALLER)
-                .requestMatchers("/api/v1/cart/**").permitAll()
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 .anyRequest().authenticated()
         );
@@ -57,7 +56,10 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(Arrays.asList("http://localhost:3000", "http://localhost:5173"));
+        config.setAllowedOrigins(Arrays.asList(
+                "http://localhost:3000", "http://localhost:5173",
+                "http://localhost:8083", "http://localhost:8084",
+                "http://127.0.0.1:8083", "http://127.0.0.1:8084"));
         config.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(Arrays.asList("*"));
         config.setExposedHeaders(Arrays.asList("Authorization"));

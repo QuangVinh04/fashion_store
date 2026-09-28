@@ -10,7 +10,7 @@ import lombok.experimental.FieldDefaults;
 @Builder
 @Entity
 @Table(
-        name = "product_attribute"
+        name = "product_attribute_option"
 )
 @AllArgsConstructor
 @NoArgsConstructor

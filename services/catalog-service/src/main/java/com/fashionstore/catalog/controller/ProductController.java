@@ -191,7 +191,7 @@ public class ProductController {
             @RequestParam(value = "search", required = false) String[] search,
             @RequestParam(required = false) java.math.BigDecimal minPrice,
             @RequestParam(required = false) java.math.BigDecimal maxPrice,
-            @RequestParam(required = false) String size,
+            @RequestParam(value = "sizeFilter", required = false) String size,
             @RequestParam(required = false) String color,
             @RequestParam(required = false) String brandId,
             @RequestParam(required = false) String gender,

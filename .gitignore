@@ -32,3 +32,8 @@ build/
 
 ### VS Code ###
 .vscode/
+
+# Storefront build artifacts
+apps/storefront/node_modules/
+apps/storefront/dist/
+apps/storefront/.npmcache/

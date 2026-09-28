@@ -1,0 +1,5 @@
+import { Link } from 'react-router';
+
+export default function Contact() {
+  return <div className="mx-auto max-w-[1400px] px-6 py-16"><p className="mb-4 text-xs uppercase tracking-[.25em] text-[#888]">Hỗ trợ khách hàng</p><h1 className="font-display mb-8 text-6xl font-black uppercase leading-none">Liên hệ LINO</h1><p className="max-w-2xl text-sm leading-7 text-[#555]">Bạn cần hỏi về sản phẩm hoặc đơn hàng? Hãy gửi email cho đội hỗ trợ và kèm mã đơn nếu có.</p><div className="mt-10 grid gap-6 md:grid-cols-3"><a className="border p-6 hover:border-[#111]" href="mailto:support@lino.vn"><p className="mb-2 text-xs uppercase tracking-widest text-[#888]">Email</p><strong>support@lino.vn</strong></a><a className="border p-6 hover:border-[#111]" href="tel:18001234"><p className="mb-2 text-xs uppercase tracking-widest text-[#888]">Điện thoại</p><strong>1800 1234</strong></a><Link className="border p-6 hover:border-[#111]" to="/profile/orders"><p className="mb-2 text-xs uppercase tracking-widest text-[#888]">Đơn hàng</p><strong>Theo dõi đơn của bạn →</strong></Link></div></div>;
+}

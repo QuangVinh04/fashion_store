@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+    "allowImportingTsExtensions": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "noEmit": true,
+    "types": ["vite/client"]
+  },
+  "include": ["src/main.tsx", "src/app/App.tsx", "src/app/Root.tsx", "src/app/routes.ts", "src/api/**/*.ts", "src/context/**/*.tsx", "src/components/RequireAuth.tsx", "src/components/ProfileLayout.tsx", "src/components/StoreUI.tsx", "src/pages/CommercePages.tsx", "src/pages/AccountPages.tsx", "src/pages/Login.tsx", "src/pages/Register.tsx", "src/pages/Contact.tsx", "src/pages/Policy.tsx", "src/pages/NotFound.tsx"]
+}

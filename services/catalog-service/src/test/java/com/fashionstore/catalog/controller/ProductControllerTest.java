@@ -1,6 +1,7 @@
 package com.fashionstore.catalog.controller;
 
 import com.fashionstore.catalog.dto.ProductResponse;
+import com.fashionstore.catalog.dto.ProductAdvanceSearchRequest;
 import com.fashionstore.catalog.dto.SizeChartResponse;
 import com.fashionstore.catalog.service.ProductService;
 import com.fashionstore.catalog.service.SizeChartService;
@@ -8,6 +9,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import org.mockito.ArgumentCaptor;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableHandlerMethodArgumentResolver;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -15,6 +19,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -35,7 +40,31 @@ class ProductControllerTest {
 
     @BeforeEach
     void setUp() {
-        mockMvc = MockMvcBuilders.standaloneSetup(new ProductController(productService, sizeChartService)).build();
+        mockMvc = MockMvcBuilders.standaloneSetup(new ProductController(productService, sizeChartService))
+                .setCustomArgumentResolvers(new PageableHandlerMethodArgumentResolver()).build();
+    }
+
+    @Test
+    void paginationSizeDoesNotBecomeApparelSizeFilter() throws Exception {
+        mockMvc.perform(get("/api/v1/products/advance-search").param("size", "12").param("page", "1"))
+                .andExpect(status().isOk());
+        ArgumentCaptor<Pageable> page = ArgumentCaptor.forClass(Pageable.class);
+        ArgumentCaptor<ProductAdvanceSearchRequest> filters = ArgumentCaptor.forClass(ProductAdvanceSearchRequest.class);
+        verify(productService).advanceSearchWithRequest(page.capture(), filters.capture());
+        assertThat(page.getValue().getPageSize()).isEqualTo(12);
+        assertThat(page.getValue().getPageNumber()).isEqualTo(1);
+        assertThat(filters.getValue().getSize()).isNull();
+    }
+
+    @Test
+    void apparelSizeFilterCanBeCombinedWithPaginationSize() throws Exception {
+        mockMvc.perform(get("/api/v1/products/advance-search").param("size", "12").param("sizeFilter", "M"))
+                .andExpect(status().isOk());
+        ArgumentCaptor<Pageable> page = ArgumentCaptor.forClass(Pageable.class);
+        ArgumentCaptor<ProductAdvanceSearchRequest> filters = ArgumentCaptor.forClass(ProductAdvanceSearchRequest.class);
+        verify(productService).advanceSearchWithRequest(page.capture(), filters.capture());
+        assertThat(page.getValue().getPageSize()).isEqualTo(12);
+        assertThat(filters.getValue().getSize()).isEqualTo("M");
     }
 
     @Test

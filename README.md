@@ -40,12 +40,12 @@ what remains is in [docs/refactor-plan.md](docs/refactor-plan.md).
 
 ## Build
 
-Java 21 is required. The scripts pin `JAVA_HOME` to `C:\Program Files\Java\jdk-21`
-themselves; calling `mvnw` directly does not.
+Java 21 is required. The PowerShell scripts select and verify JDK 21 before
+starting Maven. Calling `mvnw` directly uses the terminal's `JAVA_HOME`, which
+may still point to JDK 17 even when JDK 21 is installed.
 
 ```powershell
 .\scripts\build.ps1
-```
 
 Run tests:
 
@@ -55,9 +55,10 @@ Run tests:
 
 One service, or one test class:
 
-```bash
-./mvnw -pl services/catalog-service -am clean test
-./mvnw -pl services/catalog-service test -Dtest=ProductServiceImplTest
+```powershell
+.\scripts\require-jdk21.ps1
+.\mvnw.cmd -pl services/catalog-service -am clean test
+.\mvnw.cmd -pl services/catalog-service test '-Dtest=ProductServiceImplTest'
 ```
 
 Validate and start local infrastructure:

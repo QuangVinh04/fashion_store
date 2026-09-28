@@ -91,6 +91,14 @@ class SecurityConfigTest {
     }
 
     @Test
+    void storefrontBffOriginCanCheckInventory() throws Exception {
+        mockMvc.perform(post("/api/v1/inventory/check")
+                        .header("Origin", "http://localhost:8083")
+                        .header("Authorization", "Bearer user-token"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
     void internalEndpointWithoutTokenIsUnauthorized() throws Exception {
         mockMvc.perform(get("/internal/inventory/low-stock/count")).andExpect(status().isUnauthorized());
     }

@@ -26,6 +26,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
@@ -242,6 +244,36 @@ class MediaFileServiceImplTest {
                 .isEqualTo(FileErrorCode.FILE_ACCESS_DENIED);
 
         verify(storageService, never()).presignDownload(anyString());
+    }
+
+    @Test
+    void adminCanViewPrivateReturnEvidence() {
+        MediaFile mediaFile = pendingFile();
+        mediaFile.setStatus(MediaStatus.ACTIVE);
+        mediaFile.setVisibility(MediaVisibility.PRIVATE);
+        mediaFile.setFolder("returns");
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
+                "admin-1", null, List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))));
+        when(mediaFileRepository.findById("file-1")).thenReturn(Optional.of(mediaFile));
+        when(storageService.presignDownload("2026/09/object.png")).thenReturn("signed-url");
+
+        assertThat(mediaFileService.resolveContentUrl("file-1")).isEqualTo("signed-url");
+    }
+
+    @Test
+    void adminCannotViewOtherPrivateFiles() {
+        MediaFile mediaFile = pendingFile();
+        mediaFile.setStatus(MediaStatus.ACTIVE);
+        mediaFile.setVisibility(MediaVisibility.PRIVATE);
+        mediaFile.setFolder("avatars");
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
+                "admin-1", null, List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))));
+        when(mediaFileRepository.findById("file-1")).thenReturn(Optional.of(mediaFile));
+
+        assertThatThrownBy(() -> mediaFileService.resolveContentUrl("file-1"))
+                .isInstanceOf(AppException.class)
+                .extracting(exception -> ((AppException) exception).getErrorCode())
+                .isEqualTo(FileErrorCode.FILE_ACCESS_DENIED);
     }
 
     @Test

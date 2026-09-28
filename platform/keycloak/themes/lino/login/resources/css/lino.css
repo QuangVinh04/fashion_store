@@ -1,0 +1,14 @@
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800;900&family=Inter:wght@400;500;600;700&display=swap');
+
+:root { --lino-black: #111; --lino-red: #e5001b; }
+body, .login-pf body, #kc-container { font-family: Inter, sans-serif; color: var(--lino-black); }
+.login-pf body { background: #f5f5f5; }
+#kc-header-wrapper { font-family: 'Barlow Condensed', sans-serif; font-size: 3rem; font-weight: 900; letter-spacing: -.02em; text-transform: uppercase; color: var(--lino-black); }
+.card-pf, #kc-content { background: #fff; border-radius: 0; border-top: 4px solid var(--lino-red); box-shadow: none; }
+#kc-page-title { font-family: 'Barlow Condensed', sans-serif; font-weight: 800; letter-spacing: -.02em; text-transform: uppercase; color: var(--lino-black); }
+.pf-c-button.pf-m-primary, .btn-primary, #kc-login { background: var(--lino-black); border: 0; border-radius: 0; color: #fff; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; }
+.pf-c-button.pf-m-primary:hover, .btn-primary:hover, #kc-login:hover { background: var(--lino-red); }
+.pf-c-form-control, .form-control { border-radius: 0; }
+a { color: var(--lino-black); text-decoration: underline; }
+a:hover { color: var(--lino-red); }
+.alert-error, .pf-c-alert.pf-m-danger { border-left-color: var(--lino-red); }

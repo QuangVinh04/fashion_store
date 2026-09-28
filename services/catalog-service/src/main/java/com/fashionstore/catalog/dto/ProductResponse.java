@@ -49,6 +49,7 @@ public class ProductResponse {
     Integer widthMm;
     Integer heightMm;
     String thumbnailMediaId;
+    String thumbnailUrl;
     String sizeChartId;
     String metaTitle;
     String metaKeyword;

@@ -49,8 +49,8 @@ class SecurityConfigTest {
     }
 
     @Test
-    void guestCartNeedsNoToken() throws Exception {
-        mockMvc.perform(get("/api/v1/cart")).andExpect(status().isOk());
+    void guestCartRequiresLogin() throws Exception {
+        mockMvc.perform(get("/api/v1/cart")).andExpect(status().isUnauthorized());
     }
 
     @Test
@@ -77,6 +77,14 @@ class SecurityConfigTest {
         mockMvc.perform(get("/api/v1/orders").header("Authorization", "Bearer user-token"))
                 .andExpect(status().isOk())
                 .andExpect(content().string("kc-user-1"));
+    }
+
+    @Test
+    void storefrontBffOriginCanReachCart() throws Exception {
+        mockMvc.perform(get("/api/v1/cart")
+                        .header("Origin", "http://localhost:8083")
+                        .header("Authorization", "Bearer user-token"))
+                .andExpect(status().isOk());
     }
 
     @Test

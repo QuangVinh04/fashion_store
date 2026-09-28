@@ -193,12 +193,17 @@ services:
       ORDER_POSTGRES_USER: root
       ORDER_POSTGRES_PASSWORD: root
       CATALOG_BASE_URL: http://catalog-service:8087
+      IDENTITY_BASE_URL: http://identity-service:8082
+      GHN_ENABLED: ${GHN_ENABLED:-false}
+      GHN_ALLOW_MOCK: ${GHN_ALLOW_MOCK:-true}
     depends_on:
       order-postgres:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
       catalog-service:
+        condition: service_started
+      identity-service:
         condition: service_started
     expose:
       - "8089"
@@ -271,6 +276,7 @@ services:
       - "8180:8080"   # Trang đăng nhập — browser phải tới được
     volumes:
       - ./platform/keycloak/realm-fashion-store.json:/opt/keycloak/data/import/realm-fashion-store.json:ro
+      - ./platform/keycloak/themes/lino:/opt/keycloak/themes/lino:ro
     networks:
       - fashion-network
 

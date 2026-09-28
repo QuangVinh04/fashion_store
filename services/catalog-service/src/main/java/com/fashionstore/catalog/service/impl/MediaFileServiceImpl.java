@@ -275,7 +275,11 @@ public class MediaFileServiceImpl implements MediaFileService {
             return;
         }
         String userId = getAuthenticatedUserIdOrNull();
-        if (userId == null || !userId.equals(mediaFile.getOwnerId())) {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        boolean returnsReviewer = "returns".equals(mediaFile.getFolder())
+                && authentication != null
+                && authentication.getAuthorities().stream().anyMatch(authority -> "ROLE_ADMIN".equals(authority.getAuthority()));
+        if (!returnsReviewer && (userId == null || !userId.equals(mediaFile.getOwnerId()))) {
             throw new AppException(FileErrorCode.FILE_ACCESS_DENIED);
         }
     }

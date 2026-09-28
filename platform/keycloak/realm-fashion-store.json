@@ -1,6 +1,7 @@
 {
   "realm": "fashion-store",
   "displayName": "Fashion Store",
+  "loginTheme": "lino",
   "enabled": true,
   "sslRequired": "external",
   "registrationAllowed": true,

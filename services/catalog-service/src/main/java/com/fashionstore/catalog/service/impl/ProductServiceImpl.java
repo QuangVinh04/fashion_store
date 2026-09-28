@@ -90,6 +90,7 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public ProductResponse getProductById(String id) {
         Product product = productRepository.findDetailProductById(id)
                 .orElseThrow(() -> new AppException(ProductErrorCode.PRODUCT_NOT_FOUND));
