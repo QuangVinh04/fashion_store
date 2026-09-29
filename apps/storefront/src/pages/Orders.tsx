@@ -1,128 +1,199 @@
-import { useState } from "react";
-import { Link } from "react-router";
-import { ShoppingBag, ArrowRight } from "lucide-react";
-import { DEMO_ORDERS, STATUS_LABEL, STATUS_COLOR, type OrderStatus } from "../data/orders";
-import { formatVND } from "../data/products";
-import ProfileLayout from "../components/ProfileLayout";
+import { useState } from 'react';
+import { Link, useSearchParams } from 'react-router';
+import { ShoppingBag, ArrowRight, Eye, Calendar, CreditCard } from 'lucide-react';
+import { store } from '../api/store';
+import { money } from '../api/client';
+import type { OrderStatus, OrderSummary } from '../api/types';
+import { ORDER_LABEL } from '../api/types';
+import ProfileLayout from '../components/ProfileLayout';
+import { PageTitle, Status, StatusBadge, useLoad } from '../components/StoreUI';
 
-const TABS: { label: string; value: string }[] = [
-  { label: "Tất Cả", value: "all" },
-  { label: "Chờ Xác Nhận", value: "pending" },
-  { label: "Đang Vận Chuyển", value: "shipping" },
-  { label: "Đã Giao", value: "delivered" },
-  { label: "Đã Hủy", value: "cancelled" },
+const ORDER_TABS: { label: string; value: string }[] = [
+  { label: 'Tất Cả', value: '' },
+  { label: 'Chờ Xử Lý', value: 'PENDING' },
+  { label: 'Đã Xác Nhận', value: 'CONFIRMED' },
+  { label: 'Đang Giao', value: 'SHIPPING' },
+  { label: 'Đã Giao', value: 'DELIVERED' },
+  { label: 'Đã Hủy', value: 'CANCELLED' },
 ];
 
 export default function Orders() {
-  const [activeTab, setActiveTab] = useState("all");
+  const [params, setParams] = useSearchParams();
+  const page = Math.max(0, Number(params.get('page') || 0));
+  const status = params.get('status') || '';
 
-  const filtered = activeTab === "all"
-    ? DEMO_ORDERS
-    : DEMO_ORDERS.filter((o) => o.status === activeTab);
+  const ordersLoad = useLoad(
+    () => store.orders(page, status || undefined),
+    [page, status]
+  );
+
+  const setTab = (val: string) => {
+    const next = new URLSearchParams(params);
+    if (val) next.set('status', val);
+    else next.delete('status');
+    next.delete('page');
+    setParams(next);
+  };
+
+  const setPage = (p: number) => {
+    const next = new URLSearchParams(params);
+    if (p > 0) next.set('page', String(p));
+    else next.delete('page');
+    setParams(next);
+  };
 
   return (
     <ProfileLayout>
-      <div>
-        <h1
-          className="text-[#111] mb-8"
-          style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 900, fontSize: "clamp(1.75rem, 3vw, 2.5rem)", letterSpacing: "-0.01em", lineHeight: 1 }}
-        >
-          ĐƠN HÀNG CỦA TÔI
-        </h1>
+      <div style={{ fontFamily: "'Inter', sans-serif" }} className="w-full">
+        <PageTitle eyebrow="Tài Khoản Của Bạn">ĐƠN HÀNG CỦA TÔI</PageTitle>
 
-        {/* Tabs */}
-        <div className="flex flex-wrap gap-0 mb-6 border-b border-[rgba(0,0,0,0.1)] overflow-x-auto">
-          {TABS.map((tab) => (
-            <button
-              key={tab.value}
-              onClick={() => setActiveTab(tab.value)}
-              className="px-4 py-3 text-xs tracking-widest uppercase font-medium transition-all relative whitespace-nowrap"
-              style={{ color: activeTab === tab.value ? "#111" : "#888" }}
-            >
-              {tab.label}
-              {activeTab === tab.value && <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#111]" />}
-            </button>
-          ))}
+        {/* Status Filter Tabs */}
+        <div className="flex gap-1 mb-8 border-b border-[rgba(0,0,0,0.1)] overflow-x-auto pb-px">
+          {ORDER_TABS.map((tab) => {
+            const isSelected = status === tab.value;
+            return (
+              <button
+                key={tab.value}
+                type="button"
+                onClick={() => setTab(tab.value)}
+                className={`px-4 py-3 text-xs uppercase tracking-widest font-semibold whitespace-nowrap transition-all relative ${
+                  isSelected ? 'text-[#111]' : 'text-[#888] hover:text-[#111]'
+                }`}
+              >
+                {tab.label}
+                {isSelected && (
+                  <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#111]" />
+                )}
+              </button>
+            );
+          })}
         </div>
 
-        {filtered.length === 0 && (
-          <div className="text-center py-16 border border-dashed border-[rgba(0,0,0,0.15)]">
-            <ShoppingBag size={36} className="text-[#ddd] mx-auto mb-4" />
-            <p className="text-[#888] text-sm mb-4">Không có đơn hàng nào.</p>
-            <Link to="/products" className="text-xs uppercase tracking-widest text-[#111] underline hover:text-[#E5001B] transition-colors">
-              Mua sắm ngay
-            </Link>
-          </div>
-        )}
+        <Status
+          loading={ordersLoad.loading}
+          error={ordersLoad.error}
+          retry={() => void ordersLoad.refresh()}
+        />
 
-        <div className="space-y-4">
-          {filtered.map((order) => (
-            <div key={order.id} className="border border-[rgba(0,0,0,0.12)] overflow-hidden">
-              {/* Order Header */}
-              <div className="bg-[#f5f5f5] px-5 py-4 flex flex-wrap items-center justify-between gap-3">
-                <div className="flex flex-wrap items-center gap-4">
-                  <div>
-                    <p className="text-[10px] uppercase tracking-widest text-[#888]">Mã Đơn Hàng</p>
-                    <p className="text-sm font-semibold text-[#111] mt-0.5">{order.id}</p>
+        {ordersLoad.data && ordersLoad.data.items.length > 0 ? (
+          <div className="space-y-4">
+            {ordersLoad.data.items.map((order: OrderSummary) => (
+              <div
+                key={order.id}
+                className="border border-[rgba(0,0,0,0.08)] bg-white hover:border-[#111] transition-all overflow-hidden"
+              >
+                <div className="p-5 md:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-[#fafafa] border-b border-[rgba(0,0,0,0.06)]">
+                  <div className="flex flex-wrap items-center gap-4">
+                    <div>
+                      <span className="text-[10px] uppercase font-bold tracking-widest text-[#888] block">
+                        Mã Đơn Hàng
+                      </span>
+                      <strong className="text-sm text-[#111] font-mono">
+                        {order.orderCode}
+                      </strong>
+                    </div>
+
+                    <div className="hidden md:block w-px h-8 bg-[#ddd]" />
+
+                    <div>
+                      <span className="text-[10px] uppercase font-bold tracking-widest text-[#888] block">
+                        Ngày Đặt
+                      </span>
+                      <span className="text-xs text-[#555]">
+                        {new Date(order.createdAt).toLocaleDateString('vi-VN')}
+                      </span>
+                    </div>
+
+                    <div className="hidden md:block w-px h-8 bg-[#ddd]" />
+
+                    <div>
+                      <span className="text-[10px] uppercase font-bold tracking-widest text-[#888] block">
+                        Tổng Tiền
+                      </span>
+                      <strong className="text-sm text-[#111]">
+                        {money(order.totalAmount)}
+                      </strong>
+                    </div>
                   </div>
-                  <div className="hidden sm:block w-px h-8 bg-[rgba(0,0,0,0.1)]" />
-                  <div>
-                    <p className="text-[10px] uppercase tracking-widest text-[#888]">Ngày Đặt</p>
-                    <p className="text-sm text-[#555] mt-0.5">{new Date(order.date).toLocaleDateString("vi-VN")}</p>
-                  </div>
-                  <div className="hidden sm:block w-px h-8 bg-[rgba(0,0,0,0.1)]" />
-                  <div>
-                    <p className="text-[10px] uppercase tracking-widest text-[#888]">Tổng Tiền</p>
-                    <p className="text-sm font-semibold text-[#111] mt-0.5">{formatVND(order.total)}</p>
+
+                  <div className="flex items-center gap-3">
+                    <StatusBadge status={order.status} />
+
+                    <Link
+                      to={`/profile/orders/${order.id}`}
+                      className="bg-[#111] text-white px-4 py-2 text-xs uppercase tracking-widest font-semibold hover:bg-[#E5001B] inline-flex items-center gap-1.5 transition-colors shrink-0"
+                    >
+                      <Eye size={13} /> Chi Tiết
+                    </Link>
                   </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  <span className={`text-[10px] uppercase tracking-widest px-3 py-1.5 border font-medium ${STATUS_COLOR[order.status as OrderStatus]}`}>
-                    {STATUS_LABEL[order.status as OrderStatus]}
-                  </span>
+
+                <div className="p-5 flex flex-wrap items-center justify-between gap-3 text-xs text-[#666]">
+                  <div className="flex items-center gap-4">
+                    <span>
+                      Thanh toán: <strong className="uppercase text-[#111]">{order.paymentProvider}</strong>
+                    </span>
+                    <span>·</span>
+                    <span>Phương thức: <strong className="uppercase text-[#111]">{order.paymentMethod}</strong></span>
+                  </div>
+
                   <Link
                     to={`/profile/orders/${order.id}`}
-                    className="flex items-center gap-1.5 text-xs uppercase tracking-widest text-[#111] font-medium hover:text-[#E5001B] transition-colors"
+                    className="text-xs uppercase tracking-wider text-[#111] font-semibold hover:text-[#E5001B] inline-flex items-center gap-1 underline underline-offset-4"
                   >
-                    Chi Tiết <ArrowRight size={12} />
+                    Xem lịch trình vận đơn & sản phẩm <ArrowRight size={12} />
                   </Link>
                 </div>
               </div>
+            ))}
 
-              {/* Order Items */}
-              <div className="px-5 divide-y divide-[rgba(0,0,0,0.06)]">
-                {order.items.map((item, i) => (
-                  <div key={i} className="py-4 flex items-center gap-4">
-                    <Link to={`/products/${item.productId}`} className="w-16 h-20 flex-shrink-0 bg-[#f5f5f5] overflow-hidden">
-                      <img src={item.img} alt={item.name} className="w-full h-full object-cover" />
-                    </Link>
-                    <div className="flex-1 min-w-0">
-                      <Link to={`/products/${item.productId}`} className="text-sm font-medium text-[#111] hover:text-[#E5001B] transition-colors block truncate">
-                        {item.name}
-                      </Link>
-                      <p className="text-xs text-[#888] mt-1">Size: {item.size} · Màu: {item.color} · SL: {item.quantity}</p>
-                      <p className="text-sm font-semibold text-[#111] mt-1">{formatVND(item.price * item.quantity)}</p>
-                    </div>
-                    {order.status === "delivered" && (
-                      <Link
-                        to={`/products/${item.productId}`}
-                        className="hidden sm:flex text-xs uppercase tracking-widest text-[#888] hover:text-[#111] transition-colors border-b border-transparent hover:border-[#888] pb-0.5 flex-shrink-0"
-                      >
-                        Mua Lại
-                      </Link>
-                    )}
-                  </div>
-                ))}
+            {/* Pagination */}
+            {ordersLoad.data.totalPage > 1 && (
+              <div className="mt-8 pt-6 border-t border-[rgba(0,0,0,0.08)] flex items-center justify-between">
+                <button
+                  type="button"
+                  disabled={page === 0}
+                  onClick={() => setPage(page - 1)}
+                  className="bg-[#111] text-white px-5 py-2.5 text-xs uppercase tracking-widest font-semibold hover:bg-[#E5001B] disabled:opacity-30 disabled:hover:bg-[#111]"
+                >
+                  ← Trước
+                </button>
+                <span className="text-xs text-[#888] font-medium">
+                  Trang {page + 1} / {ordersLoad.data.totalPage}
+                </span>
+                <button
+                  type="button"
+                  disabled={page + 1 >= ordersLoad.data.totalPage}
+                  onClick={() => setPage(page + 1)}
+                  className="bg-[#111] text-white px-5 py-2.5 text-xs uppercase tracking-widest font-semibold hover:bg-[#E5001B] disabled:opacity-30 disabled:hover:bg-[#111]"
+                >
+                  Sau →
+                </button>
               </div>
-
-              {/* Footer */}
-              <div className="bg-[#fafafa] px-5 py-3 flex flex-wrap items-center justify-between gap-2 text-xs text-[#888]">
-                <span className="uppercase tracking-widest">Thanh toán: {order.paymentMethod}</span>
-                <span className="font-medium text-[#111]">Tổng: {formatVND(order.total)}</span>
-              </div>
+            )}
+          </div>
+        ) : (
+          !ordersLoad.loading &&
+          !ordersLoad.error && (
+            <div className="py-20 text-center border border-dashed border-[#ddd] p-8">
+              <ShoppingBag size={36} className="text-[#ccc] mx-auto mb-4" />
+              <p className="text-base font-bold text-[#111] mb-1">
+                Không có đơn hàng nào
+              </p>
+              <p className="text-xs text-[#888] mb-6">
+                {status
+                  ? 'Không tìm thấy đơn hàng nào ở trạng thái này.'
+                  : 'Bạn chưa thực hiện đơn đặt hàng nào tại LINO.'}
+              </p>
+              <Link
+                to="/products"
+                className="inline-block bg-[#111] text-white px-6 py-3 text-xs uppercase tracking-widest font-bold hover:bg-[#E5001B]"
+              >
+                Khám Phá Sản Phẩm Ngay
+              </Link>
             </div>
-          ))}
-        </div>
+          )
+        )}
       </div>
     </ProfileLayout>
   );

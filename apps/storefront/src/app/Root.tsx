@@ -65,7 +65,7 @@ export default function Root() {
           </nav>
 
           <div className="flex items-center gap-4">
-            <Link to="/products" className="hidden sm:flex text-[#888] hover:text-[#111] transition-colors" aria-label="Tìm kiếm">
+            <Link to="/products" className="flex text-[#888] hover:text-[#111] transition-colors" aria-label="Tìm kiếm">
               <Search size={18} />
             </Link>
             <div className="hidden sm:block relative">
@@ -127,18 +127,54 @@ export default function Root() {
         </div>
 
         {menuOpen && (
-          <div className="lg:hidden bg-white border-t border-[rgba(0,0,0,0.08)] px-6 py-6 flex flex-col gap-5">
-            {NAV_LINKS.map((link) => (
-              <Link
-                key={link.label}
-                to={link.href}
-                onClick={() => setMenuOpen(false)}
-                className="text-base font-medium uppercase tracking-wide text-[#111] hover:text-[#E5001B] transition-colors flex items-center justify-between"
-              >
-                {link.label}
-                <ChevronRight size={16} className="text-[#888]" />
-              </Link>
-            ))}
+          <div className="lg:hidden bg-white border-t border-[rgba(0,0,0,0.08)] px-6 py-6 flex flex-col gap-4">
+            <div className="flex flex-col gap-3">
+              {NAV_LINKS.map((link) => (
+                <Link
+                  key={link.label}
+                  to={link.href}
+                  onClick={() => setMenuOpen(false)}
+                  className="text-sm font-semibold uppercase tracking-wider text-[#111] hover:text-[#E5001B] transition-colors flex items-center justify-between py-2 border-b border-[rgba(0,0,0,0.05)]"
+                >
+                  {link.label}
+                  <ChevronRight size={15} className="text-[#888]" />
+                </Link>
+              ))}
+            </div>
+
+            <div className="pt-2">
+              {isLoggedIn ? (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3 p-3 bg-gray-50 border border-gray-100">
+                    <div className="w-8 h-8 bg-[#111] flex items-center justify-center text-white text-xs font-bold">
+                      {user?.fullName?.[0]?.toUpperCase() || 'U'}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-semibold text-[#111] truncate">{user?.fullName}</p>
+                      <p className="text-[10px] text-[#888] truncate">{user?.email}</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-xs font-semibold uppercase tracking-wider text-center">
+                    <Link to="/profile" onClick={() => setMenuOpen(false)} className="p-2.5 bg-gray-50 hover:bg-gray-100 text-[#111]">Hồ Sơ</Link>
+                    <Link to="/profile/orders" onClick={() => setMenuOpen(false)} className="p-2.5 bg-gray-50 hover:bg-gray-100 text-[#111]">Đơn Hàng</Link>
+                    <Link to="/profile/addresses" onClick={() => setMenuOpen(false)} className="p-2.5 bg-gray-50 hover:bg-gray-100 text-[#111]">Địa Chỉ</Link>
+                    <Link to="/wishlist" onClick={() => setMenuOpen(false)} className="p-2.5 bg-gray-50 hover:bg-gray-100 text-[#111]">Yêu Thích</Link>
+                  </div>
+                  <button onClick={() => { handleLogout(); setMenuOpen(false); }} className="w-full flex items-center justify-center gap-2 py-2.5 text-xs uppercase tracking-widest text-[#E5001B] border border-[#E5001B]/20 hover:bg-red-50">
+                    <LogOut size={13} /> Đăng Xuất
+                  </button>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <Link to="/login" onClick={() => setMenuOpen(false)} className="flex-1 py-3 text-center text-xs uppercase tracking-widest font-semibold bg-[#111] text-white hover:bg-black">
+                    Đăng Nhập
+                  </Link>
+                  <Link to="/register" onClick={() => setMenuOpen(false)} className="flex-1 py-3 text-center text-xs uppercase tracking-widest font-semibold border border-[#111] text-[#111] hover:bg-gray-50">
+                    Đăng Ký
+                  </Link>
+                </div>
+              )}
+            </div>
           </div>
         )}
       </header>

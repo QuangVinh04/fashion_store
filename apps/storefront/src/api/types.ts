@@ -1,6 +1,6 @@
 export type Session = { authenticated: boolean; userId?: string; email?: string; name?: string; roles: string[] };
 export type Profile = { id: string; email: string; fullName: string; phone: string; address: string; avatar: string; isEmailVerified: boolean };
-export type Address = { id: string; recipientName: string; phone: string; province: string; district: string; ward: string; detailAddress: string; districtId?: number; wardCode?: string; isDefault: boolean; fullAddress?: string };
+export type Address = { id: string; recipientName: string; phone: string; province: string; district?: string; ward: string; detailAddress: string; provinceId?: number; wardId?: number; districtId?: number; wardCode?: string; isDefault: boolean; fullAddress?: string };
 export type ProductSummary = { id: string; name: string; slug: string; basePrice: number; salePrice?: number; price: number; status: string; published: boolean; thumbnailMediaId?: string; thumbnailUrl?: string; brandName?: string; categoryName?: string };
 export type Variant = { id: string; productId: string; sku: string; price?: number; salePrice?: number; active: boolean; sizeOptionId?: string; colorOptionId?: string; size?: string; color?: string; colorHex?: string; thumbnailMediaId?: string };
 export type ProductImage = { id: string; mediaId: string; colorOptionId?: string; color?: string; url?: string; altText?: string; sortOrder: number; primary: boolean };

@@ -1,364 +1,727 @@
-import { useState } from "react";
-import { Link, useParams, useNavigate } from "react-router";
-import { Heart, Star, ChevronDown, ChevronUp, ShoppingBag, ArrowRight, Truck, RefreshCw, Shield } from "lucide-react";
-import { PRODUCTS, formatVND } from "../data/products";
-import { useCart } from "../context/CartContext";
+import { useState, useEffect, useMemo } from 'react';
+import { Link, useParams, useNavigate } from 'react-router';
+import {
+  Heart,
+  Star,
+  ChevronDown,
+  ChevronUp,
+  ShoppingBag,
+  ArrowRight,
+  Truck,
+  RefreshCw,
+  ShieldCheck,
+  Check,
+  AlertCircle,
+} from 'lucide-react';
+import { store } from '../api/store';
+import { media, money } from '../api/client';
+import type { Product, ProductImage, ProductSummary, Review, Variant } from '../api/types';
+import {
+  PageTitle,
+  ProductCard,
+  ProductPhoto,
+  StarRating,
+  Status,
+  useLoad,
+} from '../components/StoreUI';
+import { useCart } from '../context/CartContext';
+import { useAuth } from '../context/AuthContext';
 
-const REVIEWS = [
-  { name: "Nguyễn Minh Anh", rating: 5, date: "15/06/2025", comment: "Sản phẩm rất đẹp, chất vải mềm mại và thoáng mát. Giao hàng nhanh, đóng gói cẩn thận. Sẽ ủng hộ LINO dài dài!", size: "M", color: "Đen" },
-  { name: "Trần Thị Hoa", rating: 4, date: "02/06/2025", comment: "Chất lượng tốt, đúng mô tả. Màu sắc đẹp, size chuẩn theo bảng hướng dẫn. Chỉ tiếc là giao hơi lâu một chút.", size: "S", color: "Trắng" },
-  { name: "Lê Văn Hùng", rating: 5, date: "28/05/2025", comment: "Mua lần thứ 3 rồi vẫn hài lòng. LINO luôn giữ được chất lượng nhất quán. Áo này đặc biệt mềm, mặc cả ngày không khó chịu.", size: "L", color: "Xanh Biển" },
-];
-
-function StarRating({ rating, size = 14 }: { rating: number; size?: number }) {
+function AccordionItem({
+  title,
+  defaultOpen = false,
+  children,
+}: {
+  title: string;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
   return (
-    <div className="flex items-center gap-0.5">
-      {[1, 2, 3, 4, 5].map((i) => (
-        <Star
-          key={i}
-          size={size}
-          className={i <= Math.round(rating) ? "fill-[#111] stroke-[#111]" : "fill-[#e0e0e0] stroke-[#e0e0e0]"}
-        />
-      ))}
-    </div>
-  );
-}
-
-function AccordionItem({ title, children }: { title: string; children: React.ReactNode }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div className="border-b border-[rgba(0,0,0,0.1)]">
+    <div className="border-b border-[rgba(0,0,0,0.08)] py-4">
       <button
+        type="button"
         onClick={() => setOpen(!open)}
-        className="flex items-center justify-between w-full py-4 text-left"
+        className="flex items-center justify-between w-full py-1 text-left font-bold text-xs uppercase tracking-widest text-[#111] hover:text-[#E5001B] transition-colors"
       >
-        <span className="text-sm font-semibold uppercase tracking-widest text-[#111]">{title}</span>
-        {open ? <ChevronUp size={14} className="text-[#888] flex-shrink-0" /> : <ChevronDown size={14} className="text-[#888] flex-shrink-0" />}
+        <span>{title}</span>
+        {open ? (
+          <ChevronUp size={16} className="text-[#888] shrink-0" />
+        ) : (
+          <ChevronDown size={16} className="text-[#888] shrink-0" />
+        )}
       </button>
-      {open && <div className="pb-5 text-sm text-[#555] leading-relaxed" style={{ fontWeight: 300 }}>{children}</div>}
+      {open && <div className="pt-3 pb-2 text-sm text-[#555] leading-relaxed">{children}</div>}
     </div>
   );
 }
 
 export default function ProductDetail() {
-  const { id } = useParams();
+  const { id = '' } = useParams();
   const navigate = useNavigate();
   const { addItem } = useCart();
+  const { isLoggedIn, login } = useAuth();
 
-  const product = PRODUCTS.find((p) => p.id === Number(id));
+  const productLoad = useLoad(() => store.product(id), [id]);
+  const reviewsLoad = useLoad(() => store.reviews(id), [id]);
+  const sizeChartLoad = useLoad(() => store.productSizeChart(id), [id]);
 
-  const [activeImg, setActiveImg] = useState(0);
-  const [selectedColor, setSelectedColor] = useState(0);
-  const [selectedSize, setSelectedSize] = useState<string | null>(null);
+  const [selectedColor, setSelectedColor] = useState<string>('');
+  const [selectedSize, setSelectedSize] = useState<string>('');
   const [qty, setQty] = useState(1);
+  const [activeImg, setActiveImg] = useState<string>('');
   const [liked, setLiked] = useState(false);
-  const [sizeError, setSizeError] = useState(false);
-  const [added, setAdded] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(
+    null
+  );
 
-  if (!product) {
+  const [relatedProducts, setRelatedProducts] = useState<ProductSummary[]>([]);
+
+  const p = productLoad.data;
+
+  // Reset state when product id changes
+  useEffect(() => {
+    setSelectedColor('');
+    setSelectedSize('');
+    setQty(1);
+    setActiveImg('');
+    setFeedback(null);
+  }, [id]);
+
+  // Wishlist check
+  useEffect(() => {
+    if (!isLoggedIn) {
+      setLiked(false);
+      return;
+    }
+    let active = true;
+    void store
+      .wishCheck(id)
+      .then((res) => {
+        if (active) setLiked(res.inWishlist);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [id, isLoggedIn]);
+
+  // Load related products
+  useEffect(() => {
+    if (!p?.categoryId) return;
+    let active = true;
+    store
+      .products({ categoryId: p.categoryId, size: 4 })
+      .then((res) => {
+        if (active) setRelatedProducts(res.items.filter((item) => item.id !== id).slice(0, 4));
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [p?.categoryId, id]);
+
+  const activeVariants = useMemo(() => {
+    return (p?.variants || []).filter((v) => v.active);
+  }, [p?.variants]);
+
+  // Unique colors
+  const colorOptions = useMemo(() => {
+    const map = new Map<string, Variant>();
+    activeVariants.forEach((v) => {
+      const key = v.colorOptionId || v.color || '';
+      if (key && !map.has(key)) map.set(key, v);
+    });
+    return Array.from(map.values());
+  }, [activeVariants]);
+
+  // Unique sizes filtered by selected color
+  const sizeOptions = useMemo(() => {
+    const map = new Map<string, Variant>();
+    const filtered = selectedColor
+      ? activeVariants.filter((v) => (v.colorOptionId || v.color) === selectedColor)
+      : activeVariants;
+    filtered.forEach((v) => {
+      const key = v.sizeOptionId || v.size || '';
+      if (key && !map.has(key)) map.set(key, v);
+    });
+    return Array.from(map.values());
+  }, [activeVariants, selectedColor]);
+
+  // Matching resolved variant
+  const selectedVariant = useMemo(() => {
+    if (!selectedColor || !selectedSize) return null;
     return (
-      <div className="max-w-[1400px] mx-auto px-6 py-24 text-center">
-        <p className="text-[#888] text-sm mb-4">Không tìm thấy sản phẩm.</p>
-        <Link to="/products" className="text-xs uppercase tracking-widest text-[#111] underline">Xem tất cả sản phẩm</Link>
-      </div>
+      activeVariants.find(
+        (v) =>
+          (v.colorOptionId || v.color) === selectedColor &&
+          (v.sizeOptionId || v.size) === selectedSize
+      ) || null
     );
+  }, [activeVariants, selectedColor, selectedSize]);
+
+  // Images filtered by color or default
+  const filteredImages = useMemo(() => {
+    const list = p?.images || [];
+    if (!selectedColor) return list.sort((a, b) => a.sortOrder - b.sortOrder);
+    const colorImages = list.filter(
+      (img) => !img.colorOptionId || img.colorOptionId === selectedColor
+    );
+    return (colorImages.length > 0 ? colorImages : list).sort((a, b) => a.sortOrder - b.sortOrder);
+  }, [p?.images, selectedColor]);
+
+  const currentPhotoUrl =
+    activeImg ||
+    filteredImages[0]?.url ||
+    (filteredImages[0]?.mediaId ? media(filteredImages[0].mediaId) : '') ||
+    p?.thumbnailUrl ||
+    media(p?.thumbnailMediaId);
+
+  const displayPrice =
+    selectedVariant?.salePrice ??
+    selectedVariant?.price ??
+    p?.salePrice ??
+    p?.price ??
+    p?.basePrice ??
+    0;
+  const isSale = p?.basePrice != null && displayPrice < p.basePrice;
+
+  async function handleAddToCart(buyNow = false) {
+    if (!isLoggedIn) {
+      login(`/products/${id}`);
+      return;
+    }
+    if (!selectedColor || !selectedSize || !selectedVariant) {
+      setFeedback({
+        type: 'error',
+        message: 'Vui lòng chọn đầy đủ màu sắc và kích cỡ sản phẩm.',
+      });
+      return;
+    }
+
+    setBusy(true);
+    setFeedback(null);
+    try {
+      await addItem(selectedVariant.id, qty);
+      if (buyNow) {
+        navigate('/cart');
+      } else {
+        setFeedback({
+          type: 'success',
+          message: 'Đã thêm sản phẩm vào giỏ hàng thành công.',
+        });
+      }
+    } catch (e) {
+      setFeedback({
+        type: 'error',
+        message: (e as Error).message || 'Không thể thêm sản phẩm vào giỏ hàng.',
+      });
+    } finally {
+      setBusy(false);
+    }
   }
 
-  const related = PRODUCTS.filter((p) => p.category === product.category && p.id !== product.id).slice(0, 4);
-
-  const handleAddToCart = () => {
-    if (!selectedSize) { setSizeError(true); return; }
-    setSizeError(false);
-    addItem(product, qty, selectedSize, product.colors[selectedColor].name);
-    setAdded(true);
-    setTimeout(() => setAdded(false), 2000);
-  };
-
-  const handleBuyNow = () => {
-    if (!selectedSize) { setSizeError(true); return; }
-    setSizeError(false);
-    addItem(product, qty, selectedSize, product.colors[selectedColor].name);
-    navigate("/cart");
-  };
+  async function toggleWishlist() {
+    if (!isLoggedIn) {
+      login(`/products/${id}`);
+      return;
+    }
+    setBusy(true);
+    try {
+      if (liked) {
+        await store.wishRemove(id);
+        setLiked(false);
+      } else {
+        await store.wishAdd(id);
+        setLiked(true);
+      }
+    } catch (e) {
+      setFeedback({ type: 'error', message: (e as Error).message });
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
-    <div style={{ fontFamily: "'Inter', sans-serif" }}>
+    <div style={{ fontFamily: "'Inter', sans-serif" }} className="w-full">
       {/* Breadcrumb */}
-      <div className="max-w-[1400px] mx-auto px-6 py-5 border-b border-[rgba(0,0,0,0.08)]">
-        <nav className="flex items-center gap-2 text-xs text-[#888] uppercase tracking-widest">
-          <Link to="/" className="hover:text-[#111] transition-colors">Trang Chủ</Link>
-          <span>/</span>
-          <Link to="/products" className="hover:text-[#111] transition-colors">Sản Phẩm</Link>
-          <span>/</span>
-          <Link to={`/products?cat=${encodeURIComponent(product.category)}`} className="hover:text-[#111] transition-colors">{product.category}</Link>
-          <span>/</span>
-          <span className="text-[#111] truncate max-w-[200px]">{product.name}</span>
-        </nav>
+      <div className="border-b border-[rgba(0,0,0,0.08)] bg-[#fafafa]">
+        <div className="max-w-[1400px] mx-auto px-6 py-4">
+          <nav className="flex items-center gap-2 text-xs text-[#888] uppercase tracking-widest font-medium overflow-x-auto whitespace-nowrap">
+            <Link to="/" className="hover:text-[#111]">
+              Trang Chủ
+            </Link>
+            <span>/</span>
+            <Link to="/products" className="hover:text-[#111]">
+              Sản Phẩm
+            </Link>
+            {p?.categoryName && (
+              <>
+                <span>/</span>
+                <Link
+                  to={`/products?categoryId=${p.categoryId || ''}`}
+                  className="hover:text-[#111]"
+                >
+                  {p.categoryName}
+                </Link>
+              </>
+            )}
+            <span>/</span>
+            <span className="text-[#111] truncate max-w-xs">{p?.name || 'Chi Tiết Sản Phẩm'}</span>
+          </nav>
+        </div>
       </div>
 
-      {/* Main Content */}
       <div className="max-w-[1400px] mx-auto px-6 py-10">
-        <div className="grid lg:grid-cols-[1fr_480px] xl:grid-cols-[1fr_520px] gap-12 xl:gap-16">
+        <Status
+          loading={productLoad.loading}
+          error={productLoad.error}
+          retry={() => void productLoad.refresh()}
+        />
 
-          {/* Image Gallery */}
-          <div className="flex gap-4">
-            {/* Thumbnails */}
-            <div className="hidden sm:flex flex-col gap-2 w-20 flex-shrink-0">
-              {product.images.map((img, i) => (
-                <button
-                  key={i}
-                  onClick={() => setActiveImg(i)}
-                  className={`aspect-square overflow-hidden bg-[#f5f5f5] transition-all duration-150 ${activeImg === i ? "ring-2 ring-[#111]" : "opacity-60 hover:opacity-100"}`}
-                >
-                  <img src={img} alt={`${product.name} ${i + 1}`} className="w-full h-full object-cover" />
-                </button>
-              ))}
-            </div>
-            {/* Main Image */}
-            <div className="flex-1 relative overflow-hidden bg-[#f5f5f5] aspect-[3/4]">
-              <img
-                src={product.images[activeImg]}
-                alt={product.name}
-                className="w-full h-full object-cover"
-              />
-              {product.tag && (
-                <span className={`absolute top-4 left-4 text-white text-[10px] font-medium tracking-widest uppercase px-2 py-1 ${product.tag === "Sale" ? "bg-[#E5001B]" : product.tag === "Mới" ? "bg-[#111]" : "bg-[#2D5A3D]"}`}>
-                  {product.tag}
-                </span>
-              )}
-              <button
-                onClick={() => setLiked(!liked)}
-                className="absolute top-4 right-4 w-9 h-9 flex items-center justify-center bg-white"
-                aria-label="Yêu thích"
-              >
-                <Heart size={18} className={liked ? "fill-[#E5001B] stroke-[#E5001B]" : "stroke-[#111]"} />
-              </button>
-            </div>
-          </div>
-
-          {/* Product Info */}
-          <div>
-            <p className="text-xs uppercase tracking-widest text-[#888] mb-2">{product.subcategory}</p>
-            <h1
-              className="text-[#111] mb-3"
-              style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: "clamp(1.75rem, 3vw, 2.5rem)", letterSpacing: "-0.01em", lineHeight: 1.1 }}
-            >
-              {product.name.toUpperCase()}
-            </h1>
-
-            {/* Rating */}
-            <div className="flex items-center gap-3 mb-5">
-              <StarRating rating={product.rating} />
-              <span className="text-sm text-[#555]">{product.rating}</span>
-              <span className="text-xs text-[#888]">({product.reviewCount} đánh giá)</span>
-            </div>
-
-            {/* Price */}
-            <div className="flex items-baseline gap-3 mb-6">
-              <p className="text-2xl font-bold text-[#111]">{formatVND(product.price)}</p>
-              {product.originalPrice && (
-                <>
-                  <p className="text-base text-[#aaa] line-through">{formatVND(product.originalPrice)}</p>
-                  <span className="bg-[#E5001B] text-white text-xs px-2 py-0.5 font-medium">
-                    -{Math.round((1 - product.price / product.originalPrice) * 100)}%
-                  </span>
-                </>
-              )}
-            </div>
-
-            {/* Color */}
-            <div className="mb-6">
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-xs font-semibold uppercase tracking-widest text-[#111]">Màu Sắc</p>
-                <p className="text-sm text-[#555]">{product.colors[selectedColor].name}</p>
-              </div>
-              <div className="flex items-center gap-3">
-                {product.colors.map((c, i) => (
-                  <button
-                    key={i}
-                    onClick={() => setSelectedColor(i)}
-                    className="w-8 h-8 rounded-full transition-all duration-150 relative"
-                    style={{
-                      backgroundColor: c.hex,
-                      border: selectedColor === i ? "2px solid #111" : "1px solid #ddd",
-                      outline: selectedColor === i ? "2px solid #fff" : "none",
-                      outlineOffset: "-3px",
-                    }}
-                    title={c.name}
-                  />
-                ))}
-              </div>
-            </div>
-
-            {/* Size */}
-            <div className="mb-6">
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-xs font-semibold uppercase tracking-widest text-[#111]">Size</p>
-                <button className="text-xs text-[#888] underline hover:text-[#111] transition-colors">Hướng Dẫn Chọn Size</button>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {product.sizes.map((size) => (
-                  <button
-                    key={size}
-                    onClick={() => { setSelectedSize(size); setSizeError(false); }}
-                    className={`min-w-[48px] h-11 px-3 text-sm font-medium transition-all duration-150 border ${
-                      selectedSize === size
-                        ? "border-[#111] bg-[#111] text-white"
-                        : "border-[rgba(0,0,0,0.2)] text-[#111] hover:border-[#111]"
-                    }`}
-                  >
-                    {size}
-                  </button>
-                ))}
-              </div>
-              {sizeError && (
-                <p className="text-xs text-[#E5001B] mt-2">Vui lòng chọn size trước khi thêm vào giỏ.</p>
-              )}
-            </div>
-
-            {/* Quantity */}
-            <div className="mb-7">
-              <p className="text-xs font-semibold uppercase tracking-widest text-[#111] mb-3">Số Lượng</p>
-              <div className="flex items-center border border-[rgba(0,0,0,0.2)] w-fit">
-                <button
-                  onClick={() => setQty(Math.max(1, qty - 1))}
-                  className="w-11 h-11 flex items-center justify-center text-[#111] hover:bg-[#f5f5f5] transition-colors text-lg"
-                >
-                  −
-                </button>
-                <span className="w-12 text-center text-sm font-medium text-[#111]">{qty}</span>
-                <button
-                  onClick={() => setQty(qty + 1)}
-                  className="w-11 h-11 flex items-center justify-center text-[#111] hover:bg-[#f5f5f5] transition-colors text-lg"
-                >
-                  +
-                </button>
-              </div>
-            </div>
-
-            {/* CTAs */}
-            <div className="flex flex-col gap-3 mb-8">
-              <button
-                onClick={handleAddToCart}
-                className={`w-full flex items-center justify-center gap-3 py-4 text-xs tracking-widest uppercase font-medium transition-colors duration-300 ${
-                  added ? "bg-[#2D5A3D] text-white" : "bg-[#111] text-white hover:bg-[#333]"
-                }`}
-              >
-                <ShoppingBag size={16} />
-                {added ? "Đã Thêm Vào Giỏ ✓" : "Thêm Vào Giỏ Hàng"}
-              </button>
-              <button
-                onClick={handleBuyNow}
-                className="w-full flex items-center justify-center gap-3 py-4 text-xs tracking-widest uppercase font-medium border-2 border-[#111] text-[#111] hover:bg-[#111] hover:text-white transition-colors duration-300"
-              >
-                Mua Ngay <ArrowRight size={14} />
-              </button>
-            </div>
-
-            {/* Shipping Info */}
-            <div className="border-t border-[rgba(0,0,0,0.1)] pt-6 space-y-3 mb-6">
-              {[
-                { icon: Truck, text: "Miễn phí vận chuyển cho đơn hàng từ 500.000 ₫" },
-                { icon: RefreshCw, text: "Đổi trả miễn phí trong 30 ngày" },
-                { icon: Shield, text: "Bảo hành chính hãng 6 tháng" },
-              ].map(({ icon: Icon, text }) => (
-                <div key={text} className="flex items-center gap-3">
-                  <Icon size={14} className="text-[#888] flex-shrink-0" />
-                  <p className="text-xs text-[#555]">{text}</p>
+        {p && (
+          <>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 xl:gap-16">
+              {/* Product Gallery */}
+              <div className="space-y-4">
+                <div className="relative aspect-[3/4] bg-[#f5f5f5] overflow-hidden group">
+                  <ProductPhoto src={currentPhotoUrl} name={p.name} />
+                  {isSale && (
+                    <span className="absolute top-4 left-4 bg-[#E5001B] text-white text-xs font-bold uppercase tracking-widest px-3 py-1">
+                      Sale
+                    </span>
+                  )}
                 </div>
-              ))}
-            </div>
 
-            {/* Accordion */}
-            <div className="border-t border-[rgba(0,0,0,0.1)]">
-              <AccordionItem title="Mô Tả Sản Phẩm">
-                <p>{product.description}</p>
-              </AccordionItem>
-              <AccordionItem title="Chất Liệu & Thành Phần">
-                <p className="mb-3">{product.material}</p>
-              </AccordionItem>
-              <AccordionItem title="Hướng Dẫn Bảo Quản">
-                <ul className="space-y-2">
-                  {product.care.map((c) => (
-                    <li key={c} className="flex items-start gap-2">
-                      <span className="text-[#E5001B] flex-shrink-0 mt-0.5">—</span>
-                      <span>{c}</span>
-                    </li>
-                  ))}
-                </ul>
-              </AccordionItem>
-            </div>
-          </div>
-        </div>
-
-        {/* Reviews */}
-        <section className="mt-20 border-t border-[rgba(0,0,0,0.1)] pt-16">
-          <div className="flex items-end justify-between mb-10">
-            <div>
-              <h2 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: "clamp(1.75rem, 3vw, 2.5rem)", letterSpacing: "-0.01em", lineHeight: 1, color: "#111" }}>
-                ĐÁNH GIÁ KHÁCH HÀNG
-              </h2>
-              <div className="flex items-center gap-4 mt-3">
-                <div className="flex items-center gap-2">
-                  <StarRating rating={product.rating} size={16} />
-                  <span className="text-2xl font-bold text-[#111]">{product.rating}</span>
-                </div>
-                <span className="text-sm text-[#888]">Dựa trên {product.reviewCount} đánh giá</span>
-              </div>
-            </div>
-          </div>
-          <div className="grid md:grid-cols-3 gap-6">
-            {REVIEWS.map((r, i) => (
-              <div key={i} className="border border-[rgba(0,0,0,0.1)] p-6">
-                <div className="flex items-start justify-between mb-3">
-                  <div>
-                    <p className="text-sm font-semibold text-[#111]">{r.name}</p>
-                    <p className="text-xs text-[#888] mt-0.5">{r.date}</p>
+                {/* Thumbnails */}
+                {filteredImages.length > 1 && (
+                  <div className="flex gap-3 overflow-x-auto pb-2">
+                    {filteredImages.map((img) => {
+                      const url = img.url || (img.mediaId ? media(img.mediaId) : '');
+                      const isActive = url === currentPhotoUrl;
+                      return (
+                        <button
+                          key={img.id}
+                          type="button"
+                          onClick={() => setActiveImg(url)}
+                          className={`w-20 h-24 shrink-0 bg-[#f5f5f5] overflow-hidden border-2 transition-all ${
+                            isActive ? 'border-[#111]' : 'border-transparent hover:border-[#aaa]'
+                          }`}
+                        >
+                          <img
+                            src={url}
+                            alt={img.altText || p.name}
+                            className="w-full h-full object-cover"
+                          />
+                        </button>
+                      );
+                    })}
                   </div>
-                  <StarRating rating={r.rating} size={12} />
-                </div>
-                <p className="text-sm text-[#555] leading-relaxed mb-4" style={{ fontWeight: 300 }}>{r.comment}</p>
-                <div className="flex gap-3">
-                  <span className="text-[10px] uppercase tracking-widest bg-[#f5f5f5] text-[#888] px-2 py-1">Size: {r.size}</span>
-                  <span className="text-[10px] uppercase tracking-widest bg-[#f5f5f5] text-[#888] px-2 py-1">Màu: {r.color}</span>
-                </div>
+                )}
               </div>
-            ))}
-          </div>
-        </section>
 
-        {/* Related Products */}
-        {related.length > 0 && (
-          <section className="mt-20 border-t border-[rgba(0,0,0,0.1)] pt-16">
-            <div className="flex items-end justify-between mb-8">
-              <h2 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: "clamp(1.75rem, 3vw, 2.5rem)", letterSpacing: "-0.01em", lineHeight: 1, color: "#111" }}>
-                SẢN PHẨM TƯƠNG TỰ
-              </h2>
-              <Link to="/products" className="hidden sm:flex items-center gap-2 text-xs tracking-widest uppercase text-[#888] hover:text-[#111] transition-colors border-b border-transparent hover:border-[#111] pb-0.5">
-                Xem Thêm
-              </Link>
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-x-5 gap-y-10">
-              {related.map((p) => {
-                const [relLiked, setRelLiked] = useState(false);
-                return (
-                  <div key={p.id} className="group cursor-pointer">
-                    <Link to={`/products/${p.id}`} className="block relative overflow-hidden bg-[#f5f5f5] aspect-[3/4]">
-                      <img src={p.img} alt={p.name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
-                      {p.tag && <span className="absolute top-3 left-3 bg-[#111] text-white text-[10px] font-medium tracking-widest uppercase px-2 py-1">{p.tag}</span>}
-                      <button onClick={(e) => { e.preventDefault(); setRelLiked(!relLiked); }} className="absolute top-3 right-3 w-8 h-8 flex items-center justify-center bg-white opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Heart size={16} className={relLiked ? "fill-[#E5001B] stroke-[#E5001B]" : "stroke-[#111]"} />
-                      </button>
-                    </Link>
-                    <div className="mt-3">
-                      <Link to={`/products/${p.id}`} className="text-sm font-medium text-[#111] hover:text-[#E5001B] transition-colors block">{p.name}</Link>
-                      <p className="text-sm font-semibold text-[#111] mt-1">{formatVND(p.price)}</p>
+              {/* Product Info & Controls */}
+              <div className="flex flex-col">
+                <p className="text-xs uppercase tracking-[0.25em] text-[#888] font-bold mb-2">
+                  {p.brandName || p.categoryName || 'LINO'}
+                </p>
+                <h1
+                  className="text-[#111] font-black uppercase text-3xl md:text-4xl leading-tight mb-4"
+                  style={{ fontFamily: "'Barlow Condensed', sans-serif" }}
+                >
+                  {p.name}
+                </h1>
+
+                {/* Reviews Summary Rating */}
+                {reviewsLoad.data && (
+                  <div className="flex items-center gap-2 mb-6">
+                    <StarRating rating={reviewsLoad.data.averageRating} size={15} />
+                    <span className="text-xs text-[#555] font-medium">
+                      {reviewsLoad.data.averageRating.toFixed(1)} / 5 (
+                      {reviewsLoad.data.totalReviews} đánh giá)
+                    </span>
+                  </div>
+                )}
+
+                {/* Price Display */}
+                <div className="flex items-baseline gap-3 mb-6 pb-6 border-b border-[rgba(0,0,0,0.08)]">
+                  <span className="text-3xl font-extrabold text-[#111]">
+                    {money(displayPrice)}
+                  </span>
+                  {isSale && (
+                    <span className="text-base text-[#999] line-through">
+                      {money(p.basePrice)}
+                    </span>
+                  )}
+                  {isSale && (
+                    <span className="text-xs font-bold text-[#E5001B] bg-red-50 border border-red-200 px-2 py-0.5 uppercase tracking-wider">
+                      Tiết kiệm {money(p.basePrice - displayPrice)}
+                    </span>
+                  )}
+                </div>
+
+                {/* Short Description */}
+                {(p.shortDescription || p.description) && (
+                  <p className="text-sm text-[#555] leading-relaxed mb-6" style={{ fontWeight: 300 }}>
+                    {p.shortDescription || p.description}
+                  </p>
+                )}
+
+                {/* Color Selector */}
+                {colorOptions.length > 0 && (
+                  <div className="mb-6">
+                    <div className="flex items-center justify-between mb-2.5">
+                      <span className="text-xs uppercase font-bold tracking-widest text-[#111]">
+                        Màu Sắc:{' '}
+                        <strong className="text-[#E5001B] font-bold">
+                          {colorOptions.find((c) => (c.colorOptionId || c.color) === selectedColor)
+                            ?.color || 'Chưa chọn'}
+                        </strong>
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-2.5">
+                      {colorOptions.map((v) => {
+                        const key = v.colorOptionId || v.color || '';
+                        const isSelected = selectedColor === key;
+                        return (
+                          <button
+                            key={key}
+                            type="button"
+                            onClick={() => {
+                              setSelectedColor(key);
+                              setSelectedSize('');
+                              setActiveImg('');
+                              setFeedback(null);
+                            }}
+                            className={`flex items-center gap-2 px-3 py-2 border text-xs font-medium uppercase transition-all ${
+                              isSelected
+                                ? 'border-[#111] bg-[#111] text-white shadow-xs'
+                                : 'border-[#ddd] bg-white text-[#333] hover:border-[#888]'
+                            }`}
+                          >
+                            <span
+                              className="w-3.5 h-3.5 rounded-full border border-black/10 shrink-0"
+                              style={{ backgroundColor: v.colorHex || '#bbb' }}
+                            />
+                            <span>{v.color || 'Màu'}</span>
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
-                );
-              })}
+                )}
+
+                {/* Size Selector */}
+                {sizeOptions.length > 0 && (
+                  <div className="mb-6">
+                    <div className="flex items-center justify-between mb-2.5">
+                      <span className="text-xs uppercase font-bold tracking-widest text-[#111]">
+                        Kích Cỡ:{' '}
+                        <strong className="text-[#E5001B] font-bold">
+                          {sizeOptions.find((s) => (s.sizeOptionId || s.size) === selectedSize)
+                            ?.size || 'Chưa chọn'}
+                        </strong>
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {sizeOptions.map((v) => {
+                        const key = v.sizeOptionId || v.size || '';
+                        const isSelected = selectedSize === key;
+                        return (
+                          <button
+                            key={key}
+                            type="button"
+                            onClick={() => {
+                              setSelectedSize(key);
+                              setFeedback(null);
+                            }}
+                            className={`min-w-12 h-10 px-3 border text-xs font-bold uppercase transition-all ${
+                              isSelected
+                                ? 'bg-[#111] text-white border-[#111]'
+                                : 'bg-white text-[#111] border-[#ddd] hover:border-[#111]'
+                            }`}
+                          >
+                            {v.size || 'Size'}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Quantity */}
+                <div className="mb-8 flex items-center gap-4">
+                  <span className="text-xs uppercase font-bold tracking-widest text-[#111]">
+                    Số Lượng:
+                  </span>
+                  <div className="flex items-center border border-[#ddd]">
+                    <button
+                      type="button"
+                      disabled={qty <= 1}
+                      onClick={() => setQty((q) => Math.max(1, q - 1))}
+                      className="w-10 h-10 flex items-center justify-center text-sm font-bold text-[#111] hover:bg-[#f5f5f5] disabled:opacity-30"
+                    >
+                      −
+                    </button>
+                    <input
+                      type="number"
+                      min="1"
+                      max="99"
+                      value={qty}
+                      onChange={(e) => setQty(Math.max(1, Math.min(99, Number(e.target.value) || 1)))}
+                      className="w-12 text-center text-sm font-semibold outline-none"
+                    />
+                    <button
+                      type="button"
+                      disabled={qty >= 99}
+                      onClick={() => setQty((q) => Math.min(99, q + 1))}
+                      className="w-10 h-10 flex items-center justify-center text-sm font-bold text-[#111] hover:bg-[#f5f5f5] disabled:opacity-30"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+
+                {/* Feedback Toast */}
+                {feedback && (
+                  <div
+                    className={`mb-6 p-4 text-xs font-medium flex items-center gap-3 border ${
+                      feedback.type === 'success'
+                        ? 'bg-emerald-50 text-emerald-900 border-emerald-200'
+                        : 'bg-red-50 text-red-900 border-red-200'
+                    }`}
+                  >
+                    {feedback.type === 'success' ? (
+                      <Check size={16} className="text-emerald-700 shrink-0" />
+                    ) : (
+                      <AlertCircle size={16} className="text-red-700 shrink-0" />
+                    )}
+                    <span>{feedback.message}</span>
+                  </div>
+                )}
+
+                {/* Action Buttons */}
+                <div className="flex flex-col sm:flex-row gap-3 mb-8">
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void handleAddToCart(false)}
+                    className="flex-1 bg-[#111] text-white py-4 px-6 text-xs uppercase tracking-widest font-bold hover:bg-[#E5001B] active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    <ShoppingBag size={15} /> Thêm Vào Giỏ
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void handleAddToCart(true)}
+                    className="flex-1 border-2 border-[#111] text-[#111] py-4 px-6 text-xs uppercase tracking-widest font-bold hover:bg-[#111] hover:text-white active:scale-[0.98] transition-all disabled:opacity-50"
+                  >
+                    Mua Ngay
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void toggleWishlist()}
+                    aria-label={liked ? 'Bỏ yêu thích' : 'Yêu thích'}
+                    className={`w-14 h-12 flex items-center justify-center border transition-colors shrink-0 ${
+                      liked
+                        ? 'border-[#E5001B] bg-red-50 text-[#E5001B]'
+                        : 'border-[#ddd] hover:border-[#111] text-[#111]'
+                    }`}
+                  >
+                    <Heart
+                      size={18}
+                      className={liked ? 'fill-[#E5001B] stroke-[#E5001B]' : 'stroke-current'}
+                    />
+                  </button>
+                </div>
+
+                {/* Guarantees */}
+                <div className="bg-[#fafafa] border border-[rgba(0,0,0,0.06)] p-5 space-y-3 mb-8 text-xs text-[#555]">
+                  <div className="flex items-center gap-3">
+                    <Truck size={16} className="text-[#111] shrink-0" />
+                    <span>Miễn phí vận chuyển cho đơn hàng từ 500.000 ₫</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <RefreshCw size={16} className="text-[#111] shrink-0" />
+                    <span>Đổi trả thuận tiện trong vòng 7 ngày</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <ShieldCheck size={16} className="text-[#111] shrink-0" />
+                    <span>Cam kết chất lượng chính hãng từ LINO</span>
+                  </div>
+                </div>
+
+                {/* Accordions */}
+                <div className="border-t border-[rgba(0,0,0,0.08)]">
+                  <AccordionItem title="Mô Tả Sản Phẩm" defaultOpen={true}>
+                    <div className="space-y-4">
+                      <p>{p.description || 'Chưa có thông tin mô tả chi tiết.'}</p>
+                      {p.attributes && p.attributes.length > 0 && (
+                        <div className="pt-2 border-t border-[rgba(0,0,0,0.06)]">
+                          <p className="font-bold text-xs uppercase tracking-wider text-[#111] mb-2">
+                            Đặc tính nổi bật:
+                          </p>
+                          <ul className="list-disc pl-5 space-y-1 text-xs text-[#666]">
+                            {p.attributes.map((attr) => (
+                              <li key={attr.id}>
+                                <strong>{attr.name}:</strong> {attr.value}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  </AccordionItem>
+
+                  {/* Size Chart Accordion */}
+                  {sizeChartLoad.data?.rows && sizeChartLoad.data.rows.length > 0 && (
+                    <AccordionItem title="Bảng Thông Số Kích Cỡ">
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left text-xs border border-[#eee]">
+                          <thead className="bg-[#f5f5f5] text-[#111] font-bold">
+                            <tr>
+                              <th className="p-2.5 border-b">Size</th>
+                              <th className="p-2.5 border-b">Vòng Ngực (cm)</th>
+                              <th className="p-2.5 border-b">Vòng Eo (cm)</th>
+                              <th className="p-2.5 border-b">Chiều Cao (cm)</th>
+                              <th className="p-2.5 border-b">Cân Nặng (kg)</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-[#eee]">
+                            {sizeChartLoad.data.rows.map((r) => (
+                              <tr key={r.id}>
+                                <td className="p-2.5 font-bold">{r.sizeCode}</td>
+                                <td className="p-2.5">{r.chest || '—'}</td>
+                                <td className="p-2.5">{r.waist || '—'}</td>
+                                <td className="p-2.5">
+                                  {r.heightMin && r.heightMax
+                                    ? `${r.heightMin}–${r.heightMax}`
+                                    : '—'}
+                                </td>
+                                <td className="p-2.5">
+                                  {r.weightMin && r.weightMax
+                                    ? `${r.weightMin}–${r.weightMax}`
+                                    : '—'}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      <p className="mt-2 text-[11px] text-[#888]">
+                        * Bảng kích cỡ mang tính chất tham khảo chuẩn theo form dáng thiết kế của LINO.
+                      </p>
+                    </AccordionItem>
+                  )}
+
+                  <AccordionItem title="Chính Sách Giao Hàng & Đổi Trả">
+                    <div className="space-y-2 text-xs">
+                      <p>
+                        <strong>Thời gian giao hàng:</strong> Từ 2–4 ngày làm việc trên toàn quốc qua
+                        đơn vị vận chuyển Giao Hàng Nhanh (GHN).
+                      </p>
+                      <p>
+                        <strong>Chính sách đổi trả:</strong> Hỗ trợ trả hàng trong vòng 7 ngày kể từ
+                        ngày nhận hàng đối với sản phẩm còn nguyên tem mác và chưa qua sử dụng.
+                      </p>
+                    </div>
+                  </AccordionItem>
+                </div>
+              </div>
             </div>
-          </section>
+
+            {/* Customer Reviews Section */}
+            <section className="mt-20 pt-12 border-t border-[rgba(0,0,0,0.08)]">
+              <div className="flex flex-col sm:flex-row sm:items-end justify-between mb-8 gap-4">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.25em] text-[#888] font-bold mb-1">
+                    Trải Nghiệm Khách Hàng
+                  </p>
+                  <h2
+                    className="text-[#111] font-black uppercase text-3xl"
+                    style={{ fontFamily: "'Barlow Condensed', sans-serif" }}
+                  >
+                    ĐÁNH GIÁ SẢN PHẨM
+                  </h2>
+                </div>
+                {reviewsLoad.data && (
+                  <div className="flex items-center gap-3">
+                    <span className="text-2xl font-black text-[#111]">
+                      {reviewsLoad.data.averageRating.toFixed(1)}
+                    </span>
+                    <div>
+                      <StarRating rating={reviewsLoad.data.averageRating} size={16} />
+                      <p className="text-[11px] text-[#888] mt-0.5">
+                        Dựa trên {reviewsLoad.data.totalReviews} lượt đánh giá
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <Status
+                loading={reviewsLoad.loading}
+                error={reviewsLoad.error}
+                retry={() => void reviewsLoad.refresh()}
+              />
+
+              {reviewsLoad.data && reviewsLoad.data.reviews.items.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {reviewsLoad.data.reviews.items.map((r: Review) => (
+                    <article
+                      key={r.id}
+                      className="border border-[rgba(0,0,0,0.08)] p-6 bg-white flex flex-col justify-between"
+                    >
+                      <div>
+                        <div className="flex items-center justify-between mb-3">
+                          <StarRating rating={r.rating} size={14} />
+                          {r.verifiedPurchase && (
+                            <span className="text-[10px] uppercase font-bold tracking-widest text-[#2D5A3D] bg-emerald-50 px-2 py-0.5 border border-emerald-200">
+                              Đã Mua Hàng
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-sm text-[#333] leading-relaxed mb-4">{r.comment}</p>
+                      </div>
+                      <p className="text-xs text-[#888] border-t border-[rgba(0,0,0,0.05)] pt-3">
+                        {new Date(r.createdAt).toLocaleDateString('vi-VN')}
+                      </p>
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                !reviewsLoad.loading && (
+                  <div className="text-center py-12 border border-dashed border-[#ddd] p-6">
+                    <p className="text-sm text-[#888]">Chưa có đánh giá nào cho sản phẩm này.</p>
+                  </div>
+                )
+              )}
+            </section>
+
+            {/* Related Products */}
+            {relatedProducts.length > 0 && (
+              <section className="mt-20 pt-12 border-t border-[rgba(0,0,0,0.08)]">
+                <div className="mb-8">
+                  <p className="text-xs uppercase tracking-[0.25em] text-[#888] font-bold mb-1">
+                    Gợi Ý Dành Cho Bạn
+                  </p>
+                  <h2
+                    className="text-[#111] font-black uppercase text-3xl"
+                    style={{ fontFamily: "'Barlow Condensed', sans-serif" }}
+                  >
+                    SẢN PHẨM LIÊN QUAN
+                  </h2>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-5">
+                  {relatedProducts.map((item) => (
+                    <ProductCard key={item.id} product={item} />
+                  ))}
+                </div>
+              </section>
+            )}
+          </>
         )}
       </div>
     </div>

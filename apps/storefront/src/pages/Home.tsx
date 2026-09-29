@@ -1,153 +1,244 @@
-import { useState } from "react";
-import { Link } from "react-router";
-import { Heart, ArrowRight } from "lucide-react";
-import { PRODUCTS, CATEGORIES, formatVND } from "../data/products";
-import { useCart } from "../context/CartContext";
-
-function ProductCard({ product }: { product: (typeof PRODUCTS)[0] }) {
-  const [liked, setLiked] = useState(false);
-  const [activeColor, setActiveColor] = useState(0);
-  const { addItem } = useCart();
-
-  return (
-    <div className="group cursor-pointer">
-      <Link to={`/products/${product.id}`} className="block relative overflow-hidden bg-[#f5f5f5] aspect-[3/4]">
-        <img
-          src={product.img}
-          alt={product.name}
-          className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-        />
-        {product.tag && (
-          <span className="absolute top-3 left-3 bg-[#E5001B] text-white text-[10px] font-medium tracking-widest uppercase px-2 py-1">
-            {product.tag}
-          </span>
-        )}
-        <button
-          onClick={(e) => { e.preventDefault(); setLiked(!liked); }}
-          className="absolute top-3 right-3 w-8 h-8 flex items-center justify-center bg-white opacity-0 group-hover:opacity-100 transition-opacity duration-200"
-          aria-label="Yêu thích"
-        >
-          <Heart size={16} className={liked ? "fill-[#E5001B] stroke-[#E5001B]" : "stroke-[#111]"} />
-        </button>
-      </Link>
-      <button
-        onClick={() => addItem(product, 1, product.sizes[2] ?? product.sizes[0], product.colors[activeColor].name)}
-        className="w-full bg-[#111111] text-white text-xs tracking-widest uppercase py-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300 -mt-0"
-        style={{ fontWeight: 500 }}
-      >
-        Thêm Vào Giỏ
-      </button>
-
-      <div className="mt-3 space-y-1.5">
-        <p className="text-xs text-[#888] uppercase tracking-widest">{product.subcategory}</p>
-        <Link to={`/products/${product.id}`} className="text-sm font-medium text-[#111] leading-snug hover:text-[#E5001B] transition-colors block">
-          {product.name}
-        </Link>
-        <div className="flex items-center gap-1.5">
-          {product.colors.map((c, i) => (
-            <button
-              key={i}
-              onClick={() => setActiveColor(i)}
-              className="w-4 h-4 rounded-full transition-all duration-150"
-              style={{
-                backgroundColor: c.hex,
-                border: activeColor === i ? "2px solid #111" : "1px solid #ddd",
-                outline: activeColor === i ? "1px solid #fff" : "none",
-                outlineOffset: "-2px",
-              }}
-              aria-label={c.name}
-            />
-          ))}
-          <span className="text-xs text-[#888] ml-1">+{product.colors.length} màu</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <p className="text-sm font-semibold text-[#111]">{formatVND(product.price)}</p>
-          {product.originalPrice && (
-            <p className="text-xs text-[#888] line-through">{formatVND(product.originalPrice)}</p>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
+import { useState, useEffect } from 'react';
+import { Link } from 'react-router';
+import { ArrowRight, Truck, ShieldCheck, RefreshCw } from 'lucide-react';
+import { store } from '../api/store';
+import type { ProductSummary } from '../api/types';
+import { ProductCard, SkeletonCard, Status, useLoad } from '../components/StoreUI';
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState("Tất Cả");
-  const [email, setEmail] = useState("");
-  const tabs = ["Tất Cả", "Nam", "Nữ", "Outerwear"];
-  const filtered = activeTab === "Tất Cả" ? PRODUCTS.slice(0, 8) : PRODUCTS.filter((p) => p.category === activeTab).slice(0, 8);
+  const [activeTab, setActiveTab] = useState<'ALL' | 'MEN' | 'WOMEN' | 'UNISEX'>('ALL');
+  const [tabProducts, setTabProducts] = useState<ProductSummary[]>([]);
+  const [tabLoading, setTabLoading] = useState(false);
+  const [tabError, setTabError] = useState('');
+  const [newsletterEmail, setNewsletterEmail] = useState('');
+  const [newsletterSubmitted, setNewsletterSubmitted] = useState(false);
+
+  const categories = useLoad(store.categories, []);
+
+  useEffect(() => {
+    let active = true;
+    setTabLoading(true);
+    setTabError('');
+    const params: Record<string, string | number> = { page: 0, size: 8 };
+    if (activeTab !== 'ALL') {
+      params.gender = activeTab;
+    }
+    store
+      .products(params)
+      .then((res) => {
+        if (active) setTabProducts(res.items);
+      })
+      .catch((err) => {
+        if (active) setTabError((err as Error).message);
+      })
+      .finally(() => {
+        if (active) setTabLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [activeTab]);
+
+  const tabs: { key: 'ALL' | 'MEN' | 'WOMEN' | 'UNISEX'; label: string }[] = [
+    { key: 'ALL', label: 'Tất Cả' },
+    { key: 'MEN', label: 'Nam' },
+    { key: 'WOMEN', label: 'Nữ' },
+    { key: 'UNISEX', label: 'Unisex' },
+  ];
+
+  const handleNewsletterSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newsletterEmail) return;
+    setNewsletterSubmitted(true);
+  };
 
   return (
-    <div style={{ fontFamily: "'Inter', sans-serif" }}>
-      {/* Hero */}
-      <section className="max-w-[1400px] mx-auto px-6">
-        <div className="grid lg:grid-cols-2 min-h-[85vh]">
-          <div className="flex flex-col justify-center py-16 lg:pr-16 order-2 lg:order-1">
-            <p className="text-xs tracking-[0.25em] uppercase text-[#888] mb-6">Bộ Sưu Tập Hè 2025</p>
-            <h1
-              className="leading-[0.9] mb-8 text-[#111]"
-              style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 900, fontSize: "clamp(4rem, 9vw, 8rem)", letterSpacing: "-0.02em" }}
-            >
-              SỐNG<br />ĐƠN<br />GIẢN
-            </h1>
-            <p className="text-base text-[#555] leading-relaxed max-w-sm mb-10" style={{ fontWeight: 300 }}>
-              Trang phục được thiết kế cho cuộc sống hiện đại — phom dáng chuẩn, chất liệu cao cấp, giá thành hợp lý cho mọi người.
+    <div style={{ fontFamily: "'Inter', sans-serif" }} className="w-full">
+      {/* Hero Section */}
+      <section className="max-w-[1400px] mx-auto px-6 py-8 md:py-16">
+        <div className="grid lg:grid-cols-2 min-h-[75vh] items-center gap-10">
+          <div className="flex flex-col justify-center order-2 lg:order-1">
+            <p className="text-xs tracking-[0.3em] uppercase text-[#888] font-semibold mb-6">
+              LINO · Bộ Sưu Tập 2025
             </p>
-            <div className="flex items-center gap-4 flex-wrap">
+            <h1
+              className="leading-[0.88] mb-8 text-[#111] font-black uppercase"
+              style={{
+                fontFamily: "'Barlow Condensed', sans-serif",
+                fontSize: 'clamp(4.5rem, 10vw, 8.5rem)',
+                letterSpacing: '-0.02em',
+              }}
+            >
+              SỐNG<br />
+              ĐƠN<br />
+              <span className="text-[#E5001B]">GIẢN</span>
+            </h1>
+            <p
+              className="text-base text-[#555] leading-relaxed max-w-md mb-10"
+              style={{ fontWeight: 300 }}
+            >
+              Trang phục tối giản thiết kế cho cuộc sống hiện đại — phom dáng chuẩn xác, chất liệu tự
+              nhiên được tinh tuyển kỹ lưỡng và hoàn thiện tỉ mỉ.
+            </p>
+            <div className="flex items-center gap-5 flex-wrap">
               <Link
                 to="/products"
-                className="inline-flex items-center gap-3 bg-[#111] text-white px-8 py-4 text-xs tracking-widest uppercase font-medium hover:bg-[#E5001B] transition-colors duration-300"
+                className="inline-flex items-center gap-3 bg-[#111] text-white px-8 py-4 text-xs tracking-widest uppercase font-semibold hover:bg-[#E5001B] active:scale-[0.98] transition-all duration-300"
               >
                 Khám Phá Ngay <ArrowRight size={14} />
               </Link>
               <Link
-                to="/products?tag=Sale"
-                className="inline-flex items-center gap-2 text-xs tracking-widest uppercase text-[#111] font-medium border-b border-[#111] pb-0.5 hover:border-[#E5001B] hover:text-[#E5001B] transition-colors"
+                to="/products?gender=MEN"
+                className="inline-flex items-center gap-2 text-xs tracking-widest uppercase text-[#111] font-semibold border-b border-[#111] pb-1 hover:border-[#E5001B] hover:text-[#E5001B] transition-colors"
               >
-                Xem Sale
+                Thời Trang Nam
+              </Link>
+              <Link
+                to="/products?gender=WOMEN"
+                className="inline-flex items-center gap-2 text-xs tracking-widest uppercase text-[#111] font-semibold border-b border-[#111] pb-1 hover:border-[#E5001B] hover:text-[#E5001B] transition-colors"
+              >
+                Thời Trang Nữ
               </Link>
             </div>
           </div>
-          <div className="relative overflow-hidden bg-[#f5f5f5] order-1 lg:order-2 min-h-[55vw] lg:min-h-0">
+
+          <div className="relative overflow-hidden bg-[#f5f5f5] aspect-[4/5] order-1 lg:order-2 group">
             <img
               src="https://images.unsplash.com/photo-1665832102316-9fd8e8f77c88?w=1000&h=1200&fit=crop&auto=format"
-              alt="Bộ sưu tập hè 2025"
-              className="w-full h-full object-cover"
+              alt="Bộ sưu tập thời trang LINO"
+              className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-105"
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent" />
-            <div className="absolute bottom-6 right-6 bg-white px-4 py-3">
-              <p className="text-[10px] uppercase tracking-widest text-[#888]">Xem Bộ Sưu Tập</p>
-              <p className="text-sm font-semibold text-[#111] mt-0.5">Áo Sơ Mi Linen — 499.000 ₫</p>
+            <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent pointer-events-none" />
+            <div className="absolute bottom-6 left-6 right-6 flex items-end justify-between bg-white/95 backdrop-blur-xs p-5 border border-white/20">
+              <div>
+                <p className="text-[10px] uppercase tracking-widest text-[#888] font-medium">
+                  Thời Trang Tối Giản
+                </p>
+                <p className="text-sm font-semibold text-[#111] mt-0.5">
+                  Bộ Sưu Tập Xu Hướng 2025
+                </p>
+              </div>
+              <Link
+                to="/products"
+                className="text-xs uppercase tracking-widest font-semibold text-[#111] hover:text-[#E5001B] flex items-center gap-1 underline underline-offset-4"
+              >
+                Xem Ngay <ArrowRight size={12} />
+              </Link>
             </div>
           </div>
         </div>
       </section>
 
-      <div className="border-t border-[rgba(0,0,0,0.08)]" />
+      {/* Value Badges */}
+      <section className="border-y border-[rgba(0,0,0,0.08)] bg-[#fafafa]">
+        <div className="max-w-[1400px] mx-auto px-6 py-6 grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="flex items-center gap-4">
+            <Truck size={24} className="text-[#111] shrink-0" />
+            <div>
+              <p className="text-xs uppercase font-bold tracking-wider text-[#111]">
+                Miễn Phí Vận Chuyển
+              </p>
+              <p className="text-xs text-[#777] mt-0.5">Áp dụng cho mọi đơn hàng từ 500.000 ₫</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-4">
+            <RefreshCw size={24} className="text-[#111] shrink-0" />
+            <div>
+              <p className="text-xs uppercase font-bold tracking-wider text-[#111]">
+                Đổi Trả Dễ Dàng
+              </p>
+              <p className="text-xs text-[#777] mt-0.5">Hỗ trợ yêu cầu trả hàng trong vòng 7 ngày</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-4">
+            <ShieldCheck size={24} className="text-[#111] shrink-0" />
+            <div>
+              <p className="text-xs uppercase font-bold tracking-wider text-[#111]">
+                Chất Lượng Đảm Bảo
+              </p>
+              <p className="text-xs text-[#777] mt-0.5">100% sản phẩm thiết kế & gia công chuẩn mực</p>
+            </div>
+          </div>
+        </div>
+      </section>
 
-      {/* Categories */}
-      <section className="max-w-[1400px] mx-auto px-6 py-16">
-        <div className="flex items-end justify-between mb-8">
-          <h2 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: "clamp(2rem, 4vw, 3.5rem)", letterSpacing: "-0.01em", lineHeight: 1 }}>
-            DANH MỤC SẢN PHẨM
-          </h2>
-          <Link to="/products" className="hidden sm:flex items-center gap-2 text-xs tracking-widest uppercase text-[#888] hover:text-[#111] transition-colors border-b border-transparent hover:border-[#111] pb-0.5">
+      {/* Featured Categories */}
+      <section className="max-w-[1400px] mx-auto px-6 py-16 md:py-24">
+        <div className="flex items-end justify-between mb-10">
+          <div>
+            <p className="text-xs uppercase tracking-[0.25em] text-[#888] font-semibold mb-2">
+              Bộ Sưu Tập
+            </p>
+            <h2
+              className="text-[#111] font-black uppercase leading-none"
+              style={{
+                fontFamily: "'Barlow Condensed', sans-serif",
+                fontSize: 'clamp(2rem, 5vw, 3.5rem)',
+                letterSpacing: '-0.01em',
+              }}
+            >
+              DANH MỤC SẢN PHẨM
+            </h2>
+          </div>
+          <Link
+            to="/products"
+            className="text-xs uppercase tracking-widest text-[#111] font-semibold hover:text-[#E5001B] border-b border-[#111] pb-1 hover:border-[#E5001B] transition-colors"
+          >
             Xem Tất Cả
           </Link>
         </div>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {CATEGORIES.map((cat) => (
-            <Link key={cat.id} to={`/products?cat=${encodeURIComponent(cat.label)}`} className="group relative overflow-hidden bg-[#f5f5f5] aspect-[3/4] block">
-              <img src={cat.img} alt={cat.label} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
-              <div className="absolute bottom-0 left-0 right-0 p-5">
-                <p className="text-white text-xs tracking-widest uppercase mb-1">{cat.sub}</p>
-                <p style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: "clamp(1.5rem, 3vw, 2.25rem)", letterSpacing: "-0.01em" }} className="text-white leading-none">
-                  {cat.label.toUpperCase()}
+
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+          {[
+            {
+              label: 'Nam',
+              href: '/products?gender=MEN',
+              sub: 'Áo sơ mi, polo & quần tây',
+              img: 'https://images.unsplash.com/photo-1617137984095-74e4e5e3613f?w=600&h=800&fit=crop&auto=format',
+            },
+            {
+              label: 'Nữ',
+              href: '/products?gender=WOMEN',
+              sub: 'Váy đầm, áo kiểu & blazer',
+              img: 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=600&h=800&fit=crop&auto=format',
+            },
+            {
+              label: 'Unisex',
+              href: '/products?gender=UNISEX',
+              sub: 'T-shirt, hoodie & phong cách tự do',
+              img: 'https://images.unsplash.com/photo-1529139574466-a303027c1d8b?w=600&h=800&fit=crop&auto=format',
+            },
+            {
+              label: 'Ưu Đãi',
+              href: '/products',
+              sub: 'Thiết kế mới & giá ưu đãi',
+              img: 'https://images.unsplash.com/photo-1490481651871-ab68de25d43d?w=600&h=800&fit=crop&auto=format',
+            },
+          ].map((cat) => (
+            <Link
+              key={cat.label}
+              to={cat.href}
+              className="group relative overflow-hidden bg-[#f5f5f5] aspect-[3/4] block focus-visible:outline-2 focus-visible:outline-[#111]"
+            >
+              <img
+                src={cat.img}
+                alt={cat.label}
+                className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-105"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent transition-opacity group-hover:from-black/80" />
+              <div className="absolute bottom-0 left-0 right-0 p-5 md:p-6 text-white">
+                <p className="text-[10px] md:text-xs uppercase tracking-widest opacity-80 mb-1">
+                  {cat.sub}
+                </p>
+                <p
+                  className="font-black text-2xl md:text-3xl leading-none uppercase tracking-tight"
+                  style={{ fontFamily: "'Barlow Condensed', sans-serif" }}
+                >
+                  {cat.label}
                 </p>
               </div>
-              <div className="absolute top-4 right-4 w-8 h-8 bg-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                <ArrowRight size={14} className="text-[#111]" />
+              <div className="absolute top-4 right-4 w-9 h-9 bg-white text-[#111] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                <ArrowRight size={14} />
               </div>
             </Link>
           ))}
@@ -155,132 +246,209 @@ export default function Home() {
       </section>
 
       {/* Promo Banner */}
-      <section className="bg-[#E5001B] text-white" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
-        <div className="max-w-[1400px] mx-auto px-6 py-14 grid lg:grid-cols-[1fr_auto] items-center gap-8">
+      <section className="bg-[#E5001B] text-white">
+        <div className="max-w-[1400px] mx-auto px-6 py-16 grid lg:grid-cols-[1fr_auto] items-center gap-8">
           <div>
-            <p className="text-sm tracking-[0.2em] uppercase mb-2 opacity-80" style={{ fontFamily: "'Inter', sans-serif", fontWeight: 400 }}>
-              Ưu Đãi Đặc Biệt
+            <p className="text-xs uppercase tracking-[0.25em] text-white/80 font-medium mb-3">
+              Ưu Đãi Thành Viên Mới
             </p>
-            <h2 style={{ fontWeight: 900, fontSize: "clamp(2.5rem, 6vw, 5rem)", letterSpacing: "-0.02em", lineHeight: 0.95 }}>
-              GIẢM 30%<br />CHO ĐƠN HÀNG<br />ĐẦU TIÊN
+            <h2
+              className="font-black uppercase leading-[0.9]"
+              style={{
+                fontFamily: "'Barlow Condensed', sans-serif",
+                fontSize: 'clamp(2.75rem, 6vw, 5rem)',
+                letterSpacing: '-0.02em',
+              }}
+            >
+              GIẢM 30% CHO ĐƠN HÀNG ĐẦU TIÊN
             </h2>
           </div>
-          <div className="flex flex-col gap-4">
-            <p className="text-sm text-white/80 max-w-xs" style={{ fontFamily: "'Inter', sans-serif", fontWeight: 300 }}>
-              Nhập mã <strong className="font-semibold text-white">LINOMOI</strong> khi thanh toán. Áp dụng cho tất cả sản phẩm.
+          <div className="flex flex-col gap-4 max-w-sm">
+            <p className="text-sm text-white/90 leading-relaxed" style={{ fontWeight: 300 }}>
+              Sử dụng mã ưu đãi <strong className="text-white font-bold bg-white/20 px-2 py-0.5 tracking-wider">LINOMOI</strong> ở bước thanh toán để nhận giảm giá.
             </p>
             <Link
               to="/products"
-              className="inline-flex items-center gap-3 bg-white text-[#E5001B] px-7 py-4 text-xs tracking-widest uppercase font-medium hover:bg-[#111] hover:text-white transition-colors duration-300 self-start"
-              style={{ fontFamily: "'Inter', sans-serif" }}
+              className="inline-flex items-center gap-3 bg-white text-[#111] px-8 py-4 text-xs tracking-widest uppercase font-bold hover:bg-[#111] hover:text-white transition-colors duration-300 self-start"
             >
-              Mua Ngay <ArrowRight size={14} />
+              Mua Sắm Ngay <ArrowRight size={14} />
             </Link>
           </div>
         </div>
       </section>
 
-      {/* New Arrivals */}
-      <section className="max-w-[1400px] mx-auto px-6 py-16">
-        <div className="flex items-end justify-between mb-8">
-          <h2 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: "clamp(2rem, 4vw, 3.5rem)", letterSpacing: "-0.01em", lineHeight: 1 }}>
-            SẢN PHẨM MỚI
-          </h2>
-          <Link to="/products" className="hidden sm:flex items-center gap-2 text-xs tracking-widest uppercase text-[#888] hover:text-[#111] transition-colors border-b border-transparent hover:border-[#111] pb-0.5">
-            Xem Tất Cả
+      {/* New Arrivals with Tabs */}
+      <section className="max-w-[1400px] mx-auto px-6 py-16 md:py-24">
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between mb-8 gap-4">
+          <div>
+            <p className="text-xs uppercase tracking-[0.25em] text-[#888] font-semibold mb-2">
+              Sản Phẩm Đang Mở Bán
+            </p>
+            <h2
+              className="text-[#111] font-black uppercase leading-none"
+              style={{
+                fontFamily: "'Barlow Condensed', sans-serif",
+                fontSize: 'clamp(2rem, 5vw, 3.5rem)',
+                letterSpacing: '-0.01em',
+              }}
+            >
+              SẢN PHẨM MỚI NHẤT
+            </h2>
+          </div>
+
+          <Link
+            to="/products"
+            className="text-xs uppercase tracking-widest text-[#111] font-semibold hover:text-[#E5001B] border-b border-[#111] pb-1 hover:border-[#E5001B] transition-colors self-start sm:self-auto"
+          >
+            Tất Cả Sản Phẩm
           </Link>
         </div>
-        <div className="flex gap-0 mb-8 border-b border-[rgba(0,0,0,0.1)]">
+
+        {/* Category Tabs */}
+        <div className="flex gap-2 mb-10 border-b border-[rgba(0,0,0,0.1)] overflow-x-auto pb-px">
           {tabs.map((tab) => (
             <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className="px-5 py-3 text-xs tracking-widest uppercase font-medium transition-all duration-200 relative"
-              style={{ color: activeTab === tab ? "#111" : "#888" }}
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={`px-5 py-3 text-xs tracking-widest uppercase font-semibold transition-all relative whitespace-nowrap ${
+                activeTab === tab.key ? 'text-[#111]' : 'text-[#888] hover:text-[#111]'
+              }`}
             >
-              {tab}
-              {activeTab === tab && <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#111]" />}
+              {tab.label}
+              {activeTab === tab.key && (
+                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#111]" />
+              )}
             </button>
           ))}
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-5 gap-y-10">
-          {filtered.map((p) => <ProductCard key={p.id} product={p} />)}
-        </div>
-      </section>
 
-      {/* Featured Collection */}
-      <section className="bg-[#f5f5f5]">
-        <div className="max-w-[1400px] mx-auto px-6 py-16 grid lg:grid-cols-2 gap-10 items-center">
-          <div className="relative overflow-hidden aspect-[4/5] bg-[#e8e8e8]">
-            <img
-              src="https://images.unsplash.com/photo-1665832102671-74fc84821a3b?w=900&h=1100&fit=crop&auto=format"
-              alt="Bộ sưu tập công sở LINO"
-              className="w-full h-full object-cover"
-            />
-          </div>
-          <div className="lg:pl-10">
-            <p className="text-xs tracking-[0.25em] uppercase text-[#888] mb-4">Bộ Sưu Tập Đặc Biệt</p>
-            <h2
-              className="text-[#111] mb-6"
-              style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 900, fontSize: "clamp(2.5rem, 5vw, 4.5rem)", letterSpacing: "-0.02em", lineHeight: 0.95 }}
-            >
-              PHONG CÁCH<br /><span className="text-[#E5001B]">CÔNG SỞ</span><br />2025
-            </h2>
-            <p className="text-base text-[#555] leading-relaxed mb-8 max-w-md" style={{ fontWeight: 300 }}>
-              Những thiết kế thanh lịch, tinh tế dành cho môi trường công sở hiện đại. Chất liệu cao cấp, phom dáng chuẩn.
-            </p>
-            <Link
-              to="/products?cat=Nam"
-              className="inline-flex items-center gap-3 bg-[#111] text-white px-8 py-4 text-xs tracking-widest uppercase font-medium hover:bg-[#E5001B] transition-colors duration-300"
-            >
-              Xem Bộ Sưu Tập <ArrowRight size={14} />
-            </Link>
-          </div>
-        </div>
-      </section>
+        <Status loading={tabLoading} error={tabError} retry={() => setActiveTab((prev) => prev)} />
 
-      {/* Brand Values */}
-      <section className="max-w-[1400px] mx-auto px-6 py-20">
-        <h2 className="text-center text-[#111] mb-16" style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: "clamp(2rem, 4vw, 3rem)", letterSpacing: "-0.01em" }}>
-          TẠI SAO CHỌN LINO?
-        </h2>
-        <div className="grid md:grid-cols-3 gap-0 border-t border-[rgba(0,0,0,0.1)]">
-          {[
-            { num: "01", title: "Chất Liệu Cao Cấp", desc: "Cotton Nhật Bản, linen tự nhiên, len merino — chọn lựa kỹ càng để mang đến sự thoải mái vượt trội." },
-            { num: "02", title: "Thiết Kế Tối Giản", desc: "Phom dáng chuẩn, đường cắt may tinh tế, dễ phối với mọi outfit, vượt qua xu hướng nhất thời." },
-            { num: "03", title: "Sản Xuất Bền Vững", desc: "Giảm thiểu tác động môi trường qua quy trình sản xuất có trách nhiệm và nguyên liệu tái chế." },
-          ].map((v, i) => (
-            <div key={v.num} className={`pt-10 pb-8 ${i < 2 ? "md:border-r border-[rgba(0,0,0,0.1)]" : ""} md:px-10 first:pl-0 last:pr-0`}>
-              <p className="mb-5 text-[#E5001B]" style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 900, fontSize: "3rem", lineHeight: 1, letterSpacing: "-0.02em" }}>
-                {v.num}
-              </p>
-              <h3 className="text-[#111] font-semibold mb-4 text-base uppercase tracking-wide">{v.title}</h3>
-              <p className="text-sm text-[#555] leading-relaxed" style={{ fontWeight: 300 }}>{v.desc}</p>
+        {tabLoading ? (
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-5 gap-y-10">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <SkeletonCard key={i} />
+            ))}
+          </div>
+        ) : tabProducts.length > 0 ? (
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-5 gap-y-10">
+            {tabProducts.map((p) => (
+              <ProductCard key={p.id} product={p} />
+            ))}
+          </div>
+        ) : (
+          !tabError && (
+            <div className="py-20 text-center border border-dashed border-[#ddd] p-8">
+              <p className="text-sm text-[#888]">Chưa có sản phẩm nào thuộc phân loại này.</p>
+              <Link
+                to="/products"
+                className="mt-4 inline-block text-xs uppercase tracking-widest underline font-semibold text-[#111]"
+              >
+                Xem tất cả sản phẩm
+              </Link>
             </div>
-          ))}
+          )
+        )}
+      </section>
+
+      {/* Brand Story & Values */}
+      <section className="bg-[#f5f5f5] py-20">
+        <div className="max-w-[1400px] mx-auto px-6">
+          <div className="max-w-2xl mx-auto text-center mb-16">
+            <p className="text-xs uppercase tracking-[0.25em] text-[#888] font-semibold mb-3">
+              Triết Lý Thương Hiệu
+            </p>
+            <h2
+              className="text-[#111] font-black uppercase leading-tight"
+              style={{
+                fontFamily: "'Barlow Condensed', sans-serif",
+                fontSize: 'clamp(2rem, 4vw, 3rem)',
+              }}
+            >
+              TẠI SAO CHỌN THỜI TRANG LINO?
+            </h2>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-8">
+            {[
+              {
+                num: '01',
+                title: 'Chất Liệu Tuyển Chọn',
+                desc: 'Cotton dệt mịn, sợi linen thoáng khí và len pha cao cấp mang lại sự thoải mái tối đa cho cả ngày dài vận động.',
+              },
+              {
+                num: '02',
+                title: 'Thiết Kế Tối Giản Vượt Thời Gian',
+                desc: 'Cắt may tinh giản, phom dáng chuẩn mực dễ dàng ứng dụng và phối hợp cho nhiều hoàn cảnh từ công sở tới dạo phố.',
+              },
+              {
+                num: '03',
+                title: 'Minh Bạch & Trách Nhiệm',
+                desc: 'Chính sách mua sắm rõ ràng, hỗ trợ đổi trả thuận tiện và quy trình sản xuất đề cao độ bền bỉ của sản phẩm.',
+              },
+            ].map((v) => (
+              <div
+                key={v.num}
+                className="bg-white p-8 md:p-10 border border-[rgba(0,0,0,0.06)] flex flex-col justify-between"
+              >
+                <div>
+                  <span
+                    className="text-[#E5001B] font-black text-4xl block mb-6"
+                    style={{ fontFamily: "'Barlow Condensed', sans-serif" }}
+                  >
+                    {v.num}
+                  </span>
+                  <h3 className="text-base font-bold uppercase tracking-wider text-[#111] mb-3">
+                    {v.title}
+                  </h3>
+                  <p className="text-sm text-[#555] leading-relaxed" style={{ fontWeight: 300 }}>
+                    {v.desc}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 
       {/* Newsletter */}
-      <section className="border-t border-[rgba(0,0,0,0.08)] max-w-[1400px] mx-auto px-6 py-20 text-center">
-        <h2 className="text-[#111] mb-4" style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: "clamp(2rem, 4vw, 3rem)", letterSpacing: "-0.01em" }}>
-          NHẬN ƯU ĐÃI ĐỘC QUYỀN
+      <section className="max-w-[1400px] mx-auto px-6 py-20 text-center">
+        <h2
+          className="text-[#111] font-black uppercase mb-4"
+          style={{
+            fontFamily: "'Barlow Condensed', sans-serif",
+            fontSize: 'clamp(2rem, 4vw, 3rem)',
+            letterSpacing: '-0.01em',
+          }}
+        >
+          NHẬN THÔNG TIN BỘ SƯU TẬP MỚI
         </h2>
         <p className="text-sm text-[#555] mb-8 max-w-md mx-auto" style={{ fontWeight: 300 }}>
-          Đăng ký để nhận thông tin về bộ sưu tập mới và ưu đãi đặc biệt.
+          Đăng ký để nhận sớm nhất thông báo về sản phẩm mới và các chương trình ưu đãi đặc quyền từ LINO.
         </p>
-        <form onSubmit={(e) => e.preventDefault()} className="flex max-w-md mx-auto gap-0">
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="Địa chỉ email của bạn"
-            className="flex-1 border border-[rgba(0,0,0,0.15)] px-4 py-3.5 text-sm text-[#111] bg-white focus:outline-none focus:border-[#111] transition-colors placeholder:text-[#aaa]"
-          />
-          <button type="submit" className="bg-[#111] text-white px-6 py-3.5 text-xs tracking-widest uppercase font-medium hover:bg-[#E5001B] transition-colors duration-300 flex-shrink-0">
-            Đăng Ký
-          </button>
-        </form>
+
+        {newsletterSubmitted ? (
+          <div className="bg-[#f0f8f0] border border-[#2D5A3D]/20 p-4 max-w-md mx-auto text-sm text-[#2D5A3D] font-medium">
+            Cảm ơn bạn! LINO sẽ gửi thông tin ưu đãi mới nhất tới địa chỉ email của bạn.
+          </div>
+        ) : (
+          <form onSubmit={handleNewsletterSubmit} className="flex max-w-md mx-auto">
+            <input
+              type="email"
+              required
+              value={newsletterEmail}
+              onChange={(e) => setNewsletterEmail(e.target.value)}
+              placeholder="Nhập email của bạn"
+              className="flex-1 border border-[#ccc] px-4 py-3.5 text-sm text-[#111] bg-white focus:outline-none focus:border-[#111] placeholder:text-[#999]"
+            />
+            <button
+              type="submit"
+              className="bg-[#111] text-white px-7 py-3.5 text-xs tracking-widest uppercase font-semibold hover:bg-[#E5001B] active:scale-[0.98] transition-colors shrink-0"
+            >
+              Đăng Ký
+            </button>
+          </form>
+        )}
       </section>
     </div>
   );
