@@ -42,6 +42,12 @@ public class ShippingAddress {
     @Column(name = "detail_address", length = 255)
     String detailAddress;
 
+    @Column(name = "province_id")
+    Integer provinceId;
+
+    @Column(name = "ward_id")
+    Integer wardId;
+
     @Column(name = "district_id")
     Integer districtId;
 

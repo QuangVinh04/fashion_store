@@ -4,6 +4,7 @@ package com.fashionstore.identity.dto.user;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 
 public record UserAddressRequest (
@@ -19,8 +20,7 @@ public record UserAddressRequest (
     @Size(max = 100, message = "Tỉnh/Thành phố tối đa 100 ký tự")
     String province,
 
-    @NotBlank(message = "Quận/Huyện không được để trống")
-    @Size(max = 100, message = "Quận/Huyện tối đa 100 ký tự")
+    @Size(max = 100)
     String district,
 
     @NotBlank(message = "Phường/Xã không được để trống")
@@ -30,6 +30,14 @@ public record UserAddressRequest (
     @NotBlank(message = "Địa chỉ chi tiết không được để trống")
     @Size(max = 255, message = "Địa chỉ chi tiết tối đa 255 ký tự")
     String detailAddress,
+
+    @NotNull
+    @Positive
+    Integer provinceId,
+
+    @NotNull
+    @Positive
+    Integer wardId,
 
     Integer districtId,
 

@@ -80,8 +80,7 @@ public class ShipmentServiceImpl implements ShipmentService {
 
         // Chỉ đọc snapshot trên đơn — không gọi identity, sửa sổ địa chỉ sau khi đặt không đổi nơi giao
         ShippingAddress snapshot = order.getAddress();
-        if (snapshot == null || snapshot.getDistrictId() == null
-                || snapshot.getWardCode() == null || snapshot.getWardCode().isBlank()) {
+        if (snapshot == null || snapshot.getProvinceId() == null || snapshot.getWardId() == null) {
             throw new AppException(OrderErrorCode.SHIPPING_ADDRESS_INVALID);
         }
         Integer toDistrictId = snapshot.getDistrictId();
@@ -92,6 +91,10 @@ public class ShipmentServiceImpl implements ShipmentService {
                 .recipientName(snapshot.getRecipientName())
                 .phone(snapshot.getRecipientPhone())
                 .fullAddress(order.getShippingAddress())
+                .province(snapshot.getProvince())
+                .ward(snapshot.getWard())
+                .provinceId(snapshot.getProvinceId())
+                .wardId(snapshot.getWardId())
                 .districtId(toDistrictId)
                 .wardCode(toWardCode)
                 .build();

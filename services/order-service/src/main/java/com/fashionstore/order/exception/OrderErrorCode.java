@@ -35,7 +35,7 @@ public enum OrderErrorCode implements BaseErrorCode {
     PROMOTION_SCOPE_MISMATCH(4014, "Promotion does not apply to items in order", HttpStatus.BAD_REQUEST),
     PROMOTION_CODE_EXISTS(4015, "Promotion code already exists", HttpStatus.CONFLICT),
     PROMOTION_CANNOT_BE_MODIFIED(4016, "Promotion code cannot be changed after usage has occurred", HttpStatus.BAD_REQUEST),
-    SHIPPING_ADDRESS_INVALID(4017, "Shipping address is missing valid district or ward code for shipping provider", HttpStatus.BAD_REQUEST),
+    SHIPPING_ADDRESS_INVALID(4017, "Shipping address needs a GHN province and ward from the current catalogue", HttpStatus.BAD_REQUEST),
     SHIPMENT_REQUIRED(4018, "Order must have shipment and tracking code before shipping", HttpStatus.BAD_REQUEST),
     RETURN_REQUEST_NOT_FOUND(4019, "Return request not found", HttpStatus.NOT_FOUND),
     RETURN_REQUEST_ALREADY_EXISTS(4020, "Return request already exists for this order", HttpStatus.CONFLICT),

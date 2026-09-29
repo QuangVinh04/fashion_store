@@ -2,8 +2,6 @@ package com.fashionstore.order.client;
 
 import com.fashionstore.order.dto.ghn.GhnCreateOrderRequest;
 import com.fashionstore.order.dto.ghn.GhnCreateOrderResponse;
-import com.fashionstore.order.dto.ghn.GhnFeeRequest;
-import com.fashionstore.order.dto.ghn.GhnFeeResponse;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.http.MediaType;
@@ -19,23 +17,14 @@ import org.springframework.web.bind.annotation.RequestHeader;
 )
 public interface GhnFeignClient {
 
-    @GetMapping("/master-data/province")
-    JsonNode provinces(@RequestHeader("Token") String token, @RequestHeader("ShopId") String shopId);
+    @GetMapping("/v3/master-data/province/all")
+    JsonNode newProvinces(@RequestHeader("Token") String token, @RequestHeader("ShopId") String shopId,
+                          @RequestParam("offset") int offset, @RequestParam("limit") int limit);
 
-    @GetMapping("/master-data/district")
-    JsonNode districts(@RequestHeader("Token") String token, @RequestHeader("ShopId") String shopId,
-                       @RequestParam("province_id") int provinceId);
-
-    @GetMapping("/master-data/ward")
-    JsonNode wards(@RequestHeader("Token") String token, @RequestHeader("ShopId") String shopId,
-                   @RequestParam("district_id") int districtId);
-
-    @PostMapping(value = "/v2/shipping-order/fee", consumes = MediaType.APPLICATION_JSON_VALUE)
-    GhnFeeResponse calculateFee(
-            @RequestHeader("Token") String token,
-            @RequestHeader(value = "ShopId", required = false) String shopId,
-            @RequestBody GhnFeeRequest request
-    );
+    @GetMapping("/v3/master-data/ward/all-by-province-id")
+    JsonNode newWards(@RequestHeader("Token") String token, @RequestHeader("ShopId") String shopId,
+                      @RequestParam("province_id") int provinceId,
+                      @RequestParam("offset") int offset, @RequestParam("limit") int limit);
 
     @PostMapping(value = "/v2/shipping-order/create", consumes = MediaType.APPLICATION_JSON_VALUE)
     GhnCreateOrderResponse createOrder(
@@ -43,4 +32,9 @@ public interface GhnFeignClient {
             @RequestHeader("ShopId") String shopId,
             @RequestBody GhnCreateOrderRequest request
     );
+
+    @PostMapping(value = "/v2/shipping-order/preview", consumes = MediaType.APPLICATION_JSON_VALUE)
+    GhnCreateOrderResponse previewOrder(@RequestHeader("Token") String token,
+                                        @RequestHeader("ShopId") String shopId,
+                                        @RequestBody GhnCreateOrderRequest request);
 }

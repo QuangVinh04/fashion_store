@@ -87,6 +87,10 @@ public class UserAddressServiceImpl implements UserAddressService {
                 .orElseThrow(() -> new AppException(IdentityErrorCode.ADDRESS_NOT_FOUND));
 
         userAddressMapper.updateEntityFromRequest(request, address);
+        // New GHN addresses have no district tier; clear legacy fields when converting an old address.
+        address.setDistrict(null);
+        address.setDistrictId(null);
+        address.setWardCode(null);
 
         if (Boolean.TRUE.equals(request.isDefault())) {
             userAddressRepository.resetOtherDefaultAddresses(userId, id);

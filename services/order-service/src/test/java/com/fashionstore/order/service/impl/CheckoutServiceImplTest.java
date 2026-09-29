@@ -220,7 +220,7 @@ class CheckoutServiceImplTest {
         checkout.setShippingAddress(snapshot(1444, "20308"));
         when(checkoutRepository.findByIdAndUserId("checkout-1", "user-1")).thenReturn(Optional.of(checkout));
         when(identityClient.getAddress("user-1", "addr-1")).thenReturn(address(1542, "1A0101"));
-        when(ghnClient.calculateFee(eq(1542), eq("1A0101"), any(Integer.class), eq(ShippingMethod.STANDARD)))
+        when(ghnClient.calculateFee(any(ShippingAddress.class), any(Integer.class), eq(ShippingMethod.STANDARD)))
                 .thenReturn(BigDecimal.valueOf(45000));
 
         CheckoutResponse response = service.updateCheckout("checkout-1",
@@ -236,7 +236,7 @@ class CheckoutServiceImplTest {
     void updateCheckout_switchingToAnotherAddress_storesItAndRecomputesFee() {
         Checkout checkout = openCheckout("200000", "addr-1");
         when(identityClient.getAddress("user-1", "addr-2")).thenReturn(address(1542, "1A0101"));
-        when(ghnClient.calculateFee(eq(1542), eq("1A0101"), any(Integer.class), eq(ShippingMethod.STANDARD)))
+        when(ghnClient.calculateFee(any(ShippingAddress.class), any(Integer.class), eq(ShippingMethod.STANDARD)))
                 .thenReturn(BigDecimal.valueOf(45000));
 
         CheckoutResponse response = service.updateCheckout("checkout-1",
@@ -253,7 +253,7 @@ class CheckoutServiceImplTest {
     @Test
     void updateCheckout_changingShippingMethodOnly_recomputesFeeFromSnapshotWithoutCallingIdentity() {
         openCheckout("200000", "addr-1");
-        when(ghnClient.calculateFee(eq(1444), eq("20308"), any(Integer.class), eq(ShippingMethod.EXPRESS)))
+        when(ghnClient.calculateFee(any(ShippingAddress.class), any(Integer.class), eq(ShippingMethod.EXPRESS)))
                 .thenReturn(BigDecimal.valueOf(40000));
 
         CheckoutResponse response = service.updateCheckout("checkout-1",
@@ -280,7 +280,7 @@ class CheckoutServiceImplTest {
     @Test
     void updateCheckout_toAddressLackingGhnCodes_rejectsAndKeepsCurrentAddress() {
         Checkout checkout = openCheckout("200000", "addr-1");
-        when(identityClient.getAddress("user-1", "addr-legacy")).thenReturn(address(null, null));
+        when(identityClient.getAddress("user-1", "addr-legacy")).thenReturn(legacyAddress());
 
         AppException exception = assertThrows(AppException.class, () -> service.updateCheckout("checkout-1",
                 UpdateCheckoutRequest.builder().addressId("addr-legacy").build()));
@@ -326,7 +326,7 @@ class CheckoutServiceImplTest {
     void createsCheckout_freeShipping_withAddressLackingGhnCodes_rejectsAtCheckout() {
         Cart cart = cart(cartItem("item-1", "variant-1", 3, "200000")); // 600k subtotal
         when(cartService.revalidateActiveCart()).thenReturn(cart);
-        when(identityClient.getAddress("user-1", "addr-legacy")).thenReturn(address(null, null));
+        when(identityClient.getAddress("user-1", "addr-legacy")).thenReturn(legacyAddress());
 
         AppException exception = assertThrows(AppException.class, () -> service.createCheckout(CreateCheckoutRequest.builder()
                 .addressId("addr-legacy")
@@ -358,7 +358,7 @@ class CheckoutServiceImplTest {
     @Test
     void updateCheckout_freeShipping_toAddressLackingGhnCodes_rejects() {
         openCheckout("600000", "addr-1");
-        when(identityClient.getAddress("user-1", "addr-legacy")).thenReturn(address(null, null));
+        when(identityClient.getAddress("user-1", "addr-legacy")).thenReturn(legacyAddress());
 
         AppException exception = assertThrows(AppException.class, () -> service.updateCheckout("checkout-1",
                 UpdateCheckoutRequest.builder().addressId("addr-legacy").build()));
@@ -386,6 +386,8 @@ class CheckoutServiceImplTest {
                 .detailAddress("123 Lê Lợi")
                 .districtId(districtId)
                 .wardCode(wardCode)
+                .provinceId(1000001)
+                .wardId(1003646)
                 .build();
     }
 
@@ -405,7 +407,14 @@ class CheckoutServiceImplTest {
                 .detailAddress("123 Lê Lợi")
                 .districtId(districtId)
                 .wardCode(wardCode)
+                .provinceId(1000001)
+                .wardId(1003646)
                 .build();
+    }
+
+    private UserAddressDto legacyAddress() {
+        return UserAddressDto.builder().province("Hồ Chí Minh").ward("Bến Nghé")
+                .districtId(1444).wardCode("20308").build();
     }
 
     private Cart cart(CartItem... items) {
@@ -458,9 +467,12 @@ class CheckoutServiceImplTest {
                 .province("Hồ Chí Minh")
                 .districtId(1444)
                 .wardCode("20308")
+                .provinceId(1000001)
+                .wardId(1003646)
+                .ward("Phường Sài Gòn")
                 .build();
         when(identityClient.getAddress("user-1", "addr-1")).thenReturn(address);
-        when(ghnClient.calculateFee(eq(1444), eq("20308"), any(Integer.class), eq(ShippingMethod.STANDARD)))
+        when(ghnClient.calculateFee(any(ShippingAddress.class), any(Integer.class), eq(ShippingMethod.STANDARD)))
                 .thenReturn(BigDecimal.valueOf(32000));
 
         CheckoutResponse response = service.createCheckout(CreateCheckoutRequest.builder()
@@ -514,7 +526,7 @@ class CheckoutServiceImplTest {
         assertEquals(0, response.getSubtotalAmount().compareTo(BigDecimal.valueOf(600000)));
         assertEquals(0, response.getShippingFee().compareTo(BigDecimal.ZERO));
         assertEquals(0, response.getTotalAmount().compareTo(BigDecimal.valueOf(600000)));
-        verify(ghnClient, never()).calculateFee(any(), any(), any(Integer.class), any());
+        verify(ghnClient, never()).calculateFee(any(), any(Integer.class), any());
         assertEquals("123 Lê Lợi", savedCheckout().getShippingAddress().getDetailAddress());
     }
 
@@ -527,9 +539,12 @@ class CheckoutServiceImplTest {
                 .province("Hồ Chí Minh")
                 .districtId(1444)
                 .wardCode("20308")
+                .provinceId(1000001)
+                .wardId(1003646)
+                .ward("Phường Sài Gòn")
                 .build();
         when(identityClient.getAddress("user-1", "addr-1")).thenReturn(address);
-        when(ghnClient.calculateFee(any(), any(), any(Integer.class), any()))
+        when(ghnClient.calculateFee(any(ShippingAddress.class), any(Integer.class), any()))
                 .thenThrow(new AppException(ErrorCode.UPSTREAM_SERVICE_ERROR));
 
         AppException exception = assertThrows(AppException.class, () -> service.createCheckout(CreateCheckoutRequest.builder()

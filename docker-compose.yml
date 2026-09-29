@@ -196,8 +196,8 @@ services:
       ORDER_POSTGRES_PASSWORD: root
       CATALOG_BASE_URL: http://catalog-service:8087
       IDENTITY_BASE_URL: http://identity-service:8082
-      GHN_ENABLED: ${GHN_ENABLED:-false}
-      GHN_ALLOW_MOCK: ${GHN_ALLOW_MOCK:-true}
+      GHN_ENABLED: ${GHN_ENABLED:-true}
+      GHN_ALLOW_MOCK: ${GHN_ALLOW_MOCK:-false}
     depends_on:
       order-postgres:
         condition: service_healthy

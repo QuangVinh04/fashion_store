@@ -7,10 +7,9 @@ import com.fashionstore.order.config.GhnProperties;
 import com.fashionstore.order.dto.UserAddressDto;
 import com.fashionstore.order.dto.ghn.GhnCreateOrderRequest;
 import com.fashionstore.order.dto.ghn.GhnCreateOrderResponse;
-import com.fashionstore.order.dto.ghn.GhnFeeRequest;
-import com.fashionstore.order.dto.ghn.GhnFeeResponse;
 import com.fashionstore.order.entity.Order;
 import com.fashionstore.order.entity.OrderItem;
+import com.fashionstore.order.entity.ShippingAddress;
 import com.fashionstore.order.entity.enumeration.ShippingMethod;
 import com.fashionstore.order.exception.OrderErrorCode;
 import feign.FeignException;
@@ -41,13 +40,15 @@ public class GhnClient {
      * - allowMock == true: fallback phí ước tính chuẩn (dev/test offline).
      * - allowMock == false: ném UPSTREAM_SERVICE_ERROR (502).
      */
-    public BigDecimal calculateFee(Integer districtId, String wardCode, int weightGram, ShippingMethod shippingMethod) {
-        if (districtId == null || wardCode == null || wardCode.trim().isEmpty()) {
+    public BigDecimal calculateFee(ShippingAddress address, int weightGram, ShippingMethod shippingMethod) {
+        if (address == null || address.getProvinceId() == null || address.getWardId() == null
+                || address.getProvince() == null || address.getProvince().isBlank()
+                || address.getWard() == null || address.getWard().isBlank()) {
             throw new AppException(OrderErrorCode.SHIPPING_ADDRESS_INVALID);
         }
 
         int effectiveWeight = weightGram <= 0 ? 200 : weightGram;
-        int serviceTypeId = (shippingMethod == ShippingMethod.EXPRESS) ? 1 : 2;
+        int serviceTypeId = effectiveWeight >= 20_000 ? 5 : 2;
 
         String token = ghnProperties.getToken();
         boolean isMockAllowed = Boolean.TRUE.equals(ghnProperties.getAllowMock());
@@ -62,11 +63,15 @@ public class GhnClient {
             throw new AppException(ErrorCode.UPSTREAM_SERVICE_ERROR);
         }
 
-        GhnFeeRequest request = GhnFeeRequest.builder()
-                .fromDistrictId(ghnProperties.getFromDistrictId())
-                .fromWardCode(ghnProperties.getFromWardCode())
-                .toDistrictId(districtId)
-                .toWardCode(wardCode)
+        GhnCreateOrderRequest request = GhnCreateOrderRequest.builder()
+                .paymentTypeId(1)
+                .toName(address.getRecipientName())
+                .toPhone(address.getRecipientPhone())
+                .toAddress(String.join(", ", address.getDetailAddress(), address.getWard(), address.getProvince()))
+                .toWardName(address.getWard())
+                .toProvinceName(address.getProvince())
+                .isNewToAddress(true)
+                .content("Fashion store order")
                 .serviceTypeId(serviceTypeId)
                 .weight(effectiveWeight)
                 .length(20)
@@ -75,9 +80,9 @@ public class GhnClient {
                 .build();
 
         try {
-            GhnFeeResponse response = ghnFeignClient.calculateFee(token, ghnProperties.getShopId(), request);
-            if (response != null && response.getData() != null && response.getData().getTotal() != null) {
-                return response.getData().getTotal();
+            GhnCreateOrderResponse response = ghnFeignClient.previewOrder(token, ghnProperties.getShopId(), request);
+            if (response != null && response.getData() != null && response.getData().getTotalFee() != null) {
+                return response.getData().getTotalFee();
             }
             log.warn("[GHN] Calculate fee response empty: {}", response);
             throw new AppException(ErrorCode.UPSTREAM_SERVICE_ERROR);
@@ -96,7 +101,9 @@ public class GhnClient {
      * Tạo vận đơn bên GHN.
      */
     public String createOrder(Order order, UserAddressDto address, int weightGram) {
-        if (address == null || address.getDistrictId() == null || address.getWardCode() == null || address.getWardCode().trim().isEmpty()) {
+        if (address == null || address.getProvinceId() == null || address.getWardId() == null
+                || address.getProvince() == null || address.getProvince().isBlank()
+                || address.getWard() == null || address.getWard().isBlank()) {
             throw new AppException(OrderErrorCode.SHIPPING_ADDRESS_INVALID);
         }
 
@@ -133,14 +140,15 @@ public class GhnClient {
                 .toName(order.getAddress().getRecipientName())
                 .toPhone(order.getAddress().getRecipientPhone())
                 .toAddress(order.getShippingAddress())
-                .toDistrictId(address.getDistrictId())
-                .toWardCode(address.getWardCode())
+                .toWardName(address.getWard())
+                .toProvinceName(address.getProvince())
+                .isNewToAddress(true)
                 .codAmount(codAmount)
                 .weight(effectiveWeight)
                 .length(20)
                 .width(20)
                 .height(10)
-                .serviceTypeId(2)
+                .serviceTypeId(effectiveWeight >= 20_000 ? 5 : 2)
                 .items(items)
                 .build();
 

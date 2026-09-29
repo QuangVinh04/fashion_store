@@ -19,6 +19,8 @@ public class UserAddressDto {
     String district;
     String ward;
     String detailAddress;
+    Integer provinceId;
+    Integer wardId;
     Integer districtId;
     String wardCode;
     Boolean isDefault;

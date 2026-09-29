@@ -277,7 +277,9 @@ public class CheckoutServiceImpl implements CheckoutService {
             return null;
         }
         UserAddressDto address = identityClient.getAddress(userId, addressId);
-        if (address == null || address.getDistrictId() == null || address.getWardCode() == null || address.getWardCode().isBlank()) {
+        if (address == null || address.getProvinceId() == null || address.getWardId() == null
+                || address.getProvince() == null || address.getProvince().isBlank()
+                || address.getWard() == null || address.getWard().isBlank()) {
             throw new AppException(OrderErrorCode.SHIPPING_ADDRESS_INVALID);
         }
         return ShippingAddress.builder()
@@ -287,6 +289,8 @@ public class CheckoutServiceImpl implements CheckoutService {
                 .district(address.getDistrict())
                 .ward(address.getWard())
                 .detailAddress(address.getDetailAddress())
+                .provinceId(address.getProvinceId())
+                .wardId(address.getWardId())
                 .districtId(address.getDistrictId())
                 .wardCode(address.getWardCode())
                 .build();
@@ -299,7 +303,7 @@ public class CheckoutServiceImpl implements CheckoutService {
         if (address == null) {
             return shippingMethod == ShippingMethod.EXPRESS ? BigDecimal.valueOf(40000) : BigDecimal.valueOf(25000);
         }
-        return ghnClient.calculateFee(address.getDistrictId(), address.getWardCode(), totalWeightGram, shippingMethod);
+        return ghnClient.calculateFee(address, totalWeightGram, shippingMethod);
     }
 
     private int calculateTotalWeightFromCartItems(List<CartItem> cartItems) {

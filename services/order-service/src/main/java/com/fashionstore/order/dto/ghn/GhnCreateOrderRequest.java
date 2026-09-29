@@ -1,6 +1,7 @@
 package com.fashionstore.order.dto.ghn;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -17,6 +18,7 @@ import java.util.List;
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
+@JsonInclude(JsonInclude.Include.NON_NULL)
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class GhnCreateOrderRequest {
 
@@ -41,6 +43,17 @@ public class GhnCreateOrderRequest {
 
     @JsonProperty("to_address")
     String toAddress;
+
+    @JsonProperty("to_ward_name")
+    String toWardName;
+
+    @JsonProperty("to_province_name")
+    String toProvinceName;
+
+    @JsonProperty("is_new_to_address")
+    Boolean isNewToAddress;
+
+    String content;
 
     @JsonProperty("to_ward_code")
     String toWardCode;

@@ -31,7 +31,7 @@ public class UserAddress extends BaseEntity {
     @Column(name = "province", nullable = false, length = 100)
     String province;
 
-    @Column(name = "district", nullable = false, length = 100)
+    @Column(name = "district", length = 100)
     String district;
 
     @Column(name = "ward", nullable = false, length = 100)
@@ -39,6 +39,12 @@ public class UserAddress extends BaseEntity {
 
     @Column(name = "detail_address", nullable = false, length = 255)
     String detailAddress;
+
+    @Column(name = "province_id")
+    Integer provinceId;
+
+    @Column(name = "ward_id")
+    Integer wardId;
 
     @Column(name = "district_id")
     Integer districtId;

@@ -156,7 +156,9 @@ public class OrderServiceImpl implements OrderService {
     }
 
     private static String fullAddress(ShippingAddress address) {
-        return String.join(", ", address.getDetailAddress(), address.getWard(), address.getDistrict(), address.getProvince());
+        return java.util.stream.Stream.of(address.getDetailAddress(), address.getWard(), address.getDistrict(), address.getProvince())
+                .filter(part -> part != null && !part.isBlank())
+                .collect(java.util.stream.Collectors.joining(", "));
     }
 
     @Override

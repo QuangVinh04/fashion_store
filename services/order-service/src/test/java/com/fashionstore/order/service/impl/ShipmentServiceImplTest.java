@@ -96,6 +96,8 @@ class ShipmentServiceImplTest {
                 .detailAddress("123 Le Loi")
                 .districtId(1444)
                 .wardCode("20308")
+                .provinceId(1000001)
+                .wardId(1003646)
                 .build());
 
         when(orderRepository.findByIdForUpdate("order-1")).thenReturn(Optional.of(order));

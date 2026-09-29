@@ -21,10 +21,8 @@ public interface UserAddressMapper {
 
     default String buildFullAddress(UserAddress entity) {
         if (entity == null) return null;
-        return String.format("%s, %s, %s, %s",
-                entity.getDetailAddress(),
-                entity.getWard(),
-                entity.getDistrict(),
-                entity.getProvince());
+        return java.util.stream.Stream.of(entity.getDetailAddress(), entity.getWard(), entity.getDistrict(), entity.getProvince())
+                .filter(part -> part != null && !part.isBlank())
+                .collect(java.util.stream.Collectors.joining(", "));
     }
 }
