@@ -20,6 +20,7 @@ services:
       SERVER_PORT: 8080
       KEYCLOAK_ISSUER: http://localhost:8180/realms/fashion-store
       KEYCLOAK_JWK_SET_URI: http://keycloak:8080/realms/fashion-store/protocol/openid-connect/certs
+      SPRING_DATA_REDIS_HOST: redis
       IDENTITY_BASE_URL: http://identity-service:8082
       CATALOG_BASE_URL: http://catalog-service:8087
       ORDER_BASE_URL: http://order-service:8089
@@ -198,6 +199,12 @@ services:
       IDENTITY_BASE_URL: http://identity-service:8082
       GHN_ENABLED: ${GHN_ENABLED:-true}
       GHN_ALLOW_MOCK: ${GHN_ALLOW_MOCK:-false}
+      GHN_API_URL: ${GHN_API_URL:-https://dev-online-gateway.ghn.vn/shiip/public-api}
+      GHN_TOKEN: ${GHN_TOKEN:-}
+      GHN_SHOP_ID: ${GHN_SHOP_ID:-0}
+      GHN_FROM_DISTRICT_ID: ${GHN_FROM_DISTRICT_ID:-0}
+      GHN_FROM_WARD_CODE: ${GHN_FROM_WARD_CODE:-0}
+      GHN_WEBHOOK_TOKEN: ${GHN_WEBHOOK_TOKEN:-dev-ghn-webhook-secret}
     depends_on:
       order-postgres:
         condition: service_healthy
@@ -225,8 +232,8 @@ services:
       PAYMENT_POSTGRES_USER: root
       PAYMENT_POSTGRES_PASSWORD: root
       VNPAY_RETURN_URL: ${VNPAY_RETURN_URL:-http://localhost:8080/api/v1/payments/vnpay/return}
-      VNPAY_TMN_CODE: ${VNPAY_TMN_CODE:-DEMOTMN0}
-      VNPAY_HASH_SECRET: ${VNPAY_HASH_SECRET:-DEMOHASHSECRETKEY1234567890123}
+      VNPAY_TMN_CODE: ${VNPAY_TMN_CODE:-}
+      VNPAY_HASH_SECRET: ${VNPAY_HASH_SECRET:-}
       PAYOS_CLIENT_ID: ${PAYOS_CLIENT_ID:-}
       PAYOS_API_KEY: ${PAYOS_API_KEY:-}
       PAYOS_CHECKSUM_KEY: ${PAYOS_CHECKSUM_KEY:-}

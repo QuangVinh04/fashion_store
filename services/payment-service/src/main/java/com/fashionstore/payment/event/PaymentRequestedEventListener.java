@@ -27,6 +27,7 @@ import com.fashionstore.payment.repository.PaymentRefundRepository;
 import com.fashionstore.payment.repository.PaymentRepository;
 import com.fashionstore.payment.service.provider.PaymentHandlerRegistry;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.stereotype.Component;
@@ -37,6 +38,7 @@ import java.time.LocalDateTime;
 
 @Component
 @RequiredArgsConstructor
+@Slf4j
 public class PaymentRequestedEventListener {
 
     private final PaymentRepository paymentRepository;
@@ -101,7 +103,20 @@ public class PaymentRequestedEventListener {
         if (saved.getStatus() == PaymentStatus.COD_PENDING) {
             publishCompleted(saved, envelope.correlationId());
         } else {
-            initiateOnlinePayment(saved, request.clientIp(), envelope.correlationId());
+            try {
+                initiateOnlinePayment(saved, request.clientIp(), envelope.correlationId());
+            } catch (Exception ex) {
+                log.error("Khởi tạo thanh toán với cổng thất bại cho order {}: {}", saved.getOrderId(), ex.getMessage(), ex);
+                saved.setStatus(PaymentStatus.FAILED);
+                saved.setFailureReason("Lỗi tạo link thanh toán: " + ex.getMessage());
+                paymentRepository.save(saved);
+                outboxService.saveMessage(saved.getOrderId(), EventTypes.PAYMENT_FAILED, EventEnvelope.v1(
+                        EventTypes.PAYMENT_FAILED,
+                        saved.getOrderId(),
+                        envelope.correlationId(),
+                        new com.fashionstore.contracts.payment.event.PaymentFailedEvent(saved.getOrderId(), saved.getId(), saved.getFailureReason())
+                ));
+            }
         }
     }
 
@@ -137,8 +152,18 @@ public class PaymentRequestedEventListener {
                 CancelPaymentCommand.class
         );
         Payment payment = paymentRepository.findByOrderIdForUpdate(request.orderId())
-                .orElseThrow(() -> new IllegalStateException(
-                        "Payment not created yet for order " + request.orderId()));
+                .orElse(null);
+
+        if (payment == null) {
+            log.warn("Payment không tồn tại cho order {} khi nhận lệnh hủy, gửi PAYMENT_CANCELLED để saga hoàn tất bù trừ", request.orderId());
+            outboxService.saveMessage(request.orderId(), EventTypes.PAYMENT_CANCELLED, EventEnvelope.v1(
+                    EventTypes.PAYMENT_CANCELLED,
+                    request.orderId(),
+                    envelope.correlationId(),
+                    new PaymentCancelledEvent(request.orderId(), null, request.reason())
+            ));
+            return;
+        }
 
         if (payment.getStatus() == PaymentStatus.PENDING
                 || payment.getStatus() == PaymentStatus.COD_PENDING) {

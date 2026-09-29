@@ -120,6 +120,16 @@ class SecurityConfigTest {
     }
 
     @Test
+    void payosWebhookIsProxiedWithoutToken() {
+        client.post().uri("/api/v1/payments/payos/webhook")
+                .header(HttpHeaders.CONTENT_TYPE, "application/json")
+                .bodyValue("{}")
+                .exchange().expectStatus().isOk();
+
+        assertThat(forwardedAuthorization.get()).isNull();
+    }
+
+    @Test
     void guestCartIsRejectedBeforeProxying() {
         client.post().uri("/api/v1/cart/items").exchange().expectStatus().isUnauthorized();
 

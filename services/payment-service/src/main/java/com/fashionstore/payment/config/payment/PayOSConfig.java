@@ -15,10 +15,14 @@ public class PayOSConfig {
             @Value("${payment.payos.api-key}") String apiKey,
             @Value("${payment.payos.checksum-key}") String checksumKey
     ) {
+        String cleanChecksumKey = checksumKey != null && checksumKey.trim().startsWith("0x")
+                ? checksumKey.trim().substring(2)
+                : (checksumKey != null ? checksumKey.trim() : "");
+
         return new PayOS(ClientOptions.builder()
-                .clientId(clientId)
-                .apiKey(apiKey)
-                .checksumKey(checksumKey)
+                .clientId(clientId != null ? clientId.trim() : "")
+                .apiKey(apiKey != null ? apiKey.trim() : "")
+                .checksumKey(cleanChecksumKey)
                 .build());
     }
 }

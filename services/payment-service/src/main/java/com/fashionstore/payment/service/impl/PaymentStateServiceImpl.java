@@ -37,7 +37,7 @@ public class PaymentStateServiceImpl implements PaymentStateService {
         if (payment.getStatus() != PaymentStatus.PENDING) {
             throw new AppException(PaymentErrorCode.PAYMENT_STATUS_INVALID);
         }
-        if (!isProviderAmountValid(payment, result)) {
+        if (result.getStatus() == PaymentStatus.COMPLETED && !isProviderAmountValid(payment, result)) {
             throw new AppException(PaymentErrorCode.PAYMENT_AMOUNT_INVALID);
         }
 
@@ -75,7 +75,7 @@ public class PaymentStateServiceImpl implements PaymentStateService {
             return;
         }
 
-        if (payment.getStatus() == PaymentStatus.FAILED) {
+        if (payment.getStatus() == PaymentStatus.FAILED || payment.getStatus() == PaymentStatus.CANCELLED) {
             outboxService.saveMessage(payment.getOrderId(), EventTypes.PAYMENT_FAILED, EventEnvelope.v1(
                     EventTypes.PAYMENT_FAILED,
                     payment.getOrderId(),

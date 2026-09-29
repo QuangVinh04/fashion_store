@@ -63,8 +63,8 @@ app:
     identity-base-url: ${IDENTITY_BASE_URL:http://localhost:8082}
   ghn:
     api-url: ${GHN_API_URL:https://dev-online-gateway.ghn.vn/shiip/public-api}
-    token: ${GHN_TOKEN:106d6880-bae9-11f1-b944-42faa0331861}
-    shop-id: ${GHN_SHOP_ID:225625}
+    token: ${GHN_TOKEN}
+    shop-id: ${GHN_SHOP_ID}
     from-district-id: ${GHN_FROM_DISTRICT_ID:1442}
     from-ward-code: ${GHN_FROM_WARD_CODE:20101}
     enabled: ${GHN_ENABLED:true}

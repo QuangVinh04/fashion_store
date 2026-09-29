@@ -26,7 +26,8 @@ public class SecurityConfig {
                                 "/order/v3/api-docs/**",
                                 "/payment/v3/api-docs/**",
                                 "/api/v1/payments/vnpay/return",
-                                "/api/v1/payments/vnpay/ipn"
+                                "/api/v1/payments/vnpay/ipn",
+                                "/api/v1/payments/payos/webhook"
                         ).permitAll()
                         .pathMatchers("/internal/**").denyAll()
                         .pathMatchers(HttpMethod.GET,

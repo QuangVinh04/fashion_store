@@ -21,6 +21,10 @@ import vn.payos.model.v2.paymentRequests.CreatePaymentLinkResponse;
 import vn.payos.model.webhooks.Webhook;
 import vn.payos.model.webhooks.WebhookData;
 
+import org.springframework.util.StringUtils;
+import vn.payos.model.v2.paymentRequests.PaymentLink;
+import vn.payos.model.v2.paymentRequests.PaymentLinkStatus;
+
 import java.math.BigDecimal;
 import java.util.Map;
 
@@ -41,7 +45,8 @@ import java.util.Map;
 @Slf4j
 public class PayOSPaymentHandler implements PaymentHandler {
 
-    private static final int ORDER_CODE_HEX_LENGTH = 15;
+    private static final int ORDER_CODE_HEX_LENGTH = 13;
+    private static final long MAX_PAYOS_ORDER_CODE = 9007199254740991L;
 
     private final PayOS payOSClient;
     private final ObjectMapper objectMapper;
@@ -60,7 +65,8 @@ public class PayOSPaymentHandler implements PaymentHandler {
     @Override
     public PaymentInitiationResult initiate(Payment payment, String clientIp) {
         long orderCode = toOrderCode(payment.getMerchantReference());
-        String description = ("Thanh toan " + payment.getOrderId());
+        String cleanOrderId = payment.getOrderId().replace("-", "");
+        String description = ("Thanh toan " + cleanOrderId);
         description = description.length() > 25 ? description.substring(0, 25) : description;
 
         CreatePaymentLinkRequest request = CreatePaymentLinkRequest.builder()
@@ -89,33 +95,120 @@ public class PayOSPaymentHandler implements PaymentHandler {
 
     @Override
     public PaymentCallbackResult verifyCallback(Map<String, String> queryParams, String rawBody) {
-        try {
-            Webhook webhook = objectMapper.readValue(rawBody, Webhook.class);
-            WebhookData data = payOSClient.webhooks().verify(webhook);
-            boolean successful = Boolean.TRUE.equals(webhook.getSuccess()) && "00".equals(webhook.getCode());
+        if (rawBody != null && !rawBody.isBlank()) {
+            try {
+                Webhook webhook = objectMapper.readValue(rawBody, Webhook.class);
+                WebhookData data = payOSClient.webhooks().verify(webhook);
+                boolean successful = Boolean.TRUE.equals(webhook.getSuccess()) && "00".equals(webhook.getCode());
 
-            return PaymentCallbackResult.builder()
-                    .merchantReference(String.valueOf(data.getOrderCode()))
-                    .providerTransactionId(data.getReference())
-                    .amount(data.getAmount() == null ? null : BigDecimal.valueOf(data.getAmount()))
-                    .currency("VND")
-                    .status(successful ? PaymentStatus.COMPLETED : PaymentStatus.FAILED)
-                    .failureReason(successful ? null : "PayOS webhook code: " + webhook.getCode())
-                    .signatureValid(true)
-                    .build();
-        } catch (PayOSException exception) {
-            log.warn("[PayOS] webhook signature verification failed", exception);
-            return PaymentCallbackResult.builder()
-                    .signatureValid(false)
-                    .failureReason("PayOS signature invalid")
-                    .build();
-        } catch (Exception exception) {
-            log.warn("[PayOS] cannot parse webhook body", exception);
-            return PaymentCallbackResult.builder()
-                    .signatureValid(false)
-                    .failureReason("PayOS webhook payload invalid")
-                    .build();
+                return PaymentCallbackResult.builder()
+                        .merchantReference(String.valueOf(data.getOrderCode()))
+                        .providerTransactionId(data.getReference())
+                        .amount(data.getAmount() == null ? null : BigDecimal.valueOf(data.getAmount()))
+                        .currency("VND")
+                        .status(successful ? PaymentStatus.COMPLETED : PaymentStatus.FAILED)
+                        .failureReason(successful ? null : "PayOS webhook code: " + webhook.getCode())
+                        .signatureValid(true)
+                        .build();
+            } catch (PayOSException exception) {
+                log.warn("[PayOS] webhook signature verification failed", exception);
+                return PaymentCallbackResult.builder()
+                        .signatureValid(false)
+                        .failureReason("PayOS signature invalid")
+                        .build();
+            } catch (Exception exception) {
+                log.warn("[PayOS] cannot parse webhook body", exception);
+                return PaymentCallbackResult.builder()
+                        .signatureValid(false)
+                        .failureReason("PayOS webhook payload invalid")
+                        .build();
+            }
         }
+
+        // Xử lý return/cancel callback từ PayOS khi chuyển hướng người dùng về trang web
+        if (queryParams != null && (queryParams.containsKey("orderCode") || queryParams.containsKey("id"))) {
+            String orderCodeStr = queryParams.get("orderCode");
+            String statusParam = queryParams.get("status");
+            boolean isCancel = "true".equalsIgnoreCase(queryParams.get("cancel"))
+                    || "CANCELLED".equalsIgnoreCase(statusParam);
+
+            Long orderCode = null;
+            if (StringUtils.hasText(orderCodeStr)) {
+                try {
+                    orderCode = Long.parseLong(orderCodeStr.trim());
+                } catch (NumberFormatException ignored) {
+                }
+            }
+
+            if (orderCode != null) {
+                try {
+                    PaymentLink paymentLink = payOSClient.paymentRequests().get(orderCode);
+                    boolean isPaid = paymentLink.getStatus() == PaymentLinkStatus.PAID;
+                    boolean isLinkCancelled = paymentLink.getStatus() == PaymentLinkStatus.CANCELLED;
+
+                    if (!isPaid && (isCancel || isLinkCancelled)) {
+                        if (!isLinkCancelled && paymentLink.getStatus() == PaymentLinkStatus.PENDING) {
+                            try {
+                                payOSClient.paymentRequests().cancel(orderCode, "Khách hàng hủy thanh toán");
+                            } catch (Exception ex) {
+                                log.warn("[PayOS] Không thể hủy link trên PayOS cho orderCode={}", orderCode, ex);
+                            }
+                        }
+                        return PaymentCallbackResult.builder()
+                                .merchantReference(String.valueOf(orderCode))
+                                .providerTransactionId(paymentLink.getId())
+                                .amount(paymentLink.getAmount() == null ? null : BigDecimal.valueOf(paymentLink.getAmount()))
+                                .currency("VND")
+                                .status(PaymentStatus.FAILED)
+                                .failureReason("Khách hàng đã hủy thanh toán trên cổng PayOS")
+                                .signatureValid(true)
+                                .build();
+                    }
+
+                    if (isPaid) {
+                        String ref = (paymentLink.getTransactions() != null && !paymentLink.getTransactions().isEmpty())
+                                ? paymentLink.getTransactions().get(0).getReference()
+                                : paymentLink.getId();
+                        return PaymentCallbackResult.builder()
+                                .merchantReference(String.valueOf(orderCode))
+                                .providerTransactionId(ref)
+                                .amount(paymentLink.getAmount() == null ? null : BigDecimal.valueOf(paymentLink.getAmount()))
+                                .currency("VND")
+                                .status(PaymentStatus.COMPLETED)
+                                .signatureValid(true)
+                                .build();
+                    }
+
+                    if (isCancel) {
+                        return PaymentCallbackResult.builder()
+                                .merchantReference(String.valueOf(orderCode))
+                                .providerTransactionId(paymentLink.getId())
+                                .amount(paymentLink.getAmount() == null ? null : BigDecimal.valueOf(paymentLink.getAmount()))
+                                .currency("VND")
+                                .status(PaymentStatus.FAILED)
+                                .failureReason("Khách hàng đã hủy giao dịch PayOS")
+                                .signatureValid(true)
+                                .build();
+                    }
+                } catch (Exception ex) {
+                    log.error("[PayOS] Không thể tra cứu PaymentLink từ PayOS API: {}", ex.getMessage());
+                    if (isCancel) {
+                        return PaymentCallbackResult.builder()
+                                .merchantReference(String.valueOf(orderCode))
+                                .currency("VND")
+                                .status(PaymentStatus.FAILED)
+                                .failureReason("Khách hàng đã hủy thanh toán PayOS")
+                                .signatureValid(true)
+                                .build();
+                    }
+                }
+            }
+        }
+
+        return PaymentCallbackResult.builder()
+                .signatureValid(false)
+                .failureReason("PayOS request payload hoặc params không hợp lệ")
+                .build();
     }
 
     @Override
@@ -125,9 +218,11 @@ public class PayOSPaymentHandler implements PaymentHandler {
     }
 
     private long toOrderCode(String merchantReference) {
-        String hex = merchantReference.length() > ORDER_CODE_HEX_LENGTH
-                ? merchantReference.substring(0, ORDER_CODE_HEX_LENGTH)
-                : merchantReference;
-        return Long.parseLong(hex, 16);
+        String clean = merchantReference.replace("-", "");
+        String hex = clean.length() > ORDER_CODE_HEX_LENGTH
+                ? clean.substring(0, ORDER_CODE_HEX_LENGTH)
+                : clean;
+        long code = Long.parseLong(hex, 16);
+        return Math.min(code, MAX_PAYOS_ORDER_CODE);
     }
 }

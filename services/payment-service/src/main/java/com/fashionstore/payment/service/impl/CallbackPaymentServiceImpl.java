@@ -30,12 +30,13 @@ public class CallbackPaymentServiceImpl implements CallbackPaymentService {
     PaymentStateService paymentStateService;
 
     @Override
-    @Transactional(readOnly = true)
+    @Transactional
     public PaymentCallbackResult verifyReturn(PaymentProvider provider, Map<String, String> queryParams) {
         PaymentCallbackResult result = paymentHandlerRegistry.get(provider).verifyCallback(queryParams, null);
         if (!result.isSignatureValid()) {
             throw new AppException(PaymentErrorCode.PAYMENT_SIGNATURE_INVALID);
         }
+        processCallback(provider, queryParams, null);
         return result;
     }
 
@@ -57,10 +58,13 @@ public class CallbackPaymentServiceImpl implements CallbackPaymentService {
                 : paymentRepository.findByMerchantReference(result.getMerchantReference())
                         .or(() -> paymentRepository.findByTransactionId(result.getMerchantReference()))
                         .orElse(null);
+        if (payment == null && queryParams != null && queryParams.containsKey("orderId")) {
+            payment = paymentRepository.findByOrderId(queryParams.get("orderId")).orElse(null);
+        }
         if (payment == null) {
             return CallbackProcessResult.of(CallbackOutcome.PAYMENT_NOT_FOUND);
         }
-        if (!paymentStateService.isProviderAmountValid(payment, result)) {
+        if (result.getStatus() == PaymentStatus.COMPLETED && !paymentStateService.isProviderAmountValid(payment, result)) {
             return CallbackProcessResult.of(CallbackOutcome.AMOUNT_INVALID);
         }
         if (payment.getStatus() != PaymentStatus.PENDING) {

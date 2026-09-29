@@ -35,16 +35,21 @@ public class VnPayPaymentController {
                 .build();
     }
 
-    @GetMapping("/ipn")
-    public VnPayIpnResponse processIpn(@RequestParam Map<String, String> payload) {
-        CallbackProcessResult result = callbackPaymentService.processCallback(PaymentProvider.VNPAY, payload, null);
-        return switch (result.outcome()) {
-            case INVALID_REQUEST -> new VnPayIpnResponse("99", "Invalid request");
-            case SIGNATURE_INVALID -> VnPayIpnResponse.invalidChecksum();
-            case PAYMENT_NOT_FOUND -> VnPayIpnResponse.orderNotFound();
-            case AMOUNT_INVALID -> VnPayIpnResponse.invalidAmount();
-            case ALREADY_PROCESSED -> VnPayIpnResponse.alreadyConfirmed();
-            case APPLIED -> VnPayIpnResponse.success();
-        };
-    }
+    /*
+     * IPN Callback Server-to-Server từ VNPay.
+     * Tạm thời comment lại do đang chạy môi trường nội bộ / chưa có domain HTTPS công khai để VNPay gọi tới localhost.
+     * Khi triển khai production có domain HTTPS, chỉ cần bỏ comment method này.
+     */
+    // @GetMapping("/ipn")
+    // public VnPayIpnResponse processIpn(@RequestParam Map<String, String> payload) {
+    //     CallbackProcessResult result = callbackPaymentService.processCallback(PaymentProvider.VNPAY, payload, null);
+    //     return switch (result.outcome()) {
+    //         case INVALID_REQUEST -> new VnPayIpnResponse("99", "Invalid request");
+    //         case SIGNATURE_INVALID -> VnPayIpnResponse.invalidChecksum();
+    //         case PAYMENT_NOT_FOUND -> VnPayIpnResponse.orderNotFound();
+    //         case AMOUNT_INVALID -> VnPayIpnResponse.invalidAmount();
+    //         case ALREADY_PROCESSED -> VnPayIpnResponse.alreadyConfirmed();
+    //         case APPLIED -> VnPayIpnResponse.success();
+    //     };
+    // }
 }
