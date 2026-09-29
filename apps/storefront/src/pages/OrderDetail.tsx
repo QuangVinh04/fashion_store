@@ -141,10 +141,59 @@ export default function OrderDetail() {
     setActionNotice(null);
     try {
       let payUrl = order?.paymentUrl;
-      if (!payUrl && payment) {
-        const res = await store.paymentInitiate(payment.id);
-        payUrl = res.paymentUrl;
+      let p = payment;
+
+      // 1. Thử lấy payment nếu state chưa có
+      if (!p) {
+        try {
+          p = await store.payment(id);
+          if (p) setPayment(p);
+        } catch {
+          // Chưa có bản ghi payment
+        }
       }
+
+      // 2. Nếu có payment mà chưa có payUrl -> gọi initiate
+      if (!payUrl && p) {
+        try {
+          const res = await store.paymentInitiate(p.id);
+          payUrl = res.paymentUrl;
+        } catch {
+          // Bỏ qua nếu lỗi initiate
+        }
+      }
+
+      // 3. Nếu vẫn chưa có, đợi và thử lại ngầm trong 4 giây (tránh hiển thị lỗi sớm)
+      if (!payUrl) {
+        for (let i = 0; i < 6; i++) {
+          await new Promise((resolve) => setTimeout(resolve, 600));
+          try {
+            const freshOrder = await store.order(id);
+            if (freshOrder.paymentUrl) {
+              payUrl = freshOrder.paymentUrl;
+              break;
+            }
+          } catch {}
+
+          if (!p) {
+            try {
+              p = await store.payment(id);
+              if (p) setPayment(p);
+            } catch {}
+          }
+
+          if (p) {
+            try {
+              const res = await store.paymentInitiate(p.id);
+              if (res.paymentUrl) {
+                payUrl = res.paymentUrl;
+                break;
+              }
+            } catch {}
+          }
+        }
+      }
+
       if (payUrl) {
         sessionStorage.setItem('lino:pendingOrder', id);
         window.location.assign(payUrl);

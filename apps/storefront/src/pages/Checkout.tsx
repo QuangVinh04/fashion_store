@@ -34,6 +34,7 @@ export default function CheckoutPage() {
   const [checkout, setCheckout] = useState<Checkout | null>(null);
 
   const [busy, setBusy] = useState<boolean>(false);
+  const [processingText, setProcessingText] = useState<string>('');
   const [error, setError] = useState<string>('');
 
   // Resume active checkout if available in session
@@ -120,6 +121,7 @@ export default function CheckoutPage() {
     if (!checkout) return;
     setBusy(true);
     setError('');
+    setProcessingText('');
     try {
       const order = await store.orderCreate(checkout.id, addressId);
       sessionStorage.setItem('lino:pendingOrder', order.id);
@@ -130,26 +132,66 @@ export default function CheckoutPage() {
         return;
       }
 
-      // Online payment (VNPay or PayOS)
-      let payUrl = order.paymentUrl;
-      if (!payUrl && order.paymentId) {
+      // Online payment (VNPay or PayOS) -> Chờ URL thanh toán để tự động chuyển hướng chuẩn TMĐT
+      setProcessingText(`Đang kết nối cổng thanh toán ${paymentProvider}...`);
+
+      let payUrl: string | undefined = order.paymentUrl;
+      const startTime = Date.now();
+      const maxWaitMs = 8000;
+
+      while (!payUrl && Date.now() - startTime < maxWaitMs) {
+        await new Promise((resolve) => setTimeout(resolve, 600));
+
+        // 1. Thử lấy order mới nhất từ order-service
         try {
-          const initRes = await store.paymentInitiate(order.paymentId);
-          payUrl = initRes.paymentUrl;
+          const freshOrder = await store.order(order.id);
+          if (freshOrder.paymentUrl) {
+            payUrl = freshOrder.paymentUrl;
+            break;
+          }
+          if (freshOrder.paymentId) {
+            try {
+              const initRes = await store.paymentInitiate(freshOrder.paymentId);
+              if (initRes.paymentUrl) {
+                payUrl = initRes.paymentUrl;
+                break;
+              }
+            } catch {
+              // Bỏ qua nếu chưa initiate được
+            }
+          }
         } catch {
-          // fallback to order detail
+          // Bỏ qua lỗi mạng tạm thời trong lúc chờ
+        }
+
+        // 2. Thử tra cứu payment từ payment-service theo orderId
+        if (!payUrl) {
+          try {
+            const p = await store.payment(order.id);
+            if (p && p.id) {
+              const initRes = await store.paymentInitiate(p.id);
+              if (initRes.paymentUrl) {
+                payUrl = initRes.paymentUrl;
+                break;
+              }
+            }
+          } catch {
+            // payment có thể chưa được tạo xong trong 1 vài ms đầu
+          }
         }
       }
 
       if (payUrl) {
         window.location.assign(payUrl);
       } else {
+        // Fallback về trang chi tiết đơn hàng nếu cổng thanh toán phản hồi quá lâu
         navigate(`/profile/orders/${order.id}`);
       }
     } catch (e) {
       setError((e as Error).message);
     } finally {
       setBusy(false);
+      setProcessingText('');
     }
   }
 
@@ -560,6 +602,26 @@ export default function CheckoutPage() {
           </aside>
         </div>
       </div>
+
+      {busy && processingText && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white p-8 max-w-sm w-full text-center shadow-2xl border border-black/10">
+            <div className="w-12 h-12 border-4 border-[#111] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+            <h3
+              className="font-bold text-base uppercase tracking-wider mb-2 text-[#111]"
+              style={{ fontFamily: "'Barlow Condensed', sans-serif" }}
+            >
+              ĐANG KẾT NỐI CỔNG THANH TOÁN
+            </h3>
+            <p className="text-xs text-[#555] leading-relaxed">
+              {processingText}
+            </p>
+            <p className="text-[11px] text-[#888] mt-3">
+              Vui lòng không đóng trình duyệt hoặc tải lại trang...
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -13,6 +13,7 @@ export default function PaymentReturn() {
   const isVnpay = location.pathname.includes('vnpay');
   const isPayosCancel = location.pathname.includes('payos/cancel') || searchParams.get('cancel') === 'true';
   const isPayosSuccess = location.pathname.includes('payos/success');
+  const isPayos = location.pathname.includes('payos') || searchParams.has('orderCode');
 
   const orderId =
     searchParams.get('orderId') ||
@@ -30,23 +31,33 @@ export default function PaymentReturn() {
     [orderId]
   );
 
-  // VNPay checksum verification
+  // VNPay checksum verification & return processing
   useEffect(() => {
     if (!isVnpay || !searchParams.toString()) return;
 
     let active = true;
+    const vnpCode = searchParams.get('vnp_ResponseCode');
     setVerifyStatus('Đang xác thực chữ ký giao dịch với cổng VNPay…');
     store
       .vnpayVerify(searchParams)
       .then(() => {
         if (active) {
-          setVerifyStatus('Xác thực chữ ký hợp lệ từ VNPay.');
+          if (vnpCode && vnpCode !== '00') {
+            setVerifyError(
+              vnpCode === '24'
+                ? 'Bạn đã hủy giao dịch trên cổng VNPay.'
+                : `Giao dịch không thành công (Mã phản hồi VNPay: ${vnpCode}).`
+            );
+          } else {
+            setVerifyStatus('Xác thực chữ ký hợp lệ từ VNPay.');
+          }
           void paymentLoad.refresh();
         }
       })
       .catch((err) => {
         if (active) {
           setVerifyError((err as Error).message || 'Chữ ký phản hồi không hợp lệ.');
+          void paymentLoad.refresh();
         }
       });
 
@@ -55,9 +66,48 @@ export default function PaymentReturn() {
     };
   }, [isVnpay]);
 
+  // PayOS verification & return processing
+  useEffect(() => {
+    if (!isPayos || !searchParams.toString()) return;
+
+    let active = true;
+    setVerifyStatus('Đang xác thực thông tin giao dịch với cổng PayOS…');
+    store
+      .payosVerify(searchParams)
+      .then(() => {
+        if (active) {
+          if (isPayosCancel) {
+            setVerifyError('Đã ghi nhận yêu cầu hủy thanh toán từ cổng PayOS.');
+          } else {
+            setVerifyStatus('Xác thực giao dịch thành công từ PayOS.');
+          }
+          void paymentLoad.refresh();
+        }
+      })
+      .catch((err) => {
+        if (active) {
+          setVerifyError((err as Error).message || 'Không thể xác thực giao dịch từ PayOS.');
+          void paymentLoad.refresh();
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [isPayos, isPayosCancel]);
+
+  const vnpResponseCode = searchParams.get('vnp_ResponseCode');
+  const isVnpayFailed = isVnpay && vnpResponseCode != null && vnpResponseCode !== '00';
+  const isVnpaySuccess = isVnpay && vnpResponseCode === '00';
+
+  const p = paymentLoad.data;
+  const isCompleted = p?.status === 'COMPLETED' || (!p && isPayosSuccess && !isPayosCancel) || (!p && isVnpaySuccess);
+  const isFailed = p?.status === 'FAILED' || p?.status === 'CANCELLED' || isPayosCancel || isVnpayFailed;
+  const isPending = !isCompleted && !isFailed;
+
   // Polling for final status from backend
   useEffect(() => {
-    if (!orderId) return;
+    if (!orderId || isFailed) return;
     const status = paymentLoad.data?.status;
     if (['COMPLETED', 'FAILED', 'CANCELLED', 'REFUNDED'].includes(status || '')) return;
 
@@ -69,12 +119,7 @@ export default function PaymentReturn() {
     }, 4000);
 
     return () => window.clearInterval(interval);
-  }, [orderId, paymentLoad.data?.status]);
-
-  const p = paymentLoad.data;
-  const isCompleted = p?.status === 'COMPLETED' || (!p && isPayosSuccess);
-  const isFailed = p?.status === 'FAILED' || p?.status === 'CANCELLED' || isPayosCancel;
-  const isPending = !isCompleted && !isFailed;
+  }, [orderId, paymentLoad.data?.status, isFailed]);
 
   return (
     <div style={{ fontFamily: "'Inter', sans-serif" }} className="w-full">

@@ -48,6 +48,7 @@ export const store = {
   payment: (orderId: string) => api<Payment>(`/api/v1/payments/order/${orderId}`),
   paymentInitiate: (id: string) => api<{ paymentUrl?: string }>(`/api/v1/payments/${id}/initiate`, json('POST')),
   vnpayVerify: (params: URLSearchParams) => api(`/api/v1/payments/vnpay/return?${params.toString()}`),
+  payosVerify: (params: URLSearchParams) => api(`/api/v1/payments/payos/return?${params.toString()}`),
   uploadImage: async (file: File, folder: string) => {
     const signed = await api<{ mediaId: string; uploadUrl: string; contentType: string }>('/api/v1/files/presign', json('POST', {
       filename: file.name, contentType: file.type, sizeBytes: file.size, folder,
