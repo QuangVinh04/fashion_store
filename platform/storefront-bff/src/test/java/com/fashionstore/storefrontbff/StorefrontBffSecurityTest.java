@@ -70,6 +70,21 @@ class StorefrontBffSecurityTest {
     }
 
     @Test
+    void registerRedirectsToKeycloakWithKcAction() {
+        String location = client.get().uri("/oauth2/authorization/keycloak?kc_action=register")
+                .exchange()
+                .expectStatus().is3xxRedirection()
+                .returnResult(Void.class).getResponseHeaders().getFirst(HttpHeaders.LOCATION);
+
+        assertThat(location)
+                .startsWith("http://localhost:8180/realms/fashion-store/protocol/openid-connect/auth")
+                .contains("client_id=storefront-bff")
+                .contains("code_challenge_method=S256")
+                .contains("code_challenge=")
+                .contains("kc_action=register");
+    }
+
+    @Test
     void anonymousApiCallIsProxiedWithoutToken() {
         client.get().uri("/api/v1/products").exchange().expectStatus().isOk();
 

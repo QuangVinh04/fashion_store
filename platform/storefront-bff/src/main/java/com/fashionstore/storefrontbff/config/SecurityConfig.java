@@ -14,6 +14,8 @@ import org.springframework.security.oauth2.client.oidc.web.server.logout.OidcCli
 import org.springframework.security.oauth2.client.registration.ReactiveClientRegistrationRepository;
 import org.springframework.security.oauth2.client.web.server.DefaultServerOAuth2AuthorizationRequestResolver;
 import org.springframework.security.oauth2.client.web.OAuth2AuthorizationRequestCustomizers;
+import org.springframework.security.oauth2.client.web.server.ServerOAuth2AuthorizationRequestResolver;
+import org.springframework.security.oauth2.core.endpoint.OAuth2AuthorizationRequest;
 import org.springframework.security.oauth2.core.oidc.user.OidcUserAuthority;
 import org.springframework.security.web.server.SecurityWebFilterChain;
 import org.springframework.security.web.server.authentication.HttpStatusServerEntryPoint;
@@ -23,6 +25,8 @@ import org.springframework.security.web.server.csrf.ServerCsrfTokenRequestAttrib
 import org.springframework.web.server.WebFilter;
 import reactor.core.publisher.Mono;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Set;
 
 @Configuration
@@ -86,13 +90,39 @@ public class SecurityConfig {
         };
     }
 
-    private static DefaultServerOAuth2AuthorizationRequestResolver pkceAuthorizationRequestResolver(
+    private static ServerOAuth2AuthorizationRequestResolver pkceAuthorizationRequestResolver(
             ReactiveClientRegistrationRepository clientRegistrations) {
         DefaultServerOAuth2AuthorizationRequestResolver resolver =
                 new DefaultServerOAuth2AuthorizationRequestResolver(clientRegistrations);
         // Confidential client vẫn dùng PKCE (realm bắt buộc S256)
         resolver.setAuthorizationRequestCustomizer(OAuth2AuthorizationRequestCustomizers.withPkce());
-        return resolver;
+        return new ServerOAuth2AuthorizationRequestResolver() {
+            @Override
+            public Mono<OAuth2AuthorizationRequest> resolve(org.springframework.web.server.ServerWebExchange exchange) {
+                return resolver.resolve(exchange).map(req -> customize(exchange, req));
+            }
+
+            @Override
+            public Mono<OAuth2AuthorizationRequest> resolve(
+                    org.springframework.web.server.ServerWebExchange exchange,
+                    String clientRegistrationId) {
+                return resolver.resolve(exchange, clientRegistrationId).map(req -> customize(exchange, req));
+            }
+
+            private OAuth2AuthorizationRequest customize(
+                    org.springframework.web.server.ServerWebExchange exchange,
+                    OAuth2AuthorizationRequest request) {
+                String kcAction = exchange.getRequest().getQueryParams().getFirst("kc_action");
+                if (kcAction != null && !kcAction.isBlank()) {
+                    Map<String, Object> additional = new LinkedHashMap<>(request.getAdditionalParameters());
+                    additional.put("kc_action", kcAction);
+                    return OAuth2AuthorizationRequest.from(request)
+                            .additionalParameters(additional)
+                            .build();
+                }
+                return request;
+            }
+        };
     }
 
     private static OidcClientInitiatedServerLogoutSuccessHandler oidcLogoutSuccessHandler(

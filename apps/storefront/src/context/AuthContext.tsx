@@ -33,6 +33,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     rememberDestination(returnTo);
     window.location.assign('/oauth2/authorization/keycloak');
   };
+  const register = (returnTo?: string) => {
+    rememberDestination(returnTo);
+    window.location.assign('/oauth2/authorization/keycloak?kc_action=register');
+  };
   const logout = async () => {
     // A native form lets the BFF's OIDC logout redirect complete as a navigation.
     const form = document.createElement('form');
@@ -52,7 +56,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     document.body.appendChild(form);
     form.submit();
   };
-  return <AuthContext.Provider value={{ session, user, ready, isLoggedIn: !!session?.authenticated, refresh, login, register: login, logout }}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={{ session, user, ready, isLoggedIn: !!session?.authenticated, refresh, login, register, logout }}>{children}</AuthContext.Provider>;
 }
 export function useAuth() {
   const context = useContext(AuthContext);

@@ -15,7 +15,7 @@ export default function Root() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const { count } = useCart();
-  const { user, isLoggedIn, logout } = useAuth();
+  const { user, isLoggedIn, login, register, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -107,9 +107,13 @@ export default function Root() {
                   )}
                 </>
               ) : (
-                <Link to="/login" className="text-[#888] hover:text-[#111] transition-colors" aria-label="Đăng nhập">
+                <button
+                  onClick={() => login(location.pathname !== '/login' ? location.pathname + location.search : '/profile')}
+                  className="text-[#888] hover:text-[#111] transition-colors"
+                  aria-label="Đăng nhập"
+                >
                   <User size={18} />
-                </Link>
+                </button>
               )}
             </div>
             <Link to="/cart" className="relative text-[#111] hover:text-[#E5001B] transition-colors" aria-label="Giỏ hàng">
@@ -166,12 +170,18 @@ export default function Root() {
                 </div>
               ) : (
                 <div className="flex gap-2">
-                  <Link to="/login" onClick={() => setMenuOpen(false)} className="flex-1 py-3 text-center text-xs uppercase tracking-widest font-semibold bg-[#111] text-white hover:bg-black">
+                  <button
+                    onClick={() => { setMenuOpen(false); login(location.pathname !== '/login' ? location.pathname + location.search : '/profile'); }}
+                    className="flex-1 py-3 text-center text-xs uppercase tracking-widest font-semibold bg-[#111] text-white hover:bg-black"
+                  >
                     Đăng Nhập
-                  </Link>
-                  <Link to="/register" onClick={() => setMenuOpen(false)} className="flex-1 py-3 text-center text-xs uppercase tracking-widest font-semibold border border-[#111] text-[#111] hover:bg-gray-50">
+                  </button>
+                  <button
+                    onClick={() => { setMenuOpen(false); register(location.pathname !== '/register' ? location.pathname + location.search : '/profile'); }}
+                    className="flex-1 py-3 text-center text-xs uppercase tracking-widest font-semibold border border-[#111] text-[#111] hover:bg-gray-50"
+                  >
                     Đăng Ký
-                  </Link>
+                  </button>
                 </div>
               )}
             </div>
