@@ -231,17 +231,16 @@ public class InventoryServiceImpl implements InventoryService {
 
     @Override
     @Transactional
-    public void releaseSaga(ReleaseInventoryCommand command) {
+    public void releaseSaga(ReleaseInventoryCommand command, String correlationId) {
         log.info("[Inventory] saga release — orderId={}, reservationId={}", command.orderId(), command.reservationId());
         String reservationId = releaseInternal(command.orderId(), command.reservationId());
         // Chỉ emit RELEASED nếu thực sự đã release (idempotent: release 2 lần chỉ emit 1 lần)
         if (reservationId != null) {
             InventoryReleasedEvent event = new InventoryReleasedEvent(command.orderId(), reservationId);
-            // correlationId không có trong ReleaseInventoryCommand, dùng orderId
             outboxService.saveMessage(
                     command.orderId(),
                     EventTypes.INVENTORY_RELEASED,
-                    EventEnvelope.v1(EventTypes.INVENTORY_RELEASED, command.orderId(), command.orderId(), event));
+                    EventEnvelope.v1(EventTypes.INVENTORY_RELEASED, command.orderId(), correlationId, event));
         }
     }
 
@@ -287,7 +286,7 @@ public class InventoryServiceImpl implements InventoryService {
 
     @Override
     @Transactional
-    public void confirmSaga(ConfirmInventoryCommand command) {
+    public void confirmSaga(ConfirmInventoryCommand command, String correlationId) {
         log.info("[Inventory] saga confirm — orderId={}, reservationId={}", command.orderId(), command.reservationId());
         String reservationId = confirmInternal(command.orderId(), command.reservationId());
         if (reservationId != null) {
@@ -295,7 +294,7 @@ public class InventoryServiceImpl implements InventoryService {
             outboxService.saveMessage(
                     command.orderId(),
                     EventTypes.INVENTORY_CONFIRMED,
-                    EventEnvelope.v1(EventTypes.INVENTORY_CONFIRMED, command.orderId(), command.orderId(), event));
+                    EventEnvelope.v1(EventTypes.INVENTORY_CONFIRMED, command.orderId(), correlationId, event));
         }
     }
 

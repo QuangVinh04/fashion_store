@@ -85,13 +85,13 @@ public class InventoryCommandListener {
     private void handleConfirm(EventEnvelope<?> envelope) {
         ConfirmInventoryCommand cmd =
                 objectMapper.convertValue(envelope.payload(), ConfirmInventoryCommand.class);
-        inventoryService.confirmSaga(cmd);
+        inventoryService.confirmSaga(cmd, envelope.correlationId());
     }
 
     private void handleRelease(EventEnvelope<?> envelope) {
         ReleaseInventoryCommand cmd =
                 objectMapper.convertValue(envelope.payload(), ReleaseInventoryCommand.class);
-        inventoryService.releaseSaga(cmd);
+        inventoryService.releaseSaga(cmd, envelope.correlationId());
     }
 
     private void handleRestock(EventEnvelope<?> envelope) {

@@ -11,5 +11,6 @@ import org.mapstruct.Mapping;
 public interface InventoryMapper {
 
     @Mapping(target = "quantityAvailable", expression = "java(inventory.getQuantityAvailable())")
+    @Mapping(target = "quantityReserved", source = "reservedQuantity")
     InventoryResponse toResponse(Inventory inventory);
 }

@@ -21,8 +21,8 @@ public interface InventoryService {
 
     // Saga (RabbitMQ) — all-or-nothing, idempotent theo orderId
     void reserveSaga(ReservationInventoryCommand command, String correlationId);
-    void confirmSaga(ConfirmInventoryCommand command);
-    void releaseSaga(ReleaseInventoryCommand command);
+    void confirmSaga(ConfirmInventoryCommand command, String correlationId);
+    void releaseSaga(ReleaseInventoryCommand command, String correlationId);
 
     com.fashionstore.common.dto.PageResponse<List<com.fashionstore.catalog.dto.inventory.InventoryLedgerResponse>> getLedger(
             String variantId,

@@ -21,6 +21,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -71,6 +72,52 @@ class InventoryServiceImplTest {
                 inventoryMapper,
                 outboxService
         );
+    }
+
+    @Test
+    void confirmSaga_preservesSagaCorrelationIdInReply() {
+        InventoryReservation reservation = InventoryReservation.builder()
+                .orderId("order-1")
+                .status(InventoryReservationStatus.RESERVED)
+                .build();
+        reservation.setId("reservation-1");
+        when(reservationRepository.findByOrderId("order-1")).thenReturn(Optional.of(reservation));
+        when(reservationItemRepository.findByReservationId("reservation-1")).thenReturn(List.of());
+
+        service.confirmSaga(
+                new com.fashionstore.contracts.inventory.command.ConfirmInventoryCommand("order-1", "reservation-1"),
+                "saga-1");
+
+        org.mockito.ArgumentCaptor<Object> reply = org.mockito.ArgumentCaptor.forClass(Object.class);
+        verify(outboxService).saveMessage(eq("order-1"),
+                eq(com.fashionstore.contracts.common.EventTypes.INVENTORY_CONFIRMED), reply.capture());
+        com.fashionstore.contracts.common.EventEnvelope<?> envelope =
+                (com.fashionstore.contracts.common.EventEnvelope<?>) reply.getValue();
+        assertThat(envelope.correlationId()).isEqualTo("saga-1");
+        assertThat(envelope.aggregateId()).isEqualTo("order-1");
+    }
+
+    @Test
+    void releaseSaga_preservesSagaCorrelationIdInReply() {
+        InventoryReservation reservation = InventoryReservation.builder()
+                .orderId("order-2")
+                .status(InventoryReservationStatus.RESERVED)
+                .build();
+        reservation.setId("reservation-2");
+        when(reservationRepository.findByOrderId("order-2")).thenReturn(Optional.of(reservation));
+        when(reservationItemRepository.findByReservationId("reservation-2")).thenReturn(List.of());
+
+        service.releaseSaga(
+                new com.fashionstore.contracts.inventory.command.ReleaseInventoryCommand("order-2", "reservation-2"),
+                "saga-2");
+
+        org.mockito.ArgumentCaptor<Object> reply = org.mockito.ArgumentCaptor.forClass(Object.class);
+        verify(outboxService).saveMessage(eq("order-2"),
+                eq(com.fashionstore.contracts.common.EventTypes.INVENTORY_RELEASED), reply.capture());
+        com.fashionstore.contracts.common.EventEnvelope<?> envelope =
+                (com.fashionstore.contracts.common.EventEnvelope<?>) reply.getValue();
+        assertThat(envelope.correlationId()).isEqualTo("saga-2");
+        assertThat(envelope.aggregateId()).isEqualTo("order-2");
     }
 
     @Test
