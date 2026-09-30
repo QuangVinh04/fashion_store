@@ -24,6 +24,12 @@ public class InventoryLedgerResponse {
     InventoryLedgerType type;
     Integer quantity;
     String refOrderId;
+    String reason;
+    Integer quantityBefore;
+    Integer quantityAfter;
+    Integer reservedBefore;
+    Integer reservedAfter;
+    String operationId;
     String createdBy;
     LocalDateTime createdAt;
 }

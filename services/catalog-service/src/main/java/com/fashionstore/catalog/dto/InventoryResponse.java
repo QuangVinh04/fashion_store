@@ -15,5 +15,6 @@ public class InventoryResponse {
     private int           quantity;
     private int           quantityReserved;
     private int           quantityAvailable;
+    private int           minThreshold;
     private LocalDateTime updatedAt;
 }

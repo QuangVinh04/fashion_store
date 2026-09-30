@@ -4,6 +4,7 @@ import com.fashionstore.common.dto.PageResponse;
 import com.fashionstore.common.exception.AppException;
 import com.fashionstore.catalog.dto.*;
 import com.fashionstore.catalog.exception.ProductErrorCode;
+import com.fashionstore.catalog.exception.InventoryErrorCode;
 import com.fashionstore.catalog.mapper.ProductMapper;
 import com.fashionstore.catalog.entity.*;
 import com.fashionstore.catalog.entity.attribute.ProductAttribute;
@@ -154,6 +155,7 @@ public class ProductServiceImpl implements ProductService {
 
         Product savedProduct = productRepository.save(product);
         seedInventoryForVariants(savedProduct);
+        applyInitialStock(savedProduct, request.getVariants(), Set.of());
         return productMapper.toProductResponse(savedProduct);
     }
 
@@ -229,6 +231,8 @@ public class ProductServiceImpl implements ProductService {
     public ProductResponse updateProduct(String productId, ProductUpdateRequest request) {
         Product product = productRepository.findDetailProductById(productId)
                 .orElseThrow(() -> new AppException(ProductErrorCode.PRODUCT_NOT_FOUND));
+        Set<String> existingVariantIds = product.getVariants().stream()
+                .map(ProductVariant::getId).filter(Objects::nonNull).collect(Collectors.toSet());
         validateUpdateProductRequest(request, product);
 
         String slug = StringUtils.normalizeSlug(request.getSlug(), request.getName());
@@ -279,6 +283,7 @@ public class ProductServiceImpl implements ProductService {
 
         Product saved = productRepository.save(product);
         seedInventoryForVariants(saved);
+        applyInitialStock(saved, request.getVariants(), existingVariantIds);
         return productMapper.toProductResponse(saved);
     }
 
@@ -287,6 +292,8 @@ public class ProductServiceImpl implements ProductService {
     public ProductResponse updateProductVariants(String productId, ProductVariantBatchRequest request) {
         Product product = productRepository.findDetailProductById(productId)
                 .orElseThrow(() -> new AppException(ProductErrorCode.PRODUCT_NOT_FOUND));
+        Set<String> existingVariantIds = product.getVariants().stream()
+                .map(ProductVariant::getId).filter(Objects::nonNull).collect(Collectors.toSet());
 
         List<ProductVariantRequest> variantRequests =
                 request == null || request.getVariants() == null
@@ -296,6 +303,7 @@ public class ProductServiceImpl implements ProductService {
         synchronizeVariants(product, variantRequests);
         Product saved = productRepository.save(product);
         seedInventoryForVariants(saved);
+        applyInitialStock(saved, variantRequests, existingVariantIds);
         return productMapper.toProductResponse(saved);
     }
 
@@ -795,6 +803,32 @@ public class ProductServiceImpl implements ProductService {
                 continue;
             }
             inventoryService.ensureStock(variant.getId(), product.getId());
+        }
+    }
+
+    private void applyInitialStock(Product product, List<ProductVariantRequest> requests,
+                                   Set<String> existingVariantIds) {
+        if (requests == null) {
+            return;
+        }
+        for (ProductVariantRequest request : requests) {
+            Integer quantity = request.getInitialQuantity();
+            if (quantity == null || quantity == 0) {
+                continue;
+            }
+            if (quantity < 0) {
+                throw new AppException(InventoryErrorCode.INVALID_STOCK_QUANTITY);
+            }
+            ProductVariant variant = product.getVariants().stream()
+                    .filter(v -> v.getColorOption() != null && v.getSizeOption() != null
+                            && v.getColorOption().getId().equals(StringUtils.cleanText(request.getColorOptionId()))
+                            && v.getSizeOption().getId().equals(StringUtils.cleanText(request.getSizeOptionId())))
+                    .findFirst()
+                    .orElseThrow(() -> new AppException(ProductErrorCode.PRODUCT_VARIANT_ALREADY_EXIST));
+            if (existingVariantIds.contains(variant.getId())) {
+                throw new AppException(InventoryErrorCode.INITIAL_STOCK_NOT_ALLOWED);
+            }
+            inventoryService.initializeStock(variant.getId(), quantity);
         }
     }
 

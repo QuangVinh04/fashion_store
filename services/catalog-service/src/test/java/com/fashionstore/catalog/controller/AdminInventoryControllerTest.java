@@ -2,6 +2,10 @@ package com.fashionstore.catalog.controller;
 
 import com.fashionstore.catalog.dto.inventory.InventoryLedgerResponse;
 import com.fashionstore.catalog.dto.inventory.LowStockItemResponse;
+import com.fashionstore.catalog.dto.inventory.InventoryListItemResponse;
+import com.fashionstore.catalog.dto.inventory.InventoryStockState;
+import com.fashionstore.catalog.dto.inventory.ReceiveStockRequest;
+import com.fashionstore.catalog.dto.InventoryResponse;
 import com.fashionstore.catalog.entity.enumeration.InventoryLedgerType;
 import com.fashionstore.catalog.service.InventoryService;
 import com.fashionstore.common.dto.PageResponse;
@@ -24,6 +28,8 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import org.springframework.http.MediaType;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -88,14 +94,14 @@ class AdminInventoryControllerTest {
                 .items(List.of())
                 .build();
 
-        when(inventoryService.getLowStock(eq(10), any(Pageable.class))).thenReturn(pageResponse);
+        when(inventoryService.getLowStock(eq(null), any(Pageable.class))).thenReturn(pageResponse);
 
         mockMvc.perform(get("/admin/inventory/low-stock"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.message").value("Get low stock inventory successfully"))
                 .andExpect(jsonPath("$.data.items").isArray());
 
-        verify(inventoryService).getLowStock(eq(10), any(Pageable.class));
+        verify(inventoryService).getLowStock(eq(null), any(Pageable.class));
     }
 
     @Test
@@ -117,7 +123,8 @@ class AdminInventoryControllerTest {
                 .items(List.of(item))
                 .build();
 
-        when(inventoryService.getLedger(eq("var-1"), any(Pageable.class))).thenReturn(pageResponse);
+        when(inventoryService.getLedger(eq("var-1"), eq(null), eq(null), eq(null), any(Pageable.class)))
+                .thenReturn(pageResponse);
 
         mockMvc.perform(get("/admin/inventory/ledger")
                         .param("variantId", "var-1")
@@ -131,6 +138,36 @@ class AdminInventoryControllerTest {
                 .andExpect(jsonPath("$.data.items[0].quantity").value(2))
                 .andExpect(jsonPath("$.data.items[0].refOrderId").value("order-100"));
 
-        verify(inventoryService).getLedger(eq("var-1"), any(Pageable.class));
+        verify(inventoryService).getLedger(eq("var-1"), eq(null), eq(null), eq(null), any(Pageable.class));
+    }
+
+    @Test
+    void listsStockBySkuAndState() throws Exception {
+        PageResponse<List<InventoryListItemResponse>> page = PageResponse.<List<InventoryListItemResponse>>builder()
+                .pageNo(0).pageSize(20).totalPage(1)
+                .items(List.of(new InventoryListItemResponse("var-1", "prod-1", "Basic Tee", "TEE-BLK-M",
+                        true, 10, 3, 7, 7, LocalDateTime.now())))
+                .build();
+        when(inventoryService.searchForAdmin(eq("TEE"), eq(InventoryStockState.LOW), eq(false),
+                any(Pageable.class))).thenReturn(page);
+
+        mockMvc.perform(get("/admin/inventory").param("query", "TEE").param("state", "LOW"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[0].sku").value("TEE-BLK-M"))
+                .andExpect(jsonPath("$.data.items[0].reservedQuantity").value(3));
+    }
+
+    @Test
+    void receivesAdditionalStock() throws Exception {
+        when(inventoryService.receiveStock(eq("var-1"), any(ReceiveStockRequest.class)))
+                .thenReturn(InventoryResponse.builder().variantId("var-1").quantity(15)
+                        .quantityReserved(2).quantityAvailable(13).build());
+
+        mockMvc.perform(post("/admin/inventory/variants/var-1/receipts")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"quantity\":5,\"reason\":\"Factory delivery\","
+                                + "\"operationId\":\"00000000-0000-0000-0000-000000000011\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.quantity").value(15));
     }
 }

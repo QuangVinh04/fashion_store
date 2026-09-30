@@ -44,7 +44,7 @@ public class InventoryController {
             @Valid @RequestBody UpdateStockRequest request) {
         return ApiResponse.<InventoryResponse>builder()
                 .message("Stock updated successfully")
-                .data(inventoryService.updateStock(variantId, request.getQuantity()))
+                .data(inventoryService.updateStock(variantId, request))
                 .build();
     }
 
@@ -118,7 +118,7 @@ public class InventoryController {
 
     @GetMapping("/low-stock")
     public ApiResponse<com.fashionstore.common.dto.PageResponse<List<com.fashionstore.catalog.dto.inventory.LowStockItemResponse>>> getLowStock(
-            @RequestParam(defaultValue = "10") int threshold,
+            @RequestParam(required = false) Integer threshold,
             @org.springdoc.core.annotations.ParameterObject
             @org.springframework.data.web.PageableDefault(page = 0, size = 20) org.springframework.data.domain.Pageable pageable
     ) {
@@ -129,7 +129,7 @@ public class InventoryController {
     }
 
     @GetMapping("/low-stock/count")
-    public ApiResponse<Long> countLowStock(@RequestParam(defaultValue = "10") int threshold) {
+    public ApiResponse<Long> countLowStock(@RequestParam(required = false) Integer threshold) {
         return ApiResponse.<Long>builder()
                 .message("Count low stock inventory successfully")
                 .data(inventoryService.countLowStock(threshold))
@@ -139,12 +139,15 @@ public class InventoryController {
     @GetMapping("/ledger")
     public ApiResponse<com.fashionstore.common.dto.PageResponse<List<com.fashionstore.catalog.dto.inventory.InventoryLedgerResponse>>> getLedger(
             @RequestParam(required = false) String variantId,
+            @RequestParam(required = false) com.fashionstore.catalog.entity.enumeration.InventoryLedgerType type,
+            @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE_TIME) java.time.LocalDateTime fromTime,
+            @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE_TIME) java.time.LocalDateTime toTime,
             @org.springdoc.core.annotations.ParameterObject
             @org.springframework.data.web.PageableDefault(page = 0, size = 20, sort = "createdAt", direction = org.springframework.data.domain.Sort.Direction.DESC) org.springframework.data.domain.Pageable pageable
     ) {
         return ApiResponse.<com.fashionstore.common.dto.PageResponse<List<com.fashionstore.catalog.dto.inventory.InventoryLedgerResponse>>>builder()
                 .message("Get inventory ledger successfully")
-                .data(inventoryService.getLedger(variantId, pageable))
+                .data(inventoryService.getLedger(variantId, type, fromTime, toTime, pageable))
                 .build();
     }
 }

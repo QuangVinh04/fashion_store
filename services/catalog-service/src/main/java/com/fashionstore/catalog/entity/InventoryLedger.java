@@ -46,6 +46,24 @@ public class InventoryLedger {
     @Column(name = "ref_order_id")
     String refOrderId;
 
+    @Column(length = 500)
+    String reason;
+
+    @Column(name = "quantity_before")
+    Integer quantityBefore;
+
+    @Column(name = "quantity_after")
+    Integer quantityAfter;
+
+    @Column(name = "reserved_before")
+    Integer reservedBefore;
+
+    @Column(name = "reserved_after")
+    Integer reservedAfter;
+
+    @Column(name = "operation_id", length = 36)
+    String operationId;
+
     @Column(name = "created_by")
     String createdBy;
 

@@ -11,6 +11,10 @@ import jakarta.persistence.LockModeType;
 
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.repository.query.Param;
+import com.fashionstore.catalog.entity.enumeration.ProductStatus;
 
 @Repository
 public interface InventoryRepository extends JpaRepository<Inventory, String> {
@@ -29,12 +33,38 @@ public interface InventoryRepository extends JpaRepository<Inventory, String> {
     @Query("SELECT i FROM Inventory i WHERE i.variantId = :variantId")
     Optional<Inventory> findByVariantIdWithLock(String variantId);
 
-    @Query("SELECT i FROM Inventory i WHERE (i.quantity - i.reservedQuantity) <= :threshold ORDER BY (i.quantity - i.reservedQuantity) ASC")
-    org.springframework.data.domain.Page<Inventory> findLowStockInventories(
-            @org.springframework.data.repository.query.Param("threshold") int threshold,
-            org.springframework.data.domain.Pageable pageable
+    @Query("""
+            select i from Inventory i, ProductVariant v join v.product p
+            where v.id = i.variantId
+              and (:includeInactive = true or (v.active = true and p.status = :published and p.deletedAt is null))
+              and (:query is null or lower(coalesce(v.sku, '')) like :query or lower(p.name) like :query)
+              and (:state = 'ALL'
+                   or (:state = 'LOW' and i.quantity - i.reservedQuantity <= i.minThreshold)
+                   or (:state = 'OUT' and i.quantity - i.reservedQuantity = 0))
+            """)
+    Page<Inventory> searchForAdmin(@Param("query") String query,
+                                   @Param("state") String state,
+                                   @Param("includeInactive") boolean includeInactive,
+                                   @Param("published") ProductStatus published,
+                                   Pageable pageable);
+
+    @Query("""
+            select i from Inventory i, ProductVariant v join v.product p
+            where v.id = i.variantId and v.active = true and p.status = :published and p.deletedAt is null
+              and i.quantity - i.reservedQuantity <= coalesce(:threshold, i.minThreshold)
+            order by (i.quantity - i.reservedQuantity) asc
+            """)
+    Page<Inventory> findLowStockInventories(
+            @Param("threshold") Integer threshold,
+            @Param("published") ProductStatus published,
+            Pageable pageable
     );
 
-    @Query("SELECT COUNT(i) FROM Inventory i WHERE (i.quantity - i.reservedQuantity) <= :threshold")
-    long countLowStockInventories(@org.springframework.data.repository.query.Param("threshold") int threshold);
+    @Query("""
+            select count(i) from Inventory i, ProductVariant v join v.product p
+            where v.id = i.variantId and v.active = true and p.status = :published and p.deletedAt is null
+              and i.quantity - i.reservedQuantity <= coalesce(:threshold, i.minThreshold)
+            """)
+    long countLowStockInventories(@Param("threshold") Integer threshold,
+                                  @Param("published") ProductStatus published);
 }

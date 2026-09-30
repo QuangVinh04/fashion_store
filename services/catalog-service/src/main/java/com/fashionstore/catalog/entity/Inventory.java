@@ -39,6 +39,10 @@ public class Inventory extends AuditedEntity {
     @Builder.Default
     Integer reservedQuantity = 0;
 
+    @Column(name = "min_threshold", nullable = false)
+    @Builder.Default
+    Integer minThreshold = 10;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     InventoryStatus status;

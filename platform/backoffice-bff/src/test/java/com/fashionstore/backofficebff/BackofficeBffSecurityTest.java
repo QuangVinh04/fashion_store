@@ -102,6 +102,24 @@ class BackofficeBffSecurityTest {
     }
 
     @Test
+    void adminInventoryRouteRelaysAccessToken() {
+        client.mutateWith(login("ROLE_ADMIN"))
+                .get().uri("/admin/inventory").exchange()
+                .expectStatus().isOk();
+
+        assertThat(relayedAuthorization.get()).isEqualTo("Bearer access-token");
+    }
+
+    @Test
+    void customerCannotAccessAdminInventoryRoute() {
+        client.mutateWith(login("ROLE_USER"))
+                .get().uri("/admin/inventory").exchange()
+                .expectStatus().isForbidden();
+
+        assertThat(relayedAuthorization.get()).isNull();
+    }
+
+    @Test
     void adminUnsafeRequestWithoutCsrfTokenIsRejected() {
         client.mutateWith(login("ROLE_ADMIN"))
                 .post().uri("/api/v1/admin/promotions").exchange()

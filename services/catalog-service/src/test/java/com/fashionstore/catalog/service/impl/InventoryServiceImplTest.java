@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -75,13 +76,160 @@ class InventoryServiceImplTest {
     }
 
     @Test
+    void receiveStockAddsQuantityAndRecordsAuditSnapshot() {
+        Inventory inventory = Inventory.builder().variantId("var-1").quantity(10).reservedQuantity(2).build();
+        when(inventoryRepository.findByVariantIdWithLock("var-1")).thenReturn(Optional.of(inventory));
+        when(inventoryRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        com.fashionstore.catalog.dto.inventory.ReceiveStockRequest request = new com.fashionstore.catalog.dto.inventory.ReceiveStockRequest();
+        request.setQuantity(5);
+        request.setReason(" Xưởng giao hàng ");
+        request.setOperationId("00000000-0000-0000-0000-000000000011");
+
+        service.receiveStock("var-1", request);
+
+        assertThat(inventory.getQuantity()).isEqualTo(15);
+        assertThat(inventory.getReservedQuantity()).isEqualTo(2);
+        org.mockito.ArgumentCaptor<com.fashionstore.catalog.entity.InventoryLedger> captor =
+                org.mockito.ArgumentCaptor.forClass(com.fashionstore.catalog.entity.InventoryLedger.class);
+        verify(inventoryLedgerRepository).save(captor.capture());
+        assertThat(captor.getValue().getType()).isEqualTo(com.fashionstore.catalog.entity.enumeration.InventoryLedgerType.IN);
+        assertThat(captor.getValue().getQuantityBefore()).isEqualTo(10);
+        assertThat(captor.getValue().getQuantityAfter()).isEqualTo(15);
+        assertThat(captor.getValue().getReservedBefore()).isEqualTo(2);
+        assertThat(captor.getValue().getReservedAfter()).isEqualTo(2);
+        assertThat(captor.getValue().getReason()).isEqualTo("Xưởng giao hàng");
+    }
+
+    @Test
+    void receiveStockRepeatedOperationDoesNotAddAgain() {
+        Inventory inventory = Inventory.builder().variantId("var-1").quantity(15).reservedQuantity(2).build();
+        when(inventoryRepository.findByVariantIdWithLock("var-1")).thenReturn(Optional.of(inventory));
+        com.fashionstore.catalog.dto.inventory.ReceiveStockRequest request = new com.fashionstore.catalog.dto.inventory.ReceiveStockRequest();
+        request.setQuantity(5);
+        request.setReason("Xưởng giao hàng");
+        request.setOperationId("00000000-0000-0000-0000-000000000012");
+        when(inventoryLedgerRepository.findByOperationId(request.getOperationId())).thenReturn(Optional.of(
+                com.fashionstore.catalog.entity.InventoryLedger.builder()
+                        .variantId("var-1")
+                        .type(com.fashionstore.catalog.entity.enumeration.InventoryLedgerType.IN)
+                        .quantity(5).reason("Xưởng giao hàng").build()));
+
+        service.receiveStock("var-1", request);
+
+        assertThat(inventory.getQuantity()).isEqualTo(15);
+        verify(inventoryRepository, never()).save(any());
+        verify(inventoryLedgerRepository, never()).save(any());
+    }
+
+    @Test
+    void receiveStockRejectsReusedOperationIdWithDifferentContent() {
+        Inventory inventory = Inventory.builder().variantId("var-1").quantity(15).reservedQuantity(2).build();
+        when(inventoryRepository.findByVariantIdWithLock("var-1")).thenReturn(Optional.of(inventory));
+        com.fashionstore.catalog.dto.inventory.ReceiveStockRequest request = new com.fashionstore.catalog.dto.inventory.ReceiveStockRequest();
+        request.setQuantity(6);
+        request.setReason("Xưởng giao hàng");
+        request.setOperationId("00000000-0000-0000-0000-000000000013");
+        when(inventoryLedgerRepository.findByOperationId(request.getOperationId())).thenReturn(Optional.of(
+                com.fashionstore.catalog.entity.InventoryLedger.builder()
+                        .variantId("var-1")
+                        .type(com.fashionstore.catalog.entity.enumeration.InventoryLedgerType.IN)
+                        .quantity(5).reason("Xưởng giao hàng").build()));
+
+        assertThatThrownBy(() -> service.receiveStock("var-1", request))
+                .isInstanceOfSatisfying(com.fashionstore.common.exception.AppException.class,
+                        error -> assertThat(error.getErrorCode()).isEqualTo(
+                                com.fashionstore.catalog.exception.InventoryErrorCode.OPERATION_ID_CONFLICT));
+    }
+
+    @Test
+    void updateStockCannotDropBelowReservedQuantity() {
+        Inventory inventory = Inventory.builder().variantId("var-1").quantity(10).reservedQuantity(3).build();
+        when(inventoryRepository.findByVariantIdWithLock("var-1")).thenReturn(Optional.of(inventory));
+        com.fashionstore.catalog.dto.UpdateStockRequest request = new com.fashionstore.catalog.dto.UpdateStockRequest();
+        request.setQuantity(2);
+        request.setReason("Kiểm kê");
+        request.setOperationId("00000000-0000-0000-0000-000000000014");
+
+        assertThatThrownBy(() -> service.updateStock("var-1", request))
+                .isInstanceOfSatisfying(com.fashionstore.common.exception.AppException.class,
+                        error -> assertThat(error.getErrorCode()).isEqualTo(
+                                com.fashionstore.catalog.exception.InventoryErrorCode.STOCK_BELOW_RESERVED));
+        assertThat(inventory.getQuantity()).isEqualTo(10);
+    }
+
+    @Test
+    void initializeStockRecordsInitialReceiptOnlyOnce() {
+        Inventory inventory = Inventory.builder().variantId("var-1").quantity(0).reservedQuantity(0).build();
+        when(inventoryRepository.findByVariantIdWithLock("var-1")).thenReturn(Optional.of(inventory));
+
+        service.initializeStock("var-1", 7);
+
+        assertThat(inventory.getQuantity()).isEqualTo(7);
+        org.mockito.ArgumentCaptor<com.fashionstore.catalog.entity.InventoryLedger> captor =
+                org.mockito.ArgumentCaptor.forClass(com.fashionstore.catalog.entity.InventoryLedger.class);
+        verify(inventoryLedgerRepository).save(captor.capture());
+        assertThat(captor.getValue().getReason()).isEqualTo("INITIAL_STOCK");
+        assertThat(captor.getValue().getQuantityBefore()).isZero();
+        assertThat(captor.getValue().getQuantityAfter()).isEqualTo(7);
+        assertThatThrownBy(() -> service.initializeStock("var-1", 7))
+                .isInstanceOf(com.fashionstore.common.exception.AppException.class);
+    }
+
+    @Test
+    void adminListEnrichesStockWithSkuAndProduct() {
+        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(0, 20);
+        Inventory inventory = Inventory.builder().variantId("var-1").productId("prod-1")
+                .quantity(10).reservedQuantity(3).minThreshold(7).build();
+        when(inventoryRepository.searchForAdmin("%tee%", "LOW", false,
+                com.fashionstore.catalog.entity.enumeration.ProductStatus.PUBLISHED, pageable))
+                .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(inventory), pageable, 1));
+        com.fashionstore.catalog.entity.ProductVariant variant = com.fashionstore.catalog.entity.ProductVariant.builder()
+                .sku("TEE-BLK-M").active(true).build();
+        variant.setId("var-1");
+        when(productVariantRepository.findAllById(List.of("var-1"))).thenReturn(List.of(variant));
+        com.fashionstore.catalog.entity.Product product = com.fashionstore.catalog.entity.Product.builder()
+                .name("Basic Tee").status(com.fashionstore.catalog.entity.enumeration.ProductStatus.PUBLISHED).build();
+        product.setId("prod-1");
+        when(productRepository.findAllById(List.of("prod-1"))).thenReturn(List.of(product));
+
+        var response = service.searchForAdmin("Tee", com.fashionstore.catalog.dto.inventory.InventoryStockState.LOW,
+                false, pageable);
+
+        assertThat(response.getItems()).hasSize(1);
+        assertThat(response.getItems().get(0).sku()).isEqualTo("TEE-BLK-M");
+        assertThat(response.getItems().get(0).availableQuantity()).isEqualTo(7);
+        assertThat(response.getItems().get(0).minThreshold()).isEqualTo(7);
+    }
+
+    @Test
+    void adminCanSeeOrderHoldingVariant() {
+        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(0, 20);
+        when(inventoryRepository.findByVariantId("var-1")).thenReturn(Optional.of(
+                Inventory.builder().variantId("var-1").quantity(10).reservedQuantity(2).build()));
+        InventoryReservationItem item = InventoryReservationItem.builder()
+                .reservationId("res-1").variantId("var-1").quantity(2).build();
+        when(reservationItemRepository.findForAdmin("var-1", InventoryReservationStatus.RESERVED, pageable))
+                .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(item), pageable, 1));
+        InventoryReservation reservation = InventoryReservation.builder().orderId("order-1")
+                .status(InventoryReservationStatus.RESERVED).build();
+        reservation.setId("res-1");
+        when(reservationRepository.findAllById(List.of("res-1"))).thenReturn(List.of(reservation));
+
+        var response = service.getReservations("var-1", InventoryReservationStatus.RESERVED, pageable);
+
+        assertThat(response.getItems()).hasSize(1);
+        assertThat(response.getItems().get(0).orderId()).isEqualTo("order-1");
+        assertThat(response.getItems().get(0).quantity()).isEqualTo(2);
+    }
+
+    @Test
     void confirmSaga_preservesSagaCorrelationIdInReply() {
         InventoryReservation reservation = InventoryReservation.builder()
                 .orderId("order-1")
                 .status(InventoryReservationStatus.RESERVED)
                 .build();
         reservation.setId("reservation-1");
-        when(reservationRepository.findByOrderId("order-1")).thenReturn(Optional.of(reservation));
+        when(reservationRepository.findByOrderIdForUpdate("order-1")).thenReturn(Optional.of(reservation));
         when(reservationItemRepository.findByReservationId("reservation-1")).thenReturn(List.of());
 
         service.confirmSaga(
@@ -104,7 +252,7 @@ class InventoryServiceImplTest {
                 .status(InventoryReservationStatus.RESERVED)
                 .build();
         reservation.setId("reservation-2");
-        when(reservationRepository.findByOrderId("order-2")).thenReturn(Optional.of(reservation));
+        when(reservationRepository.findByOrderIdForUpdate("order-2")).thenReturn(Optional.of(reservation));
         when(reservationItemRepository.findByReservationId("reservation-2")).thenReturn(List.of());
 
         service.releaseSaga(
@@ -270,7 +418,11 @@ class InventoryServiceImplTest {
         when(inventoryRepository.findByVariantIdWithLock("var-1")).thenReturn(Optional.of(inv));
         when(inventoryRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
-        service.updateStock("var-1", 15);
+        com.fashionstore.catalog.dto.UpdateStockRequest request = new com.fashionstore.catalog.dto.UpdateStockRequest();
+        request.setQuantity(15);
+        request.setReason("Kiểm kê");
+        request.setOperationId("00000000-0000-0000-0000-000000000001");
+        service.updateStock("var-1", request);
 
         assertThat(inv.getQuantity()).isEqualTo(15);
         org.mockito.ArgumentCaptor<com.fashionstore.catalog.entity.InventoryLedger> captor =
@@ -326,7 +478,7 @@ class InventoryServiceImplTest {
 
         Inventory inv = Inventory.builder().variantId("var-1").quantity(10).reservedQuantity(4).build();
 
-        when(reservationRepository.findByOrderId("order-200")).thenReturn(Optional.of(reservation));
+        when(reservationRepository.findByOrderIdForUpdate("order-200")).thenReturn(Optional.of(reservation));
         when(reservationItemRepository.findByReservationId("res-200")).thenReturn(List.of(item));
         when(inventoryRepository.findByVariantIdWithLock("var-1")).thenReturn(Optional.of(inv));
 
@@ -359,7 +511,7 @@ class InventoryServiceImplTest {
 
         Inventory inv = Inventory.builder().variantId("var-1").quantity(10).reservedQuantity(3).build();
 
-        when(reservationRepository.findByOrderId("order-300")).thenReturn(Optional.of(reservation));
+        when(reservationRepository.findByOrderIdForUpdate("order-300")).thenReturn(Optional.of(reservation));
         when(reservationItemRepository.findByReservationId("res-300")).thenReturn(List.of(item));
         when(inventoryRepository.findByVariantIdWithLock("var-1")).thenReturn(Optional.of(inv));
 
@@ -392,10 +544,10 @@ class InventoryServiceImplTest {
         org.springframework.data.domain.Page<com.fashionstore.catalog.entity.InventoryLedger> page =
                 new org.springframework.data.domain.PageImpl<>(List.of(ledger), pageable, 1);
 
-        when(inventoryLedgerRepository.findByVariantId("var-1", pageable)).thenReturn(page);
+        when(inventoryLedgerRepository.search("var-1", null, null, null, pageable)).thenReturn(page);
 
         com.fashionstore.common.dto.PageResponse<List<com.fashionstore.catalog.dto.inventory.InventoryLedgerResponse>> response =
-                service.getLedger("var-1", pageable);
+                service.getLedger("var-1", null, null, null, pageable);
 
         assertThat(response.getItems()).hasSize(1);
         assertThat(response.getItems().get(0).getId()).isEqualTo("led-1");
@@ -409,13 +561,13 @@ class InventoryServiceImplTest {
         org.springframework.data.domain.Page<com.fashionstore.catalog.entity.InventoryLedger> page =
                 new org.springframework.data.domain.PageImpl<>(List.of(), pageable, 0);
 
-        when(inventoryLedgerRepository.findAll(pageable)).thenReturn(page);
+        when(inventoryLedgerRepository.search(null, null, null, null, pageable)).thenReturn(page);
 
         com.fashionstore.common.dto.PageResponse<List<com.fashionstore.catalog.dto.inventory.InventoryLedgerResponse>> response =
-                service.getLedger(null, pageable);
+                service.getLedger(null, null, null, null, pageable);
 
         assertThat(response.getItems()).isEmpty();
-        verify(inventoryLedgerRepository, times(1)).findAll(pageable);
+        verify(inventoryLedgerRepository, times(1)).search(null, null, null, null, pageable);
     }
 
     @Test
@@ -429,7 +581,8 @@ class InventoryServiceImplTest {
                 .build();
         org.springframework.data.domain.Page<Inventory> page = new org.springframework.data.domain.PageImpl<>(List.of(inv), pageable, 1);
 
-        when(inventoryRepository.findLowStockInventories(10, pageable)).thenReturn(page);
+        when(inventoryRepository.findLowStockInventories(10,
+                com.fashionstore.catalog.entity.enumeration.ProductStatus.PUBLISHED, pageable)).thenReturn(page);
 
         com.fashionstore.catalog.entity.ProductVariant variant = com.fashionstore.catalog.entity.ProductVariant.builder()
                 .sku("SKU-VAR-1")

@@ -111,7 +111,7 @@ public class SecurityConfig {
     private static ServerAuthenticationEntryPoint authenticationEntryPoint() {
         DelegatingServerAuthenticationEntryPoint entryPoint = new DelegatingServerAuthenticationEntryPoint(
                 new DelegatingServerAuthenticationEntryPoint.DelegateEntry(
-                        ServerWebExchangeMatchers.pathMatchers("/api/**"),
+                        ServerWebExchangeMatchers.pathMatchers("/api/**", "/admin/**"),
                         new HttpStatusServerEntryPoint(HttpStatus.UNAUTHORIZED)));
         entryPoint.setDefaultEntryPoint(new RedirectServerAuthenticationEntryPoint(
                 "/oauth2/authorization/" + OAuth2ClientConfig.REGISTRATION_ID));

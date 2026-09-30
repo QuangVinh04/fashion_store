@@ -59,6 +59,14 @@ Mọi traffic client đi qua gateway `http://localhost:8080`, không gọi thẳ
   `InventoryReservation` (+ `InventoryReservationItem`) khoá `orderId` unique nên
   command lặp lại là idempotent.
 
+Admin inventory operations (single store / one stock pool):
+
+- A new variant starts at zero stock unless `initialQuantity` is supplied in its create request. Initial stock is recorded as `IN` in the same product transaction. Sending `initialQuantity` again for an existing variant is rejected.
+- `GET /admin/inventory?query=SKU&state=ALL|LOW|OUT&includeInactive=false` lists stock by variant. `LOW` means available is at most that variant's `minThreshold` (including zero); `OUT` means available is zero. New and existing variants default to threshold 10.
+- `POST /admin/inventory/variants/{variantId}/receipts` adds stock with `{quantity, reason, operationId}`. `PUT /api/v1/inventory/variants/{variantId}` sets total stock with the same fields. `operationId` is a UUID: repeating the same operation does not change stock again, while reusing it with different content returns 409. The PUT body with only `quantity` now returns 400.
+- `PUT /admin/inventory/variants/{variantId}/threshold` accepts `{minThreshold}`. `GET /admin/inventory/variants/{variantId}/reservations` shows orders holding stock without offering a manual release action.
+- The existing low-stock endpoints use each variant's threshold when `threshold` is omitted; an explicit `threshold` overrides it. Ledger endpoints accept `variantId`, `type`, `fromTime`, and `toTime`. New ledger entries include before/after stock snapshots and a reason for manual changes; older entries retain null snapshots.
+
 ### 4. Media (`MediaFileService`) — upload bằng presigned URL (MinIO)
 
 Bytes không đi qua service. Ba bước:

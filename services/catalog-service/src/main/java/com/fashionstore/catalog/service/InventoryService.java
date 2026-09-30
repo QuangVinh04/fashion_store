@@ -6,6 +6,12 @@ import com.fashionstore.contracts.inventory.command.ReleaseInventoryCommand;
 import com.fashionstore.contracts.inventory.command.ReservationInventoryCommand;
 
 import java.util.List;
+import java.time.LocalDateTime;
+import com.fashionstore.catalog.dto.inventory.*;
+import com.fashionstore.catalog.entity.enumeration.InventoryLedgerType;
+import com.fashionstore.catalog.entity.enumeration.InventoryReservationStatus;
+import com.fashionstore.common.dto.PageResponse;
+import org.springframework.data.domain.Pageable;
 
 public interface InventoryService {
     CheckStockResponse checkStock(CheckStockRequest request);
@@ -15,7 +21,14 @@ public interface InventoryService {
     void restock(String orderId);
     InventoryResponse getByVariantId(String variantId);
     List<InventoryResponse> getByVariantIds(List<String> variantIds);
-    InventoryResponse updateStock(String variantId, Integer quantity);
+    InventoryResponse updateStock(String variantId, UpdateStockRequest request);
+    InventoryResponse receiveStock(String variantId, ReceiveStockRequest request);
+    InventoryResponse updateThreshold(String variantId, int minThreshold);
+    void initializeStock(String variantId, int initialQuantity);
+    PageResponse<List<InventoryListItemResponse>> searchForAdmin(String query, InventoryStockState state,
+                                                                  boolean includeInactive, Pageable pageable);
+    PageResponse<List<InventoryReservationResponse>> getReservations(String variantId,
+                                                                       InventoryReservationStatus status, Pageable pageable);
     void ensureStock(String variantId, String productId);
     void deleteStock(String variantId);
 
@@ -25,14 +38,14 @@ public interface InventoryService {
     void releaseSaga(ReleaseInventoryCommand command, String correlationId);
 
     com.fashionstore.common.dto.PageResponse<List<com.fashionstore.catalog.dto.inventory.InventoryLedgerResponse>> getLedger(
-            String variantId,
-            org.springframework.data.domain.Pageable pageable
+            String variantId, InventoryLedgerType type, LocalDateTime fromTime,
+            LocalDateTime toTime, Pageable pageable
     );
 
     com.fashionstore.common.dto.PageResponse<List<com.fashionstore.catalog.dto.inventory.LowStockItemResponse>> getLowStock(
-            int threshold,
-            org.springframework.data.domain.Pageable pageable
+            Integer threshold,
+            Pageable pageable
     );
 
-    long countLowStock(int threshold);
+    long countLowStock(Integer threshold);
 }

@@ -38,6 +38,12 @@ spring:
                 - Path=/api/**
               filters:
                 - TokenRelay=
+            - id: admin-api
+              uri: ${API_GATEWAY_URL:http://localhost:8080}
+              predicates:
+                - Path=/admin/**
+              filters:
+                - TokenRelay=
             # SPA chạy cùng origin với BFF (giống YAS) — không cần CORS
             - id: backoffice-ui
               uri: ${BACKOFFICE_UI_URL:http://localhost:5173}

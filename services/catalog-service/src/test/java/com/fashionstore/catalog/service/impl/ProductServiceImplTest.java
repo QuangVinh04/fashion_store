@@ -161,6 +161,7 @@ class ProductServiceImplTest {
                         .sizeOptionId("size-m")
                         .colorOptionId("color-black")
                         .sku("TEE-BLK-M")
+                        .initialQuantity(5)
                         .price(new BigDecimal("22.00"))
                         .build()))
                 .build();
@@ -171,7 +172,12 @@ class ProductServiceImplTest {
         when(colorOptionRepository.findAllById(List.of("color-black"))).thenReturn(List.of(black));
         when(sizeOptionRepository.findAllById(List.of("size-m"))).thenReturn(List.of(medium));
         when(productVariantRepository.findBySku("TEE-BLK-M")).thenReturn(Optional.empty());
-        when(productRepository.save(any(Product.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(productRepository.save(any(Product.class))).thenAnswer(invocation -> {
+            Product saved = invocation.getArgument(0);
+            saved.setId("product-new");
+            saved.getVariants().get(0).setId("variant-new");
+            return saved;
+        });
 
         productService.createProduct(request);
 
@@ -188,6 +194,36 @@ class ProductServiceImplTest {
         assertThat(savedProduct.getVariants()).hasSize(1);
         assertThat(savedProduct.getVariants().get(0).getOptionSignature())
                 .isEqualTo("COLOR:color-black|SIZE:size-m");
+        verify(inventoryService).initializeStock("variant-new", 5);
+    }
+
+    @Test
+    void existingVariantCannotApplyInitialStockAgain() {
+        Product product = Product.builder().name("Basic Tee").basePrice(new BigDecimal("20.00"))
+                .variants(new ArrayList<>()).build();
+        product.setId("product-1");
+        ColorOption black = color("color-black", "Black", "#111111");
+        SizeOption medium = size("size-m", "M");
+        ProductVariant variant = ProductVariant.builder().product(product)
+                .colorOption(black).sizeOption(medium)
+                .optionSignature("COLOR:color-black|SIZE:size-m")
+                .displayName("Black / M").active(true).build();
+        variant.setId("variant-1");
+        product.getVariants().add(variant);
+        ProductVariantBatchRequest request = ProductVariantBatchRequest.builder()
+                .variants(List.of(ProductVariantRequest.builder()
+                        .id("variant-1").colorOptionId("color-black").sizeOptionId("size-m")
+                        .initialQuantity(5).build())).build();
+        when(productRepository.findDetailProductById("product-1")).thenReturn(Optional.of(product));
+        when(colorOptionRepository.findAllById(List.of("color-black"))).thenReturn(List.of(black));
+        when(sizeOptionRepository.findAllById(List.of("size-m"))).thenReturn(List.of(medium));
+        when(productRepository.save(any(Product.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        assertThatThrownBy(() -> productService.updateProductVariants("product-1", request))
+                .isInstanceOfSatisfying(AppException.class,
+                        error -> assertThat(error.getErrorCode()).isEqualTo(
+                                com.fashionstore.catalog.exception.InventoryErrorCode.INITIAL_STOCK_NOT_ALLOWED));
+        verify(inventoryService, never()).initializeStock(any(), any(Integer.class));
     }
 
     @Test

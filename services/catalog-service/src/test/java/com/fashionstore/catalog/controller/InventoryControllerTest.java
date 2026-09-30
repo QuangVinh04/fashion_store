@@ -78,7 +78,7 @@ class InventoryControllerTest {
 
         when(inventoryService.getLowStock(eq(10), any(Pageable.class))).thenReturn(pageResponse);
 
-        mockMvc.perform(get("/api/v1/inventory/low-stock"))
+        mockMvc.perform(get("/api/v1/inventory/low-stock").param("threshold", "10"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.message").value("Get low stock inventory successfully"))
                 .andExpect(jsonPath("$.data.items[0].variantId").value("var-1"))
@@ -106,7 +106,8 @@ class InventoryControllerTest {
                 .items(List.of(item))
                 .build();
 
-        when(inventoryService.getLedger(eq("var-1"), any(Pageable.class))).thenReturn(pageResponse);
+        when(inventoryService.getLedger(eq("var-1"), eq(null), eq(null), eq(null), any(Pageable.class)))
+                .thenReturn(pageResponse);
 
         mockMvc.perform(get("/api/v1/inventory/ledger")
                         .param("variantId", "var-1"))
@@ -114,7 +115,7 @@ class InventoryControllerTest {
                 .andExpect(jsonPath("$.message").value("Get inventory ledger successfully"))
                 .andExpect(jsonPath("$.data.items[0].type").value("CONFIRM"));
 
-        verify(inventoryService).getLedger(eq("var-1"), any(Pageable.class));
+        verify(inventoryService).getLedger(eq("var-1"), eq(null), eq(null), eq(null), any(Pageable.class));
     }
 
     @Test
@@ -133,5 +134,13 @@ class InventoryControllerTest {
                 .andExpect(jsonPath("$.message").value("Stock restocked successfully"));
 
         verify(inventoryService).restock("order-200");
+    }
+
+    @Test
+    void updateStockRequiresReasonAndOperationId() throws Exception {
+        mockMvc.perform(put("/api/v1/inventory/variants/var-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"quantity\":15}"))
+                .andExpect(status().isBadRequest());
     }
 }
