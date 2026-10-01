@@ -18,7 +18,7 @@ Browser ──cookie──► storefront-bff :8083 ──TokenRelay (Bearer)─�
 | `/api/**` | proxied to api-gateway with `Authorization: Bearer <access token>` when logged in |
 | `/**` | proxied to the SPA dev server / static host (`STOREFRONT_UI_URL`, default `http://localhost:3000`) so SPA and BFF share one origin |
 
-Every path is `permitAll` at the BFF; api-gateway and the services authorize the relayed token. Anonymous browsing (products, guest cart) is proxied without a token.
+Every path is `permitAll` at the BFF; api-gateway and the services authorize the relayed token. Anonymous browsing (products, categories, brands) is proxied without a token; cart, checkout and orders require login (401 from api-gateway).
 
 `/api/v1/auth/**` is denied: registration, login, password reset and account management go through Keycloak.
 

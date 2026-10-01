@@ -31,7 +31,6 @@ export const store = {
   cartQty: (id: string, quantity: number) => api<Cart>(`/api/v1/cart/items/${id}`, json('PUT', { quantity })),
   cartRemove: (id: string) => api<Cart>(`/api/v1/cart/items/${id}`, json('DELETE')),
   cartClear: () => api<Cart>('/api/v1/cart', json('DELETE')),
-  cartMerge: () => api<Cart>('/api/v1/cart/merge', json('POST', {})),
   voucher: (code: string, subtotal: number) => api<{ valid: boolean; discountAmount: number; message?: string }>(`/api/v1/promotions/validate?${query({ code, subtotal })}`),
   checkoutCreate: (body: { paymentMethod: string; paymentProvider: string; shippingMethod: string; addressId: string; couponCode?: string }) => api<Checkout>('/api/v1/checkouts', json('POST', body)),
   checkout: (id: string) => api<Checkout>(`/api/v1/checkouts/${id}`),
