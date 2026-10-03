@@ -16,5 +16,7 @@ public class UserProfileResponse {
     String phone;
     String address;
     String avatar;
+    String avatarUrl;
+    String avatarMediaId;
     Boolean isEmailVerified;
 }

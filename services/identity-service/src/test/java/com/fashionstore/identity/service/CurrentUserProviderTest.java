@@ -53,6 +53,17 @@ class CurrentUserProviderTest {
     }
 
     @Test
+    void loadsUserWithWriteLockBeforeReturningForUpdate() {
+        Jwt jwt = authenticate("kc-1");
+        User user = user("kc-1");
+        when(userRepository.findByIdForUpdate("kc-1")).thenReturn(Optional.of(user));
+
+        assertThat(currentUserProvider.getCurrentUserForUpdate()).isSameAs(user);
+        verify(userProvisioningService).provision(jwt);
+        verify(userRepository, org.mockito.Mockito.never()).findById("kc-1");
+    }
+
+    @Test
     void concurrentFirstRequestStillLoadsTheUserCreatedByTheOtherRequest() {
         Jwt jwt = authenticate("kc-1");
         doThrow(new DataIntegrityViolationException("duplicate key")).when(userProvisioningService).provision(jwt);

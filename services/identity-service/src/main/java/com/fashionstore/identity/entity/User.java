@@ -27,7 +27,15 @@ public class User extends AuditedEntity {
 
     String phone;
     String address;
+    @Column(length = 1000)
     String avatar;
+
+    @Column(name = "avatar_media_id", length = 36)
+    String avatarMediaId;
+
+    @Builder.Default
+    @Column(name = "avatar_revision", nullable = false)
+    Long avatarRevision = 0L;
 
     @Builder.Default
     @Column(nullable = false)

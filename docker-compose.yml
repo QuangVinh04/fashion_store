@@ -110,6 +110,7 @@ services:
       IDENTITY_POSTGRES_PASSWORD: root
       IDENTITY_SERVICE_CLIENT_SECRET: ${IDENTITY_SERVICE_CLIENT_SECRET:-dev-identity-service-secret}
       KEYCLOAK_ADMIN_URL: http://keycloak:8080/admin/realms/fashion-store
+      CATALOG_BASE_URL: http://catalog-service:8087
       SPRING_MAIN_ALLOW_BEAN_DEFINITION_OVERRIDING: "true"
     depends_on:
       identity-postgres:
@@ -157,12 +158,13 @@ services:
       SERVER_PORT: 8087
       CATALOG_SERVICE_CLIENT_SECRET: ${CATALOG_SERVICE_CLIENT_SECRET:-dev-catalog-service-secret}
       ORDER_BASE_URL: http://order-service:8089
+      IDENTITY_BASE_URL: http://identity-service:8082
       CATALOG_POSTGRES_HOST: catalog-postgres
       CATALOG_POSTGRES_PORT: 5432
       CATALOG_POSTGRES_DB: catalog_database
       CATALOG_POSTGRES_USER: root
       CATALOG_POSTGRES_PASSWORD: root
-      FILE_PUBLIC_BASE_URL: http://localhost:8080
+      FILE_PUBLIC_BASE_URL: ""
       MINIO_ENDPOINT: http://minio:9000
       MINIO_PUBLIC_ENDPOINT: http://localhost:9000
       MINIO_ACCESS_KEY: minioadmin
@@ -312,7 +314,7 @@ services:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin
       # Browser PUT thang len :9000 nen CORS phai mo o day, SecurityConfig cua catalog khong voi toi.
-      MINIO_API_CORS_ALLOW_ORIGIN: "http://localhost:3000,http://localhost:5173"
+      MINIO_API_CORS_ALLOW_ORIGIN: "http://localhost:3000,http://localhost:5173,http://localhost:8083"
     ports:
       - "9000:9000"   # S3 API — browser goi presigned URL vao day
       - "9001:9001"   # Console
@@ -338,6 +340,8 @@ services:
 
   identity-postgres:
     image: postgres:16
+    ports:
+      - "127.0.0.1:5434:5432"
     environment:
       POSTGRES_DB: identity_database
       POSTGRES_USER: root
@@ -354,6 +358,8 @@ services:
 
   notification-postgres:
     image: postgres:16
+    ports:
+      - "127.0.0.1:5437:5432"
     environment:
       POSTGRES_DB: notification_database
       POSTGRES_USER: root
@@ -366,6 +372,8 @@ services:
 
   catalog-postgres:
     image: postgres:16
+    ports:
+      - "127.0.0.1:5433:5432"
     environment:
       POSTGRES_DB: catalog_database
       POSTGRES_USER: root
@@ -378,6 +386,8 @@ services:
 
   order-postgres:
     image: postgres:16
+    ports:
+      - "127.0.0.1:5435:5432"
     environment:
       POSTGRES_DB: order_database
       POSTGRES_USER: root
@@ -390,6 +400,8 @@ services:
 
   payment-postgres:
     image: postgres:16
+    ports:
+      - "127.0.0.1:5436:5432"
     environment:
       POSTGRES_DB: payment_database
       POSTGRES_USER: root
@@ -402,6 +414,8 @@ services:
 
   keycloak-postgres:
     image: postgres:16
+    ports:
+      - "127.0.0.1:5438:5432"
     environment:
       POSTGRES_DB: keycloak_database
       POSTGRES_USER: root

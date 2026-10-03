@@ -1,5 +1,6 @@
-import { useState, useMemo, useEffect } from 'react';
-import { Link, useSearchParams } from 'react-router';
+import StoreSelect from "../components/StoreSelect";
+import { useState, useMemo, useEffect } from "react";
+import { Link, useSearchParams } from "react-router";
 import {
   SlidersHorizontal,
   X,
@@ -8,11 +9,22 @@ import {
   Search,
   Check,
   RotateCcw,
-} from 'lucide-react';
-import { store } from '../api/store';
-import { money } from '../api/client';
-import type { ProductSummary } from '../api/types';
-import { ProductCard, SkeletonCard, Status, useLoad } from '../components/StoreUI';
+} from "lucide-react";
+import { store } from "../api/store";
+import { money } from "../api/client";
+import type { ProductSummary } from "../api/types";
+import {
+  ProductCard,
+  SkeletonCard,
+  Status,
+  useLoad,
+} from "../components/StoreUI";
+import {
+  Sheet,
+  SheetContent,
+  SheetTitle,
+  SheetDescription,
+} from "../app/components/ui/sheet";
 
 function FilterSection({
   title,
@@ -25,32 +37,43 @@ function FilterSection({
 }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <div className="border-b border-[rgba(0,0,0,0.08)] py-4">
+    <div className="border-b border-border py-4">
       <button
         type="button"
-        className="flex items-center justify-between w-full text-left font-semibold text-xs uppercase tracking-widest text-[#111]"
+        className="flex items-center justify-between w-full text-left font-semibold text-xs text-foreground store-button"
         onClick={() => setOpen(!open)}
+        aria-expanded={open}
       >
         <span>{title}</span>
-        {open ? <ChevronUp size={14} className="text-[#888]" /> : <ChevronDown size={14} className="text-[#888]" />}
+        {open ? (
+          <ChevronUp size={14} className="text-muted-foreground" />
+        ) : (
+          <ChevronDown size={14} className="text-muted-foreground" />
+        )}
       </button>
-      {open && <div className="mt-3.5">{children}</div>}
+      <div
+        className={`grid transition-[grid-template-rows] duration-200 ${open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}
+      >
+        <div className="overflow-hidden">
+          <div className="pt-3">{children}</div>
+        </div>
+      </div>
     </div>
   );
 }
 
 export default function Products() {
   const [params, setParams] = useSearchParams();
-  const page = Math.max(0, Number(params.get('page') || 0));
-  const keyword = params.get('q') || '';
-  const gender = params.get('gender') || '';
-  const categoryId = params.get('categoryId') || '';
-  const brandId = params.get('brandId') || '';
-  const color = params.get('color') || '';
-  const fit = params.get('fit') || '';
-  const minPrice = params.get('minPrice') || '';
-  const maxPrice = params.get('maxPrice') || '';
-  const sort = params.get('sort') || '';
+  const page = Math.max(0, Number(params.get("page") || 0));
+  const keyword = params.get("q") || "";
+  const gender = params.get("gender") || "";
+  const categoryId = params.get("categoryId") || "";
+  const brandId = params.get("brandId") || "";
+  const color = params.get("color") || "";
+  const fit = params.get("fit") || "";
+  const minPrice = params.get("minPrice") || "";
+  const maxPrice = params.get("maxPrice") || "";
+  const sort = params.get("sort") || "";
 
   const [searchInput, setSearchInput] = useState(keyword);
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
@@ -81,27 +104,27 @@ export default function Products() {
           maxPrice: maxPrice ? Number(maxPrice) : undefined,
           sort: sort || undefined,
         },
-        fit || null
+        fit || null,
       ),
-    [queryKey]
+    [queryKey],
   );
 
   const updateParam = (name: string, value: string | null) => {
     const next = new URLSearchParams(params);
     if (value) next.set(name, value);
     else next.delete(name);
-    next.delete('page');
+    next.delete("page");
     setParams(next);
   };
 
   const clearAllFilters = () => {
-    setSearchInput('');
+    setSearchInput("");
     setParams(new URLSearchParams());
   };
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    updateParam('q', searchInput.trim() || null);
+    updateParam("q", searchInput.trim() || null);
   };
 
   const activeFiltersCount = [
@@ -121,21 +144,21 @@ export default function Products() {
       <FilterSection title="Giới Tính">
         <div className="flex flex-col gap-2">
           {[
-            { label: 'Tất Cả', value: '' },
-            { label: 'Nam', value: 'MEN' },
-            { label: 'Nữ', value: 'WOMEN' },
-            { label: 'Unisex', value: 'UNISEX' },
+            { label: "Tất Cả", value: "" },
+            { label: "Nam", value: "MEN" },
+            { label: "Nữ", value: "WOMEN" },
+            { label: "Unisex", value: "UNISEX" },
           ].map((item) => (
             <label
               key={item.label}
-              className="flex items-center gap-2.5 text-xs text-[#444] cursor-pointer hover:text-[#111] py-0.5"
+              className="flex items-center gap-2.5 text-xs text-foreground cursor-pointer hover:text-foreground py-0.5"
             >
               <input
                 type="radio"
                 name="gender"
                 checked={gender === item.value}
-                onChange={() => updateParam('gender', item.value || null)}
-                className="w-3.5 h-3.5 accent-[#111]"
+                onChange={() => updateParam("gender", item.value || null)}
+                className="w-3.5 h-3.5 choice-control"
               />
               <span>{item.label}</span>
             </label>
@@ -148,8 +171,8 @@ export default function Products() {
         <div className="flex flex-col gap-1.5 max-h-56 overflow-y-auto pr-2 text-xs">
           <button
             type="button"
-            onClick={() => updateParam('categoryId', null)}
-            className={`text-left py-1 hover:text-[#E5001B] ${!categoryId ? 'font-bold text-[#E5001B]' : 'text-[#555]'}`}
+            onClick={() => updateParam("categoryId", null)}
+            className={`text-left py-1 hover:text-primary ${!categoryId ? "font-semibold text-primary" : "text-muted-foreground"} store-button`}
           >
             Tất Cả Danh Mục
           </button>
@@ -157,23 +180,27 @@ export default function Products() {
             <div key={cat.id} className="space-y-1">
               <button
                 type="button"
-                onClick={() => updateParam('categoryId', cat.id)}
-                className={`text-left py-1 block w-full hover:text-[#E5001B] truncate ${
-                  categoryId === cat.id ? 'font-bold text-[#E5001B]' : 'text-[#333]'
-                }`}
+                onClick={() => updateParam("categoryId", cat.id)}
+                className={`text-left py-1 block w-full hover:text-primary truncate ${
+                  categoryId === cat.id
+                    ? "font-semibold text-primary"
+                    : "text-foreground"
+                } store-button`}
               >
                 {cat.name}
               </button>
               {cat.children && cat.children.length > 0 && (
-                <div className="pl-3 border-l border-[rgba(0,0,0,0.06)] space-y-1">
+                <div className="pl-3 border-l border-border space-y-1">
                   {cat.children.map((child) => (
                     <button
                       key={child.id}
                       type="button"
-                      onClick={() => updateParam('categoryId', child.id)}
-                      className={`text-left py-0.5 block w-full text-[11px] hover:text-[#E5001B] truncate ${
-                        categoryId === child.id ? 'font-bold text-[#E5001B]' : 'text-[#666]'
-                      }`}
+                      onClick={() => updateParam("categoryId", child.id)}
+                      className={`text-left py-0.5 block w-full text-xs hover:text-primary truncate ${
+                        categoryId === child.id
+                          ? "font-semibold text-primary"
+                          : "text-muted-foreground"
+                      } store-button`}
                     >
                       — {child.name}
                     </button>
@@ -191,8 +218,8 @@ export default function Products() {
           <div className="flex flex-col gap-1.5 max-h-48 overflow-y-auto pr-2 text-xs">
             <button
               type="button"
-              onClick={() => updateParam('brandId', null)}
-              className={`text-left py-0.5 hover:text-[#E5001B] ${!brandId ? 'font-bold text-[#E5001B]' : 'text-[#555]'}`}
+              onClick={() => updateParam("brandId", null)}
+              className={`text-left py-0.5 hover:text-primary ${!brandId ? "font-semibold text-primary" : "text-muted-foreground"} store-button`}
             >
               Tất Cả Thương Hiệu
             </button>
@@ -200,10 +227,12 @@ export default function Products() {
               <button
                 key={b.id}
                 type="button"
-                onClick={() => updateParam('brandId', b.id)}
-                className={`text-left py-0.5 hover:text-[#E5001B] truncate ${
-                  brandId === b.id ? 'font-bold text-[#E5001B]' : 'text-[#444]'
-                }`}
+                onClick={() => updateParam("brandId", b.id)}
+                className={`text-left py-0.5 hover:text-primary truncate ${
+                  brandId === b.id
+                    ? "font-semibold text-primary"
+                    : "text-foreground"
+                } store-button`}
               >
                 {b.name}
               </button>
@@ -222,12 +251,12 @@ export default function Products() {
                 <button
                   key={s.id}
                   type="button"
-                  onClick={() => updateParam('fit', selected ? null : s.name)}
-                  className={`min-w-9 h-8 px-2 border text-xs font-medium uppercase transition-colors ${
+                  onClick={() => updateParam("fit", selected ? null : s.name)}
+                  className={`min-w-9 h-8 px-2 border text-xs font-medium transition-colors ${
                     selected
-                      ? 'bg-[#111] text-white border-[#111]'
-                      : 'bg-white text-[#333] border-[#ddd] hover:border-[#111]'
-                  }`}
+                      ? "bg-secondary text-foreground border-border-strong"
+                      : "bg-white text-foreground border-border-strong hover:border-border-strong"
+                  } rounded-2xl store-button`}
                 >
                   {s.name}
                 </button>
@@ -247,15 +276,17 @@ export default function Products() {
                 <button
                   key={c.id}
                   type="button"
-                  onClick={() => updateParam('color', selected ? null : c.name)}
+                  onClick={() => updateParam("color", selected ? null : c.name)}
                   className={`h-7 px-2.5 rounded-full border text-xs flex items-center gap-1.5 transition-all ${
-                    selected ? 'border-[#111] bg-[#111] text-white' : 'border-[#ddd] hover:border-[#888]'
-                  }`}
+                    selected
+                      ? "border-transparent bg-secondary text-foreground"
+                      : "border-border-strong hover:border-border-strong"
+                  } store-button`}
                   title={c.name}
                 >
                   <span
                     className="w-3 h-3 rounded-full border border-black/10 shrink-0"
-                    style={{ backgroundColor: c.colorHex || '#bbb' }}
+                    style={{ backgroundColor: c.colorHex || "#bbb" }}
                   />
                   <span>{c.name}</span>
                 </button>
@@ -274,40 +305,44 @@ export default function Products() {
               min="0"
               placeholder="Từ ₫"
               value={minPrice}
-              onChange={(e) => updateParam('minPrice', e.target.value || null)}
-              className="w-full border border-[#ddd] px-2.5 py-2 text-xs outline-none focus:border-[#111]"
+              onChange={(e) => updateParam("minPrice", e.target.value || null)}
+              className="w-full border border-border-strong px-2.5 py-2 text-xs outline-none focus:border-border-strong store-input"
             />
-            <span className="text-[#888]">—</span>
+            <span className="text-muted-foreground">—</span>
             <input
               type="number"
               min="0"
               placeholder="Đến ₫"
               value={maxPrice}
-              onChange={(e) => updateParam('maxPrice', e.target.value || null)}
-              className="w-full border border-[#ddd] px-2.5 py-2 text-xs outline-none focus:border-[#111]"
+              onChange={(e) => updateParam("maxPrice", e.target.value || null)}
+              className="w-full border border-border-strong px-2.5 py-2 text-xs outline-none focus:border-border-strong store-input"
             />
           </div>
 
-          <div className="flex flex-col gap-1 text-[11px] text-[#666]">
+          <div className="flex flex-col gap-1 text-xs text-muted-foreground">
             {[
-              { label: 'Dưới 300.000 ₫', min: '', max: '300000' },
-              { label: '300.000 ₫ – 500.000 ₫', min: '300000', max: '500000' },
-              { label: '500.000 ₫ – 1.000.000 ₫', min: '500000', max: '1000000' },
-              { label: 'Trên 1.000.000 ₫', min: '1000000', max: '' },
+              { label: "Dưới 300.000 ₫", min: "", max: "300000" },
+              { label: "300.000 ₫ – 500.000 ₫", min: "300000", max: "500000" },
+              {
+                label: "500.000 ₫ – 1.000.000 ₫",
+                min: "500000",
+                max: "1000000",
+              },
+              { label: "Trên 1.000.000 ₫", min: "1000000", max: "" },
             ].map((p, i) => (
               <button
                 key={i}
                 type="button"
                 onClick={() => {
                   const next = new URLSearchParams(params);
-                  if (p.min) next.set('minPrice', p.min);
-                  else next.delete('minPrice');
-                  if (p.max) next.set('maxPrice', p.max);
-                  else next.delete('maxPrice');
-                  next.delete('page');
+                  if (p.min) next.set("minPrice", p.min);
+                  else next.delete("minPrice");
+                  if (p.max) next.set("maxPrice", p.max);
+                  else next.delete("maxPrice");
+                  next.delete("page");
                   setParams(next);
                 }}
-                className="text-left py-0.5 hover:text-[#111] hover:underline"
+                className="text-left py-0.5 hover:text-foreground hover:underline store-button"
               >
                 {p.label}
               </button>
@@ -322,7 +357,7 @@ export default function Products() {
           <button
             type="button"
             onClick={clearAllFilters}
-            className="flex items-center gap-2 text-xs uppercase tracking-widest text-[#E5001B] hover:underline font-semibold"
+            className="flex items-center gap-2 text-xs text-primary hover:underline font-semibold store-button"
           >
             <RotateCcw size={13} /> Xóa Tất Cả Bộ Lọc
           </button>
@@ -332,37 +367,34 @@ export default function Products() {
   );
 
   return (
-    <div style={{ fontFamily: "'Inter', sans-serif" }} className="w-full">
+    <div className="w-full">
       {/* Top Banner & Breadcrumb */}
-      <div className="border-b border-[rgba(0,0,0,0.08)] bg-[#fafafa]">
-        <div className="max-w-[1400px] mx-auto px-6 py-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="border-b border-border bg-background">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <nav className="text-xs uppercase tracking-widest text-[#888] font-medium mb-1">
-              <Link to="/" className="hover:text-[#111]">
+            <nav className="text-xs text-muted-foreground font-medium mb-1">
+              <Link to="/" className="hover:text-foreground store-text-link">
                 Trang Chủ
-              </Link>{' '}
-              /{' '}
-              <span className="text-[#111]">
-                {gender === 'MEN'
-                  ? 'Thời Trang Nam'
-                  : gender === 'WOMEN'
-                    ? 'Thời Trang Nữ'
-                    : gender === 'UNISEX'
-                      ? 'Thời Trang Unisex'
-                      : 'Sản Phẩm'}
+              </Link>{" "}
+              /{" "}
+              <span className="text-foreground">
+                {gender === "MEN"
+                  ? "Thời Trang Nam"
+                  : gender === "WOMEN"
+                    ? "Thời Trang Nữ"
+                    : gender === "UNISEX"
+                      ? "Thời Trang Unisex"
+                      : "Sản Phẩm"}
               </span>
             </nav>
-            <h1
-              className="text-[#111] font-black uppercase text-3xl md:text-4xl leading-tight"
-              style={{ fontFamily: "'Barlow Condensed', sans-serif" }}
-            >
-              {gender === 'MEN'
-                ? 'THỜI TRANG NAM'
-                : gender === 'WOMEN'
-                  ? 'THỜI TRANG NỮ'
-                  : gender === 'UNISEX'
-                    ? 'THỜI TRANG UNISEX'
-                    : 'TẤT CẢ SẢN PHẨM'}
+            <h1 className="text-foreground font-semibold text-xl leading-tight text-balance">
+              {gender === "MEN"
+                ? "THỜI TRANG NAM"
+                : gender === "WOMEN"
+                  ? "THỜI TRANG NỮ"
+                  : gender === "UNISEX"
+                    ? "THỜI TRANG UNISEX"
+                    : "TẤT CẢ SẢN PHẨM"}
             </h1>
           </div>
 
@@ -374,17 +406,20 @@ export default function Products() {
                 placeholder="Tìm kiếm sản phẩm theo tên…"
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
-                className="w-full border border-[#ddd] bg-white pl-9 pr-4 py-2.5 text-xs text-[#111] outline-none focus:border-[#111]"
+                className="w-full border border-border-strong bg-white pl-9 pr-3 py-2.5 text-xs text-foreground outline-none focus:border-border-strong store-input"
               />
-              <Search size={14} className="absolute left-3 top-3 text-[#888]" />
+              <Search
+                size={14}
+                className="absolute left-3 top-3 text-muted-foreground"
+              />
               {searchInput && (
                 <button
                   type="button"
                   onClick={() => {
-                    setSearchInput('');
-                    updateParam('q', null);
+                    setSearchInput("");
+                    updateParam("q", null);
                   }}
-                  className="absolute right-3 top-2.5 text-[#aaa] hover:text-[#111]"
+                  className="absolute right-3 top-2.5 text-muted-foreground hover:text-foreground store-button"
                 >
                   <X size={14} />
                 </button>
@@ -392,7 +427,7 @@ export default function Products() {
             </div>
             <button
               type="submit"
-              className="bg-[#111] text-white px-5 py-2.5 text-xs uppercase tracking-widest font-semibold hover:bg-[#E5001B] transition-colors shrink-0"
+              className="bg-primary text-white px-5 py-2.5 text-xs font-semibold hover:bg-primary-hover transition-colors shrink-0 store-button"
             >
               Tìm
             </button>
@@ -400,103 +435,114 @@ export default function Products() {
         </div>
       </div>
 
-      <div className="max-w-[1400px] mx-auto px-6 py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
         {/* Controls Bar: Count, Active chips, Sort, Mobile Filter Button */}
-        <div className="flex flex-wrap items-center justify-between gap-4 pb-6 mb-6 border-b border-[rgba(0,0,0,0.08)]">
+        <div className="flex flex-wrap items-center justify-between gap-4 pb-6 mb-6 border-b border-border">
           <div className="flex items-center gap-3">
             <button
               type="button"
               onClick={() => setMobileDrawerOpen(true)}
-              className="lg:hidden inline-flex items-center gap-2 border border-[#ddd] px-4 py-2 text-xs uppercase tracking-widest font-semibold text-[#111]"
+              className="lg:hidden inline-flex items-center gap-2 border border-border-strong px-4 py-2 text-xs font-semibold text-foreground store-button"
             >
-              <SlidersHorizontal size={14} /> Bộ Lọc {activeFiltersCount > 0 && `(${activeFiltersCount})`}
+              <SlidersHorizontal size={14} /> Bộ Lọc{" "}
+              {activeFiltersCount > 0 && `(${activeFiltersCount})`}
             </button>
 
-            <p className="text-xs text-[#666] tracking-wide">
+            <p className="text-xs text-muted-foreground">
               {listing.data ? (
                 <>
-                  Tìm thấy <strong className="text-[#111]">{listing.data.items.length}</strong> sản
-                  phẩm (Trang {page + 1}/{Math.max(1, listing.data.totalPage)})
+                  Tìm thấy{" "}
+                  <strong className="text-foreground">
+                    {listing.data.items.length}
+                  </strong>{" "}
+                  sản phẩm (Trang {page + 1}/
+                  {Math.max(1, listing.data.totalPage)})
                 </>
               ) : (
-                'Đang tải sản phẩm…'
+                "Đang tải sản phẩm…"
               )}
             </p>
           </div>
 
           {/* Sort Dropdown */}
           <div className="flex items-center gap-2">
-            <span className="text-xs uppercase tracking-widest text-[#888] font-medium hidden sm:inline">
+            <span className="text-xs text-muted-foreground font-medium hidden sm:inline">
               Sắp Xếp:
             </span>
-            <select
+            <StoreSelect
               aria-label="Sắp xếp sản phẩm"
               value={sort}
-              onChange={(e) => updateParam('sort', e.target.value || null)}
-              className="border border-[#ddd] bg-white px-3 py-2 text-xs font-medium text-[#111] outline-none focus:border-[#111]"
+              onChange={(e) => updateParam("sort", e.target.value || null)}
+              className="border border-border-strong bg-white px-3 py-2 text-xs font-medium text-foreground outline-none focus:border-border-strong"
             >
               <option value="">Mới Nhất</option>
               <option value="basePrice,asc">Giá: Thấp đến Cao</option>
               <option value="basePrice,desc">Giá: Cao đến Thấp</option>
-            </select>
+            </StoreSelect>
           </div>
         </div>
 
         {/* Active Filter Chips */}
         {activeFiltersCount > 0 && (
           <div className="flex flex-wrap items-center gap-2 mb-6">
-            <span className="text-xs text-[#888]">Bộ lọc đang chọn:</span>
+            <span className="text-xs text-muted-foreground">
+              Bộ lọc đang chọn:
+            </span>
             {keyword && (
-              <span className="inline-flex items-center gap-1 bg-[#f5f5f5] border border-[#ddd] px-2.5 py-1 text-xs">
+              <span className="inline-flex items-center gap-1 bg-background border border-border-strong px-2.5 py-1 text-xs">
                 Từ khóa: {keyword}
-                <button onClick={() => updateParam('q', null)}>
-                  <X size={12} className="hover:text-[#E5001B]" />
+                <button onClick={() => updateParam("q", null)}>
+                  <X size={12} className="hover:text-primary" />
                 </button>
               </span>
             )}
             {gender && (
-              <span className="inline-flex items-center gap-1 bg-[#f5f5f5] border border-[#ddd] px-2.5 py-1 text-xs">
-                {gender === 'MEN' ? 'Nam' : gender === 'WOMEN' ? 'Nữ' : 'Unisex'}
-                <button onClick={() => updateParam('gender', null)}>
-                  <X size={12} className="hover:text-[#E5001B]" />
+              <span className="inline-flex items-center gap-1 bg-background border border-border-strong px-2.5 py-1 text-xs">
+                {gender === "MEN"
+                  ? "Nam"
+                  : gender === "WOMEN"
+                    ? "Nữ"
+                    : "Unisex"}
+                <button onClick={() => updateParam("gender", null)}>
+                  <X size={12} className="hover:text-primary" />
                 </button>
               </span>
             )}
             {fit && (
-              <span className="inline-flex items-center gap-1 bg-[#f5f5f5] border border-[#ddd] px-2.5 py-1 text-xs">
+              <span className="inline-flex items-center gap-1 bg-background border border-border-strong px-2.5 py-1 text-xs">
                 Size: {fit}
-                <button onClick={() => updateParam('fit', null)}>
-                  <X size={12} className="hover:text-[#E5001B]" />
+                <button onClick={() => updateParam("fit", null)}>
+                  <X size={12} className="hover:text-primary" />
                 </button>
               </span>
             )}
             {color && (
-              <span className="inline-flex items-center gap-1 bg-[#f5f5f5] border border-[#ddd] px-2.5 py-1 text-xs">
+              <span className="inline-flex items-center gap-1 bg-background border border-border-strong px-2.5 py-1 text-xs">
                 Màu: {color}
-                <button onClick={() => updateParam('color', null)}>
-                  <X size={12} className="hover:text-[#E5001B]" />
+                <button onClick={() => updateParam("color", null)}>
+                  <X size={12} className="hover:text-primary" />
                 </button>
               </span>
             )}
             {(minPrice || maxPrice) && (
-              <span className="inline-flex items-center gap-1 bg-[#f5f5f5] border border-[#ddd] px-2.5 py-1 text-xs">
-                Giá: {minPrice ? money(Number(minPrice)) : '0 ₫'} –{' '}
-                {maxPrice ? money(Number(maxPrice)) : '∞'}
+              <span className="inline-flex items-center gap-1 bg-background border border-border-strong px-2.5 py-1 text-xs">
+                Giá: {minPrice ? money(Number(minPrice)) : "0 ₫"} –{" "}
+                {maxPrice ? money(Number(maxPrice)) : "∞"}
                 <button
                   onClick={() => {
                     const next = new URLSearchParams(params);
-                    next.delete('minPrice');
-                    next.delete('maxPrice');
+                    next.delete("minPrice");
+                    next.delete("maxPrice");
                     setParams(next);
                   }}
                 >
-                  <X size={12} className="hover:text-[#E5001B]" />
+                  <X size={12} className="hover:text-primary" />
                 </button>
               </span>
             )}
             <button
               onClick={clearAllFilters}
-              className="text-xs uppercase underline tracking-wider text-[#E5001B] font-semibold ml-2"
+              className="text-xs underline text-primary font-semibold ml-2 store-button"
             >
               Xóa tất cả
             </button>
@@ -504,12 +550,14 @@ export default function Products() {
         )}
 
         {/* Main Content Layout: Sidebar + Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr] gap-10">
+        <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr] gap-6">
           {/* Desktop Filter Sidebar */}
-          <aside className="hidden lg:block">{filterSidebar}</aside>
+          <aside className="hidden lg:block rounded-2xl border border-border bg-card px-4 pb-4 self-start">
+            {filterSidebar}
+          </aside>
 
           {/* Products Grid */}
-          <main>
+          <div className="min-w-0">
             <Status
               loading={listing.loading}
               error={listing.error}
@@ -517,14 +565,14 @@ export default function Products() {
             />
 
             {listing.loading ? (
-              <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 gap-x-5 gap-y-10">
+              <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
                 {Array.from({ length: 9 }).map((_, i) => (
                   <SkeletonCard key={i} />
                 ))}
               </div>
             ) : listing.data && listing.data.items.length > 0 ? (
               <>
-                <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 gap-x-5 gap-y-10">
+                <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
                   {listing.data.items.map((p) => (
                     <ProductCard key={p.id} product={p} />
                   ))}
@@ -532,38 +580,47 @@ export default function Products() {
 
                 {/* Pagination */}
                 {listing.data.totalPage > 1 && (
-                  <div className="mt-14 pt-8 border-t border-[rgba(0,0,0,0.08)] flex items-center justify-between">
+                  <div className="mt-14 pt-8 border-t border-border flex items-center justify-between">
                     <button
                       type="button"
                       disabled={page === 0}
-                      onClick={() => updateParam('page', page > 1 ? String(page - 1) : null)}
-                      className="bg-[#111] text-white px-6 py-3 text-xs uppercase tracking-widest font-semibold hover:bg-[#E5001B] disabled:opacity-30 disabled:hover:bg-[#111]"
+                      onClick={() =>
+                        updateParam("page", page > 1 ? String(page - 1) : null)
+                      }
+                      className="bg-primary text-white px-4 sm:px-6 py-3 text-xs font-semibold hover:bg-primary-hover disabled:opacity-30 disabled:hover:bg-primary-hover store-button"
                     >
                       ← Trang Trước
                     </button>
 
                     <div className="flex items-center gap-1">
-                      {Array.from({ length: listing.data.totalPage }).map((_, idx) => (
-                        <button
-                          key={idx}
-                          type="button"
-                          onClick={() => updateParam('page', idx === 0 ? null : String(idx))}
-                          className={`w-9 h-9 text-xs font-semibold uppercase ${
-                            page === idx
-                              ? 'bg-[#111] text-white'
-                              : 'bg-white text-[#555] hover:bg-[#f5f5f5]'
-                          }`}
-                        >
-                          {idx + 1}
-                        </button>
-                      ))}
+                      {Array.from({ length: listing.data.totalPage }).map(
+                        (_, idx) => (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() =>
+                              updateParam(
+                                "page",
+                                idx === 0 ? null : String(idx),
+                              )
+                            }
+                            className={`w-9 h-9 text-xs font-semibold ${
+                              page === idx
+                                ? "bg-secondary text-foreground"
+                                : "bg-white text-muted-foreground hover:bg-background"
+                            } store-button`}
+                          >
+                            {idx + 1}
+                          </button>
+                        ),
+                      )}
                     </div>
 
                     <button
                       type="button"
                       disabled={page + 1 >= listing.data.totalPage}
-                      onClick={() => updateParam('page', String(page + 1))}
-                      className="bg-[#111] text-white px-6 py-3 text-xs uppercase tracking-widest font-semibold hover:bg-[#E5001B] disabled:opacity-30 disabled:hover:bg-[#111]"
+                      onClick={() => updateParam("page", String(page + 1))}
+                      className="bg-primary text-white px-4 sm:px-6 py-3 text-xs font-semibold hover:bg-primary-hover disabled:opacity-30 disabled:hover:bg-primary-hover store-button"
                     >
                       Trang Sau →
                     </button>
@@ -573,69 +630,60 @@ export default function Products() {
             ) : (
               !listing.loading &&
               !listing.error && (
-                <div className="py-24 text-center border border-dashed border-[#ddd] p-8">
-                  <p className="text-base font-semibold text-[#111] mb-2">
+                <div className="py-24 text-center border border-dashed border-border-strong p-8">
+                  <p className="text-base font-semibold text-foreground mb-2">
                     Không tìm thấy sản phẩm phù hợp
                   </p>
-                  <p className="text-xs text-[#888] max-w-sm mx-auto mb-6">
-                    Thử chọn lại bộ lọc hoặc tìm kiếm với từ khóa khác để tìm sản phẩm mong muốn.
+                  <p className="text-xs text-muted-foreground max-w-sm mx-auto mb-6">
+                    Thử chọn lại bộ lọc hoặc tìm kiếm với từ khóa khác để tìm
+                    sản phẩm mong muốn.
                   </p>
                   <button
                     onClick={clearAllFilters}
-                    className="inline-block bg-[#111] text-white px-6 py-3 text-xs uppercase tracking-widest font-semibold hover:bg-[#E5001B]"
+                    className="inline-block bg-primary text-white px-4 sm:px-6 py-3 text-xs font-semibold hover:bg-primary-hover store-button"
                   >
                     Xem Tất Cả Sản Phẩm
                   </button>
                 </div>
               )
             )}
-          </main>
+          </div>
         </div>
       </div>
 
       {/* Mobile Filter Drawer */}
-      {mobileDrawerOpen && (
-        <div className="fixed inset-0 z-50 lg:hidden flex">
-          <div
-            className="fixed inset-0 bg-black/50 backdrop-blur-xs transition-opacity"
-            onClick={() => setMobileDrawerOpen(false)}
-          />
-          <div className="relative ml-auto w-full max-w-xs bg-white h-full shadow-2xl z-10 flex flex-col">
-            <div className="p-5 border-b border-[rgba(0,0,0,0.08)] flex items-center justify-between">
-              <h3 className="font-bold text-sm uppercase tracking-wider text-[#111]">
-                Bộ Lọc Sản Phẩm
-              </h3>
-              <button
-                type="button"
-                onClick={() => setMobileDrawerOpen(false)}
-                className="p-1 text-[#888] hover:text-[#111]"
-              >
-                <X size={20} />
-              </button>
-            </div>
-            <div className="p-5 overflow-y-auto flex-1">{filterSidebar}</div>
-            <div className="p-5 border-t border-[rgba(0,0,0,0.08)] flex gap-3">
-              <button
-                type="button"
-                onClick={() => {
-                  clearAllFilters();
-                  setMobileDrawerOpen(false);
-                }}
-                className="flex-1 py-3 border border-[#ddd] text-xs uppercase tracking-widest font-semibold text-[#555]"
-              >
-                Xóa Lọc
-              </button>
-              <button
-                type="button"
-                onClick={() => setMobileDrawerOpen(false)}
-                className="flex-1 py-3 bg-[#111] text-white text-xs uppercase tracking-widest font-semibold hover:bg-[#E5001B]"
-              >
-                Áp Dụng
-              </button>
-            </div>
+      <Sheet open={mobileDrawerOpen} onOpenChange={setMobileDrawerOpen}>
+        <SheetContent className="w-[min(360px,90vw)] gap-0 bg-card p-0">
+          <div className="p-5 border-b border-border flex items-center justify-between">
+            <SheetTitle className="font-semibold text-base text-foreground">
+              Bộ Lọc Sản Phẩm
+            </SheetTitle>
+            <SheetDescription className="sr-only">
+              Bộ lọc sản phẩm
+            </SheetDescription>
           </div>
-        </div>
-      )}
+          <div className="p-5 overflow-y-auto flex-1">{filterSidebar}</div>
+          <div className="p-5 border-t border-border flex gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                clearAllFilters();
+                setMobileDrawerOpen(false);
+              }}
+              className="flex-1 py-3 border border-border-strong text-xs font-semibold text-muted-foreground store-button"
+            >
+              Xóa Lọc
+            </button>
+            <button
+              type="button"
+              onClick={() => setMobileDrawerOpen(false)}
+              className="flex-1 py-3 bg-primary text-white text-xs font-semibold hover:bg-primary-hover store-button"
+            >
+              Áp Dụng
+            </button>
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

@@ -9,7 +9,9 @@ import com.fashionstore.catalog.dto.PresignUploadResponse;
 import com.fashionstore.catalog.dto.PresignedUpload;
 import com.fashionstore.catalog.dto.StoredObject;
 import com.fashionstore.catalog.exception.FileErrorCode;
-import com.fashionstore.catalog.mapper.MediaFileMapperImpl;
+import com.fashionstore.catalog.mapper.MediaFileMapper;
+import static org.mockito.Mockito.lenient;
+import com.fashionstore.catalog.entity.enumeration.MediaPurpose;
 import com.fashionstore.catalog.entity.MediaFile;
 import com.fashionstore.catalog.entity.enumeration.MediaStatus;
 import com.fashionstore.catalog.entity.enumeration.MediaType;
@@ -52,16 +54,19 @@ class MediaFileServiceImplTest {
     StorageService storageService;
     @Mock
     CurrentUserProvider currentUserProvider;
+    @Mock
+    MediaFileMapper mediaFileMapper;
 
     MediaFileServiceImpl mediaFileService;
 
     @BeforeEach
     void setUp() {
         mediaFileService = new MediaFileServiceImpl(
+                org.mockito.Mockito.mock(com.fashionstore.catalog.client.IdentityAvatarClient.class),
                 mediaFileRepository,
                 storageService,
                 currentUserProvider,
-                new MediaFileMapperImpl(),
+                mediaFileMapper,
                 new FileStorageProperties("http://localhost:8087"),
                 new MinioProperties(
                         "http://minio:9000",
@@ -72,6 +77,20 @@ class MediaFileServiceImplTest {
                         900,
                         20L * 1024 * 1024)
         );
+        lenient().when(mediaFileMapper.toResponse(any(MediaFile.class), anyString()))
+                .thenAnswer(inv -> {
+                    MediaFile file = inv.getArgument(0);
+                    return MediaFileResponse.builder()
+                            .id(file.getId())
+                            .status(file.getStatus())
+                            .visibility(file.getVisibility())
+                            .sizeBytes(file.getSizeBytes())
+                            .width(file.getWidth())
+                            .height(file.getHeight())
+                            .url("http://localhost:8087/api/v1/files/" + file.getId() + "/content")
+                            .trashedAt(file.getTrashedAt())
+                            .build();
+                });
     }
 
     @AfterEach
@@ -88,6 +107,28 @@ class MediaFileServiceImplTest {
         request.setFolder("/campaigns/summer/");
         request.setTags(List.of("Homepage", "Summer", "homepage"));
         return request;
+    }
+
+    @Test
+    void avatarCompleteUsesSharedPipelineAndRemainsTemp() {
+        MediaFile avatar = MediaFile.builder().ownerId("user-1").purpose(MediaPurpose.AVATAR)
+                .status(MediaStatus.PENDING).storageKey("avatars/avatar.png")
+                .contentType("image/png").expiresAt(LocalDateTime.now().plusHours(24)).build();
+        avatar.setId("avatar-1");
+        when(currentUserProvider.getCurrentUserId()).thenReturn("user-1");
+        lenient().when(mediaFileRepository.findById("avatar-1")).thenReturn(Optional.of(avatar));
+        lenient().when(mediaFileRepository.findByIdForUpdate("avatar-1")).thenReturn(Optional.of(avatar));
+        lenient().when(storageService.stat("avatars/avatar.png"))
+                .thenReturn(new StoredObject(1024L, "image/png", "etag"));
+        lenient().when(storageService.readPrefix("avatars/avatar.png", 32))
+                .thenReturn(new byte[]{(byte)0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a});
+        lenient().when(mediaFileRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        MediaFileResponse result = mediaFileService.completeUpload("avatar-1", null);
+
+        assertThat(result.getStatus().name()).isEqualTo("TEMP");
+        assertThat(result.getVisibility()).isEqualTo(MediaVisibility.PRIVATE);
+        assertThat(result.getUrl()).endsWith("/api/v1/files/avatar-1/content");
     }
 
     @Test
@@ -150,7 +191,7 @@ class MediaFileServiceImplTest {
     void completeUploadVerifiesObjectThenActivatesRow() {
         MediaFile pending = pendingFile();
         when(currentUserProvider.getCurrentUserId()).thenReturn("user-1");
-        when(mediaFileRepository.findById("file-1")).thenReturn(Optional.of(pending));
+        when(mediaFileRepository.findByIdForUpdate("file-1")).thenReturn(Optional.of(pending));
         when(storageService.stat("2026/09/object.png"))
                 .thenReturn(new StoredObject(4096L, "image/png", "etag-1"));
         when(mediaFileRepository.save(pending)).thenReturn(pending);
@@ -174,7 +215,7 @@ class MediaFileServiceImplTest {
     void completeUploadFailsWhenObjectMissingOnStorage() {
         MediaFile pending = pendingFile();
         when(currentUserProvider.getCurrentUserId()).thenReturn("user-1");
-        when(mediaFileRepository.findById("file-1")).thenReturn(Optional.of(pending));
+        when(mediaFileRepository.findByIdForUpdate("file-1")).thenReturn(Optional.of(pending));
         when(storageService.stat("2026/09/object.png")).thenReturn(null);
 
         assertThatThrownBy(() -> mediaFileService.completeUpload("file-1", null))
@@ -191,7 +232,7 @@ class MediaFileServiceImplTest {
         MediaFile pending = pendingFile();
         pending.setStatus(MediaStatus.ACTIVE);
         when(currentUserProvider.getCurrentUserId()).thenReturn("user-1");
-        when(mediaFileRepository.findById("file-1")).thenReturn(Optional.of(pending));
+        when(mediaFileRepository.findByIdForUpdate("file-1")).thenReturn(Optional.of(pending));
 
         assertThatThrownBy(() -> mediaFileService.completeUpload("file-1", null))
                 .isInstanceOf(AppException.class)
@@ -205,7 +246,7 @@ class MediaFileServiceImplTest {
     void completeUploadDropsObjectWhenRealSizeExceedsLimit() {
         MediaFile pending = pendingFile();
         when(currentUserProvider.getCurrentUserId()).thenReturn("user-1");
-        when(mediaFileRepository.findById("file-1")).thenReturn(Optional.of(pending));
+        when(mediaFileRepository.findByIdForUpdate("file-1")).thenReturn(Optional.of(pending));
         when(storageService.stat("2026/09/object.png"))
                 .thenReturn(new StoredObject(21L * 1024 * 1024, "image/png", "etag-1"));
 
@@ -306,7 +347,7 @@ class MediaFileServiceImplTest {
     void completeUploadDropsObjectWhenStorageContentTypeNotAllowed() {
         MediaFile pending = pendingFile();
         when(currentUserProvider.getCurrentUserId()).thenReturn("user-1");
-        when(mediaFileRepository.findById("file-1")).thenReturn(Optional.of(pending));
+        when(mediaFileRepository.findByIdForUpdate("file-1")).thenReturn(Optional.of(pending));
         // Content-Type khong nam trong chu ky truoc day nen client co the PUT bat ky thu gi
         when(storageService.stat("2026/09/object.png"))
                 .thenReturn(new StoredObject(2048L, "text/html", "etag-1"));
@@ -324,13 +365,15 @@ class MediaFileServiceImplTest {
     @Test
     void purgeStalePendingUploadsRemovesObjectAndRow() {
         MediaFile stale = pendingFile();
+        stale.setCreatedAt(LocalDateTime.now().minusHours(2));
         ArgumentCaptor<LocalDateTime> cutoff = ArgumentCaptor.forClass(LocalDateTime.class);
-        when(mediaFileRepository.findByStatusAndCreatedAtBefore(eq(MediaStatus.PENDING), any(LocalDateTime.class)))
-                .thenReturn(List.of(stale));
+        when(mediaFileRepository.findPendingIdsBefore(any(LocalDateTime.class), any()))
+                .thenReturn(List.of(stale.getId()));
+        when(mediaFileRepository.findByIdForUpdate(stale.getId())).thenReturn(Optional.of(stale));
 
         mediaFileService.purgeStalePendingUploads();
 
-        verify(mediaFileRepository).findByStatusAndCreatedAtBefore(eq(MediaStatus.PENDING), cutoff.capture());
+        verify(mediaFileRepository).findPendingIdsBefore(cutoff.capture(), any());
         // moc cat = 2 lan thoi han presign, du cho mot lenh complete ve muon
         assertThat(ChronoUnit.SECONDS.between(cutoff.getValue(), LocalDateTime.now()))
                 .isBetween(1795L, 1805L);
@@ -340,13 +383,113 @@ class MediaFileServiceImplTest {
 
     @Test
     void purgeStalePendingUploadsDoesNothingWhenNoStaleRow() {
-        when(mediaFileRepository.findByStatusAndCreatedAtBefore(eq(MediaStatus.PENDING), any(LocalDateTime.class)))
+        when(mediaFileRepository.findPendingIdsBefore(any(LocalDateTime.class), any()))
                 .thenReturn(List.of());
 
         mediaFileService.purgeStalePendingUploads();
 
         verify(storageService, never()).delete(anyString());
         verify(mediaFileRepository, never()).delete(any(MediaFile.class));
+    }
+
+    @Test
+    void pendingSweepRechecksStatusAfterCandidateSelection() {
+        MediaFile completed = pendingFile();
+        completed.setCreatedAt(LocalDateTime.now().minusHours(2));
+        completed.setStatus(MediaStatus.ACTIVE);
+        when(mediaFileRepository.findPendingIdsBefore(any(), any())).thenReturn(List.of(completed.getId()));
+        when(mediaFileRepository.findByIdForUpdate(completed.getId())).thenReturn(Optional.of(completed));
+        mediaFileService.purgeStalePendingUploads();
+        verify(storageService, never()).delete(anyString());
+        verify(mediaFileRepository, never()).delete(any(MediaFile.class));
+    }
+
+    @Test
+    void ownerCanReadTempReadyAndClaimedContent() {
+        MediaFile tempReady = pendingFile();
+        tempReady.setStatus(MediaStatus.TEMP);
+        tempReady.setVisibility(MediaVisibility.PRIVATE);
+        tempReady.setPurpose(MediaPurpose.AVATAR);
+        when(mediaFileRepository.findById("file-1")).thenReturn(Optional.of(tempReady));
+        when(storageService.presignDownload("2026/09/object.png")).thenReturn("signed-avatar-url");
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
+                "user-1", null, List.of(new SimpleGrantedAuthority("ROLE_USER"))));
+
+        assertThat(mediaFileService.resolveContentUrl("file-1")).isEqualTo("signed-avatar-url");
+
+        tempReady.setStatus(MediaStatus.TEMP);
+        assertThat(mediaFileService.resolveContentUrl("file-1")).isEqualTo("signed-avatar-url");
+    }
+
+    @Test
+    void otherUserCannotReadTempReadyOrClaimedContent() {
+        MediaFile tempReady = pendingFile();
+        tempReady.setStatus(MediaStatus.TEMP);
+        tempReady.setVisibility(MediaVisibility.PRIVATE);
+        tempReady.setPurpose(MediaPurpose.AVATAR);
+        when(mediaFileRepository.findById("file-1")).thenReturn(Optional.of(tempReady));
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
+                "user-2", null, List.of(new SimpleGrantedAuthority("ROLE_USER"))));
+
+        assertThatThrownBy(() -> mediaFileService.resolveContentUrl("file-1"))
+                .isInstanceOf(AppException.class)
+                .extracting(exception -> ((AppException) exception).getErrorCode())
+                .isEqualTo(FileErrorCode.FILE_NOT_FOUND);
+    }
+
+    @Test
+    void completeUploadRejectsExpiredAvatar() {
+        MediaFile avatarFile = pendingFile();
+        avatarFile.setPurpose(MediaPurpose.AVATAR);
+        when(currentUserProvider.getCurrentUserId()).thenReturn("user-1");
+        when(mediaFileRepository.findByIdForUpdate("file-1")).thenReturn(Optional.of(avatarFile));
+
+        assertThatThrownBy(() -> mediaFileService.completeUpload("file-1", null))
+                .isInstanceOf(AppException.class)
+                .extracting(exception -> ((AppException) exception).getErrorCode())
+                .isEqualTo(FileErrorCode.FILE_UPLOAD_INVALID);
+    }
+
+    @Test
+    void updateRejectsAvatarMedia() {
+        MediaFile avatarFile = pendingFile();
+        avatarFile.setPurpose(MediaPurpose.AVATAR);
+        when(currentUserProvider.getCurrentUserId()).thenReturn("user-1");
+        when(mediaFileRepository.findById("file-1")).thenReturn(Optional.of(avatarFile));
+
+        com.fashionstore.catalog.dto.MediaFileUpdateRequest req = new com.fashionstore.catalog.dto.MediaFileUpdateRequest();
+        req.setDisplayName("new name");
+
+        assertThatThrownBy(() -> mediaFileService.update("file-1", req))
+                .isInstanceOf(AppException.class)
+                .extracting(exception -> ((AppException) exception).getErrorCode())
+                .isEqualTo(FileErrorCode.FILE_ACCESS_DENIED);
+    }
+
+    @Test
+    void moveToTrashRejectsAvatarMedia() {
+        MediaFile avatarFile = pendingFile();
+        avatarFile.setPurpose(MediaPurpose.AVATAR);
+        when(currentUserProvider.getCurrentUserId()).thenReturn("user-1");
+        when(mediaFileRepository.findById("file-1")).thenReturn(Optional.of(avatarFile));
+
+        assertThatThrownBy(() -> mediaFileService.moveToTrash("file-1"))
+                .isInstanceOf(AppException.class)
+                .extracting(exception -> ((AppException) exception).getErrorCode())
+                .isEqualTo(FileErrorCode.FILE_ACCESS_DENIED);
+    }
+
+    @Test
+    void deletePermanentlyRejectsAvatarMedia() {
+        MediaFile avatarFile = pendingFile();
+        avatarFile.setPurpose(MediaPurpose.AVATAR);
+        when(currentUserProvider.getCurrentUserId()).thenReturn("user-1");
+        when(mediaFileRepository.findById("file-1")).thenReturn(Optional.of(avatarFile));
+
+        assertThatThrownBy(() -> mediaFileService.deletePermanently("file-1"))
+                .isInstanceOf(AppException.class)
+                .extracting(exception -> ((AppException) exception).getErrorCode())
+                .isEqualTo(FileErrorCode.FILE_ACCESS_DENIED);
     }
 
     private MediaFile pendingFile() {

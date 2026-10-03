@@ -7,6 +7,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.FieldDefaults;
+import java.util.Map;
 
 @Getter
 @Setter
@@ -21,5 +22,6 @@ public class PresignUploadResponse {
     String uploadUrl;
     /** Browser phai gui dung header nay khi PUT, neu khong chu ky khong khop. */
     String contentType;
+    Map<String, String> uploadHeaders;
     int expiresInSeconds;
 }

@@ -7,8 +7,6 @@ public record FileStorageProperties(
         String publicBaseUrl
 ) {
     public FileStorageProperties {
-        if (publicBaseUrl == null || publicBaseUrl.isBlank()) {
-            publicBaseUrl = "http://localhost:8087";
-        }
+        publicBaseUrl = publicBaseUrl == null ? "" : publicBaseUrl.trim();
     }
 }

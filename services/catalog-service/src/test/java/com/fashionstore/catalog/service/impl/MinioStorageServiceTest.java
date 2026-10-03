@@ -88,6 +88,13 @@ class MinioStorageServiceTest {
     }
 
     @Test
+    void presignUploadRequiresConditionalHeaderToPreventOverwrite() {
+        String url = storageService.presignUpload("avatars/object.png", "image/png",
+                java.util.Map.of("If-None-Match", "*")).url();
+        assertThat(url).contains("X-Amz-SignedHeaders=content-type%3Bhost%3Bif-none-match");
+    }
+
+    @Test
     void presignDownloadDoesNotSignContentType() {
         assertThat(storageService.presignDownload("2026/09/object.png"))
                 .contains("X-Amz-SignedHeaders=host")

@@ -18,6 +18,14 @@ public class CurrentUserProvider {
     private final UserProvisioningService userProvisioningService;
 
     public User getCurrentUser() {
+        return getCurrentUser(false);
+    }
+
+    public User getCurrentUserForUpdate() {
+        return getCurrentUser(true);
+    }
+
+    private User getCurrentUser(boolean forUpdate) {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !(authentication.getPrincipal() instanceof Jwt jwt)) {
             throw new AppException(IdentityErrorCode.UNAUTHENTICATED);
@@ -28,7 +36,8 @@ public class CurrentUserProvider {
             // Request song song đã tạo user này trước — đọc lại bên dưới
         }
         // Nạp trong transaction của caller để caller sửa/lưu được entity
-        User user = userRepository.findById(jwt.getSubject())
+        User user = (forUpdate ? userRepository.findByIdForUpdate(jwt.getSubject())
+                : userRepository.findById(jwt.getSubject()))
                 .orElseThrow(() -> new AppException(IdentityErrorCode.USER_NOT_FOUND));
         // Bị admin khoá: access token cũ còn hạn (≤ accessTokenLifespan) cũng không dùng được API của identity
         if (!Boolean.TRUE.equals(user.getIsActive())) {

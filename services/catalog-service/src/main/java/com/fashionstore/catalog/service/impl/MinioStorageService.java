@@ -7,6 +7,7 @@ import com.fashionstore.catalog.exception.FileErrorCode;
 import com.fashionstore.catalog.service.StorageService;
 import com.fashionstore.common.exception.AppException;
 import io.minio.BucketExistsArgs;
+import io.minio.GetObjectArgs;
 import io.minio.GetPresignedObjectUrlArgs;
 import io.minio.MakeBucketArgs;
 import io.minio.MinioClient;
@@ -19,7 +20,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
+import java.io.InputStream;
 import java.util.Map;
+import java.util.HashMap;
 import java.util.concurrent.TimeUnit;
 
 @Slf4j
@@ -75,13 +78,20 @@ public class MinioStorageService implements StorageService {
      */
     @Override
     public PresignedUpload presignUpload(String storageKey, String contentType) {
+        return presignUpload(storageKey, contentType, Map.of());
+    }
+
+    @Override
+    public PresignedUpload presignUpload(String storageKey, String contentType, Map<String, String> requiredHeaders) {
         ensureBucket();
         try {
+            Map<String, String> headers = new HashMap<>(requiredHeaders);
+            headers.put("Content-Type", contentType);
             String url = presignMinioClient.getPresignedObjectUrl(GetPresignedObjectUrlArgs.builder()
                     .method(Method.PUT)
                     .bucket(properties.bucket())
                     .object(storageKey)
-                    .extraHeaders(Map.of("Content-Type", contentType))
+                    .extraHeaders(headers)
                     .expiry(properties.presignExpirySeconds(), TimeUnit.SECONDS)
                     .build());
             return new PresignedUpload(url, properties.presignExpirySeconds());
@@ -112,6 +122,25 @@ public class MinioStorageService implements StorageService {
                     .object(storageKey)
                     .build());
             return new StoredObject(stat.size(), stat.contentType(), stat.etag());
+        } catch (ErrorResponseException exception) {
+            if ("NoSuchKey".equals(exception.errorResponse().code())) {
+                return null;
+            }
+            throw new AppException(FileErrorCode.FILE_STORAGE_FAILED, exception);
+        } catch (Exception exception) {
+            throw new AppException(FileErrorCode.FILE_STORAGE_FAILED, exception);
+        }
+    }
+
+    @Override
+    public byte[] readPrefix(String storageKey, int maxBytes) {
+        try (InputStream is = minioClient.getObject(GetObjectArgs.builder()
+                .bucket(properties.bucket())
+                .object(storageKey)
+                .offset(0L)
+                .length((long) maxBytes)
+                .build())) {
+            return is.readNBytes(maxBytes);
         } catch (ErrorResponseException exception) {
             if ("NoSuchKey".equals(exception.errorResponse().code())) {
                 return null;

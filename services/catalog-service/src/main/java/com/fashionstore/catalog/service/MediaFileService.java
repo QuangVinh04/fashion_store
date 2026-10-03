@@ -8,6 +8,8 @@ import com.fashionstore.catalog.dto.PresignUploadResponse;
 import com.fashionstore.common.dto.PageResponse;
 import com.fashionstore.catalog.entity.enumeration.MediaStatus;
 import com.fashionstore.catalog.entity.enumeration.MediaType;
+import com.fashionstore.catalog.entity.enumeration.MediaPurpose;
+import com.fashionstore.contracts.identity.event.ProfileAvatarChangedEvent;
 import org.springframework.data.domain.Pageable;
 
 import java.util.List;
@@ -15,6 +17,8 @@ import java.util.List;
 public interface MediaFileService {
 
     PresignUploadResponse presignUpload(PresignUploadRequest request);
+
+    PresignUploadResponse presignUpload(PresignUploadRequest request, MediaPurpose purpose);
 
     MediaFileResponse completeUpload(String id, CompleteUploadRequest request);
 
@@ -25,6 +29,12 @@ public interface MediaFileService {
                                                  MediaStatus status);
 
     MediaFileResponse getById(String id);
+
+    MediaFileResponse getById(String id, String ownerId);
+
+    void activateIfCurrent(ProfileAvatarChangedEvent event);
+
+    void reconcileMedia(String id);
 
     MediaFileResponse update(String id, MediaFileUpdateRequest request);
 

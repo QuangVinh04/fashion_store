@@ -1,6 +1,7 @@
 package com.fashionstore.catalog.config;
 
 import io.minio.MinioClient;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -18,12 +19,12 @@ public class MinioConfig {
 
     /** Client dung de ky presigned URL, phai tro toi host ma browser goi duoc. */
     @Bean
-    MinioClient presignMinioClient(MinioProperties properties) {
-        if (properties.endpoint().equals(properties.publicEndpoint())) {
-            return minioClient(properties);
-        }
+    MinioClient presignMinioClient(MinioProperties properties,
+            @Value("${app.minio.region:us-east-1}") String region) {
         return MinioClient.builder()
                 .endpoint(properties.publicEndpoint())
+                // Without a region the SDK calls GetBucketLocation on the browser endpoint.
+                .region(region)
                 .credentials(properties.accessKey(), properties.secretKey())
                 .build();
     }

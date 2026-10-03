@@ -28,7 +28,8 @@ public class NotificationOutbox {
 
     @EventListener
     public void record(EventEnvelope<?> event) {
-        if (!EventTypes.NOTIFICATION_EMAIL_REQUESTED.equals(event.eventType())) {
+        if (!EventTypes.NOTIFICATION_EMAIL_REQUESTED.equals(event.eventType())
+                && !EventTypes.PROFILE_AVATAR_CHANGED.equals(event.eventType())) {
             return;
         }
         try {

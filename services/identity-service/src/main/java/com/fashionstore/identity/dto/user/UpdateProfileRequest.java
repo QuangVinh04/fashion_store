@@ -25,7 +25,9 @@ public class UpdateProfileRequest {
     @Size(max = 255, message = "Địa chỉ tối đa 255 ký tự")
     String address;
 
-    @NotBlank(message = "Không được trống")
     @Size(max = 500, message = "Avatar URL tối đa 500 ký tự")
     String avatar;
+
+    @Size(max = 36, message = "Avatar media ID tối đa 36 ký tự")
+    String avatarMediaId;
 }

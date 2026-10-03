@@ -24,6 +24,7 @@ public final class EventTypes {
     public static final String ORDER_CANCELLED = "order.cancelled";
     public static final String ORDER_DELIVERED = "order.delivered";
     public static final String NOTIFICATION_EMAIL_REQUESTED = "notification.email.requested";
+    public static final String PROFILE_AVATAR_CHANGED = "profile.avatar.changed";
 
     private EventTypes() {
     }

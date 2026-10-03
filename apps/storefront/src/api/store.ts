@@ -1,10 +1,27 @@
 import { api, json, query, type Page } from './client';
 import type { Address, Cart, Checkout, Order, OrderSummary, Payment, Product, ProductSummary, Profile, ReturnRequest, ReviewSummary, Session, WishlistItem } from './types';
+async function uploadFile(file: File, folder: string) {
+  const avatar = folder === 'avatars';
+  const route = avatar ? '/api/v1/files/avatars' : '/api/v1/files';
+  const signed = await api<{ mediaId: string; uploadUrl: string; contentType: string; uploadHeaders?: Record<string, string> }>(
+    `${route}/presign`, json('POST', {
+      filename: file.name, contentType: file.type, sizeBytes: file.size, folder,
+      visibility: avatar || folder === 'returns' ? 'PRIVATE' : 'PUBLIC',
+    }));
+  const put = await fetch(signed.uploadUrl, {
+    method: 'PUT', body: file,
+    headers: signed.uploadHeaders ?? { 'Content-Type': signed.contentType },
+  });
+  if (!put.ok) throw new Error('Không tải được ảnh lên kho lưu trữ.');
+  const completed = await api<{ id: string; url: string; status: string }>(`${route}/${signed.mediaId}/complete`, json('POST', {}));
+  if (!completed.url || (avatar && completed.status !== 'TEMP')) throw new Error('Ảnh chưa được xác nhận tải lên thành công.');
+  return { mediaId: completed.id, url: completed.url };
+}
 
 export const store = {
   session: () => api<Session>('/bff/session'),
   profile: () => api<Profile>('/api/v1/users/profile'),
-  saveProfile: (body: Pick<Profile, 'fullName' | 'phone' | 'address' | 'avatar'>) => api<Profile>('/api/v1/users/profile', json('PUT', body)),
+  saveProfile: (body: { fullName: string; phone: string; address: string; avatar?: string; avatarMediaId?: string | null }) => api<Profile>('/api/v1/users/profile', json('PUT', body)),
   addresses: () => api<Address[]>('/api/v1/users/addresses'),
   provinces: () => api<{ code: string; name: string }[]>('/api/v1/shipping/locations/provinces'),
   wards: (provinceId: string) => api<{ code: string; name: string }[]>(`/api/v1/shipping/locations/wards?provinceId=${encodeURIComponent(provinceId)}`),
@@ -48,14 +65,6 @@ export const store = {
   paymentInitiate: (id: string) => api<{ paymentUrl?: string }>(`/api/v1/payments/${id}/initiate`, json('POST')),
   vnpayVerify: (params: URLSearchParams) => api(`/api/v1/payments/vnpay/return?${params.toString()}`),
   payosVerify: (params: URLSearchParams) => api(`/api/v1/payments/payos/return?${params.toString()}`),
-  uploadImage: async (file: File, folder: string) => {
-    const signed = await api<{ mediaId: string; uploadUrl: string; contentType: string }>('/api/v1/files/presign', json('POST', {
-      filename: file.name, contentType: file.type, sizeBytes: file.size, folder,
-      visibility: folder === 'returns' ? 'PRIVATE' : 'PUBLIC',
-    }));
-    const put = await fetch(signed.uploadUrl, { method: 'PUT', body: file, headers: { 'Content-Type': signed.contentType } });
-    if (!put.ok) throw new Error('Không tải được ảnh lên kho lưu trữ.');
-    await api<{ url: string }>(`/api/v1/files/${signed.mediaId}/complete`, json('POST', {}));
-    return `/api/v1/files/${signed.mediaId}/content`;
-  },
+  uploadImage: async (file: File, folder: string) => (await uploadFile(file, folder)).url,
+  uploadAvatar: (file: File) => uploadFile(file, 'avatars'),
 };

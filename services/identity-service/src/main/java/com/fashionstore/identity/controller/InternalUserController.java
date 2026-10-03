@@ -3,6 +3,7 @@ package com.fashionstore.identity.controller;
 import com.fashionstore.common.dto.ApiResponse;
 import com.fashionstore.common.exception.AppException;
 import com.fashionstore.identity.exception.IdentityErrorCode;
+import com.fashionstore.identity.dto.user.AvatarReferenceResponse;
 import com.fashionstore.identity.dto.user.InternalUserResponse;
 import com.fashionstore.identity.dto.user.UserAddressResponse;
 import com.fashionstore.identity.entity.User;
@@ -50,6 +51,17 @@ public class InternalUserController {
         return ApiResponse.<UserAddressResponse>builder()
                 .message("Get address successfully")
                 .data(userAddressService.getAddressOfUser(userId, addressId))
+                .build();
+    }
+
+    @GetMapping("/{userId}/avatar-reference")
+    public ApiResponse<AvatarReferenceResponse> getAvatarReference(@PathVariable String userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new AppException(IdentityErrorCode.USER_NOT_FOUND));
+
+        return ApiResponse.<AvatarReferenceResponse>builder()
+                .message("Get avatar reference successfully")
+                .data(new AvatarReferenceResponse(user.getAvatarMediaId(), user.getAvatarRevision()))
                 .build();
     }
 }

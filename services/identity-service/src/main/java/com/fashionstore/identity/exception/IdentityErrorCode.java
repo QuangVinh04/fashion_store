@@ -7,6 +7,7 @@ import org.springframework.http.HttpStatusCode;
 
 @Getter
 public enum IdentityErrorCode implements BaseErrorCode {
+    AVATAR_MEDIA_INVALID(2022, "Avatar media is invalid or expired", HttpStatus.BAD_REQUEST),
     USER_NOT_FOUND(2001, "User not found", HttpStatus.NOT_FOUND),
     EMAIL_ALREADY_EXISTS(2002, "Email already exists", HttpStatus.CONFLICT),
     INVALID_CREDENTIALS(2003, "Invalid email or password", HttpStatus.UNAUTHORIZED),

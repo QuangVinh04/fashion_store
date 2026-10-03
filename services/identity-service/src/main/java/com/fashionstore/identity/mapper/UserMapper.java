@@ -12,6 +12,7 @@ import org.mapstruct.BeanMapping;
 import org.mapstruct.Mapper;
 import org.mapstruct.MappingTarget;
 import org.mapstruct.NullValuePropertyMappingStrategy;
+import org.mapstruct.Mapping;
 import org.mapstruct.ReportingPolicy;
 
 import java.util.List;
@@ -19,12 +20,16 @@ import java.util.List;
 @Mapper(componentModel = "spring")
 public interface UserMapper {
 
+    @Mapping(target = "avatarUrl", source = "avatar")
     UserProfileResponse toUserResponse(User user);
 
     @BeanMapping(
             nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE,
             unmappedTargetPolicy = ReportingPolicy.IGNORE
     )
+    @Mapping(target = "avatar", ignore = true)
+    @Mapping(target = "avatarMediaId", ignore = true)
+    @Mapping(target = "avatarRevision", ignore = true)
     void updateUserFromRequest(UpdateProfileRequest request, @MappingTarget User user);
 
     AdminUserResponse toAdminUserResponse(User user);

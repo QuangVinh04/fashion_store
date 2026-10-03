@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fashionstore.catalog.entity.enumeration.MediaStatus;
 import com.fashionstore.catalog.entity.enumeration.MediaType;
 import com.fashionstore.catalog.entity.enumeration.MediaVisibility;
+import com.fashionstore.catalog.entity.enumeration.MediaPurpose;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -24,6 +25,9 @@ import java.util.List;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class MediaFileResponse {
     String id;
+    String ownerId;
+    MediaPurpose purpose;
+    LocalDateTime expiresAt;
     String originalFilename;
     String displayName;
     String url;

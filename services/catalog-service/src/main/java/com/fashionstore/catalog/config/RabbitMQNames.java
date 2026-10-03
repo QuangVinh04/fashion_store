@@ -14,6 +14,9 @@ public final class RabbitMQNames {
 
     public static final String INVENTORY_RESERVATION_CONSUMER = "inventory-reservation-consumer";
 
+    public static final String PROFILE_AVATAR_CHANGED_QUEUE = "catalog.profile-avatar-changed";
+    public static final String PROFILE_AVATAR_CONSUMER = "profile-avatar";
+
     private RabbitMQNames() {
     }
 }

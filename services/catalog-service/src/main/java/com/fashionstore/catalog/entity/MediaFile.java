@@ -1,6 +1,7 @@
 package com.fashionstore.catalog.entity;
 
 import com.fashionstore.common.persistence.BaseEntity;
+import com.fashionstore.catalog.entity.enumeration.MediaPurpose;
 import com.fashionstore.catalog.entity.enumeration.MediaStatus;
 import com.fashionstore.catalog.entity.enumeration.MediaType;
 import com.fashionstore.catalog.entity.enumeration.MediaVisibility;
@@ -95,6 +96,17 @@ public class MediaFile extends BaseEntity {
 
     @Column(name = "height")
     Integer height;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "purpose", nullable = false, length = 20)
+    @Builder.Default
+    MediaPurpose purpose = MediaPurpose.GENERAL;
+
+    @Column(name = "expires_at")
+    LocalDateTime expiresAt;
+
+    @Column(name = "retired_at")
+    LocalDateTime retiredAt;
 
     @Column(name = "trashed_at")
     LocalDateTime trashedAt;

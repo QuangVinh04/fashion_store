@@ -54,13 +54,15 @@ spring:
 app:
   clients:
     order-base-url: ${ORDER_BASE_URL:http://localhost:8089}
+    identity-base-url: ${IDENTITY_BASE_URL:http://localhost:8082}
   outbox:
     relay-delay-ms: ${OUTBOX_RELAY_DELAY_MS:3000}
   storage:
-    public-base-url: ${FILE_PUBLIC_BASE_URL:http://localhost:8087}
+    public-base-url: ${FILE_PUBLIC_BASE_URL:}
   minio:
     endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
     public-endpoint: ${MINIO_PUBLIC_ENDPOINT:http://localhost:9000}
+    region: ${MINIO_REGION:us-east-1}
     access-key: ${MINIO_ACCESS_KEY:minioadmin}
     secret-key: ${MINIO_SECRET_KEY:minioadmin}
     bucket: ${MINIO_BUCKET:fashion-media}

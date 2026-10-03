@@ -88,4 +88,28 @@ class InternalUserControllerTest {
         mockMvc.perform(get("/internal/v1/users/user-123/addresses/addr-other"))
                 .andExpect(status().isNotFound());
     }
+
+    @Test
+    void getAvatarReference_whenUserExists_returns200AndData() throws Exception {
+        User user = User.builder()
+                .avatarMediaId("avatar-abc")
+                .avatarRevision(5L)
+                .build();
+        user.setId("user-123");
+
+        when(userRepository.findById("user-123")).thenReturn(Optional.of(user));
+
+        mockMvc.perform(get("/internal/v1/users/user-123/avatar-reference"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.avatarMediaId").value("avatar-abc"))
+                .andExpect(jsonPath("$.data.avatarRevision").value(5));
+    }
+
+    @Test
+    void getAvatarReference_whenUserNotFound_returns404() throws Exception {
+        when(userRepository.findById("user-404")).thenReturn(Optional.empty());
+
+        mockMvc.perform(get("/internal/v1/users/user-404/avatar-reference"))
+                .andExpect(status().isNotFound());
+    }
 }

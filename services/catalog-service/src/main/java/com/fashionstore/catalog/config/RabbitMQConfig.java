@@ -81,6 +81,21 @@ public class RabbitMQConfig {
     }
 
     @Bean
+    Queue profileAvatarChangedQueue() {
+        return new Queue(RabbitMQNames.PROFILE_AVATAR_CHANGED_QUEUE, true);
+    }
+
+    @Bean
+    Binding profileAvatarChangedBinding(
+            Queue profileAvatarChangedQueue,
+            DirectExchange fashionEventsExchange
+    ) {
+        return BindingBuilder.bind(profileAvatarChangedQueue)
+                .to(fashionEventsExchange)
+                .with(EventTypes.PROFILE_AVATAR_CHANGED);
+    }
+
+    @Bean
     MessageConverter jsonMessageConverter() {
         return new Jackson2JsonMessageConverter();
     }
