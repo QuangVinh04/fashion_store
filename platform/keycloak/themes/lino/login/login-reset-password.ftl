@@ -9,17 +9,17 @@
             alt="LINO fashion"
             class="lino-banner-img"
         />
-        <div class="lino-banner-overlay"></div>
         <div class="lino-banner-content">
             <p class="lino-banner-sub">Hỗ trợ tài khoản</p>
             <h2 class="lino-banner-title">
-                KHÔI PHỤC<br />MẬT KHẨU
+                KHÔI PHỤC MẬT KHẨU
             </h2>
         </div>
     </div>
 
     <!-- Right Form -->
     <div class="lino-auth-form-container">
+        <div class="lino-auth-card">
         <a href="${(client.baseUrl)?has_content?then(client.baseUrl, 'http://localhost:8083/')}" id="lino-back-home-link" onclick="goBackToStorefront(event)" class="lino-back-home">
             &larr; Trang Chủ
         </a>
@@ -66,6 +66,7 @@
             </svg>
             Liên kết đặt lại mật khẩu sẽ được gửi an toàn tới email của bạn.
         </p>
+        </div>
     </div>
 </div>
 

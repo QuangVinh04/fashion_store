@@ -1,0 +1,183 @@
+/* Shared controls keep every route on the same scale. */
+.store-button,
+.store-action {
+  min-height: 40px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 500;
+  transition:
+    background-color 180ms ease,
+    color 180ms ease,
+    border-color 180ms ease;
+}
+.store-button:disabled {
+  opacity: 0.45;
+}
+form .store-button[type="submit"] {
+  display: inline-flex;
+  height: 44px;
+  min-height: 44px;
+  padding-block: 0;
+  align-items: center;
+  justify-content: center;
+}
+.store-button:has(> svg:only-child) {
+  min-width: 36px;
+}
+.store-text-link {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+}
+.store-card-title {
+  min-height: 32px;
+  text-wrap: balance;
+}
+.store-input {
+  height: 44px;
+  min-width: 0;
+  border-radius: 12px;
+  border: 1px solid var(--border-strong);
+  background: var(--card);
+  color: var(--foreground);
+  font-size: 16px;
+  line-height: 1.5;
+}
+.store-input:disabled {
+  background: var(--background);
+  color: var(--muted-foreground);
+}
+.store-input:focus,
+.store-textarea:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px #e5001b14;
+}
+.store-textarea {
+  border-radius: 12px;
+  border: 1px solid var(--border-strong);
+  padding: 12px;
+  font-size: 16px;
+  line-height: 1.6;
+}
+.choice-control {
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  min-width: 18px;
+  flex-shrink: 0;
+  border: 1.5px solid var(--border-strong);
+  background: var(--card);
+  vertical-align: middle;
+  cursor: pointer;
+}
+.choice-control[type="radio"] {
+  border-radius: 50%;
+}
+.choice-control[type="checkbox"] {
+  border-radius: 5px;
+}
+.choice-control:checked {
+  border-color: var(--primary);
+  background-color: var(--primary);
+}
+.choice-control[type="radio"]:checked {
+  background-image: radial-gradient(circle, white 0 3px, transparent 3.5px);
+}
+.choice-control[type="checkbox"]:checked {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='m5 10 3 3 7-7' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+.choice-control:not(:checked):hover {
+  border-color: var(--foreground);
+}
+.choice-control:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.store-panel {
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--card);
+  padding: 16px;
+}
+.store-icon-button {
+  display: inline-flex;
+  width: 40px;
+  height: 40px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  color: var(--muted-foreground);
+  transition:
+    background-color 180ms,
+    color 180ms;
+}
+.store-icon-button:hover {
+  background: var(--background);
+  color: var(--foreground);
+}
+.store-link {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 500;
+}
+.store-link:hover {
+  color: var(--primary);
+}
+.store-logo {
+  font-family: "Barlow Condensed", sans-serif;
+  font-size: 30px;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+}
+.store-container {
+  max-width: 1280px;
+  margin-inline: auto;
+  padding-inline: 16px;
+}
+.store-section {
+  padding-block: 32px;
+}
+.store-hero {
+  font-size: 30px;
+  line-height: 1.2;
+}
+@media (min-width: 768px) {
+  form .store-button[type="submit"] {
+    height: 40px;
+    min-height: 40px;
+  }
+  .store-input {
+    height: 40px;
+    font-size: 14px;
+  }
+  .store-textarea {
+    font-size: 14px;
+  }
+  .store-panel {
+    padding: 20px;
+  }
+  .store-container {
+    padding-inline: 24px;
+  }
+  .store-section {
+    padding-block: 40px;
+  }
+}
+@media (min-width: 1024px) {
+  .store-icon-button.lg\:hidden {
+    display: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

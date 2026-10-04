@@ -9,16 +9,15 @@
             alt="LINO fashion"
             class="lino-banner-img"
         />
-        <div class="lino-banner-overlay"></div>
         <div class="lino-banner-content">
             <p class="lino-banner-sub">Tham gia LINO</p>
             <h2 class="lino-banner-title">
-                ƯU ĐÃI<br />THÀNH<br />VIÊN
+                ƯU ĐÃI THÀNH VIÊN
             </h2>
             <div class="lino-benefit-list">
                 <div class="lino-benefit-item">
                     <div class="lino-benefit-badge">
-                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
                             <polyline points="20 6 9 17 4 12"></polyline>
                         </svg>
                     </div>
@@ -26,7 +25,7 @@
                 </div>
                 <div class="lino-benefit-item">
                     <div class="lino-benefit-badge">
-                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
                             <polyline points="20 6 9 17 4 12"></polyline>
                         </svg>
                     </div>
@@ -34,7 +33,7 @@
                 </div>
                 <div class="lino-benefit-item">
                     <div class="lino-benefit-badge">
-                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
                             <polyline points="20 6 9 17 4 12"></polyline>
                         </svg>
                     </div>
@@ -46,6 +45,7 @@
 
     <!-- Right Form -->
     <div class="lino-auth-form-container">
+        <div class="lino-auth-card">
         <a href="${(client.baseUrl)?has_content?then(client.baseUrl, 'http://localhost:8083/')}" id="lino-back-home-link" onclick="goBackToStorefront(event)" class="lino-back-home">
             &larr; Trang Chủ
         </a>
@@ -199,10 +199,6 @@
                 id="kc-register"
                 type="submit"
             >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect>
-                    <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-                </svg>
                 Tạo Tài Khoản
             </button>
         </form>
@@ -214,6 +210,7 @@
             </svg>
             Thông tin được bảo mật theo tiêu chuẩn SSL 256-bit.
         </p>
+        </div>
     </div>
 </div>
 
