@@ -8,11 +8,11 @@ import {
   Truck,
   type LucideIcon,
 } from "lucide-react";
-import { ORDER_LABEL, type OrderStatus } from "../api/types";
 
 type HistoryEntry = {
   id: string;
   toStatus: string;
+  action?: string;
   reason?: string;
   createdAt: string;
 };
@@ -25,40 +25,52 @@ type Activity = {
   tone?: "danger" | "success";
 };
 
+type ActivityContent = Pick<Activity, "title" | "description" | "icon" | "tone">;
+
+const statusContent: Record<string, ActivityContent> = {
+  PENDING: { title: "Đã đặt hàng", description: "Đơn hàng của bạn đã được ghi nhận.", icon: ShoppingBag },
+  CONFIRMED: { title: "Đã xác nhận", description: "Đơn hàng đã được xác nhận và sẽ được shop chuẩn bị.", icon: ClipboardCheck },
+  PROCESSING: { title: "Đang chuẩn bị hàng", description: "Shop đang chuẩn bị sản phẩm của bạn.", icon: Package },
+  PACKED: { title: "Đã đóng gói", description: "Đơn hàng đã được đóng gói và đang chờ giao cho đơn vị vận chuyển.", icon: Package },
+  SHIPPING: { title: "Đang vận chuyển", description: "Đơn hàng đang trên đường đến bạn.", icon: Truck },
+  DELIVERED: { title: "Đã giao hàng", description: "Đơn hàng đã được giao thành công.", icon: CheckCircle2, tone: "success" },
+  COMPLETED: { title: "Đơn hàng hoàn tất", description: "Cảm ơn bạn đã mua sắm tại shop.", icon: CheckCircle2, tone: "success" },
+  CANCELLED: { title: "Đã hủy đơn hàng", description: "Đơn hàng đã được hủy.", icon: AlertCircle, tone: "danger" },
+  RETURNED: { title: "Đã cập nhật trả hàng", description: "Đơn hàng đã được cập nhật sang trạng thái trả hàng.", icon: Package },
+  REFUNDED: { title: "Đã hoàn tiền", description: "Khoản thanh toán của đơn hàng đã được hoàn lại.", icon: CheckCircle2, tone: "success" },
+};
+
+const deliveryFailed: ActivityContent = {
+  title: "Giao hàng chưa thành công", description: "Đơn hàng chưa được giao thành công. Vui lòng liên hệ shop để được hỗ trợ.", icon: AlertCircle, tone: "danger",
+};
+const eventContent: Record<string, ActivityContent> = {
+  ORDER_CREATED: statusContent.PENDING,
+  ORDER_CONFIRMED: statusContent.CONFIRMED,
+  ORDER_CANCELLED: statusContent.CANCELLED,
+  SAGA_TIMEOUT: { ...statusContent.CANCELLED, description: "Đơn hàng đã được hủy do quá thời gian xử lý. Vui lòng liên hệ shop nếu bạn cần hỗ trợ." },
+  SHIPMENT_CREATED: { title: "Đã tạo vận đơn", description: "Đơn hàng đang chờ đơn vị vận chuyển lấy hàng.", icon: Truck },
+  RETURN_REQUESTED: { title: "Đã gửi yêu cầu trả hàng", description: "Shop đã nhận yêu cầu trả hàng của bạn và sẽ xem xét.", icon: Package },
+  RETURN_APPROVED: { title: "Yêu cầu trả hàng đã được chấp nhận", description: "Shop đã chấp nhận yêu cầu trả hàng của bạn.", icon: ClipboardCheck },
+  RETURN_REJECTED: { title: "Yêu cầu trả hàng chưa được chấp nhận", description: "Vui lòng xem chi tiết yêu cầu trả hàng hoặc liên hệ shop để được hỗ trợ.", icon: AlertCircle, tone: "danger" },
+  PAYMENT_REFUNDED: { title: "Đã hoàn tiền", description: "Khoản thanh toán đã được hoàn qua cổng thanh toán.", icon: CheckCircle2, tone: "success" },
+  PAYMENT_REFUND_FAILED: { title: "Chưa hoàn tiền thành công", description: "Shop cần kiểm tra lại việc hoàn tiền. Vui lòng liên hệ shop để được hỗ trợ.", icon: AlertCircle, tone: "danger" },
+};
+
 function activityFromHistory(entry: HistoryEntry): Activity {
-  const failed = [
-    "DELIVERY_FAILED",
-    "DELIVERY_FAIL",
-    "SHIPPING_FAILED",
-  ].includes(entry.toStatus);
-  const complete = ["DELIVERED", "COMPLETED"].includes(entry.toStatus);
-  return {
-    id: entry.id,
-    title: failed
-      ? "Giao hàng thất bại"
-      : entry.toStatus === "PENDING"
-        ? "Đã tạo đơn hàng"
-        : ORDER_LABEL[entry.toStatus as OrderStatus] || entry.toStatus,
-    description: entry.reason,
-    timestamp: entry.createdAt,
-    icon: failed
-      ? AlertCircle
-      : complete
-        ? CheckCircle2
-        : entry.toStatus === "SHIPPING"
-          ? Truck
-          : entry.toStatus === "PACKED" || entry.toStatus === "PROCESSING"
-            ? Package
-            : entry.toStatus === "CONFIRMED"
-              ? ClipboardCheck
-              : ShoppingBag,
-    tone:
-      failed || entry.toStatus === "CANCELLED"
-        ? "danger"
-        : complete
-          ? "success"
-          : undefined,
+  // Raw reasons belong to the audit history and may contain internal diagnostics.
+  // Actions distinguish events such as return rejection from an unchanged order status.
+  const event = entry.action && Object.hasOwn(eventContent, entry.action)
+    ? eventContent[entry.action] : undefined;
+  const useStatus = !entry.action || ["ADMIN_UPDATE", "GHN_WEBHOOK"].includes(entry.action);
+  const status = useStatus
+    ? ["DELIVERY_FAILED", "DELIVERY_FAIL", "SHIPPING_FAILED"].includes(entry.toStatus)
+      ? deliveryFailed
+      : Object.hasOwn(statusContent, entry.toStatus) ? statusContent[entry.toStatus] : undefined
+    : undefined;
+  const content = event || status || {
+    title: "Đơn hàng đã được cập nhật", description: "Thông tin đơn hàng vừa được cập nhật.", icon: ShoppingBag,
   };
+  return { ...content, id: entry.id, timestamp: entry.createdAt };
 }
 
 function timestampLabel(value: string) {

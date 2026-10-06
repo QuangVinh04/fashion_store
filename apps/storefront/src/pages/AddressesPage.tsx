@@ -1,3 +1,4 @@
+import { customerError } from "../api/client";
 import StoreSelect from "../components/StoreSelect";
 import { useEffect, useState } from "react";
 import {
@@ -32,6 +33,9 @@ export default function AddressesPage() {
   const provincesLoad = useLoad(store.provinces, []);
 
   const [wards, setWards] = useState<Location[]>([]);
+  const [wardsLoading, setWardsLoading] = useState(false);
+  const [wardsError, setWardsError] = useState("");
+  const [wardsRetry, setWardsRetry] = useState(0);
 
   const [provinceCode, setProvinceCode] = useState<string>("");
   const [wardId, setWardId] = useState<string>("");
@@ -46,24 +50,28 @@ export default function AddressesPage() {
 
   // GHN wards belong directly to a province.
   useEffect(() => {
+    setWards([]);
+    setWardsError("");
     if (!provinceCode) {
-      setWards([]);
+      setWardsLoading(false);
       setWardId("");
       return;
     }
     let active = true;
+    setWardsLoading(true);
     store
       .wards(provinceCode)
       .then((rows) => {
         if (active) setWards(rows);
       })
-      .catch((err) => {
-        if (active) setMessage({ type: "error", text: (err as Error).message });
-      });
+      .catch(() => {
+        if (active) setWardsError("Không tải được danh sách phường/xã.");
+      })
+      .finally(() => { if (active) setWardsLoading(false); });
     return () => {
       active = false;
     };
-  }, [provinceCode]);
+  }, [provinceCode, wardsRetry]);
 
   function resetForm() {
     setEditingId(null);
@@ -95,7 +103,7 @@ export default function AddressesPage() {
     if (!prov) {
       setMessage({
         type: "error",
-        text: "Tỉnh/Thành phố trong địa chỉ cũ cần được chọn lại từ danh mục GHN.",
+        text: "Vui lòng chọn lại tỉnh/thành phố để cập nhật địa chỉ giao hàng.",
       });
     } else {
       setMessage(null);
@@ -107,7 +115,7 @@ export default function AddressesPage() {
     if (!provinceCode || !wardId) {
       setMessage({
         type: "error",
-        text: "Vui lòng chọn tỉnh/thành phố và phường/xã từ danh mục GHN.",
+        text: "Vui lòng chọn tỉnh/thành phố và phường/xã trong danh sách.",
       });
       return;
     }
@@ -116,7 +124,10 @@ export default function AddressesPage() {
       (p) => p.code === provinceCode,
     );
     const selectedWard = wards.find((w) => w.code === wardId);
-    if (!selectedProv || !selectedWard) return;
+    if (!selectedProv || !selectedWard || wardsLoading || wardsError) {
+      setMessage({ type: "error", text: "Danh sách địa chỉ chưa sẵn sàng. Vui lòng kiểm tra lại tỉnh/thành phố và phường/xã." });
+      return;
+    }
 
     const payload: Form = {
       ...form,
@@ -142,7 +153,7 @@ export default function AddressesPage() {
       });
       resetForm();
     } catch (err) {
-      setMessage({ type: "error", text: (err as Error).message });
+      setMessage({ type: "error", text: customerError(err) });
     } finally {
       setBusy(false);
     }
@@ -156,7 +167,7 @@ export default function AddressesPage() {
       await addressesLoad.refresh();
       setMessage({ type: "success", text: "Đã đặt làm địa chỉ mặc định." });
     } catch (err) {
-      setMessage({ type: "error", text: (err as Error).message });
+      setMessage({ type: "error", text: customerError(err) });
     } finally {
       setBusy(false);
     }
@@ -171,7 +182,7 @@ export default function AddressesPage() {
       await addressesLoad.refresh();
       setMessage({ type: "success", text: "Đã xóa địa chỉ thành công." });
     } catch (err) {
-      setMessage({ type: "error", text: (err as Error).message });
+      setMessage({ type: "error", text: customerError(err) });
     } finally {
       setBusy(false);
     }
@@ -192,14 +203,14 @@ export default function AddressesPage() {
           <div
             className={`mb-6 p-4 text-xs font-medium flex items-center gap-2.5 border ${
               message.type === "success"
-                ? "bg-emerald-50 text-emerald-900 border-emerald-200"
-                : "bg-red-50 text-red-900 border-red-200"
+                ? "bg-success-light text-success border-success/20"
+                : "bg-primary-light text-destructive border-destructive/20"
             }`}
           >
             {message.type === "success" ? (
-              <CheckCircle2 size={16} className="text-emerald-700 shrink-0" />
+              <CheckCircle2 size={16} className="text-success shrink-0" />
             ) : (
-              <AlertCircle size={16} className="text-red-700 shrink-0" />
+              <AlertCircle size={16} className="text-destructive shrink-0" />
             )}
             <span>{message.text}</span>
           </div>
@@ -225,7 +236,7 @@ export default function AddressesPage() {
                         {addr.recipientName}
                       </strong>
                       {addr.isDefault && (
-                        <span className="text-xs font-semibold text-success bg-emerald-50 px-2 py-0.5 border border-emerald-200">
+                        <span className="text-xs font-semibold text-success bg-success-light px-2 py-0.5 border border-success/20">
                           Mặc định
                         </span>
                       )}
@@ -276,7 +287,7 @@ export default function AddressesPage() {
                         type="button"
                         disabled={busy}
                         onClick={() => void handleDelete(addr.id)}
-                        className="text-rose-700 hover:text-rose-900 inline-flex items-center gap-1 store-button"
+                        className="text-destructive hover:text-destructive inline-flex items-center gap-1 store-button"
                       >
                         <Trash2 size={12} /> Xóa
                       </button>
@@ -364,6 +375,7 @@ export default function AddressesPage() {
               <StoreSelect
                 id="province"
                 aria-label="Tỉnh / Thành Phố"
+                disabled={provincesLoad.loading || Boolean(provincesLoad.error)}
                 required
                 value={provinceCode}
                 onChange={(e) => {
@@ -372,13 +384,21 @@ export default function AddressesPage() {
                 }}
                 className="w-full border border-border-strong bg-white px-3 py-2.5 text-xs text-foreground outline-none focus:border-border-strong"
               >
-                <option value="">Chọn Tỉnh/Thành</option>
+                <option value="">{provincesLoad.loading ? "Đang tải tỉnh/thành phố…" : "Chọn Tỉnh/Thành"}</option>
                 {provincesLoad.data?.map((p) => (
                   <option key={p.code} value={p.code}>
                     {p.name}
                   </option>
                 ))}
               </StoreSelect>
+              {provincesLoad.loading && <p role="status" className="mt-2 text-sm text-muted-foreground">Đang tải danh sách tỉnh/thành phố…</p>}
+              {provincesLoad.error && (
+                <div role="alert" className="mt-2 text-sm text-destructive">
+                  <p>Không tải được danh sách tỉnh/thành phố.</p>
+                  <button type="button" onClick={() => void provincesLoad.refresh()} className="store-button underline">Thử lại</button>
+                </div>
+              )}
+              {!provincesLoad.loading && !provincesLoad.error && provincesLoad.data?.length === 0 && <p className="mt-2 text-sm text-muted-foreground">Chưa có danh sách tỉnh/thành phố. Vui lòng liên hệ shop.</p>}
             </div>
 
             {/* Ward */}
@@ -393,18 +413,26 @@ export default function AddressesPage() {
                 id="ward"
                 aria-label="Phường / Xã"
                 required
-                disabled={!provinceCode || wards.length === 0}
+                disabled={!provinceCode || wardsLoading || Boolean(wardsError) || wards.length === 0}
                 value={wardId}
                 onChange={(e) => setWardId(e.target.value)}
                 className="w-full border border-border-strong bg-white px-3 py-2.5 text-xs text-foreground outline-none focus:border-border-strong disabled:bg-background disabled:cursor-not-allowed"
               >
-                <option value="">Chọn Phường/Xã</option>
+                <option value="">{wardsLoading ? "Đang tải phường/xã…" : "Chọn Phường/Xã"}</option>
                 {wards.map((w) => (
                   <option key={w.code} value={w.code}>
                     {w.name}
                   </option>
                 ))}
               </StoreSelect>
+              {wardsLoading && <p role="status" className="mt-2 text-sm text-muted-foreground">Đang tải danh sách phường/xã…</p>}
+              {wardsError && (
+                <div role="alert" className="mt-2 text-sm text-destructive">
+                  <p>{wardsError}</p>
+                  <button type="button" onClick={() => setWardsRetry(value => value + 1)} className="store-button underline">Thử lại</button>
+                </div>
+              )}
+              {provinceCode && !wardsLoading && !wardsError && wards.length === 0 && <p className="mt-2 text-sm text-muted-foreground">Chưa có phường/xã cho tỉnh/thành phố này.</p>}
             </div>
           </div>
 

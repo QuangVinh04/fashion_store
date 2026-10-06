@@ -70,11 +70,12 @@ export default function ProfileLayout({
 
             <nav className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-1">
               {NAV.map(({ href, label, icon: Icon }) => {
-                const active = location.pathname === href;
+                const active = location.pathname === href || (href !== "/profile" && location.pathname.startsWith(`${href}/`));
                 return (
                   <Link
                     key={href}
                     to={href}
+                    aria-current={active ? "page" : undefined}
                     className={`flex min-h-11 items-center justify-between rounded-xl px-3 py-2.5 text-sm transition-colors duration-150 ${active ? "bg-secondary text-foreground font-medium" : "text-muted-foreground hover:bg-background hover:text-foreground"}`}
                   >
                     <div className="flex items-center gap-3">
@@ -87,7 +88,7 @@ export default function ProfileLayout({
               })}
               <button
                 onClick={handleLogout}
-                className="w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-destructive bg-primary-light hover:bg-rose-100 transition-colors duration-150 store-button"
+                className="w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-destructive bg-primary-light hover:bg-primary-light transition-colors duration-150 store-button"
               >
                 <LogOut size={16} />
                 <span>Đăng Xuất</span>

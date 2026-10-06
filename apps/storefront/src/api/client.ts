@@ -7,6 +7,19 @@ export class ApiError extends Error {
   }
 }
 
+export function customerError(error: unknown): string {
+  if (error instanceof ApiError) {
+    if (error.status === 0) return 'Không kết nối được máy chủ. Vui lòng thử lại.';
+    if (error.status === 401) return 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.';
+    if (error.status === 403) return 'Không thể thực hiện thao tác này. Vui lòng kiểm tra tài khoản hoặc tải lại trang.';
+    if (error.status === 404) return 'Chưa tìm thấy thông tin bạn cần. Vui lòng thử lại hoặc liên hệ shop.';
+    if (error.status === 409) return 'Thông tin đã thay đổi. Vui lòng cập nhật lại trước khi tiếp tục.';
+    if (error.status === 400 || error.status === 422) return 'Không thể thực hiện yêu cầu. Vui lòng kiểm tra thông tin đã nhập.';
+    if (error.status === 429) return 'Bạn thao tác quá nhanh. Vui lòng chờ một chút rồi thử lại.';
+  }
+  return 'Không thể xử lý yêu cầu lúc này. Vui lòng thử lại hoặc liên hệ shop.';
+}
+
 function cookie(name: string): string | undefined {
   return document.cookie.split('; ').find(part => part.startsWith(`${name}=`))?.slice(name.length + 1);
 }

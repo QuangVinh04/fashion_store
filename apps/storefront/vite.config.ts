@@ -17,6 +17,8 @@ function figmaAssetResolver() {
 }
 
 export default defineConfig({
+  // Keep the storefront cache separate from the stale shared cache.
+  cacheDir: 'node_modules/.vite-storefront',
   server: {
     host: '0.0.0.0',
     port: 3000,

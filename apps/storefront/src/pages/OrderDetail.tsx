@@ -1,3 +1,4 @@
+import { customerError } from "../api/client";
 import { useState, useEffect } from "react";
 import { Link, useParams } from "react-router";
 import {
@@ -16,6 +17,7 @@ import {
 } from "lucide-react";
 import { store } from "../api/store";
 import { money } from "../api/client";
+import { loadOrderPayment, loadOrderShipment } from "../api/order-resources";
 import type { Order, Payment, ReturnRequest } from "../api/types";
 import OrderActivityTimeline from "../components/OrderActivityTimeline";
 import ProfileLayout from "../components/ProfileLayout";
@@ -28,6 +30,11 @@ export default function OrderDetail() {
   const historyLoad = useLoad(() => store.orderHistory(id), [id]);
 
   const [payment, setPayment] = useState<Payment | null>(null);
+  const [paymentLoading, setPaymentLoading] = useState(false);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
+  const [shipmentError, setShipmentError] = useState<string | null>(null);
+  const [shipmentLoading, setShipmentLoading] = useState(false);
+  const [resourceRetry, setResourceRetry] = useState(0);
   const [shipment, setShipment] = useState<{
     trackingCode: string;
     status: string;
@@ -47,24 +54,66 @@ export default function OrderDetail() {
 
   const order = orderLoad.data;
 
-  // Load payment, shipment, returnRequest
+  // Clear data when navigating between orders.
   useEffect(() => {
-    if (!order) return;
-    let active = true;
+    setPayment(null);
+    setShipment(null);
+    setReturnRequest(null);
+    setPaymentError(null);
+    setShipmentError(null);
+  }, [id]);
 
-    store
-      .payment(id)
+  useEffect(() => {
+    if (!order || order.id !== id) return;
+    const controller = new AbortController();
+    setPayment(null);
+    setPaymentError(null);
+    if (order.status === "CANCELLED" && !order.paymentId && !order.paymentUrl) {
+      setPaymentLoading(false);
+      return () => controller.abort();
+    }
+    // Before authorization there is no payment yet. Order polling discovers it.
+    if (order.status === "PENDING" && !order.paymentId && !order.paymentUrl) {
+      setPaymentLoading(true);
+      return () => controller.abort();
+    }
+    setPaymentLoading(true);
+    void loadOrderPayment(() => store.payment(id), controller.signal)
       .then((p) => {
-        if (active) setPayment(p);
+        if (!controller.signal.aborted) {
+          setPayment(p);
+          if (!p) setPaymentError("Thông tin thanh toán chưa sẵn sàng. Vui lòng thử lại.");
+        }
       })
-      .catch(() => {});
+      .catch(() => {
+        if (!controller.signal.aborted)
+          setPaymentError("Không thể tải thông tin thanh toán. Vui lòng thử lại.");
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setPaymentLoading(false);
+      });
+    return () => controller.abort();
+  }, [id, order?.id, order?.status, order?.paymentId, order?.paymentUrl, resourceRetry]);
 
-    store
-      .orderShipment(id)
-      .then((s) => {
-        if (active) setShipment(s);
+  useEffect(() => {
+    if (!order || order.id !== id) return;
+    let active = true;
+    setShipment(null);
+    setShipmentError(null);
+    setShipmentLoading(Boolean(order.trackingCode));
+    void loadOrderShipment(order.trackingCode, () => store.orderShipment(id))
+      .then((s) => { if (active) setShipment(s); })
+      .catch(() => {
+        if (active) setShipmentError("Không thể tải thông tin vận chuyển. Vui lòng thử lại.");
       })
-      .catch(() => {});
+      .finally(() => { if (active) setShipmentLoading(false); });
+    return () => { active = false; };
+  }, [id, order?.id, order?.status, order?.trackingCode, resourceRetry]);
+
+  // Return requests are available after delivery.
+  useEffect(() => {
+    if (!order || order.id !== id) return;
+    let active = true;
 
     if (["DELIVERED", "RETURNED", "REFUNDED"].includes(order.status)) {
       store
@@ -78,7 +127,7 @@ export default function OrderDetail() {
     return () => {
       active = false;
     };
-  }, [id, order?.status]);
+  }, [id, order?.id, order?.status]);
 
   // Resolve variantIds to productIds for reviews
   useEffect(() => {
@@ -104,25 +153,31 @@ export default function OrderDetail() {
 
   // Auto-polling for PENDING orders
   useEffect(() => {
-    if (order?.status !== "PENDING") return;
+    if (order?.status !== "PENDING" || order.id !== id) return;
     let attempts = 0;
     const interval = window.setInterval(() => {
       if (!document.hidden && attempts++ < 30) {
         void orderLoad.refresh();
-        if (order?.paymentMethod === "ONLINE") {
-          void store
-            .payment(id)
-            .then(setPayment)
-            .catch(() => {});
-        }
+      }
+      if (attempts >= 30) {
+        window.clearInterval(interval);
+        setPaymentLoading(false);
+        if (!order?.paymentId && !order?.paymentUrl)
+          setPaymentError("Đơn hàng vẫn đang xử lý. Vui lòng thử cập nhật lại.");
       }
     }, 5000);
     return () => window.clearInterval(interval);
-  }, [order?.status, id]);
+  }, [order?.id, order?.status, order?.paymentId, order?.paymentUrl, id, resourceRetry]);
+
+  const retryResources = () => {
+    void orderLoad.refresh();
+    setResourceRetry((value) => value + 1);
+  };
 
   const copyTracking = () => {
-    if (!shipment?.trackingCode) return;
-    navigator.clipboard.writeText(shipment.trackingCode);
+    const trackingCode = shipment?.trackingCode || order?.trackingCode;
+    if (!trackingCode) return;
+    navigator.clipboard.writeText(trackingCode);
     setCopiedTracking(true);
     setTimeout(() => setCopiedTracking(false), 2000);
   };
@@ -143,13 +198,13 @@ export default function OrderDetail() {
       );
       setActionNotice({
         type: "success",
-        text: "Đã gửi yêu cầu hủy đơn. Hệ thống đang tiến hành xử lý bù trừ.",
+        text: "Đã gửi yêu cầu hủy đơn. Shop sẽ cập nhật kết quả xử lý tại đây.",
       });
       await orderLoad.refresh();
     } catch (e) {
       setActionNotice({
         type: "error",
-        text: (e as Error).message || "Không thể hủy đơn hàng vào lúc này.",
+        text: customerError(e) || "Không thể hủy đơn hàng vào lúc này.",
       });
     } finally {
       setBusyAction(false);
@@ -224,7 +279,7 @@ export default function OrderDetail() {
         });
       }
     } catch (e) {
-      setActionNotice({ type: "error", text: (e as Error).message });
+      setActionNotice({ type: "error", text: customerError(e) });
     } finally {
       setBusyAction(false);
     }
@@ -265,14 +320,14 @@ export default function OrderDetail() {
           <div
             className={`mb-6 p-4 text-xs font-medium flex items-center gap-2.5 border ${
               actionNotice.type === "success"
-                ? "bg-emerald-50 text-emerald-900 border-emerald-200"
-                : "bg-red-50 text-red-900 border-red-200"
+                ? "bg-success-light text-success border-success/20"
+                : "bg-primary-light text-destructive border-destructive/20"
             }`}
           >
             {actionNotice.type === "success" ? (
-              <Check size={16} className="text-emerald-700" />
+              <Check size={16} className="text-success" />
             ) : (
-              <AlertCircle size={16} className="text-red-700" />
+              <AlertCircle size={16} className="text-destructive" />
             )}
             <span>{actionNotice.text}</span>
           </div>
@@ -290,19 +345,19 @@ export default function OrderDetail() {
                   </h2>
                   {shipment && (
                     <span className="text-xs font-semibold text-success">
-                      {shipment.provider}: {shipment.status}
+                      {shipment.provider}: {({ PENDING: "Chờ lấy hàng", PICKED: "Đã lấy hàng", SHIPPING: "Đang vận chuyển", DELIVERED: "Đã giao hàng", RETURNED: "Đang hoàn hàng", CANCELLED: "Đã hủy vận đơn" } as Record<string, string>)[shipment.status] || "Đang cập nhật"}
                     </span>
                   )}
                 </div>
 
-                {shipment?.trackingCode && (
+                {(shipment?.trackingCode || order.trackingCode) && (
                   <div className="p-3 bg-background border border-border flex items-center justify-between gap-3 text-xs">
                     <div>
                       <span className="text-muted-foreground mr-2">
                         Mã vận đơn GHN:
                       </span>
                       <strong className="text-foreground font-mono text-sm">
-                        {shipment.trackingCode}
+                        {shipment?.trackingCode || order.trackingCode}
                       </strong>
                     </div>
                     <button
@@ -312,7 +367,7 @@ export default function OrderDetail() {
                     >
                       {copiedTracking ? (
                         <>
-                          <Check size={13} className="text-emerald-600" /> Đã
+                          <Check size={13} className="text-success" /> Đã
                           chép
                         </>
                       ) : (
@@ -324,6 +379,27 @@ export default function OrderDetail() {
                   </div>
                 )}
 
+                <div aria-live="polite" className="text-xs text-muted-foreground">
+                  {shipmentError ? (
+                    <div role="alert" className="space-y-2 text-destructive">
+                      <p>{shipmentError}</p>
+                      <button type="button" onClick={retryResources} className="underline store-button">Thử lại</button>
+                    </div>
+                  ) : shipmentLoading ? (
+                    <p>Đang tải thông tin vận chuyển…</p>
+                  ) : !shipment && !order.trackingCode ? (
+                    <p>{order.status === "CANCELLED"
+                      ? "Đơn hàng đã hủy. Chưa có vận đơn."
+                      : order.status === "PENDING"
+                        ? "Chưa có mã vận đơn. Đơn hàng đang chờ xác nhận."
+                        : ["CONFIRMED", "PROCESSING", "PACKED"].includes(order.status)
+                          ? "Chưa có mã vận đơn. Shop đang chuẩn bị giao hàng."
+                          : "Chưa có thông tin vận đơn."}</p>
+                  ) : (shipment?.status === "PENDING" || !shipment) ? (
+                    <p>Đã có mã vận đơn. Chờ cập nhật từ đơn vị vận chuyển.</p>
+                  ) : null}
+                </div>
+
                 {/* History Timeline */}
                 <OrderActivityTimeline
                   key={id}
@@ -334,8 +410,8 @@ export default function OrderDetail() {
                 />
 
                 {order.cancelReason && (
-                  <div className="p-3 bg-red-50 text-xs text-destructive border border-red-200">
-                    <strong>Lý do hủy đơn:</strong> {order.cancelReason}
+                  <div className="p-3 bg-primary-light text-xs text-destructive border border-destructive/20">
+                    <strong>Đơn hàng đã hủy.</strong> Vui lòng liên hệ shop nếu bạn cần hỗ trợ.
                   </div>
                 )}
               </section>
@@ -416,7 +492,7 @@ export default function OrderDetail() {
                       type="button"
                       disabled={busyAction}
                       onClick={() => void handleCancelOrder()}
-                      className="w-full border border-rose-300 bg-rose-50 text-rose-800 py-3 text-xs font-semibold hover:bg-rose-100 disabled:opacity-50 store-button"
+                      className="w-full border border-destructive/20 bg-primary-light text-destructive py-3 text-xs font-semibold hover:bg-primary-light disabled:opacity-50 store-button"
                     >
                       {busyAction ? "Đang Xử Lý…" : "Yêu Cầu Hủy Đơn Hàng"}
                     </button>
@@ -464,7 +540,7 @@ export default function OrderDetail() {
                     <p>
                       <strong>Trạng thái trả hàng:</strong>{" "}
                       <span className="font-semibold text-primary">
-                        {returnRequest.status}
+                        {({ PENDING: "Đang xem xét", APPROVED: "Đã chấp nhận", REJECTED: "Chưa được chấp nhận" } as Record<string, string>)[returnRequest.status] || "Đang cập nhật"}
                       </span>
                     </p>
                     <p className="text-muted-foreground">
@@ -504,7 +580,7 @@ export default function OrderDetail() {
                 <div className="flex justify-between text-muted-foreground">
                   <span>Phương thức:</span>
                   <strong className="text-foreground">
-                    {order.paymentMethod} ({order.paymentProvider})
+                    {order.paymentMethod === "COD" ? "Thanh toán khi nhận hàng" : `Thanh toán trực tuyến (${({ VNPAY: "VNPay", PAYOS: "PayOS" } as Record<string, string>)[order.paymentProvider] || "Cổng thanh toán"})`}
                   </strong>
                 </div>
 
@@ -513,15 +589,26 @@ export default function OrderDetail() {
                   <strong
                     className={
                       payment?.status === "COMPLETED"
-                        ? "text-emerald-700 uppercase font-bold"
+                        ? "text-success uppercase font-bold"
                         : payment?.status === "FAILED"
-                          ? "text-rose-700 uppercase font-bold"
+                          ? "text-destructive uppercase font-bold"
                           : "text-amber-700 uppercase font-bold"
                     }
                   >
-                    {payment?.status || "Chờ cập nhật"}
+                    {payment?.status
+                      ? ({ COD_PENDING: "Thanh toán khi nhận hàng", PENDING: "Chờ thanh toán", COMPLETED: "Đã thanh toán", FAILED: "Thanh toán thất bại", CANCELLED: "Đã hủy", REFUND_PENDING: "Đang hoàn tiền", REFUNDED: "Đã hoàn tiền", REFUND_FAILED: "Hoàn tiền thất bại" } as Record<string, string>)[payment.status] || "Đang cập nhật"
+                      : paymentError ? "Chưa tải được thông tin"
+                        : order.status === "CANCELLED" ? "Đơn hàng đã hủy"
+                          : paymentLoading ? "Đang cập nhật thanh toán…" : "Chờ cập nhật"}
                   </strong>
                 </div>
+
+                {paymentError && (
+                  <div role="alert" className="text-destructive space-y-2">
+                    <p>{paymentError}</p>
+                    <button type="button" onClick={retryResources} className="underline store-button">Thử lại</button>
+                  </div>
+                )}
 
                 <div className="pt-2 border-t border-border space-y-1.5">
                   <div className="flex justify-between text-muted-foreground">
@@ -582,7 +669,7 @@ function OrderItemReview({
       setFeedback("Cảm ơn bạn! Đánh giá đã được gửi thành công.");
       setTimeout(() => setOpen(false), 2500);
     } catch (err) {
-      setFeedback((err as Error).message || "Gửi đánh giá không thành công.");
+      setFeedback(customerError(err) || "Gửi đánh giá không thành công.");
     } finally {
       setBusy(false);
     }
@@ -609,6 +696,8 @@ function OrderItemReview({
                 <button
                   key={star}
                   type="button"
+                  aria-label={`Đánh giá ${star} sao`}
+                  aria-pressed={rating === star}
                   onClick={() => setRating(star)}
                   className="p-1 hover:scale-110 transition-transform store-button"
                 >
@@ -629,6 +718,7 @@ function OrderItemReview({
           </div>
 
           <textarea
+            aria-label="Nội dung đánh giá sản phẩm"
             required
             rows={3}
             maxLength={1000}
@@ -652,7 +742,7 @@ function OrderItemReview({
           </div>
 
           {feedback && (
-            <p className="text-xs text-emerald-700 font-medium pt-1">
+            <p className="text-xs text-success font-medium pt-1">
               {feedback}
             </p>
           )}

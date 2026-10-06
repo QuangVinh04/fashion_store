@@ -1,3 +1,4 @@
+import { customerError } from "../api/client";
 import { useState } from "react";
 import { Link, useParams } from "react-router";
 import {
@@ -56,7 +57,7 @@ export default function ReturnPage() {
     } catch (err) {
       setNotice({
         type: "error",
-        text: (err as Error).message || "Lỗi khi tải ảnh lên kho lưu trữ.",
+        text: customerError(err) || "Lỗi khi tải ảnh lên kho lưu trữ.",
       });
     } finally {
       setBusy(false);
@@ -82,7 +83,7 @@ export default function ReturnPage() {
     } catch (err) {
       setNotice({
         type: "error",
-        text: (err as Error).message || "Gửi yêu cầu trả hàng thất bại.",
+        text: customerError(err) || "Gửi yêu cầu trả hàng thất bại.",
       });
     } finally {
       setBusy(false);
@@ -111,14 +112,14 @@ export default function ReturnPage() {
           <div
             className={`mb-6 p-4 text-xs font-medium flex items-center gap-2.5 border ${
               notice.type === "success"
-                ? "bg-emerald-50 text-emerald-900 border-emerald-200"
-                : "bg-red-50 text-red-900 border-red-200"
+                ? "bg-success-light text-success border-success/20"
+                : "bg-primary-light text-destructive border-destructive/20"
             }`}
           >
             {notice.type === "success" ? (
-              <CheckCircle2 size={16} className="text-emerald-700 shrink-0" />
+              <CheckCircle2 size={16} className="text-success shrink-0" />
             ) : (
-              <AlertCircle size={16} className="text-red-700 shrink-0" />
+              <AlertCircle size={16} className="text-destructive shrink-0" />
             )}
             <span>{notice.text}</span>
           </div>
@@ -134,9 +135,9 @@ export default function ReturnPage() {
               <span
                 className={`text-xs font-semibold px-3 py-1 border ${
                   request.status === "APPROVED"
-                    ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                    ? "bg-success-light text-success border-success/20"
                     : request.status === "REJECTED"
-                      ? "bg-rose-50 text-rose-800 border-rose-200"
+                      ? "bg-primary-light text-destructive border-destructive/20"
                       : "bg-amber-50 text-amber-800 border-amber-200"
                 }`}
               >
@@ -144,7 +145,7 @@ export default function ReturnPage() {
                   ? "Đã Duyệt Trả Hàng"
                   : request.status === "REJECTED"
                     ? "Từ Chối Yêu Cầu"
-                    : "Đang Xem Xét (PENDING)"}
+                    : "Đang Xem Xét"}
               </span>
             </div>
 
@@ -153,7 +154,7 @@ export default function ReturnPage() {
                 <strong>Lý do của bạn:</strong> {request.reason}
               </p>
               {request.rejectReason && (
-                <div className="p-3 bg-red-50 border border-red-200 text-destructive">
+                <div className="p-3 bg-primary-light border border-destructive/20 text-destructive">
                   <strong>Lý do từ chối:</strong> {request.rejectReason}
                 </div>
               )}
@@ -239,6 +240,7 @@ export default function ReturnPage() {
                       <button
                         type="button"
                         onClick={() => removeImage(idx)}
+                        aria-label={`Xóa ảnh minh chứng ${idx + 1}`}
                         className="absolute top-1 right-1 w-5 h-5 bg-black/70 text-white rounded-full flex items-center justify-center hover:bg-primary store-button"
                       >
                         <X size={12} />
@@ -287,7 +289,7 @@ export default function ReturnPage() {
               </p>
               <p className="text-xs text-muted-foreground max-w-md mx-auto">
                 Chính sách đổi trả của LINO chỉ áp dụng cho các đơn hàng đã được
-                giao thành công (DELIVERED) trong vòng 7 ngày. Trạng thái hiện
+                giao thành công trong vòng 7 ngày. Trạng thái hiện
                 tại của đơn:{" "}
                 <strong>{ORDER_LABEL[order.status] || order.status}</strong>.
               </p>

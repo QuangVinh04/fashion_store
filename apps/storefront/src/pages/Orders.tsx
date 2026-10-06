@@ -61,6 +61,7 @@ export default function Orders() {
               <button
                 key={tab.value}
                 type="button"
+                aria-pressed={isSelected}
                 onClick={() => setTab(tab.value)}
                 className={`px-4 py-3 text-xs font-semibold whitespace-nowrap transition-all relative ${
                   isSelected
@@ -141,14 +142,14 @@ export default function Orders() {
                     <span>
                       Thanh toán:{" "}
                       <strong className="text-foreground">
-                        {order.paymentProvider}
+                        {({ COD: "Thanh toán khi nhận hàng", VNPAY: "VNPay", PAYOS: "PayOS" } as Record<string, string>)[order.paymentProvider] || "Đang cập nhật"}
                       </strong>
                     </span>
                     <span>·</span>
                     <span>
                       Phương thức:{" "}
                       <strong className="text-foreground">
-                        {order.paymentMethod}
+                        {order.paymentMethod === "COD" ? "Khi nhận hàng" : "Trực tuyến"}
                       </strong>
                     </span>
                   </div>

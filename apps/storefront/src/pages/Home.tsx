@@ -1,3 +1,4 @@
+import { customerError } from "../api/client";
 import { useState, useEffect } from "react";
 import { Link } from "react-router";
 import { ArrowRight, Truck, ShieldCheck, RefreshCw } from "lucide-react";
@@ -17,8 +18,6 @@ export default function Home() {
   const [tabProducts, setTabProducts] = useState<ProductSummary[]>([]);
   const [tabLoading, setTabLoading] = useState(false);
   const [tabError, setTabError] = useState("");
-  const [newsletterEmail, setNewsletterEmail] = useState("");
-  const [newsletterSubmitted, setNewsletterSubmitted] = useState(false);
 
   const categories = useLoad(store.categories, []);
 
@@ -36,7 +35,7 @@ export default function Home() {
         if (active) setTabProducts(res.items);
       })
       .catch((err) => {
-        if (active) setTabError((err as Error).message);
+        if (active) setTabError(customerError(err));
       })
       .finally(() => {
         if (active) setTabLoading(false);
@@ -53,11 +52,6 @@ export default function Home() {
     { key: "UNISEX", label: "Unisex" },
   ];
 
-  const handleNewsletterSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newsletterEmail) return;
-    setNewsletterSubmitted(true);
-  };
 
   return (
     <div className="w-full">
@@ -66,7 +60,7 @@ export default function Home() {
         <div className="grid lg:grid-cols-2 items-center gap-6 lg:gap-10">
           <div className="flex flex-col justify-center order-2 lg:order-1">
             <p className="text-xs text-muted-foreground font-semibold mb-6">
-              LINO · Bộ Sưu Tập 2025
+              LINO · Bộ Sưu Tập
             </p>
             <h1 className="store-hero mb-6 text-foreground font-semibold text-balance">
               SỐNG ĐƠN <span className="text-primary">GIẢN</span>
@@ -111,7 +105,7 @@ export default function Home() {
                   Thời Trang Tối Giản
                 </p>
                 <p className="text-sm font-semibold text-foreground mt-0.5">
-                  Bộ Sưu Tập Xu Hướng 2025
+                  Bộ Sưu Tập LINO
                 </p>
               </div>
               <Link
@@ -399,36 +393,11 @@ export default function Home() {
           NHẬN THÔNG TIN BỘ SƯU TẬP MỚI
         </h2>
         <p className="text-sm text-muted-foreground mb-8 max-w-md mx-auto">
-          Đăng ký để nhận sớm nhất thông báo về sản phẩm mới và các chương trình
-          ưu đãi đặc quyền từ LINO.
+          Đăng ký nhận thông tin qua email hiện chưa khả dụng. Bạn có thể khám
+          phá sản phẩm tại cửa hàng.
         </p>
 
-        {newsletterSubmitted ? (
-          <div className="bg-success-light border border-success/20 p-4 max-w-md mx-auto text-sm text-success font-medium">
-            Cảm ơn bạn! LINO sẽ gửi thông tin ưu đãi mới nhất tới địa chỉ email
-            của bạn.
-          </div>
-        ) : (
-          <form
-            onSubmit={handleNewsletterSubmit}
-            className="flex max-w-md mx-auto gap-2"
-          >
-            <input
-              type="email"
-              required
-              value={newsletterEmail}
-              onChange={(e) => setNewsletterEmail(e.target.value)}
-              placeholder="Nhập email của bạn"
-              className="flex-1 border border-border-strong px-4 py-3.5 text-sm text-foreground bg-white focus:outline-none focus:border-border-strong placeholder:text-muted-foreground store-input"
-            />
-            <button
-              type="submit"
-              className="bg-primary text-white px-7 py-3.5 text-xs font-semibold hover:bg-primary-hover active:scale-[0.98] transition-colors shrink-0 store-button"
-            >
-              Đăng Ký
-            </button>
-          </form>
-        )}
+        <Link to="/products" className="store-action inline-flex items-center bg-primary px-6 py-3 text-white hover:bg-primary-hover">Khám phá sản phẩm</Link>
       </section>
     </div>
   );

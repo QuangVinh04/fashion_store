@@ -172,6 +172,7 @@ export default function Products() {
           <button
             type="button"
             onClick={() => updateParam("categoryId", null)}
+            aria-pressed={!categoryId}
             className={`text-left py-1 hover:text-primary ${!categoryId ? "font-semibold text-primary" : "text-muted-foreground"} store-button`}
           >
             Tất Cả Danh Mục
@@ -181,6 +182,7 @@ export default function Products() {
               <button
                 type="button"
                 onClick={() => updateParam("categoryId", cat.id)}
+                aria-pressed={categoryId === cat.id}
                 className={`text-left py-1 block w-full hover:text-primary truncate ${
                   categoryId === cat.id
                     ? "font-semibold text-primary"
@@ -196,6 +198,7 @@ export default function Products() {
                       key={child.id}
                       type="button"
                       onClick={() => updateParam("categoryId", child.id)}
+                      aria-pressed={categoryId === child.id}
                       className={`text-left py-0.5 block w-full text-xs hover:text-primary truncate ${
                         categoryId === child.id
                           ? "font-semibold text-primary"
@@ -219,6 +222,7 @@ export default function Products() {
             <button
               type="button"
               onClick={() => updateParam("brandId", null)}
+              aria-pressed={!brandId}
               className={`text-left py-0.5 hover:text-primary ${!brandId ? "font-semibold text-primary" : "text-muted-foreground"} store-button`}
             >
               Tất Cả Thương Hiệu
@@ -228,6 +232,7 @@ export default function Products() {
                 key={b.id}
                 type="button"
                 onClick={() => updateParam("brandId", b.id)}
+                aria-pressed={brandId === b.id}
                 className={`text-left py-0.5 hover:text-primary truncate ${
                   brandId === b.id
                     ? "font-semibold text-primary"
@@ -251,6 +256,7 @@ export default function Products() {
                 <button
                   key={s.id}
                   type="button"
+                  aria-pressed={selected}
                   onClick={() => updateParam("fit", selected ? null : s.name)}
                   className={`min-w-9 h-8 px-2 border text-xs font-medium transition-colors ${
                     selected
@@ -276,6 +282,7 @@ export default function Products() {
                 <button
                   key={c.id}
                   type="button"
+                  aria-pressed={selected}
                   onClick={() => updateParam("color", selected ? null : c.name)}
                   className={`h-7 px-2.5 rounded-full border text-xs flex items-center gap-1.5 transition-all ${
                     selected
@@ -304,6 +311,7 @@ export default function Products() {
               type="number"
               min="0"
               placeholder="Từ ₫"
+              aria-label="Giá tối thiểu"
               value={minPrice}
               onChange={(e) => updateParam("minPrice", e.target.value || null)}
               className="w-full border border-border-strong px-2.5 py-2 text-xs outline-none focus:border-border-strong store-input"
@@ -313,6 +321,7 @@ export default function Products() {
               type="number"
               min="0"
               placeholder="Đến ₫"
+              aria-label="Giá tối đa"
               value={maxPrice}
               onChange={(e) => updateParam("maxPrice", e.target.value || null)}
               className="w-full border border-border-strong px-2.5 py-2 text-xs outline-none focus:border-border-strong store-input"
@@ -404,6 +413,7 @@ export default function Products() {
               <input
                 type="text"
                 placeholder="Tìm kiếm sản phẩm theo tên…"
+                aria-label="Tìm kiếm sản phẩm"
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
                 className="w-full border border-border-strong bg-white pl-9 pr-3 py-2.5 text-xs text-foreground outline-none focus:border-border-strong store-input"
@@ -415,6 +425,7 @@ export default function Products() {
               {searchInput && (
                 <button
                   type="button"
+                  aria-label="Xóa từ khóa tìm kiếm"
                   onClick={() => {
                     setSearchInput("");
                     updateParam("q", null);
@@ -491,7 +502,7 @@ export default function Products() {
             {keyword && (
               <span className="inline-flex items-center gap-1 bg-background border border-border-strong px-2.5 py-1 text-xs">
                 Từ khóa: {keyword}
-                <button onClick={() => updateParam("q", null)}>
+                <button aria-label="Bỏ lọc từ khóa" onClick={() => updateParam("q", null)}>
                   <X size={12} className="hover:text-primary" />
                 </button>
               </span>
@@ -503,7 +514,7 @@ export default function Products() {
                   : gender === "WOMEN"
                     ? "Nữ"
                     : "Unisex"}
-                <button onClick={() => updateParam("gender", null)}>
+                <button aria-label="Bỏ lọc giới tính" onClick={() => updateParam("gender", null)}>
                   <X size={12} className="hover:text-primary" />
                 </button>
               </span>
@@ -511,7 +522,7 @@ export default function Products() {
             {fit && (
               <span className="inline-flex items-center gap-1 bg-background border border-border-strong px-2.5 py-1 text-xs">
                 Size: {fit}
-                <button onClick={() => updateParam("fit", null)}>
+                <button aria-label="Bỏ lọc kích cỡ" onClick={() => updateParam("fit", null)}>
                   <X size={12} className="hover:text-primary" />
                 </button>
               </span>
@@ -519,7 +530,7 @@ export default function Products() {
             {color && (
               <span className="inline-flex items-center gap-1 bg-background border border-border-strong px-2.5 py-1 text-xs">
                 Màu: {color}
-                <button onClick={() => updateParam("color", null)}>
+                <button aria-label="Bỏ lọc màu sắc" onClick={() => updateParam("color", null)}>
                   <X size={12} className="hover:text-primary" />
                 </button>
               </span>
@@ -529,6 +540,7 @@ export default function Products() {
                 Giá: {minPrice ? money(Number(minPrice)) : "0 ₫"} –{" "}
                 {maxPrice ? money(Number(maxPrice)) : "∞"}
                 <button
+                  aria-label="Bỏ lọc khoảng giá"
                   onClick={() => {
                     const next = new URLSearchParams(params);
                     next.delete("minPrice");

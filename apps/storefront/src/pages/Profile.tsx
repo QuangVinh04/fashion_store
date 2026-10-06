@@ -1,3 +1,4 @@
+import { customerError } from "../api/client";
 import { useState, useEffect, useRef } from "react";
 import {
   Camera,
@@ -103,7 +104,7 @@ export default function ProfilePage() {
       (err: Error) => {
         if (selectionCounter.current === currentSeq) {
           setUploading(false);
-          const errorMsg = err.message || "Tải ảnh đại diện thất bại.";
+          const errorMsg = customerError(err) || "Tải ảnh đại diện thất bại.";
           setUploadError(errorMsg);
           setNotice({
             type: "error",
@@ -151,7 +152,7 @@ export default function ProfilePage() {
     } catch (err) {
       setNotice({
         type: "error",
-        text: (err as Error).message || "Lưu thông tin thất bại.",
+        text: customerError(err) || "Lưu thông tin thất bại.",
       });
     } finally {
       setBusy(false);
@@ -175,14 +176,14 @@ export default function ProfilePage() {
           <div
             className={`mb-6 p-4 text-xs font-medium flex items-center gap-2.5 border ${
               notice.type === "success"
-                ? "bg-emerald-50 text-emerald-900 border-emerald-200"
-                : "bg-red-50 text-red-900 border-red-200"
+                ? "bg-success-light text-success border-success/20"
+                : "bg-primary-light text-destructive border-destructive/20"
             }`}
           >
             {notice.type === "success" ? (
-              <Check size={16} className="text-emerald-700 shrink-0" />
+              <Check size={16} className="text-success shrink-0" />
             ) : (
-              <AlertCircle size={16} className="text-red-700 shrink-0" />
+              <AlertCircle size={16} className="text-destructive shrink-0" />
             )}
             <span>{notice.text}</span>
           </div>
@@ -231,7 +232,7 @@ export default function ProfilePage() {
                     <button
                       type="button"
                       onClick={handleRetryUpload}
-                      className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-red-700 hover:text-red-800 bg-red-50 hover:bg-red-100 border border-red-200 transition-colors"
+                      className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-destructive hover:text-destructive bg-primary-light hover:bg-primary-light border border-destructive/20 transition-colors"
                     >
                       <RefreshCw size={13} /> Thử lại
                     </button>
@@ -250,12 +251,13 @@ export default function ProfilePage() {
               </label>
               <input
                 type="email"
+                aria-label="Email tài khoản"
                 disabled
                 value={profileLoad.data.email}
                 className="w-full border border-border-strong bg-background px-4 py-3 text-xs text-muted-foreground cursor-not-allowed select-none store-input"
               />
               <span className="text-xs text-muted-foreground mt-1 block">
-                Email được quản lý qua tài khoản bảo mật Keycloak của LINO.
+                Bạn có thể quản lý email trong phần cài đặt tài khoản.
               </span>
             </div>
 
@@ -333,8 +335,7 @@ export default function ProfilePage() {
                   <ShieldCheck size={15} /> Bảo Mật & Mật Khẩu
                 </p>
                 <p className="text-muted-foreground">
-                  Đổi mật khẩu và cài đặt xác thực 2 lớp qua cổng quản lý tài
-                  khoản Keycloak.
+                  Đổi mật khẩu và cài đặt xác thực hai bước để bảo vệ tài khoản.
                 </p>
               </div>
 

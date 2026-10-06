@@ -11,6 +11,7 @@ import {
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
 import { Button } from "./components/ui/button";
+import { Avatar, AvatarImage, AvatarFallback } from "./components/ui/avatar";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -103,9 +104,16 @@ export default function Root() {
               <DropdownMenu open={userMenuOpen} onOpenChange={setUserMenuOpen}>
                 <DropdownMenuTrigger asChild>
                   <button className="store-icon-button" aria-label="Tài khoản">
-                    <span className="flex size-8 items-center justify-center rounded-full bg-secondary text-xs font-medium text-foreground">
-                      {user?.fullName?.[0]?.toUpperCase() || "U"}
-                    </span>
+                    <Avatar className="size-8">
+                      <AvatarImage
+                        src={user?.avatarUrl || user?.avatar || undefined}
+                        alt=""
+                        className="object-cover"
+                      />
+                      <AvatarFallback className="bg-secondary text-xs font-medium text-foreground">
+                        {user?.fullName?.[0]?.toUpperCase() || "U"}
+                      </AvatarFallback>
+                    </Avatar>
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent

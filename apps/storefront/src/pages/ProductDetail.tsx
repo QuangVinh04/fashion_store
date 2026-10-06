@@ -1,3 +1,4 @@
+import { customerError } from "../api/client";
 import { useState, useEffect, useMemo } from "react";
 import { Link, useParams, useNavigate } from "react-router";
 import {
@@ -234,7 +235,7 @@ export default function ProductDetail() {
       setFeedback({
         type: "error",
         message:
-          (e as Error).message || "Không thể thêm sản phẩm vào giỏ hàng.",
+          customerError(e) || "Không thể thêm sản phẩm vào giỏ hàng.",
       });
     } finally {
       setBusy(false);
@@ -256,7 +257,7 @@ export default function ProductDetail() {
         setLiked(true);
       }
     } catch (e) {
-      setFeedback({ type: "error", message: (e as Error).message });
+      setFeedback({ type: "error", message: customerError(e) });
     } finally {
       setBusy(false);
     }
@@ -329,6 +330,8 @@ export default function ProductDetail() {
                         <button
                           key={img.id}
                           type="button"
+                          aria-label={`Xem ảnh ${img.altText || p.name}`}
+                          aria-pressed={isActive}
                           onClick={() => setActiveImg(url)}
                           className={`w-20 h-24 shrink-0 bg-background overflow-hidden border-2 transition-all ${
                             isActive
@@ -382,7 +385,7 @@ export default function ProductDetail() {
                     </span>
                   )}
                   {isSale && (
-                    <span className="text-xs font-semibold text-primary bg-red-50 border border-red-200 px-2 py-0.5">
+                    <span className="text-xs font-semibold text-primary bg-primary-light border border-destructive/20 px-2 py-0.5">
                       Tiết kiệm {money(p.basePrice - displayPrice)}
                     </span>
                   )}
@@ -417,6 +420,7 @@ export default function ProductDetail() {
                           <button
                             key={key}
                             type="button"
+                            aria-pressed={isSelected}
                             onClick={() => {
                               setSelectedColor(key);
                               setSelectedSize("");
@@ -462,6 +466,7 @@ export default function ProductDetail() {
                           <button
                             key={key}
                             type="button"
+                            aria-pressed={isSelected}
                             onClick={() => {
                               setSelectedSize(key);
                               setFeedback(null);
@@ -489,6 +494,7 @@ export default function ProductDetail() {
                     <button
                       type="button"
                       disabled={qty <= 1}
+                      aria-label="Giảm số lượng"
                       onClick={() => setQty((q) => Math.max(1, q - 1))}
                       className="w-10 h-10 flex items-center justify-center text-sm font-semibold text-foreground hover:bg-background disabled:opacity-30 store-button"
                     >
@@ -496,6 +502,7 @@ export default function ProductDetail() {
                     </button>
                     <input
                       type="number"
+                      aria-label="Số lượng sản phẩm"
                       min="1"
                       max="99"
                       value={qty}
@@ -512,6 +519,7 @@ export default function ProductDetail() {
                     <button
                       type="button"
                       disabled={qty >= 99}
+                      aria-label="Tăng số lượng"
                       onClick={() => setQty((q) => Math.min(99, q + 1))}
                       className="w-10 h-10 flex items-center justify-center text-sm font-semibold text-foreground hover:bg-background disabled:opacity-30 store-button"
                     >
@@ -525,16 +533,16 @@ export default function ProductDetail() {
                   <div
                     className={`mb-6 p-4 text-xs font-medium flex items-center gap-3 border ${
                       feedback.type === "success"
-                        ? "bg-emerald-50 text-emerald-900 border-emerald-200"
-                        : "bg-red-50 text-red-900 border-red-200"
+                        ? "bg-success-light text-success border-success/20"
+                        : "bg-primary-light text-destructive border-destructive/20"
                     }`}
                   >
                     {feedback.type === "success" ? (
-                      <Check size={16} className="text-emerald-700 shrink-0" />
+                      <Check size={16} className="text-success shrink-0" />
                     ) : (
                       <AlertCircle
                         size={16}
-                        className="text-red-700 shrink-0"
+                        className="text-destructive shrink-0"
                       />
                     )}
                     <span>{feedback.message}</span>
@@ -566,7 +574,7 @@ export default function ProductDetail() {
                     aria-label={liked ? "Bỏ yêu thích" : "Yêu thích"}
                     className={`size-11 md:size-10 flex items-center justify-center rounded-xl border transition-colors shrink-0 ${
                       liked
-                        ? "border-primary bg-red-50 text-primary"
+                        ? "border-primary bg-primary-light text-primary"
                         : "border-border-strong hover:border-border-strong text-foreground"
                     } store-button`}
                   >
@@ -737,7 +745,7 @@ export default function ProductDetail() {
                         <div className="flex items-center justify-between mb-3">
                           <StarRating rating={r.rating} size={14} />
                           {r.verifiedPurchase && (
-                            <span className="text-xs font-semibold text-success bg-emerald-50 px-2 py-0.5 border border-emerald-200">
+                            <span className="text-xs font-semibold text-success bg-success-light px-2 py-0.5 border border-success/20">
                               Đã Mua Hàng
                             </span>
                           )}

@@ -21,7 +21,7 @@ export default function Contact() {
     },
     {
       q: "Chính sách đổi trả sản phẩm được áp dụng như thế nào?",
-      a: "Khách hàng có thể gửi yêu cầu trả hàng trong vòng 7 ngày kể từ khi đơn hàng được ghi nhận đã giao thành công (DELIVERED). Sản phẩm đổi trả cần giữ nguyên tem mác, chưa qua giặt ủi và không có mùi lạ. Quý khách có thể gửi yêu cầu trực tiếp tại trang Chi tiết đơn hàng trong tài khoản.",
+      a: "Khách hàng có thể gửi yêu cầu trả hàng trong vòng 7 ngày kể từ khi đơn hàng được ghi nhận đã giao thành công. Sản phẩm đổi trả cần giữ nguyên tem mác, chưa qua giặt ủi và không có mùi lạ. Quý khách có thể gửi yêu cầu trực tiếp tại trang Chi tiết đơn hàng trong tài khoản.",
     },
     {
       q: "Tôi có thể thanh toán bằng những hình thức nào?",

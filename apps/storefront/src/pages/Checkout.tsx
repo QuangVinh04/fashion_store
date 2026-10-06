@@ -1,3 +1,4 @@
+import { customerError } from "../api/client";
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router";
 import {
@@ -100,7 +101,7 @@ export default function CheckoutPage() {
       selectedAddress &&
       (!selectedAddress.provinceId || !selectedAddress.wardId)
     ) {
-      setError("Địa chỉ cần chọn lại tỉnh và phường/xã theo danh mục GHN mới.");
+      setError("Vui lòng cập nhật tỉnh/thành phố và phường/xã trong địa chỉ giao hàng.");
       return;
     }
 
@@ -118,7 +119,7 @@ export default function CheckoutPage() {
       sessionStorage.setItem("lino:checkoutId", result.id);
       await refreshCart();
     } catch (e) {
-      setError((e as Error).message);
+      setError(customerError(e));
     } finally {
       setBusy(false);
     }
@@ -196,7 +197,7 @@ export default function CheckoutPage() {
         navigate(`/profile/orders/${order.id}`);
       }
     } catch (e) {
-      setError((e as Error).message);
+      setError(customerError(e));
     } finally {
       setBusy(false);
       setProcessingText("");
@@ -329,7 +330,7 @@ export default function CheckoutPage() {
                               · {addr.phone}
                             </span>
                             {addr.isDefault && (
-                              <span className="text-xs font-semibold text-success bg-emerald-50 px-2 py-0.5 border border-emerald-200">
+                              <span className="text-xs font-semibold text-success bg-success-light px-2 py-0.5 border border-success/20">
                                 Mặc định
                               </span>
                             )}
@@ -509,6 +510,7 @@ export default function CheckoutPage() {
                 <input
                   type="text"
                   placeholder="Nhập mã ưu đãi (ví dụ: LINOMOI)"
+                  aria-label="Mã giảm giá"
                   value={couponCode}
                   onChange={(e) => {
                     setCouponCode(e.target.value.toUpperCase());
@@ -600,7 +602,7 @@ export default function CheckoutPage() {
             </div>
 
             {error && (
-              <div className="p-3 bg-red-50 border border-red-200 text-xs text-destructive flex items-center gap-2">
+              <div className="p-3 bg-primary-light border border-destructive/20 text-xs text-destructive flex items-center gap-2">
                 <AlertCircle size={15} className="shrink-0 text-primary" />
                 <span>{error}</span>
               </div>

@@ -21,7 +21,6 @@ export default function PaymentReturn() {
   const isPayosCancel =
     location.pathname.includes("payos/cancel") ||
     searchParams.get("cancel") === "true";
-  const isPayosSuccess = location.pathname.includes("payos/success");
   const isPayos =
     location.pathname.includes("payos") || searchParams.has("orderCode");
 
@@ -32,6 +31,7 @@ export default function PaymentReturn() {
 
   const [verifyStatus, setVerifyStatus] = useState<string>("");
   const [verifyError, setVerifyError] = useState<string>("");
+  const [pollExpired, setPollExpired] = useState(false);
 
   const paymentLoad = useLoad(
     () =>
@@ -51,7 +51,7 @@ export default function PaymentReturn() {
 
     let active = true;
     const vnpCode = searchParams.get("vnp_ResponseCode");
-    setVerifyStatus("Đang xác thực chữ ký giao dịch với cổng VNPay…");
+    setVerifyStatus("Đang kiểm tra kết quả thanh toán…");
     store
       .vnpayVerify(searchParams)
       .then(() => {
@@ -60,18 +60,18 @@ export default function PaymentReturn() {
             setVerifyError(
               vnpCode === "24"
                 ? "Bạn đã hủy giao dịch trên cổng VNPay."
-                : `Giao dịch không thành công (Mã phản hồi VNPay: ${vnpCode}).`,
+                : "Chưa xác nhận được thanh toán. Vui lòng kiểm tra lại đơn hàng.",
             );
           } else {
-            setVerifyStatus("Xác thực chữ ký hợp lệ từ VNPay.");
+            setVerifyStatus("Đã nhận phản hồi thanh toán. Đang kiểm tra đơn hàng.");
           }
           void paymentLoad.refresh();
         }
       })
-      .catch((err) => {
+      .catch(() => {
         if (active) {
           setVerifyError(
-            (err as Error).message || "Chữ ký phản hồi không hợp lệ.",
+            "Chưa kiểm tra được kết quả thanh toán. Vui lòng thử lại.",
           );
           void paymentLoad.refresh();
         }
@@ -87,7 +87,7 @@ export default function PaymentReturn() {
     if (!isPayos || !searchParams.toString()) return;
 
     let active = true;
-    setVerifyStatus("Đang xác thực thông tin giao dịch với cổng PayOS…");
+    setVerifyStatus("Đang kiểm tra kết quả thanh toán…");
     store
       .payosVerify(searchParams)
       .then(() => {
@@ -95,15 +95,15 @@ export default function PaymentReturn() {
           if (isPayosCancel) {
             setVerifyError("Đã ghi nhận yêu cầu hủy thanh toán từ cổng PayOS.");
           } else {
-            setVerifyStatus("Xác thực giao dịch thành công từ PayOS.");
+            setVerifyStatus("Đã nhận phản hồi thanh toán. Đang kiểm tra đơn hàng.");
           }
           void paymentLoad.refresh();
         }
       })
-      .catch((err) => {
+      .catch(() => {
         if (active) {
           setVerifyError(
-            (err as Error).message || "Không thể xác thực giao dịch từ PayOS.",
+            "Chưa kiểm tra được kết quả thanh toán. Vui lòng thử lại.",
           );
           void paymentLoad.refresh();
         }
@@ -117,18 +117,13 @@ export default function PaymentReturn() {
   const vnpResponseCode = searchParams.get("vnp_ResponseCode");
   const isVnpayFailed =
     isVnpay && vnpResponseCode != null && vnpResponseCode !== "00";
-  const isVnpaySuccess = isVnpay && vnpResponseCode === "00";
 
   const p = paymentLoad.data;
-  const isCompleted =
-    p?.status === "COMPLETED" ||
-    (!p && isPayosSuccess && !isPayosCancel) ||
-    (!p && isVnpaySuccess);
+  const isCompleted = p?.status === "COMPLETED";
   const isFailed =
     p?.status === "FAILED" ||
     p?.status === "CANCELLED" ||
-    isPayosCancel ||
-    isVnpayFailed;
+    (!p && (isPayosCancel || isVnpayFailed));
   const isPending = !isCompleted && !isFailed;
 
   // Polling for final status from backend
@@ -139,9 +134,14 @@ export default function PaymentReturn() {
       return;
 
     let attempts = 0;
+    setPollExpired(false);
     const interval = window.setInterval(() => {
       if (!document.hidden && attempts++ < 15) {
         void paymentLoad.refresh();
+      }
+      if (attempts >= 15) {
+        window.clearInterval(interval);
+        setPollExpired(true);
       }
     }, 4000);
 
@@ -167,20 +167,20 @@ export default function PaymentReturn() {
         {/* State Icon & Title */}
         {isCompleted ? (
           <div className="mb-6">
-            <div className="w-20 h-20 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4 border border-emerald-200">
+            <div className="w-20 h-20 bg-success-light text-success rounded-full flex items-center justify-center mx-auto mb-4 border border-success/20">
               <CheckCircle2 size={44} />
             </div>
             <h1 className="text-foreground font-semibold text-xl text-balance">
               THANH TOÁN THÀNH CÔNG
             </h1>
             <p className="text-sm text-muted-foreground mt-2 max-w-md mx-auto">
-              Đơn hàng của bạn đã được ghi nhận thanh toán thành công và chuyển
-              sang bộ phận chuẩn bị hàng.
+              Thanh toán của bạn đã được ghi nhận. Bạn có thể xem tiến độ xử lý
+              tại trang chi tiết đơn hàng.
             </p>
           </div>
         ) : isFailed ? (
           <div className="mb-6">
-            <div className="w-20 h-20 bg-rose-50 text-rose-600 rounded-full flex items-center justify-center mx-auto mb-4 border border-rose-200">
+            <div className="w-20 h-20 bg-primary-light text-destructive rounded-full flex items-center justify-center mx-auto mb-4 border border-destructive/20">
               <XCircle size={44} />
             </div>
             <h1 className="text-foreground font-semibold text-xl text-balance">
@@ -200,20 +200,24 @@ export default function PaymentReturn() {
               ĐANG XÁC NHẬN THANH TOÁN
             </h1>
             <p className="text-sm text-muted-foreground mt-2 max-w-md mx-auto">
-              Hệ thống đang đồng bộ dữ liệu giao dịch từ cổng thanh toán. Vui
-              lòng giữ trang trong giây lát.
+              {pollExpired || paymentLoad.error
+                ? "Chưa xác nhận được kết quả thanh toán. Vui lòng kiểm tra lại hoặc xem chi tiết đơn hàng."
+                : "Đang kiểm tra kết quả thanh toán của bạn. Vui lòng chờ trong giây lát."}
             </p>
           </div>
         )}
 
         {/* Verification messages */}
-        {verifyStatus && (
-          <p className="text-xs text-emerald-800 bg-emerald-50/80 p-2.5 mb-6 border border-emerald-200 inline-block">
+        {isPending && (pollExpired || paymentLoad.error) && (
+          <button type="button" onClick={() => void paymentLoad.refresh()} className="store-button mb-4 underline">Kiểm tra lại thanh toán</button>
+        )}
+        {verifyStatus && isPending && !verifyError && !pollExpired && !paymentLoad.error && (
+          <p className="text-xs text-success bg-success-light/80 p-2.5 mb-6 border border-success/20 inline-block">
             {verifyStatus}
           </p>
         )}
-        {verifyError && (
-          <p className="text-xs text-destructive bg-red-50 p-2.5 mb-6 border border-red-200 inline-block">
+        {verifyError && !isCompleted && (
+          <p className="text-xs text-destructive bg-primary-light p-2.5 mb-6 border border-destructive/20 inline-block">
             {verifyError}
           </p>
         )}
@@ -227,18 +231,18 @@ export default function PaymentReturn() {
             </div>
             <div className="flex justify-between border-b border-border pb-2">
               <span className="text-muted-foreground">
-                Trạng thái hệ thống:
+                Trạng thái thanh toán:
               </span>
               <strong
                 className={
                   p.status === "COMPLETED"
-                    ? "text-emerald-700 font-bold"
+                    ? "text-success font-bold"
                     : p.status === "FAILED"
-                      ? "text-rose-700 font-bold"
+                      ? "text-destructive font-bold"
                       : "text-amber-700 font-bold"
                 }
               >
-                {p.status}
+                {({ COMPLETED: "Đã thanh toán", PENDING: "Chờ thanh toán", COD_PENDING: "Thanh toán khi nhận hàng", FAILED: "Thanh toán chưa thành công", CANCELLED: "Đã hủy thanh toán", REFUNDED: "Đã hoàn tiền", REFUND_PENDING: "Đang hoàn tiền", REFUND_FAILED: "Chưa hoàn tiền thành công" } as Record<string, string>)[p.status] || "Đang cập nhật"}
               </strong>
             </div>
             <div className="flex justify-between border-b border-border pb-2">
@@ -250,7 +254,7 @@ export default function PaymentReturn() {
             {p.failureReason && (
               <div className="flex justify-between pt-1 text-primary">
                 <span>Nguyên nhân:</span>
-                <span>{p.failureReason}</span>
+                <span>Thanh toán chưa hoàn tất. Vui lòng liên hệ shop nếu bạn đã bị trừ tiền.</span>
               </div>
             )}
           </div>

@@ -1,3 +1,4 @@
+import { customerError } from "../api/client";
 import { useState } from "react";
 import { Link } from "react-router";
 import { Heart, Trash2, ShoppingBag, ArrowRight } from "lucide-react";
@@ -25,7 +26,7 @@ export default function Wishlist() {
       await store.wishRemove(productId);
       await wishlistLoad.refresh();
     } catch (e) {
-      setNotice((e as Error).message);
+      setNotice(customerError(e));
     } finally {
       setBusyId("");
     }
@@ -43,7 +44,7 @@ export default function Wishlist() {
         />
 
         {notice && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 text-xs text-destructive">
+          <div className="mb-6 p-4 bg-primary-light border border-destructive/20 text-xs text-destructive">
             {notice}
           </div>
         )}

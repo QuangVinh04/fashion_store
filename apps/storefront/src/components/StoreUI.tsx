@@ -1,3 +1,4 @@
+import { customerError } from "../api/client";
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router";
 import { Heart, Star, AlertCircle, RefreshCw, ShoppingBag } from "lucide-react";
@@ -17,7 +18,7 @@ export function useLoad<T>(load: () => Promise<T>, keys: unknown[] = []) {
       setData(await load());
       setError("");
     } catch (e) {
-      setError((e as Error).message);
+      setError(customerError(e));
     } finally {
       setLoading(false);
     }
@@ -133,6 +134,7 @@ export function ProductCard({
   const { isLoggedIn, login } = useAuth();
   const [liked, setLiked] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [wishError, setWishError] = useState("");
 
   useEffect(() => {
     if (!isLoggedIn) {
@@ -159,6 +161,7 @@ export function ProductCard({
       return;
     }
     setBusy(true);
+    setWishError("");
     try {
       if (liked) {
         await store.wishRemove(product.id);
@@ -169,6 +172,8 @@ export function ProductCard({
         setLiked(true);
         onWishlistChange?.(product.id, true);
       }
+    } catch {
+      setWishError("Không cập nhật được yêu thích. Vui lòng thử lại.");
     } finally {
       setBusy(false);
     }
@@ -204,6 +209,7 @@ export function ProductCard({
           disabled={busy}
           onClick={toggleWish}
           aria-label={liked ? "Bỏ yêu thích" : "Yêu thích"}
+          aria-pressed={liked}
           className="absolute right-3 top-3 flex size-9 items-center justify-center rounded-lg bg-white text-foreground transition-colors hover:bg-primary-light disabled:opacity-45"
         >
           <Heart
@@ -216,6 +222,12 @@ export function ProductCard({
       </div>
 
       <div className="flex flex-1 flex-col justify-between gap-3 p-4">
+        {wishError && (
+          <div role="alert" className="rounded-lg bg-primary-light p-3 text-sm text-destructive">
+            <p>{wishError}</p>
+            <button type="button" disabled={busy} onClick={toggleWish} className="store-button underline">Thử lại</button>
+          </div>
+        )}
         <div>
           <p className="text-xs text-muted-foreground font-medium truncate">
             {product.categoryName || product.brandName || "LINO"}
@@ -295,9 +307,9 @@ export function StatusBadge({ status }: { status: OrderStatus }) {
     PROCESSING: "bg-indigo-50 text-indigo-800 border-indigo-200",
     PACKED: "bg-purple-50 text-purple-800 border-purple-200",
     SHIPPING: "bg-cyan-50 text-cyan-800 border-cyan-200",
-    DELIVERED: "bg-emerald-50 text-emerald-800 border-emerald-200",
+    DELIVERED: "bg-success-light text-success border-success/20",
     COMPLETED: "bg-green-50 text-green-900 border-green-300 font-semibold",
-    CANCELLED: "bg-rose-50 text-rose-800 border-rose-200",
+    CANCELLED: "bg-primary-light text-destructive border-destructive/20",
     RETURNED: "bg-orange-50 text-orange-800 border-orange-200",
     REFUNDED: "bg-gray-100 text-gray-800 border-gray-300",
   };

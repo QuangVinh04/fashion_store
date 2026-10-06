@@ -1,3 +1,4 @@
+import { customerError } from "../api/client";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router";
 import {
@@ -42,7 +43,7 @@ export default function Cart() {
     try {
       await updateQty(id, newQty);
     } catch (e) {
-      setActionError((e as Error).message);
+      setActionError(customerError(e));
     } finally {
       setBusyId("");
     }
@@ -54,7 +55,7 @@ export default function Cart() {
     try {
       await removeItem(id);
     } catch (e) {
-      setActionError((e as Error).message);
+      setActionError(customerError(e));
     } finally {
       setBusyId("");
     }
@@ -72,7 +73,7 @@ export default function Cart() {
     try {
       await clearCart();
     } catch (e) {
-      setActionError((e as Error).message);
+      setActionError(customerError(e));
     } finally {
       setBusyId("");
     }
@@ -83,7 +84,7 @@ export default function Cart() {
     Math.round((total / SHIPPING_THRESHOLD) * 100),
   );
 
-  if (!loading && (!cart || cart.items.length === 0)) {
+  if (!loading && !error && cart && cart.items.length === 0) {
     return (
       <div className="w-full">
         {/* Breadcrumb */}
@@ -194,7 +195,7 @@ export default function Cart() {
         <Status loading={loading} error={error} retry={() => void refresh()} />
 
         {actionError && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 text-xs text-destructive flex items-center gap-2">
+          <div className="mb-6 p-4 bg-primary-light border border-destructive/20 text-xs text-destructive flex items-center gap-2">
             <AlertCircle size={15} className="shrink-0 text-primary" />
             <span>{actionError}</span>
           </div>
@@ -260,6 +261,7 @@ export default function Cart() {
                       <div className="flex items-center border border-border-strong bg-white rounded-2xl">
                         <button
                           type="button"
+                          aria-label={`Giảm số lượng ${item.productName}`}
                           disabled={isBusy || item.quantity <= 1}
                           onClick={() =>
                             void handleQty(item.id, item.quantity - 1)
@@ -273,6 +275,7 @@ export default function Cart() {
                         </span>
                         <button
                           type="button"
+                          aria-label={`Tăng số lượng ${item.productName}`}
                           disabled={isBusy || item.quantity >= 99}
                           onClick={() =>
                             void handleQty(item.id, item.quantity + 1)

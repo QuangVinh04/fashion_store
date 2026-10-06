@@ -84,7 +84,7 @@ export default function Policy() {
               <p>
                 <strong>Thời hạn yêu cầu:</strong> Trong vòng{" "}
                 <strong>7 ngày</strong> kể từ thời điểm đơn hàng được ghi nhận
-                đã giao thành công (DELIVERED).
+                đã giao thành công.
               </p>
               <p>
                 <strong>Điều kiện sản phẩm:</strong> Sản phẩm còn nguyên vẹn tem
@@ -122,8 +122,7 @@ export default function Policy() {
                 Visa, Mastercard.
               </p>
               <p>
-                <strong>Bảo mật giao dịch:</strong> Hệ thống BFF và Gateway của
-                LINO không lưu trữ thông tin thẻ ngân hàng hoặc mật khẩu tài
+                <strong>Bảo mật giao dịch:</strong> LINO không lưu trữ thông tin thẻ ngân hàng hoặc mật khẩu tài
                 khoản của người dùng.
               </p>
             </div>
@@ -144,9 +143,8 @@ export default function Policy() {
                 hàng, liên hệ giao nhận và dịch vụ khách hàng.
               </p>
               <p>
-                <strong>Bảo vệ dữ liệu:</strong> Toàn bộ dữ liệu tài khoản được
-                quản lý độc lập qua máy chủ xác thực Keycloak đạt tiêu chuẩn an
-                ninh cao cấp.
+                <strong>Bảo vệ dữ liệu:</strong> Thông tin tài khoản được bảo vệ
+                bằng cơ chế đăng nhập và kiểm soát truy cập của LINO.
               </p>
               <p>
                 <strong>Quyền của người dùng:</strong> Quý khách có quyền xem,
