@@ -4,8 +4,7 @@ import org.springframework.amqp.core.Binding;
 import org.springframework.amqp.core.BindingBuilder;
 import org.springframework.amqp.core.DirectExchange;
 import org.springframework.amqp.core.Queue;
-import org.springframework.amqp.rabbit.config.SimpleRabbitListenerContainerFactory;
-import org.springframework.amqp.rabbit.connection.ConnectionFactory;
+import org.springframework.amqp.core.QueueBuilder;
 import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
 import org.springframework.amqp.support.converter.MessageConverter;
 import org.springframework.context.annotation.Bean;
@@ -14,6 +13,22 @@ import org.springframework.context.annotation.Configuration;
 
 @Configuration
 public class RabbitMQConfig {
+
+    @Bean
+    DirectExchange deadLetterExchange() {
+        return new DirectExchange(RabbitMQNames.DEAD_LETTER_EXCHANGE, true, false);
+    }
+
+    @Bean
+    Queue paymentDeadLetterQueue() {
+        return QueueBuilder.durable(RabbitMQNames.PAYMENT_DEAD_LETTER_QUEUE).build();
+    }
+
+    @Bean
+    Binding paymentDeadLetterBinding(Queue paymentDeadLetterQueue, DirectExchange deadLetterExchange) {
+        return BindingBuilder.bind(paymentDeadLetterQueue).to(deadLetterExchange)
+                .with(RabbitMQNames.PAYMENT_DEAD_LETTER_QUEUE);
+    }
 
     @Bean
     DirectExchange fashionEventsExchange() {
@@ -73,12 +88,4 @@ public class RabbitMQConfig {
         return new Jackson2JsonMessageConverter();
     }
 
-    @Bean
-    SimpleRabbitListenerContainerFactory rabbitListenerContainerFactory(ConnectionFactory connectionFactory,
-                                                                        MessageConverter jsonMessageConverter) {
-        SimpleRabbitListenerContainerFactory factory = new SimpleRabbitListenerContainerFactory();
-        factory.setConnectionFactory(connectionFactory);
-        factory.setMessageConverter(jsonMessageConverter);
-        return factory;
-    }
 }

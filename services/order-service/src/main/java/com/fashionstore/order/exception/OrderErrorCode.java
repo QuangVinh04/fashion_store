@@ -13,8 +13,8 @@ import org.springframework.http.HttpStatusCode;
 @Getter
 public enum OrderErrorCode implements BaseErrorCode {
     PRODUCT_VARIANT_NOT_FOUND(1004, "Product variant not found", HttpStatus.NOT_FOUND),
-    STOCK_INSUFFICIENT(1005, "Stock is insufficient", HttpStatus.BAD_REQUEST),
-    PRODUCT_VARIANT_INACTIVE(1006, "Product variant is no longer on sale", HttpStatus.CONFLICT),
+    STOCK_INSUFFICIENT(3005, "Stock is insufficient", HttpStatus.BAD_REQUEST),
+    PRODUCT_VARIANT_INACTIVE(3006, "Product variant is no longer on sale", HttpStatus.CONFLICT),
     CART_ITEM_NOT_FOUND(3001, "Cart item not found", HttpStatus.NOT_FOUND),
     CART_EMPTY(3002, "Cart is empty", HttpStatus.BAD_REQUEST),
     CART_ITEM_STALE(3003, "Cart item is missing its product snapshot, please add it again", HttpStatus.CONFLICT),

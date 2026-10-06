@@ -3,6 +3,8 @@ package com.fashionstore.catalog.config;
 public final class RabbitMQNames {
 
     public static final String EXCHANGE = "fashion.events";
+    public static final String DEAD_LETTER_EXCHANGE = "fashion.events.dlx";
+    public static final String CATALOG_DEAD_LETTER_QUEUE = "catalog.dlq";
     public static final String OUTBOX_EVENT_ID_HEADER = "outboxEventId";
 
     // Routing key của saga luôn bằng đúng eventType (EventTypes), bind thẳng vào đó thay vì lặp giá trị.

@@ -38,6 +38,7 @@ spring:
     password: ${RABBITMQ_PASSWORD:guest}
     listener:
       simple:
+        default-requeue-rejected: false
         retry:
           enabled: true
           initial-interval: 1000

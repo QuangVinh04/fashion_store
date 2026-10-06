@@ -20,6 +20,10 @@ import org.springframework.security.web.server.DelegatingServerAuthenticationEnt
 import org.springframework.security.web.server.ServerAuthenticationEntryPoint;
 import org.springframework.security.web.server.authentication.HttpStatusServerEntryPoint;
 import org.springframework.security.web.server.authentication.RedirectServerAuthenticationEntryPoint;
+import org.springframework.security.web.server.authorization.HttpStatusServerAccessDeniedHandler;
+import org.springframework.security.web.server.authorization.ServerAccessDeniedHandler;
+import org.springframework.security.web.server.util.matcher.ServerWebExchangeMatcher;
+import java.net.URI;
 import org.springframework.security.web.server.csrf.CookieServerCsrfTokenRepository;
 import org.springframework.security.web.server.csrf.CsrfToken;
 import org.springframework.security.web.server.csrf.ServerCsrfTokenRequestAttributeHandler;
@@ -43,7 +47,7 @@ public class SecurityConfig {
             @Value("${server.reactive.session.cookie.name}") String sessionCookieName) {
         return http
                 .authorizeExchange(authorize -> authorize
-                        .pathMatchers("/actuator/health/**", "/bff/session").permitAll()
+                        .pathMatchers("/actuator/health/**", "/bff/session", "/_next/**", "/favicon.ico", "/images/**", "/access-denied").permitAll()
                         // Đăng nhập đi qua Keycloak, không mở API auth cũ cho browser
                         .pathMatchers("/api/v1/auth/**").denyAll()
                         // Backoffice chỉ dành cho ADMIN — chặn ngay ở BFF, token không được relay
@@ -59,7 +63,9 @@ public class SecurityConfig {
                         .csrfTokenRepository(csrfTokenRepository())
                         // SPA gửi nguyên giá trị cookie qua header X-XSRF-TOKEN
                         .csrfTokenRequestHandler(new ServerCsrfTokenRequestAttributeHandler()))
-                .exceptionHandling(exceptions -> exceptions.authenticationEntryPoint(authenticationEntryPoint()))
+                .exceptionHandling(exceptions -> exceptions
+                        .authenticationEntryPoint(authenticationEntryPoint())
+                        .accessDeniedHandler(accessDeniedHandler()))
                 .build();
     }
 
@@ -116,6 +122,27 @@ public class SecurityConfig {
         entryPoint.setDefaultEntryPoint(new RedirectServerAuthenticationEntryPoint(
                 "/oauth2/authorization/" + OAuth2ClientConfig.REGISTRATION_ID));
         return entryPoint;
+    }
+
+    // API từ chối quyền -> 403 cho SPA; trang UI -> chuyển sang /access-denied
+    private static ServerAccessDeniedHandler accessDeniedHandler() {
+        ServerAccessDeniedHandler redirectHandler = (exchange, denied) -> {
+            var response = exchange.getResponse();
+            response.setStatusCode(HttpStatus.FOUND);
+            response.getHeaders().setLocation(URI.create("/access-denied"));
+            return response.setComplete();
+        };
+
+        ServerWebExchangeMatcher apiMatcher = ServerWebExchangeMatchers.pathMatchers("/api/**", "/admin/**");
+        HttpStatusServerAccessDeniedHandler forbiddenHandler = new HttpStatusServerAccessDeniedHandler(HttpStatus.FORBIDDEN);
+        return (exchange, denied) -> apiMatcher.matches(exchange)
+                .flatMap(matchResult -> matchResult.isMatch()
+                        ? forbiddenHandler.handle(exchange, denied)
+                        : redirectHandler.handle(exchange, denied));
+
+
+
+
     }
 
     // Mặc định handler tìm cookie SESSION; BFF đặt tên cookie riêng nên phải khai báo lại
