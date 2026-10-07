@@ -95,6 +95,7 @@ public class OutboxEvent {
             status = OutboxEventStatus.FAILED;
             return;
         }
-        nextAttemptAt = updatedAt.plusSeconds(Math.min(300, 1L << Math.min(attempts, 8)));
+        // Backoff mũ: 2s, 4s, 8s... trần 300s (5 phút) để broker sập lâu cũng không dồn dập gửi lại.
+        nextAttemptAt = updatedAt.plusSeconds(Math.min(300, 1L << Math.min(attempts, 9)));
     }
 }

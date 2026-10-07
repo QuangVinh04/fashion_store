@@ -24,6 +24,7 @@ import com.fashionstore.order.repository.OrderSagaRepository;
 import com.fashionstore.order.repository.OrderStatusHistoryRepository;
 import com.fashionstore.order.repository.ShipmentRepository;
 import com.fashionstore.order.service.OrderService;
+import com.fashionstore.order.service.OrderNotificationService;
 import com.fashionstore.order.service.PromotionService;
 import com.fashionstore.order.outbox.OutboxService;
 import lombok.AccessLevel;
@@ -54,6 +55,7 @@ public class OrderServiceImpl implements OrderService {
     PromotionService promotionService;
     OrderStatusHistoryRepository orderStatusHistoryRepository;
     ShipmentRepository shipmentRepository;
+    OrderNotificationService orderNotificationService;
 
 
     @Override
@@ -213,6 +215,7 @@ public class OrderServiceImpl implements OrderService {
             orderRepository.save(locked);
             promotionService.release(locked.getId());
             recordHistory(locked, OrderStatus.PENDING, OrderStatus.CANCELLED, "ORDER_CANCELLED", userId, reason);
+            orderNotificationService.sendOrderCancelledNotification(locked, reason);
             return toResponse(locked, locked.getCheckoutId());
         }
 
@@ -223,6 +226,7 @@ public class OrderServiceImpl implements OrderService {
         if (outcome == SagaCancellationService.Outcome.CANCELLED) {
             promotionService.release(locked.getId());
             recordHistory(locked, OrderStatus.PENDING, OrderStatus.CANCELLED, "ORDER_CANCELLED", userId, reason);
+            orderNotificationService.sendOrderCancelledNotification(locked, reason);
         }
         return toResponse(locked, locked.getCheckoutId());
     }

@@ -5,6 +5,7 @@ import com.fashionstore.common.payment.PaymentMethod;
 import com.fashionstore.common.payment.PaymentProvider;
 import com.fashionstore.contracts.common.EventEnvelope;
 import com.fashionstore.contracts.common.EventTypes;
+import com.fashionstore.contracts.inventory.event.InventoryReleasedEvent;
 import com.fashionstore.contracts.inventory.event.InventoryConfirmedEvent;
 import com.fashionstore.contracts.inventory.event.InventoryReservationEvent;
 import com.fashionstore.contracts.payment.event.PaymentCancellationRejectedEvent;
@@ -380,6 +381,23 @@ class OrderSagaEventListenerTest {
         assertEquals("pay-1", saga.getPaymentId());
         assertTrue(saga.getStepDeadline() != null);
         assertEquals(EventTypes.INVENTORY_CONFIRMATION_REQUESTED, emittedCommands().getFirst().eventType());
+    }
+
+    @Test
+    void finishedCompensationCancelsOrderAndEmailsTheCustomer() {
+        OrderSaga saga = runningSaga();
+        saga.inventoryReserved("res-1");
+        saga.startCompensation(OrderSagaStep.RELEASE_INVENTORY, "PAYMENT_FAILED", "Thẻ bị từ chối");
+        Order order = order();
+        registerSaga(saga, order);
+
+        listener.inventoryReleased(
+                envelope(saga, EventTypes.INVENTORY_RELEASED, new InventoryReleasedEvent("order-1", "res-1")),
+                "message-cancel"
+        );
+
+        assertEquals(OrderStatus.CANCELLED, order.getStatus());
+        verify(orderNotificationService).sendOrderCancelledNotification(order, "Thẻ bị từ chối");
     }
 
     // ----- helpers -----

@@ -9,6 +9,7 @@ import com.fashionstore.order.entity.enumeration.OrderStatus;
 import com.fashionstore.order.repository.OrderRepository;
 import com.fashionstore.order.repository.OrderSagaRepository;
 import com.fashionstore.order.repository.OrderStatusHistoryRepository;
+import com.fashionstore.order.service.OrderNotificationService;
 import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -41,6 +42,7 @@ public class OrderSagaTimeoutScanner {
     private final SagaOutbox sagaOutbox;
     private final MeterRegistry meterRegistry;
     private final OrderStatusHistoryRepository orderStatusHistoryRepository;
+    private final OrderNotificationService orderNotificationService;
 
     @Transactional
     @Scheduled(fixedDelayString = "${app.saga.timeout-scan-delay-ms:15000}")
@@ -112,6 +114,7 @@ public class OrderSagaTimeoutScanner {
                     .build());
         }
 
+        orderNotificationService.sendOrderCancelledNotification(order, reason);
         sagaOutbox.emit(saga, SagaCommands.orderCancelled(order, reason));
     }
 }

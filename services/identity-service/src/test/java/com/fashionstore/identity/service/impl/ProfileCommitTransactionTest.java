@@ -25,7 +25,6 @@ import org.springframework.orm.jpa.vendor.HibernateJpaVendorAdapter;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 import org.springframework.transaction.support.TransactionTemplate;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import javax.sql.DataSource;
 import java.time.LocalDateTime;
 import java.util.*;
@@ -151,7 +150,7 @@ class ProfileCommitTransactionTest {
             return new UserServiceImpl(org.mapstruct.factory.Mappers.getMapper(UserMapper.class),
                     currentUserProvider, catalogMediaClient, users, publisher);
         }
-        @Bean NotificationOutbox notificationOutbox(OutboxEventRepository outbox) { return new NotificationOutbox(outbox, new ObjectMapper().findAndRegisterModules(), mock(RabbitTemplate.class)); }
+        @Bean NotificationOutbox notificationOutbox(OutboxEventRepository outbox) { return new NotificationOutbox(outbox, new ObjectMapper().findAndRegisterModules(), mock(com.fashionstore.common.messaging.outbox.ConfirmedRabbitSender.class)); }
         @Bean FailingListener failingListener(NotificationOutbox outbox, OutboxEventRepository repository) { return new FailingListener(outbox, repository); }
     }
 }

@@ -2,6 +2,7 @@ package com.fashionstore.common.autoconfigure;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fashionstore.common.exception.AppException;
+import com.fashionstore.common.messaging.outbox.ConfirmedRabbitSender;
 import org.springframework.amqp.AmqpRejectAndDontRequeueException;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -11,13 +12,16 @@ import org.springframework.boot.autoconfigure.amqp.RabbitRetryTemplateCustomizer
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.retry.policy.ExceptionClassifierRetryPolicy;
 import org.springframework.retry.policy.NeverRetryPolicy;
 import org.springframework.retry.policy.SimpleRetryPolicy;
 import org.springframework.retry.support.RetryTemplate;
 
-/** Shared listener policy only; never changes sender retries or business outcomes. */
+import java.time.Duration;
+
+/** Shared listener retry policy, plus the confirmed sender for services that publish via an outbox. */
 @AutoConfiguration(after = RabbitAutoConfiguration.class)
 @ConditionalOnClass({RabbitTemplate.class, RetryTemplate.class})
 @ConditionalOnBean(RabbitProperties.class)
@@ -34,6 +38,19 @@ public class CommonRabbitAutoConfiguration {
             policy.setExceptionClassifier(exception -> retryable(exception) ? retry : terminal);
             template.setRetryPolicy(policy); // Boot still supplies YAML backoff and the rejecting recoverer.
         };
+    }
+
+    /**
+     * Chỉ service phát message (có outbox) mới bật publisher confirms; service chỉ tiêu thụ như
+     * notification-service không cần bean này. Bật confirms mà quên mandatory thì constructor ném lỗi
+     * ngay lúc khởi động.
+     */
+    @Bean
+    @ConditionalOnMissingBean
+    @ConditionalOnBean(RabbitTemplate.class)
+    @ConditionalOnProperty(prefix = "spring.rabbitmq", name = "publisher-confirm-type", havingValue = "correlated")
+    ConfirmedRabbitSender confirmedRabbitSender(RabbitTemplate rabbitTemplate) {
+        return new ConfirmedRabbitSender(rabbitTemplate, Duration.ofSeconds(5));
     }
 
     private static boolean retryable(Throwable exception) {

@@ -1,5 +1,6 @@
 package com.fashionstore.order.saga;
 
+import com.fashionstore.common.messaging.RabbitTopology;
 import com.fashionstore.contracts.common.EventEnvelope;
 import com.fashionstore.contracts.inventory.event.InventoryConfirmedEvent;
 import com.fashionstore.contracts.inventory.event.InventoryReleasedEvent;
@@ -55,7 +56,7 @@ public class OrderSagaEventListener {
     @RabbitListener(queues = RabbitMQNames.ORDER_INVENTORY_RESERVED_QUEUE)
     public void inventoryReserved(
             EventEnvelope<?> envelope,
-            @Header(RabbitMQNames.OUTBOX_EVENT_ID_HEADER) String messageId
+            @Header(RabbitTopology.OUTBOX_EVENT_ID_HEADER) String messageId
     ) {
         sagaReplies.process(SagaReply.<InventoryReservationEvent>builder()
                 .messageId(messageId)
@@ -86,7 +87,7 @@ public class OrderSagaEventListener {
     @RabbitListener(queues = RabbitMQNames.ORDER_PAYMENT_INITIATED_QUEUE)
     public void paymentInitiated(
             EventEnvelope<?> envelope,
-            @Header(RabbitMQNames.OUTBOX_EVENT_ID_HEADER) String messageId
+            @Header(RabbitTopology.OUTBOX_EVENT_ID_HEADER) String messageId
     ) {
         sagaReplies.process(SagaReply.<PaymentInitiatedEvent>builder()
                 .messageId(messageId)
@@ -109,7 +110,7 @@ public class OrderSagaEventListener {
     @RabbitListener(queues = RabbitMQNames.ORDER_INVENTORY_REJECTED_QUEUE)
     public void inventoryRejected(
             EventEnvelope<?> envelope,
-            @Header(RabbitMQNames.OUTBOX_EVENT_ID_HEADER) String messageId
+            @Header(RabbitTopology.OUTBOX_EVENT_ID_HEADER) String messageId
     ) {
         sagaReplies.process(SagaReply.<InventoryReservationFailedEvent>builder()
                 .messageId(messageId)
@@ -130,7 +131,7 @@ public class OrderSagaEventListener {
     @RabbitListener(queues = RabbitMQNames.ORDER_PAYMENT_COMPLETED_QUEUE)
     public void paymentCompleted(
             EventEnvelope<?> envelope,
-            @Header(RabbitMQNames.OUTBOX_EVENT_ID_HEADER) String messageId
+            @Header(RabbitTopology.OUTBOX_EVENT_ID_HEADER) String messageId
     ) {
         sagaReplies.process(SagaReply.<PaymentSuccessEvent>builder()
                 .messageId(messageId)
@@ -151,7 +152,7 @@ public class OrderSagaEventListener {
     @RabbitListener(queues = RabbitMQNames.ORDER_PAYMENT_FAILED_QUEUE)
     public void paymentFailed(
             EventEnvelope<?> envelope,
-            @Header(RabbitMQNames.OUTBOX_EVENT_ID_HEADER) String messageId
+            @Header(RabbitTopology.OUTBOX_EVENT_ID_HEADER) String messageId
     ) {
         sagaReplies.process(SagaReply.<PaymentFailedEvent>builder()
                 .messageId(messageId)
@@ -172,7 +173,7 @@ public class OrderSagaEventListener {
     @RabbitListener(queues = RabbitMQNames.ORDER_PAYMENT_CANCELLED_QUEUE)
     public void paymentCancelled(
             EventEnvelope<?> envelope,
-            @Header(RabbitMQNames.OUTBOX_EVENT_ID_HEADER) String messageId
+            @Header(RabbitTopology.OUTBOX_EVENT_ID_HEADER) String messageId
     ) {
         sagaReplies.process(SagaReply.<PaymentCancelledEvent>builder()
                 .messageId(messageId)
@@ -193,7 +194,7 @@ public class OrderSagaEventListener {
     @RabbitListener(queues = RabbitMQNames.ORDER_PAYMENT_CANCELLATION_REJECTED_QUEUE)
     public void paymentCancellationRejected(
             EventEnvelope<?> envelope,
-            @Header(RabbitMQNames.OUTBOX_EVENT_ID_HEADER) String messageId
+            @Header(RabbitTopology.OUTBOX_EVENT_ID_HEADER) String messageId
     ) {
         sagaReplies.process(SagaReply.<PaymentCancellationRejectedEvent>builder()
                 .messageId(messageId)
@@ -214,7 +215,7 @@ public class OrderSagaEventListener {
     @RabbitListener(queues = RabbitMQNames.ORDER_INVENTORY_CONFIRMED_QUEUE)
     public void inventoryConfirmed(
             EventEnvelope<?> envelope,
-            @Header(RabbitMQNames.OUTBOX_EVENT_ID_HEADER) String messageId
+            @Header(RabbitTopology.OUTBOX_EVENT_ID_HEADER) String messageId
     ) {
         sagaReplies.process(SagaReply.<InventoryConfirmedEvent>builder()
                 .messageId(messageId)
@@ -277,7 +278,7 @@ public class OrderSagaEventListener {
     @RabbitListener(queues = RabbitMQNames.ORDER_INVENTORY_RELEASED_QUEUE)
     public void inventoryReleased(
             EventEnvelope<?> envelope,
-            @Header(RabbitMQNames.OUTBOX_EVENT_ID_HEADER) String messageId
+            @Header(RabbitTopology.OUTBOX_EVENT_ID_HEADER) String messageId
     ) {
         sagaReplies.process(SagaReply.<InventoryReleasedEvent>builder()
                 .messageId(messageId)
@@ -300,6 +301,7 @@ public class OrderSagaEventListener {
         orderRepository.save(order);
         promotionService.release(order.getId());
         recordHistory(order, OrderStatus.PENDING, OrderStatus.CANCELLED, "ORDER_CANCELLED", "SYSTEM", reason);
+        orderNotificationService.sendOrderCancelledNotification(order, reason);
         return List.of(SagaCommands.orderCancelled(order, reason));
     }
 

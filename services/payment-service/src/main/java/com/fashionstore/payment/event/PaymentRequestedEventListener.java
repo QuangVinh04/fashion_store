@@ -1,5 +1,6 @@
 package com.fashionstore.payment.event;
 
+import com.fashionstore.common.messaging.RabbitTopology;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fashionstore.common.messaging.processed.ProcessedMessageService;
 import com.fashionstore.common.payment.PaymentMethod;
@@ -31,15 +32,50 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.concurrent.atomic.AtomicReference;
 
+/**
+ * Nhận 3 lệnh saga của payment: xin thanh toán, huỷ, hoàn tiền.
+ *
+ * <p><b>Không gọi cổng thanh toán (PayOS, VNPay) bên trong DB transaction.</b> Một lời gọi HTTP có thể
+ * mất vài giây; nếu đang mở transaction và giữ row lock trên payment thì mọi request khác chạm vào payment
+ * đó (webhook, lệnh huỷ...) phải chờ, và connection DB bị chiếm suốt thời gian đó. Vì vậy xin thanh toán và
+ * hoàn tiền chạy theo 3 pha:
+ * <ol>
+ *   <li><b>Pha 1 — transaction ngắn:</b> đánh dấu message đã xử lý, kiểm tra nghiệp vụ, ghi trạng thái chờ
+ *       (payment PENDING / refund PENDING). Commit.</li>
+ *   <li><b>Pha 2 — ngoài transaction:</b> gọi cổng thanh toán, bắt mọi lỗi thành một kết quả.</li>
+ *   <li><b>Pha 3 — transaction ngắn:</b> khoá lại payment, ghi kết quả và reply cho saga qua outbox.</li>
+ * </ol>
+ *
+ * <p>Đánh đổi: nếu service chết giữa pha 1 và pha 3 thì message đã được đánh dấu xử lý, nên không tự chạy
+ * lại. Với xin thanh toán, saga quá hạn sẽ phát lại lệnh (message mới) và {@link #prepareAuthorization}
+ * khởi tạo lại payment còn PENDING. Với hoàn tiền, refund nằm ở PENDING chờ đối soát với cổng — vẫn an toàn
+ * hơn cách cũ (rollback rồi gọi refund lần nữa, có nguy cơ hoàn tiền hai lần).
+ */
 @Component
 @RequiredArgsConstructor
 @Slf4j
 public class PaymentRequestedEventListener {
+
+    /** Payment cần gọi cổng để lấy link thanh toán, chuẩn bị xong ở pha 1. */
+    private record InitiationCall(Payment payment, String clientIp, String correlationId) {
+    }
+
+    /** Kết quả pha 2: hoặc có result, hoặc có error — không bao giờ ném exception ra ngoài. */
+    private record InitiationOutcome(PaymentInitiationResult result, String error) {
+    }
+
+    /** Refund đã ghi PENDING ở pha 1, chờ gọi cổng. */
+    private record RefundCall(Payment payment, PaymentRefund refund, BigDecimal previouslyRefunded, String correlationId) {
+    }
+
+    private record RefundOutcome(PaymentRefundResult result, String error) {
+    }
 
     private final PaymentRepository paymentRepository;
     private final PaymentRefundRepository paymentRefundRepository;
@@ -47,32 +83,55 @@ public class PaymentRequestedEventListener {
     private final ObjectMapper objectMapper;
     private final OutboxService outboxService;
     private final PaymentHandlerRegistry paymentHandlerRegistry;
+    /** Mở transaction bằng code (thay cho @Transactional) để chia một message thành nhiều transaction ngắn. */
+    private final TransactionTemplate transactionTemplate;
 
-    @Transactional
     @RabbitListener(queues = RabbitMQNames.PAYMENT_SAGA_COMMAND_QUEUE)
     public void handle(
             EventEnvelope<?> envelope,
-            @Header(RabbitMQNames.OUTBOX_EVENT_ID_HEADER) String messageId
+            @Header(RabbitTopology.OUTBOX_EVENT_ID_HEADER) String messageId
     ) {
         if (EventTypes.PAYMENT_REQUESTED.equals(envelope.eventType())) {
-            processedMessageService.processOnce(messageId, "payment-requested-v2", () ->
-                    createPayment(envelope));
+            authorize(envelope, messageId);
             return;
         }
         if (EventTypes.PAYMENT_CANCELLATION_REQUESTED.equals(envelope.eventType())) {
-            processedMessageService.processOnce(messageId, "payment-cancellation-v2", () ->
-                    cancelPayment(envelope));
+            // Huỷ không gọi cổng nên một transaction là đủ.
+            transactionTemplate.executeWithoutResult(status ->
+                    processedMessageService.processOnce(messageId, "payment-cancellation-v2", () ->
+                            cancelPayment(envelope)));
             return;
         }
         if (EventTypes.PAYMENT_REFUND_REQUESTED.equals(envelope.eventType())) {
-            processedMessageService.processOnce(messageId, "payment-refund-v1", () ->
-                    refundPayment(envelope, messageId));
+            refund(envelope, messageId);
             return;
         }
         throw new IllegalArgumentException("Unsupported payment saga command " + envelope.eventType());
     }
 
-    private void createPayment(EventEnvelope<?> envelope) {
+    // ===================== Xin thanh toán =====================
+
+    private void authorize(EventEnvelope<?> envelope, String messageId) {
+        // Pha 1: transaction ngắn — tạo/khoá payment, quyết định có cần gọi cổng không.
+        AtomicReference<InitiationCall> call = new AtomicReference<>();
+        transactionTemplate.executeWithoutResult(status ->
+                processedMessageService.processOnce(messageId, "payment-requested-v2", () ->
+                        call.set(prepareAuthorization(envelope))));
+        if (call.get() == null) {
+            return; // message trùng, COD, hoặc payment đã xong — không cần gọi cổng
+        }
+
+        // Pha 2: ngoài transaction — gọi cổng thanh toán.
+        InitiationOutcome outcome = initiateAtGateway(call.get());
+
+        // Pha 3: transaction ngắn — ghi kết quả và reply cho saga.
+        transactionTemplate.executeWithoutResult(status -> applyInitiation(call.get(), outcome));
+    }
+
+    /**
+     * @return payment cần gọi cổng, hoặc {@code null} nếu đã xử lý xong ngay trong pha 1
+     */
+    private InitiationCall prepareAuthorization(EventEnvelope<?> envelope) {
         AuthorizePaymentCommand request = objectMapper.convertValue(envelope.payload(), AuthorizePaymentCommand.class);
         Payment existing = paymentRepository.findByOrderIdForUpdate(request.orderId()).orElse(null);
         if (existing != null) {
@@ -83,9 +142,9 @@ public class PaymentRequestedEventListener {
                     && existing.getMethod() != PaymentMethod.COD) {
                 // Saga timeout đã phát lại AUTHORIZE_PAYMENT (PAYMENT_INITIATED lần trước có thể đã thất
                 // lạc) — thử khởi tạo lại, cùng merchantReference nên vẫn idempotent phía cổng thanh toán.
-                initiateOnlinePayment(existing, request.clientIp(), envelope.correlationId());
+                return new InitiationCall(withMerchantReference(existing), request.clientIp(), envelope.correlationId());
             }
-            return;
+            return null;
         }
 
         PaymentMethod method = PaymentMethod.valueOf(request.method());
@@ -102,34 +161,65 @@ public class PaymentRequestedEventListener {
         Payment saved = paymentRepository.save(payment);
         if (saved.getStatus() == PaymentStatus.COD_PENDING) {
             publishCompleted(saved, envelope.correlationId());
-        } else {
-            try {
-                initiateOnlinePayment(saved, request.clientIp(), envelope.correlationId());
-            } catch (Exception ex) {
-                log.error("Khởi tạo thanh toán với cổng thất bại cho order {}: {}", saved.getOrderId(), ex.getMessage(), ex);
-                saved.setStatus(PaymentStatus.FAILED);
-                saved.setFailureReason("Lỗi tạo link thanh toán: " + ex.getMessage());
-                paymentRepository.save(saved);
-                outboxService.saveMessage(saved.getOrderId(), EventTypes.PAYMENT_FAILED, EventEnvelope.v1(
-                        EventTypes.PAYMENT_FAILED,
-                        saved.getOrderId(),
-                        envelope.correlationId(),
-                        new com.fashionstore.contracts.payment.event.PaymentFailedEvent(saved.getOrderId(), saved.getId(), saved.getFailureReason())
-                ));
-            }
+            return null;
         }
+        return new InitiationCall(withMerchantReference(saved), request.clientIp(), envelope.correlationId());
+    }
+
+    /**
+     * Mã tham chiếu gửi cổng, suy ra từ id payment nên cố định qua mọi lần gọi lại. Lưu ngay ở pha 1
+     * (trước khi gọi cổng) để webhook của cổng luôn tra ra được payment.
+     */
+    private Payment withMerchantReference(Payment payment) {
+        if (payment.getMerchantReference() == null) {
+            payment.setMerchantReference(payment.getId().replace("-", ""));
+            return paymentRepository.save(payment);
+        }
+        return payment;
     }
 
     /**
      * Khởi tạo giao dịch với cổng ngay khi vừa xin thanh toán, thay vì đợi client gọi
      * {@code POST /payments/{id}/initiate} riêng — bớt 2 vòng round-trip cho frontend. Endpoint initiate
      * cũ vẫn giữ nguyên, dùng khi cần tạo lại link đã hết hạn.
+     *
+     * <p>Chạy ngoài transaction: chỉ đọc payment đã chuẩn bị ở pha 1, không ghi gì vào DB.
      */
-    private void initiateOnlinePayment(Payment payment, String clientIp, String correlationId) {
-        if (payment.getMerchantReference() == null) {
-            payment.setMerchantReference(payment.getId().replace("-", ""));
+    private InitiationOutcome initiateAtGateway(InitiationCall call) {
+        Payment payment = call.payment();
+        try {
+            return new InitiationOutcome(
+                    paymentHandlerRegistry.get(payment.getProvider()).initiate(payment, call.clientIp()), null);
+        } catch (Exception ex) {
+            log.error("Khởi tạo thanh toán với cổng thất bại cho order {}: {}", payment.getOrderId(), ex.getMessage(), ex);
+            return new InitiationOutcome(null, ex.getMessage());
         }
-        PaymentInitiationResult result = paymentHandlerRegistry.get(payment.getProvider()).initiate(payment, clientIp);
+    }
+
+    private void applyInitiation(InitiationCall call, InitiationOutcome outcome) {
+        Payment payment = paymentRepository.findByIdForUpdate(call.payment().getId())
+                .orElseThrow(() -> new IllegalStateException("Payment " + call.payment().getId() + " biến mất giữa hai pha"));
+        if (payment.getStatus() != PaymentStatus.PENDING) {
+            // Trong lúc gọi cổng, payment đã đổi trạng thái ở transaction khác (saga huỷ, webhook...):
+            // trạng thái mới thắng, không ghi đè và không gửi link thanh toán nữa.
+            log.info("Bỏ kết quả khởi tạo cho payment {} vì đã sang {}", payment.getId(), payment.getStatus());
+            return;
+        }
+
+        if (outcome.error() != null) {
+            payment.setStatus(PaymentStatus.FAILED);
+            payment.setFailureReason("Lỗi tạo link thanh toán: " + outcome.error());
+            paymentRepository.save(payment);
+            outboxService.saveMessage(payment.getOrderId(), EventTypes.PAYMENT_FAILED, EventEnvelope.v1(
+                    EventTypes.PAYMENT_FAILED,
+                    payment.getOrderId(),
+                    call.correlationId(),
+                    new com.fashionstore.contracts.payment.event.PaymentFailedEvent(payment.getOrderId(), payment.getId(), payment.getFailureReason())
+            ));
+            return;
+        }
+
+        PaymentInitiationResult result = outcome.result();
         if (result.getProviderTransactionId() != null) {
             payment.setTransactionId(result.getProviderTransactionId());
         }
@@ -141,10 +231,12 @@ public class PaymentRequestedEventListener {
         outboxService.saveMessage(saved.getOrderId(), EventTypes.PAYMENT_INITIATED, EventEnvelope.v1(
                 EventTypes.PAYMENT_INITIATED,
                 saved.getOrderId(),
-                correlationId,
+                call.correlationId(),
                 new PaymentInitiatedEvent(saved.getOrderId(), saved.getId(), result.getPaymentUrl())
         ));
     }
+
+    // ===================== Huỷ =====================
 
     private void cancelPayment(EventEnvelope<?> envelope) {
         CancelPaymentCommand request = objectMapper.convertValue(
@@ -191,48 +283,69 @@ public class PaymentRequestedEventListener {
         publishCancelled(payment, payment.getFailureReason(), envelope.correlationId());
     }
 
+    // ===================== Hoàn tiền =====================
+
+    private void refund(EventEnvelope<?> envelope, String messageId) {
+        // Pha 1: transaction ngắn — kiểm tra điều kiện, ghi refund PENDING.
+        AtomicReference<RefundCall> call = new AtomicReference<>();
+        transactionTemplate.executeWithoutResult(status ->
+                processedMessageService.processOnce(messageId, "payment-refund-v1", () ->
+                        call.set(prepareRefund(envelope, messageId))));
+        if (call.get() == null) {
+            return; // message trùng hoặc đã trả lời ngay (từ chối / đã hoàn trước đó)
+        }
+
+        // Pha 2: ngoài transaction — gọi API hoàn tiền của cổng.
+        RefundOutcome outcome = refundAtGateway(call.get());
+
+        // Pha 3: transaction ngắn — ghi kết quả và reply cho order-service.
+        transactionTemplate.executeWithoutResult(status -> applyRefund(call.get(), outcome));
+    }
+
     /**
      * Hoàn tiền là yêu cầu độc lập với saga đặt hàng — không có sagaId, correlationId ở đây là orderId.
      * Chỉ hoàn được khi tiền thật sự đã thu ({@code COMPLETED}); đã hoàn rồi thì trả lại đúng reply cũ
      * để phía order-service (đang chờ reply) không bị kẹt vì tưởng message thất lạc.
+     *
+     * @return refund cần gọi cổng, hoặc {@code null} nếu đã trả lời xong ngay trong pha 1
      */
-    private void refundPayment(EventEnvelope<?> envelope, String idempotencyKey) {
+    private RefundCall prepareRefund(EventEnvelope<?> envelope, String idempotencyKey) {
         RefundPaymentCommand request = objectMapper.convertValue(envelope.payload(), RefundPaymentCommand.class);
         Payment payment = paymentRepository.findByOrderIdForUpdate(request.orderId()).orElse(null);
         if (payment == null) {
             publishRefundRejected(request.orderId(), request.paymentId(), "PAYMENT_NOT_FOUND",
                     "Không tìm thấy payment cho đơn hàng này", envelope.correlationId());
-            return;
+            return null;
         }
 
         PaymentRefund existingRefund = paymentRefundRepository.findByIdempotencyKey(idempotencyKey).orElse(null);
         if (existingRefund != null) {
             replayRefundResult(existingRefund, envelope.correlationId());
-            return;
+            return null;
         }
 
         if (request.paymentId() != null && !request.paymentId().equals(payment.getId())) {
             publishRefundRejected(payment.getOrderId(), payment.getId(), "PAYMENT_MISMATCH",
                     "Refund payment id does not belong to this order", envelope.correlationId());
-            return;
+            return null;
         }
 
         if (payment.getStatus() == PaymentStatus.REFUNDED) {
             publishRefunded(payment, request.reason(), envelope.correlationId());
-            return;
+            return null;
         }
         if (payment.getStatus() != PaymentStatus.COMPLETED
                 && payment.getStatus() != PaymentStatus.REFUND_FAILED) {
             publishRefundRejected(payment.getOrderId(), payment.getId(), "PAYMENT_NOT_CAPTURED",
                     "Payment đang ở trạng thái " + payment.getStatus() + ", không thể hoàn tiền",
                     envelope.correlationId());
-            return;
+            return null;
         }
 
         if (payment.getMethod() == PaymentMethod.COD) {
             publishRefundRejected(payment.getOrderId(), payment.getId(), "COD_REFUND_REQUIRES_MANUAL_PAYOUT",
                     "COD refunds require a separate customer payout method", envelope.correlationId());
-            return;
+            return null;
         }
 
         BigDecimal amount = request.amount();
@@ -242,7 +355,7 @@ public class PaymentRequestedEventListener {
             publishRefundRejected(payment.getOrderId(), payment.getId(), "REFUND_AMOUNT_INVALID",
                     "Refund amount must be positive and not exceed the remaining captured amount",
                     envelope.correlationId());
-            return;
+            return null;
         }
 
         PaymentRefund refund = PaymentRefund.builder()
@@ -254,28 +367,44 @@ public class PaymentRequestedEventListener {
                 .idempotencyKey(idempotencyKey)
                 .reason(request.reason())
                 .build();
-        paymentRefundRepository.save(refund);
+        PaymentRefund savedRefund = paymentRefundRepository.save(refund);
         payment.setStatus(PaymentStatus.REFUND_PENDING);
         payment.setFailureReason(null);
         paymentRepository.save(payment);
+        return new RefundCall(payment, savedRefund, refundedAmount, envelope.correlationId());
+    }
 
+    /** Chạy ngoài transaction. requestId gửi cổng suy ra từ idempotencyKey nên cổng nhận ra lần gọi trùng. */
+    private RefundOutcome refundAtGateway(RefundCall call) {
         try {
-            PaymentRefundResult result = paymentHandlerRegistry
-                    .get(payment.getProvider())
-                    .refund(payment, refund);
-            applyRefundResult(payment, refund, result, refundedAmount, envelope.correlationId());
+            return new RefundOutcome(
+                    paymentHandlerRegistry.get(call.payment().getProvider()).refund(call.payment(), call.refund()), null);
         } catch (RuntimeException exception) {
-            String failureReason = safeFailureReason(exception);
-            refund.setStatus(PaymentRefundStatus.FAILED);
-            refund.setFailureReason(failureReason);
-            paymentRefundRepository.save(refund);
-            payment.setStatus(PaymentStatus.REFUND_FAILED);
-            payment.setFailureReason(failureReason);
-            paymentRepository.save(payment);
-            publishRefundRejected(payment.getOrderId(), payment.getId(), "PROVIDER_REFUND_FAILED",
-                    failureReason, envelope.correlationId());
+            log.error("Hoàn tiền với cổng thất bại cho order {}: {}", call.payment().getOrderId(), exception.getMessage(), exception);
+            return new RefundOutcome(null, safeFailureReason(exception));
         }
     }
+
+    private void applyRefund(RefundCall call, RefundOutcome outcome) {
+        Payment payment = paymentRepository.findByIdForUpdate(call.payment().getId())
+                .orElseThrow(() -> new IllegalStateException("Payment " + call.payment().getId() + " biến mất giữa hai pha"));
+        PaymentRefund refund = paymentRefundRepository.findById(call.refund().getId())
+                .orElseThrow(() -> new IllegalStateException("Refund " + call.refund().getId() + " biến mất giữa hai pha"));
+
+        if (outcome.error() != null) {
+            refund.setStatus(PaymentRefundStatus.FAILED);
+            refund.setFailureReason(outcome.error());
+            paymentRefundRepository.save(refund);
+            payment.setStatus(PaymentStatus.REFUND_FAILED);
+            payment.setFailureReason(outcome.error());
+            paymentRepository.save(payment);
+            publishRefundRejected(payment.getOrderId(), payment.getId(), "PROVIDER_REFUND_FAILED",
+                    outcome.error(), call.correlationId());
+            return;
+        }
+        applyRefundResult(payment, refund, outcome.result(), call.previouslyRefunded(), call.correlationId());
+    }
+
 
     private void applyRefundResult(
             Payment payment,

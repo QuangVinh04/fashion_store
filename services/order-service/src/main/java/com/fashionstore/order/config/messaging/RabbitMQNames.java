@@ -1,17 +1,14 @@
 package com.fashionstore.order.config.messaging;
 
+/**
+ * Tên queue mà order-service sở hữu. Exchange, DLX và header dùng chung nằm ở
+ * {@link com.fashionstore.common.messaging.RabbitTopology}; routing key nằm ở {@code EventTypes}.
+ */
 public final class RabbitMQNames {
 
-    public static final String EXCHANGE = "fashion.events";
-    public static final String INVENTORY_EXCHANGE = "inventory.events";
-    public static final String OUTBOX_EVENT_ID_HEADER = "outboxEventId";
-
-    /** Hết retry thì message rơi về đây thay vì bị drop im lặng. */
-    public static final String DEAD_LETTER_EXCHANGE = "fashion.events.dlx";
     public static final String ORDER_DEAD_LETTER_QUEUE = "order.dlq";
 
-    // Routing key luôn bằng đúng eventType (EventTypes), nên bind thẳng vào đó — không lặp giá trị ở đây.
-
+    // Mỗi reply của saga có queue riêng: handler nào lỗi thì chỉ queue đó dồn lại, các bước khác vẫn chạy.
     public static final String ORDER_INVENTORY_RESERVED_QUEUE = "order.inventory-reserved";
     public static final String ORDER_INVENTORY_REJECTED_QUEUE = "order.inventory-rejected";
     public static final String ORDER_INVENTORY_CONFIRMED_QUEUE = "order.inventory-confirmed";

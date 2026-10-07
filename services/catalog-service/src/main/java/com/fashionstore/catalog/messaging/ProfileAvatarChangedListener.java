@@ -1,5 +1,6 @@
 package com.fashionstore.catalog.messaging;
 
+import com.fashionstore.common.messaging.RabbitTopology;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fashionstore.catalog.config.RabbitMQNames;
 import com.fashionstore.catalog.service.MediaFileService;
@@ -26,7 +27,7 @@ public class ProfileAvatarChangedListener {
     @RabbitListener(queues = RabbitMQNames.PROFILE_AVATAR_CHANGED_QUEUE)
     public void onProfileAvatarChanged(
             EventEnvelope<?> envelope,
-            @Header(value = RabbitMQNames.OUTBOX_EVENT_ID_HEADER, required = false) String messageId) {
+            @Header(value = RabbitTopology.OUTBOX_EVENT_ID_HEADER, required = false) String messageId) {
         if (!EventTypes.PROFILE_AVATAR_CHANGED.equals(envelope.eventType())) {
             throw new IllegalArgumentException("Unsupported eventType on profile avatar queue: " + envelope.eventType());
         }

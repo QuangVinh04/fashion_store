@@ -37,8 +37,13 @@ spring:
   rabbitmq:
     host: ${RABBITMQ_HOST:localhost}
     port: ${RABBITMQ_PORT:5672}
-    username: ${RABBITMQ_USERNAME:guest}
-    password: ${RABBITMQ_PASSWORD:guest}
+    username: ${RABBITMQ_USERNAME:fashion}
+    password: ${RABBITMQ_PASSWORD:fashion-dev-password}
+    # Publisher confirms + returns: relay outbox chỉ đánh dấu PUBLISHED khi broker đã ack và route được.
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    template:
+      mandatory: true
   data:
     redis:
       host: ${REDIS_HOST:localhost}

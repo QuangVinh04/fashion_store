@@ -120,6 +120,41 @@ public class OrderNotificationService {
         log.info("[OrderNotification] Emitted order-delivered email event for orderId={}", order.getId());
     }
 
+    /**
+     * Báo khách đơn đã bị hủy — dù do khách tự hủy, thanh toán thất bại hay saga quá hạn.
+     * Gọi trong cùng transaction chuyển đơn sang CANCELLED, nên email chỉ đi khi việc hủy đã commit.
+     */
+    public void sendOrderCancelledNotification(Order order, String reason) {
+        if (order == null) return;
+        String recipientEmail = resolveRecipientEmail(order);
+        if (recipientEmail == null || recipientEmail.isBlank()) {
+            log.warn("[OrderNotification] Cannot send order-cancelled email: No email found for userId={}", order.getUserId());
+            return;
+        }
+
+        Map<String, String> variables = new HashMap<>();
+        variables.put("orderCode", order.getOrderCode());
+        variables.put("recipientName", recipientName(order));
+        variables.put("totalAmount", order.getTotalAmount() != null ? order.getTotalAmount().toPlainString() : "0");
+        variables.put("reason", reason != null ? reason : "");
+
+        EmailNotificationRequested payload = new EmailNotificationRequested(
+                recipientEmail,
+                "order-cancelled",
+                variables
+        );
+
+        EventEnvelope<EmailNotificationRequested> envelope = EventEnvelope.v1(
+                EventTypes.NOTIFICATION_EMAIL_REQUESTED,
+                order.getId(),
+                null,
+                payload
+        );
+
+        outboxService.saveMessage(order.getId(), EventTypes.NOTIFICATION_EMAIL_REQUESTED, envelope);
+        log.info("[OrderNotification] Emitted order-cancelled email event for orderId={}", order.getId());
+    }
+
     private String resolveRecipientEmail(Order order) {
         if (order == null) return null;
         if (order.getRecipientEmail() != null && !order.getRecipientEmail().isBlank()) {

@@ -1,118 +1,113 @@
 package com.fashionstore.catalog.config;
 
+import com.fashionstore.common.messaging.RabbitTopology;
+import com.fashionstore.contracts.common.EventTypes;
 import org.springframework.amqp.core.Binding;
-import org.springframework.amqp.core.BindingBuilder;
+import org.springframework.amqp.core.Declarables;
 import org.springframework.amqp.core.DirectExchange;
 import org.springframework.amqp.core.Queue;
-import org.springframework.amqp.core.QueueBuilder;
 import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
 import org.springframework.amqp.support.converter.MessageConverter;
 import org.springframework.context.annotation.Bean;
-import com.fashionstore.contracts.common.EventTypes;
 import org.springframework.context.annotation.Configuration;
 
+/**
+ * Topology của catalog-service. RabbitAdmin (Spring Boot tự tạo) khai báo mọi bean Exchange/Queue/Binding
+ * dưới đây lên broker khi kết nối lần đầu.
+ */
 @Configuration
 public class RabbitMQConfig {
 
+    // ----- Hạ tầng dùng chung: khai báo y hệt ở mọi service (xem RabbitTopology) -----
+
     @Bean
-    DirectExchange deadLetterExchange() {
-        return new DirectExchange(RabbitMQNames.DEAD_LETTER_EXCHANGE, true, false);
+    DirectExchange fashionEventsExchange() {
+        return RabbitTopology.eventsExchange();
     }
 
     @Bean
+    DirectExchange deadLetterExchange() {
+        return RabbitTopology.deadLetterExchange();
+    }
+
+    @Bean
+    Declarables unroutedTopology() {
+        return RabbitTopology.unroutedTopology();
+    }
+
+    // ----- Dead letter của catalog -----
+
+    @Bean
     Queue catalogDeadLetterQueue() {
-        return QueueBuilder.durable(RabbitMQNames.CATALOG_DEAD_LETTER_QUEUE).build();
+        return RabbitTopology.deadLetterQueue(RabbitMQNames.CATALOG_DEAD_LETTER_QUEUE);
     }
 
     @Bean
     Binding catalogDeadLetterBinding(Queue catalogDeadLetterQueue, DirectExchange deadLetterExchange) {
-        return BindingBuilder.bind(catalogDeadLetterQueue).to(deadLetterExchange)
-                .with(RabbitMQNames.CATALOG_DEAD_LETTER_QUEUE);
+        return RabbitTopology.deadLetterBinding(catalogDeadLetterQueue, deadLetterExchange);
     }
 
-    @Bean
-    DirectExchange fashionEventsExchange() {
-        return new DirectExchange(RabbitMQNames.EXCHANGE, true, false);
-    }
+    // ----- Lệnh kho từ saga đặt hàng -----
 
     @Bean
     Queue inventoryReservationRequestedQueue() {
-        return new Queue(RabbitMQNames.INVENTORY_RESERVATION_REQUESTED_QUEUE, true);
+        return consumerQueue(RabbitMQNames.INVENTORY_RESERVATION_REQUESTED_QUEUE);
     }
 
     @Bean
     Queue inventoryConfirmationRequestedQueue() {
-        return new Queue(RabbitMQNames.INVENTORY_CONFIRMATION_REQUESTED_QUEUE, true);
+        return consumerQueue(RabbitMQNames.INVENTORY_CONFIRMATION_REQUESTED_QUEUE);
     }
 
     @Bean
     Queue inventoryReleaseRequestedQueue() {
-        return new Queue(RabbitMQNames.INVENTORY_RELEASE_REQUESTED_QUEUE, true);
+        return consumerQueue(RabbitMQNames.INVENTORY_RELEASE_REQUESTED_QUEUE);
     }
 
     @Bean
     Queue inventoryRestockRequestedQueue() {
-        return new Queue(RabbitMQNames.INVENTORY_RESTOCK_REQUESTED_QUEUE, true);
+        return consumerQueue(RabbitMQNames.INVENTORY_RESTOCK_REQUESTED_QUEUE);
     }
 
     @Bean
-    Binding inventoryReservationRequestedBinding(
-            Queue inventoryReservationRequestedQueue,
-            DirectExchange fashionEventsExchange
-    ) {
-        return BindingBuilder.bind(inventoryReservationRequestedQueue)
-                .to(fashionEventsExchange)
-                .with(EventTypes.INVENTORY_RESERVATION_REQUESTED);
+    Binding inventoryReservationRequestedBinding(Queue inventoryReservationRequestedQueue, DirectExchange fashionEventsExchange) {
+        return RabbitTopology.bind(inventoryReservationRequestedQueue, fashionEventsExchange, EventTypes.INVENTORY_RESERVATION_REQUESTED);
     }
 
     @Bean
-    Binding inventoryConfirmationRequestedBinding(
-            Queue inventoryConfirmationRequestedQueue,
-            DirectExchange fashionEventsExchange
-    ) {
-        return BindingBuilder.bind(inventoryConfirmationRequestedQueue)
-                .to(fashionEventsExchange)
-                .with(EventTypes.INVENTORY_CONFIRMATION_REQUESTED);
+    Binding inventoryConfirmationRequestedBinding(Queue inventoryConfirmationRequestedQueue, DirectExchange fashionEventsExchange) {
+        return RabbitTopology.bind(inventoryConfirmationRequestedQueue, fashionEventsExchange, EventTypes.INVENTORY_CONFIRMATION_REQUESTED);
     }
 
     @Bean
-    Binding inventoryReleaseRequestedBinding(
-            Queue inventoryReleaseRequestedQueue,
-            DirectExchange fashionEventsExchange
-    ) {
-        return BindingBuilder.bind(inventoryReleaseRequestedQueue)
-                .to(fashionEventsExchange)
-                .with(EventTypes.INVENTORY_RELEASE_REQUESTED);
+    Binding inventoryReleaseRequestedBinding(Queue inventoryReleaseRequestedQueue, DirectExchange fashionEventsExchange) {
+        return RabbitTopology.bind(inventoryReleaseRequestedQueue, fashionEventsExchange, EventTypes.INVENTORY_RELEASE_REQUESTED);
     }
 
     @Bean
-    Binding inventoryRestockRequestedBinding(
-            Queue inventoryRestockRequestedQueue,
-            DirectExchange fashionEventsExchange
-    ) {
-        return BindingBuilder.bind(inventoryRestockRequestedQueue)
-                .to(fashionEventsExchange)
-                .with(EventTypes.INVENTORY_RESTOCK_REQUESTED);
+    Binding inventoryRestockRequestedBinding(Queue inventoryRestockRequestedQueue, DirectExchange fashionEventsExchange) {
+        return RabbitTopology.bind(inventoryRestockRequestedQueue, fashionEventsExchange, EventTypes.INVENTORY_RESTOCK_REQUESTED);
     }
+
+    // ----- Avatar từ identity-service -----
 
     @Bean
     Queue profileAvatarChangedQueue() {
-        return new Queue(RabbitMQNames.PROFILE_AVATAR_CHANGED_QUEUE, true);
+        return consumerQueue(RabbitMQNames.PROFILE_AVATAR_CHANGED_QUEUE);
     }
 
     @Bean
-    Binding profileAvatarChangedBinding(
-            Queue profileAvatarChangedQueue,
-            DirectExchange fashionEventsExchange
-    ) {
-        return BindingBuilder.bind(profileAvatarChangedQueue)
-                .to(fashionEventsExchange)
-                .with(EventTypes.PROFILE_AVATAR_CHANGED);
+    Binding profileAvatarChangedBinding(Queue profileAvatarChangedQueue, DirectExchange fashionEventsExchange) {
+        return RabbitTopology.bind(profileAvatarChangedQueue, fashionEventsExchange, EventTypes.PROFILE_AVATAR_CHANGED);
     }
 
+    /** Payload là JSON; kiểu đích suy ra từ tham số của @RabbitListener, không cần header __TypeId__. */
     @Bean
     MessageConverter jsonMessageConverter() {
         return new Jackson2JsonMessageConverter();
     }
 
+    private static Queue consumerQueue(String name) {
+        return RabbitTopology.consumerQueue(name, RabbitMQNames.CATALOG_DEAD_LETTER_QUEUE);
+    }
 }

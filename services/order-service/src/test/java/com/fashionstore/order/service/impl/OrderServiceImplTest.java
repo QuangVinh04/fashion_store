@@ -93,6 +93,9 @@ class OrderServiceImplTest {
     @Mock
     private ShipmentRepository shipmentRepository;
 
+    @Mock
+    private com.fashionstore.order.service.OrderNotificationService orderNotificationService;
+
     private OrderServiceImpl service;
 
     @BeforeEach
@@ -110,7 +113,8 @@ class OrderServiceImplTest {
                 currentUserProvider,
                 promotionService,
                 orderStatusHistoryRepository,
-                shipmentRepository
+                shipmentRepository,
+                orderNotificationService
         );
         when(currentUserProvider.getCurrentUserId()).thenReturn("user-1");
         when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
@@ -404,6 +408,7 @@ class OrderServiceImplTest {
         assertEquals(OrderStatus.PENDING, historyCaptor.getValue().getFromStatus());
         assertEquals(OrderStatus.CANCELLED, historyCaptor.getValue().getToStatus());
         assertEquals("ORDER_CANCELLED", historyCaptor.getValue().getAction());
+        verify(orderNotificationService).sendOrderCancelledNotification(order, "Đổi ý");
     }
 
     @Test
@@ -420,6 +425,8 @@ class OrderServiceImplTest {
         assertEquals(OrderSagaStatus.COMPENSATING, saga.getStatus());
         assertEquals(OrderSagaStep.CANCEL_PAYMENT, saga.getCurrentStep());
         assertEquals(EventTypes.PAYMENT_CANCELLATION_REQUESTED, emitted().getFirst().eventType());
+        // Email chỉ gửi khi bù trừ xong và đơn thật sự CANCELLED (OrderSagaEventListener lo việc đó).
+        verify(orderNotificationService, org.mockito.Mockito.never()).sendOrderCancelledNotification(any(), any());
     }
 
     @Test

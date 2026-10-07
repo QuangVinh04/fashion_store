@@ -1,5 +1,6 @@
 package com.fashionstore.payment.event;
 
+import com.fashionstore.common.messaging.RabbitTopology;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fashionstore.common.messaging.processed.ProcessedMessageService;
 import com.fashionstore.common.payment.PaymentMethod;
@@ -31,7 +32,7 @@ public class OrderDeliveredEventListener {
     @RabbitListener(queues = RabbitMQNames.PAYMENT_ORDER_DELIVERED_QUEUE)
     public void handle(
             EventEnvelope<?> envelope,
-            @Header(RabbitMQNames.OUTBOX_EVENT_ID_HEADER) String messageId
+            @Header(RabbitTopology.OUTBOX_EVENT_ID_HEADER) String messageId
     ) {
         processedMessageService.processOnce(messageId, "payment-order-delivered-v1", () -> settleCod(envelope));
     }

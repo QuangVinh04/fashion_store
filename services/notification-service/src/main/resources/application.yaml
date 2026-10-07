@@ -15,16 +15,24 @@ spring:
   rabbitmq:
     host: ${RABBITMQ_HOST:localhost}
     port: ${RABBITMQ_PORT:5672}
-    username: ${RABBITMQ_USERNAME:guest}
-    password: ${RABBITMQ_PASSWORD:guest}
+    username: ${RABBITMQ_USERNAME:fashion}
+    password: ${RABBITMQ_PASSWORD:fashion-dev-password}
     listener:
       simple:
+        # Số message broker đẩy trước cho mỗi consumer chưa ack; nhỏ để message không dồn vào một instance.
+        prefetch: 20
         default-requeue-rejected: false
         retry:
           enabled: true
           initial-interval: 1000
           max-attempts: 3
           multiplier: 2
+  data:
+    # Bộ lọc nhanh của ProcessedMessageService; Redis chết thì vẫn đúng nhờ unique index trong Postgres.
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      timeout: 2000ms
   mail:
     host: ${MAIL_HOST:smtp.gmail.com}
     port: ${MAIL_PORT:587}

@@ -186,4 +186,29 @@ class OrderNotificationServiceTest {
         assertThat(payload.template()).isEqualTo("order-delivered");
         assertThat(payload.variables()).containsEntry("orderCode", "ORD-300");
     }
+
+    @Test
+    void sendOrderCancelledNotification_emitsCancelledTemplateWithReason() {
+        Order order = Order.builder()
+                .orderCode("ORD-200")
+                .userId("user-uuid-2")
+                .recipientEmail("buyer@fashionstore.com")
+                .address(ShippingAddress.builder().recipientName("Tran Thi B").recipientPhone("0907654321").build())
+                .totalAmount(BigDecimal.valueOf(750000))
+                .build();
+        order.setId("order-uuid-2");
+
+        notificationService.sendOrderCancelledNotification(order, "Thanh toán thất bại");
+
+        ArgumentCaptor<EventEnvelope<EmailNotificationRequested>> captor = ArgumentCaptor.forClass(EventEnvelope.class);
+        verify(outboxService).saveMessage(eq("order-uuid-2"), eq(EventTypes.NOTIFICATION_EMAIL_REQUESTED), captor.capture());
+        EmailNotificationRequested payload = captor.getValue().payload();
+        assertThat(payload.recipient()).isEqualTo("buyer@fashionstore.com");
+        assertThat(payload.template()).isEqualTo("order-cancelled");
+        assertThat(payload.variables())
+                .containsEntry("orderCode", "ORD-200")
+                .containsEntry("recipientName", "Tran Thi B")
+                .containsEntry("totalAmount", "750000")
+                .containsEntry("reason", "Thanh toán thất bại");
+    }
 }

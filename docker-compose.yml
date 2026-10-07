@@ -5,8 +5,8 @@ x-service-environment: &service-environment
   KEYCLOAK_JWK_SET_URI: http://keycloak:8080/realms/fashion-store/protocol/openid-connect/certs
   RABBITMQ_HOST: rabbitmq
   RABBITMQ_PORT: 5672
-  RABBITMQ_USERNAME: guest
-  RABBITMQ_PASSWORD: guest
+  RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:-fashion}
+  RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-fashion-dev-password}
   REDIS_HOST: redis
   REDIS_PORT: 6379
   KEYCLOAK_TOKEN_URI: http://keycloak:8080/realms/fashion-store/protocol/openid-connect/token
@@ -294,8 +294,9 @@ services:
   rabbitmq:
     image: rabbitmq:3.13-management
     environment:
-      RABBITMQ_DEFAULT_USER: guest
-      RABBITMQ_DEFAULT_PASS: guest
+      # User chỉ được tạo khi volume rabbitmq_data còn trống: đổi giá trị thì phải xoá volume.
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USERNAME:-fashion}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-fashion-dev-password}
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 10s

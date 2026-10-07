@@ -11,6 +11,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 public interface OutboxEventRepository extends JpaRepository<OutboxEvent, String> {
 
@@ -31,6 +32,15 @@ public interface OutboxEventRepository extends JpaRepository<OutboxEvent, String
             @Param("status") OutboxEventStatus status,
             @Param("now") LocalDateTime now
     );
+
+    /**
+     * Đường nhanh khoá đúng dòng vừa ghi. {@code skip locked}: nếu scanner đang giữ dòng thì trả về rỗng
+     * ngay thay vì chờ, tránh hai luồng cùng gửi một message.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @QueryHints(@QueryHint(name = "jakarta.persistence.lock.timeout", value = "-2"))
+    @Query("select e from OutboxEvent e where e.id = :id")
+    Optional<OutboxEvent> findByIdForPublish(@Param("id") String id);
 
     void deleteByStatusAndPublishedAtBefore(OutboxEventStatus status, LocalDateTime publishedAt);
 }

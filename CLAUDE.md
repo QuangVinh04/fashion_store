@@ -74,7 +74,7 @@ scripts/         build.ps1, test.ps1
 | errors | `exception.AppException`, `BaseErrorCode`, `ErrorCode`, `GlobalExceptionHandler` |
 | JPA base classes | `persistence.BaseEntity`, `persistence.AuditedEntity` |
 | security | `security.CurrentUserProvider`, `ApiAuthenticationEntryPoint`, `ApiAccessDeniedHandler`, `KeycloakJwtAuthoritiesConverter` (auto-configured `JwtAuthenticationConverter` bean — services just use `.oauth2ResourceServer(rs -> rs.jwt(withDefaults()))`) |
-| messaging infra | `messaging.outbox.OutboxEventStatus`, `messaging.processed.@EnableProcessedMessages` + `ProcessedMessageService` |
+| messaging infra | `messaging.RabbitTopology` (exchange/DLX/unrouted + quorum queue factory — every `RabbitMQConfig` declares through it), `messaging.outbox.ConfirmedRabbitSender` (publisher-confirm send for outbox relays), `messaging.outbox.OutboxEventStatus`, `messaging.processed.@EnableProcessedMessages` + `ProcessedMessageService` |
 | misc | `util.SlugUtils`, `web.CorrelationIdFilter`, `payment.PaymentMethod/PaymentProvider` |
 
 `com.fashionstore.contracts.*` (api-contracts): `common.EventEnvelope`, `common.EventTypes`, plus `inventory.*`, `order.*`, `payment.*`, `notification.*` commands/events. Add a new event **here** and reference `EventTypes` — never hardcode a routing key string in two services.

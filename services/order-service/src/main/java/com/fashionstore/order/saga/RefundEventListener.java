@@ -1,5 +1,6 @@
 package com.fashionstore.order.saga;
 
+import com.fashionstore.common.messaging.RabbitTopology;
 import com.fashionstore.common.messaging.processed.ProcessedMessageService;
 import com.fashionstore.contracts.common.EventEnvelope;
 import com.fashionstore.contracts.payment.event.PaymentRefundRejectedEvent;
@@ -40,7 +41,7 @@ public class RefundEventListener {
     @RabbitListener(queues = RabbitMQNames.ORDER_PAYMENT_REFUNDED_QUEUE)
     public void paymentRefunded(
             EventEnvelope<?> envelope,
-            @Header(RabbitMQNames.OUTBOX_EVENT_ID_HEADER) String messageId
+            @Header(RabbitTopology.OUTBOX_EVENT_ID_HEADER) String messageId
     ) {
         processedMessageService.processOnce(messageId, SagaConsumers.PAYMENT_REFUNDED, () -> {
             PaymentRefundedEvent event = payload(envelope, PaymentRefundedEvent.class);
@@ -77,7 +78,7 @@ public class RefundEventListener {
     @RabbitListener(queues = RabbitMQNames.ORDER_PAYMENT_REFUND_REJECTED_QUEUE)
     public void paymentRefundRejected(
             EventEnvelope<?> envelope,
-            @Header(RabbitMQNames.OUTBOX_EVENT_ID_HEADER) String messageId
+            @Header(RabbitTopology.OUTBOX_EVENT_ID_HEADER) String messageId
     ) {
         processedMessageService.processOnce(messageId, SagaConsumers.PAYMENT_REFUND_REJECTED, () -> {
             PaymentRefundRejectedEvent event = payload(envelope, PaymentRefundRejectedEvent.class);

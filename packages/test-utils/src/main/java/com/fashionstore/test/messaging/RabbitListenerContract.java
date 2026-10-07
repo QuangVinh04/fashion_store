@@ -1,7 +1,5 @@
 package com.fashionstore.test.messaging;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fashionstore.common.exception.AppException;
 import com.fashionstore.common.exception.ErrorCode;
 import org.junit.jupiter.api.AfterAll;
@@ -33,8 +31,6 @@ import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.wait.strategy.Wait;
 
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -59,22 +55,37 @@ public abstract class RabbitListenerContract {
     protected abstract List<String> sourceQueues();
     protected abstract String deadLetterQueue();
 
+    /**
+     * Broker sạch, không nạp policy nào: mọi thuộc tính queue (quorum, DLX, delivery-limit) phải đến
+     * từ chính {@code RabbitMQConfig} của service — đúng như khi service chạy trên một broker mới.
+     */
     @BeforeAll
-    static void startBroker() throws Exception {
+    static void startBroker() {
         BROKER.start();
-        Path root = Path.of("").toAbsolutePath();
-        while (root != null && !Files.exists(root.resolve("platform/rabbitmq/dlq-policies.json"))) {
-            root = root.getParent();
-        }
-        assertThat(root).as("repository RabbitMQ policy manifest").isNotNull();
-        ObjectMapper mapper = new ObjectMapper();
-        for (JsonNode policy : mapper.readTree(root.resolve("platform/rabbitmq/dlq-policies.json").toFile())) {
-            var result = BROKER.execInContainer("rabbitmqctl", "set_policy", "--vhost", "/",
-                    policy.get("name").asText(), policy.get("pattern").asText(),
-                    mapper.writeValueAsString(policy.get("definition")), "--priority", policy.get("priority").asText(),
-                    "--apply-to", policy.get("apply-to").asText());
-            assertThat(result.getExitCode()).as(result.getStderr()).isZero();
-        }
+    }
+
+    @Test
+    void everyQueueOfTheServiceIsQuorum() {
+        withContext(context -> {
+            List<String> queues = new ArrayList<>(sourceQueues());
+            queues.add(deadLetterQueue());
+            try {
+                var result = BROKER.execInContainer("rabbitmqctl", "list_queues", "-q", "--no-table-headers", "name", "type");
+                for (String queue : queues) {
+                    assertThat(result.getStdout()).as("queue type of " + queue)
+                            .containsPattern("(?m)^" + java.util.regex.Pattern.quote(queue) + "\\s+quorum$");
+                }
+            } catch (Exception exception) { throw new AssertionError(exception); }
+        });
+    }
+
+    @Test
+    void eventWithoutAnyConsumerIsKeptInUnroutedQueueInsteadOfDropped() {
+        withContext(context -> {
+            RabbitTemplate template = context.getBean(RabbitTemplate.class);
+            template.send("fashion.events", "event.nobody.listens", new Message("{}".getBytes(StandardCharsets.UTF_8)));
+            assertThat(template.receive("fashion.events.unrouted", 5000)).as("unrouted message").isNotNull();
+        });
     }
 
     @AfterAll

@@ -1,5 +1,6 @@
 package com.fashionstore.catalog.messaging;
 
+import com.fashionstore.common.messaging.RabbitTopology;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fashionstore.catalog.config.RabbitMQNames;
 import com.fashionstore.common.messaging.processed.ProcessedMessageService;
@@ -29,7 +30,7 @@ public class InventoryCommandListener {
     @RabbitListener(queues = RabbitMQNames.INVENTORY_RESERVATION_REQUESTED_QUEUE)
     public void onReservationRequested(
             EventEnvelope<?> envelope,
-            @Header(RabbitMQNames.OUTBOX_EVENT_ID_HEADER) String messageId) {
+            @Header(RabbitTopology.OUTBOX_EVENT_ID_HEADER) String messageId) {
         if (!EventTypes.INVENTORY_RESERVATION_REQUESTED.equals(envelope.eventType())) {
             throw new IllegalArgumentException("Unsupported eventType on reservation queue: " + envelope.eventType());
         }
@@ -42,7 +43,7 @@ public class InventoryCommandListener {
     @RabbitListener(queues = RabbitMQNames.INVENTORY_CONFIRMATION_REQUESTED_QUEUE)
     public void onConfirmationRequested(
             EventEnvelope<?> envelope,
-            @Header(RabbitMQNames.OUTBOX_EVENT_ID_HEADER) String messageId) {
+            @Header(RabbitTopology.OUTBOX_EVENT_ID_HEADER) String messageId) {
         if (!EventTypes.INVENTORY_CONFIRMATION_REQUESTED.equals(envelope.eventType())) {
             throw new IllegalArgumentException("Unsupported eventType on confirmation queue: " + envelope.eventType());
         }
@@ -55,7 +56,7 @@ public class InventoryCommandListener {
     @RabbitListener(queues = RabbitMQNames.INVENTORY_RELEASE_REQUESTED_QUEUE)
     public void onReleaseRequested(
             EventEnvelope<?> envelope,
-            @Header(RabbitMQNames.OUTBOX_EVENT_ID_HEADER) String messageId) {
+            @Header(RabbitTopology.OUTBOX_EVENT_ID_HEADER) String messageId) {
         if (!EventTypes.INVENTORY_RELEASE_REQUESTED.equals(envelope.eventType())) {
             throw new IllegalArgumentException("Unsupported eventType on release queue: " + envelope.eventType());
         }
@@ -68,7 +69,7 @@ public class InventoryCommandListener {
     @RabbitListener(queues = RabbitMQNames.INVENTORY_RESTOCK_REQUESTED_QUEUE)
     public void onRestockRequested(
             EventEnvelope<?> envelope,
-            @Header(RabbitMQNames.OUTBOX_EVENT_ID_HEADER) String messageId) {
+            @Header(RabbitTopology.OUTBOX_EVENT_ID_HEADER) String messageId) {
         if (!EventTypes.INVENTORY_RESTOCK_REQUESTED.equals(envelope.eventType())) {
             throw new IllegalArgumentException("Unsupported eventType on restock queue: " + envelope.eventType());
         }

@@ -1,18 +1,30 @@
 package com.fashionstore.notification.config;
 
+import com.fashionstore.common.messaging.RabbitTopology;
 import com.fashionstore.contracts.common.EventTypes;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.amqp.core.Binding;
-import org.springframework.amqp.core.BindingBuilder;
+import org.springframework.amqp.core.Declarables;
 import org.springframework.amqp.core.DirectExchange;
 import org.springframework.amqp.core.Queue;
-import org.springframework.amqp.core.QueueBuilder;
+import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
+import org.springframework.amqp.support.converter.MessageConverter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+/**
+ * Topology của notification-service: một queue nhận lệnh gửi email từ mọi service.
+ */
 @Configuration
 public class RabbitMQConfig {
 
+    public static final String EMAIL_QUEUE = "notification.email";
+    public static final String EMAIL_DEAD_LETTER_QUEUE = "notification.email.dlq";
+
+    /**
+     * Service này không có spring-web nên Spring Boot không tự tạo ObjectMapper; tự khai báo và đăng ký
+     * module (JavaTimeModule cho {@code Instant} trong EventEnvelope).
+     */
     @Bean
     public ObjectMapper objectMapper() {
         ObjectMapper mapper = new ObjectMapper();
@@ -20,45 +32,48 @@ public class RabbitMQConfig {
         return mapper;
     }
 
-    public static final String EXCHANGE = "fashion.events";
-    public static final String DEAD_LETTER_EXCHANGE = "fashion.events.dlx";
-    public static final String EMAIL_QUEUE = "notification.email";
-    public static final String EMAIL_DEAD_LETTER_QUEUE = "notification.email.dlq";
+    /** Listener nhận thẳng {@code EventEnvelope<?>}: converter này đọc JSON thành object theo kiểu tham số. */
+    @Bean
+    MessageConverter jsonMessageConverter(ObjectMapper objectMapper) {
+        return new Jackson2JsonMessageConverter(objectMapper);
+    }
+
+    // ----- Hạ tầng dùng chung: khai báo y hệt ở mọi service (xem RabbitTopology) -----
 
     @Bean
-    DirectExchange fashionExchange() {
-        return new DirectExchange(EXCHANGE, true, false);
+    DirectExchange fashionEventsExchange() {
+        return RabbitTopology.eventsExchange();
     }
 
     @Bean
     DirectExchange deadLetterExchange() {
-        return new DirectExchange(DEAD_LETTER_EXCHANGE, true, false);
+        return RabbitTopology.deadLetterExchange();
     }
 
     @Bean
-    Queue emailQueue() {
-        return QueueBuilder.durable(EMAIL_QUEUE)
-                .deadLetterExchange(DEAD_LETTER_EXCHANGE)
-                .deadLetterRoutingKey(EMAIL_DEAD_LETTER_QUEUE)
-                .build();
+    Declarables unroutedTopology() {
+        return RabbitTopology.unroutedTopology();
     }
+
+    // ----- Email -----
 
     @Bean
     Queue emailDeadLetterQueue() {
-        return QueueBuilder.durable(EMAIL_DEAD_LETTER_QUEUE).build();
-    }
-
-    @Bean
-    Binding emailBinding(Queue emailQueue, DirectExchange fashionExchange) {
-        return BindingBuilder.bind(emailQueue)
-                .to(fashionExchange)
-                .with(EventTypes.NOTIFICATION_EMAIL_REQUESTED);
+        return RabbitTopology.deadLetterQueue(EMAIL_DEAD_LETTER_QUEUE);
     }
 
     @Bean
     Binding emailDeadLetterBinding(Queue emailDeadLetterQueue, DirectExchange deadLetterExchange) {
-        return BindingBuilder.bind(emailDeadLetterQueue)
-                .to(deadLetterExchange)
-                .with(EMAIL_DEAD_LETTER_QUEUE);
+        return RabbitTopology.deadLetterBinding(emailDeadLetterQueue, deadLetterExchange);
+    }
+
+    @Bean
+    Queue emailQueue() {
+        return RabbitTopology.consumerQueue(EMAIL_QUEUE, EMAIL_DEAD_LETTER_QUEUE);
+    }
+
+    @Bean
+    Binding emailBinding(Queue emailQueue, DirectExchange fashionEventsExchange) {
+        return RabbitTopology.bind(emailQueue, fashionEventsExchange, EventTypes.NOTIFICATION_EMAIL_REQUESTED);
     }
 }

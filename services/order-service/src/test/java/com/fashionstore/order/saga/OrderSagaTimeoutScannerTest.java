@@ -54,10 +54,14 @@ class OrderSagaTimeoutScannerTest {
     private SimpleMeterRegistry meterRegistry;
     private OrderSagaTimeoutScanner scanner;
 
+    @Mock
+    private com.fashionstore.order.service.OrderNotificationService orderNotificationService;
+
     @BeforeEach
     void setUp() {
         meterRegistry = new SimpleMeterRegistry();
-        scanner = new OrderSagaTimeoutScanner(sagaRepository, orderRepository, sagaOutbox, meterRegistry, orderStatusHistoryRepository);
+        scanner = new OrderSagaTimeoutScanner(sagaRepository, orderRepository, sagaOutbox, meterRegistry,
+                orderStatusHistoryRepository, orderNotificationService);
     }
 
     @Test
@@ -79,6 +83,7 @@ class OrderSagaTimeoutScannerTest {
         assertEquals(OrderStatus.CANCELLED, historyCaptor.getValue().getToStatus());
         assertEquals("SAGA_TIMEOUT", historyCaptor.getValue().getAction());
         assertEquals("SYSTEM", historyCaptor.getValue().getChangedBy());
+        verify(orderNotificationService).sendOrderCancelledNotification(order, saga.getFailureReason());
     }
 
     @Test

@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Đơn hàng đã bị hủy</title>
+</head>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+    <div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
+        <h2 style="color: #c53030;">Đơn hàng của bạn đã bị hủy</h2>
+        <p>Xin chào <strong th:text="${recipientName}">Khách hàng</strong>,</p>
+        <p>Fashion Store xin thông báo đơn hàng dưới đây đã được hủy.</p>
+
+        <div style="background-color: #f7fafc; padding: 15px; border-radius: 6px; margin: 20px 0;">
+            <p><strong>Mã đơn hàng:</strong> <span th:text="${orderCode}">ORD-123456</span></p>
+            <p><strong>Tổng tiền:</strong> <span th:text="${totalAmount}">0</span> VND</p>
+            <p th:if="${reason != null and reason != ''}"><strong>Lý do:</strong> <span th:text="${reason}">Lý do</span></p>
+        </div>
+
+        <p>Nếu bạn đã thanh toán trực tuyến, khoản tiền sẽ được hoàn theo quy định của cổng thanh toán.</p>
+        <p>Trân trọng,<br><strong>Đội ngũ Fashion Store</strong></p>
+    </div>
+</body>
+</html>

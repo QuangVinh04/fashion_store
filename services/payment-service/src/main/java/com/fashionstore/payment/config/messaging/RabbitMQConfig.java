@@ -1,91 +1,90 @@
 package com.fashionstore.payment.config.messaging;
 
+import com.fashionstore.common.messaging.RabbitTopology;
+import com.fashionstore.contracts.common.EventTypes;
 import org.springframework.amqp.core.Binding;
-import org.springframework.amqp.core.BindingBuilder;
+import org.springframework.amqp.core.Declarables;
 import org.springframework.amqp.core.DirectExchange;
 import org.springframework.amqp.core.Queue;
-import org.springframework.amqp.core.QueueBuilder;
 import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
 import org.springframework.amqp.support.converter.MessageConverter;
 import org.springframework.context.annotation.Bean;
-import com.fashionstore.contracts.common.EventTypes;
 import org.springframework.context.annotation.Configuration;
 
+/**
+ * Topology của payment-service. RabbitAdmin (Spring Boot tự tạo) khai báo mọi bean Exchange/Queue/Binding
+ * dưới đây lên broker khi kết nối lần đầu, nên service tự dựng được hạ tầng nó cần trên một broker trống.
+ */
 @Configuration
 public class RabbitMQConfig {
 
+    // ----- Hạ tầng dùng chung: khai báo y hệt ở mọi service (xem RabbitTopology) -----
+
     @Bean
-    DirectExchange deadLetterExchange() {
-        return new DirectExchange(RabbitMQNames.DEAD_LETTER_EXCHANGE, true, false);
+    DirectExchange fashionEventsExchange() {
+        return RabbitTopology.eventsExchange();
     }
 
     @Bean
+    DirectExchange deadLetterExchange() {
+        return RabbitTopology.deadLetterExchange();
+    }
+
+    @Bean
+    Declarables unroutedTopology() {
+        return RabbitTopology.unroutedTopology();
+    }
+
+    // ----- Dead letter của payment: hết retry / lỗi vĩnh viễn thì message nằm ở đây chờ xử lý tay -----
+
+    @Bean
     Queue paymentDeadLetterQueue() {
-        return QueueBuilder.durable(RabbitMQNames.PAYMENT_DEAD_LETTER_QUEUE).build();
+        return RabbitTopology.deadLetterQueue(RabbitMQNames.PAYMENT_DEAD_LETTER_QUEUE);
     }
 
     @Bean
     Binding paymentDeadLetterBinding(Queue paymentDeadLetterQueue, DirectExchange deadLetterExchange) {
-        return BindingBuilder.bind(paymentDeadLetterQueue).to(deadLetterExchange)
-                .with(RabbitMQNames.PAYMENT_DEAD_LETTER_QUEUE);
+        return RabbitTopology.deadLetterBinding(paymentDeadLetterQueue, deadLetterExchange);
     }
 
-    @Bean
-    DirectExchange fashionEventsExchange() {
-        return new DirectExchange(RabbitMQNames.EXCHANGE, true, false);
-    }
+    // ----- Queue nghiệp vụ -----
 
+    /** Một queue nhận cả 3 lệnh saga để giữ đúng thứ tự xin thanh toán → huỷ → hoàn tiền của cùng một đơn. */
     @Bean
     Queue paymentSagaCommandQueue() {
-        return new Queue(RabbitMQNames.PAYMENT_SAGA_COMMAND_QUEUE, true);
+        return RabbitTopology.consumerQueue(
+                RabbitMQNames.PAYMENT_SAGA_COMMAND_QUEUE, RabbitMQNames.PAYMENT_DEAD_LETTER_QUEUE);
     }
 
     @Bean
     Queue paymentOrderDeliveredQueue() {
-        return new Queue(RabbitMQNames.PAYMENT_ORDER_DELIVERED_QUEUE, true);
+        return RabbitTopology.consumerQueue(
+                RabbitMQNames.PAYMENT_ORDER_DELIVERED_QUEUE, RabbitMQNames.PAYMENT_DEAD_LETTER_QUEUE);
     }
 
     @Bean
-    Binding paymentRequestedBinding(Queue paymentSagaCommandQueue,
-                                    DirectExchange fashionEventsExchange) {
-        return BindingBuilder.bind(paymentSagaCommandQueue)
-                .to(fashionEventsExchange)
-                .with(EventTypes.PAYMENT_REQUESTED);
+    Binding paymentRequestedBinding(Queue paymentSagaCommandQueue, DirectExchange fashionEventsExchange) {
+        return RabbitTopology.bind(paymentSagaCommandQueue, fashionEventsExchange, EventTypes.PAYMENT_REQUESTED);
     }
 
     @Bean
-    Binding paymentCancellationRequestedBinding(
-            Queue paymentSagaCommandQueue,
-            DirectExchange fashionEventsExchange
-    ) {
-        return BindingBuilder.bind(paymentSagaCommandQueue)
-                .to(fashionEventsExchange)
-                .with(EventTypes.PAYMENT_CANCELLATION_REQUESTED);
+    Binding paymentCancellationRequestedBinding(Queue paymentSagaCommandQueue, DirectExchange fashionEventsExchange) {
+        return RabbitTopology.bind(paymentSagaCommandQueue, fashionEventsExchange, EventTypes.PAYMENT_CANCELLATION_REQUESTED);
     }
 
     @Bean
-    Binding paymentRefundRequestedBinding(
-            Queue paymentSagaCommandQueue,
-            DirectExchange fashionEventsExchange
-    ) {
-        return BindingBuilder.bind(paymentSagaCommandQueue)
-                .to(fashionEventsExchange)
-                .with(EventTypes.PAYMENT_REFUND_REQUESTED);
+    Binding paymentRefundRequestedBinding(Queue paymentSagaCommandQueue, DirectExchange fashionEventsExchange) {
+        return RabbitTopology.bind(paymentSagaCommandQueue, fashionEventsExchange, EventTypes.PAYMENT_REFUND_REQUESTED);
     }
 
     @Bean
-    Binding paymentOrderDeliveredBinding(
-            Queue paymentOrderDeliveredQueue,
-            DirectExchange fashionEventsExchange
-    ) {
-        return BindingBuilder.bind(paymentOrderDeliveredQueue)
-                .to(fashionEventsExchange)
-                .with(EventTypes.ORDER_DELIVERED);
+    Binding paymentOrderDeliveredBinding(Queue paymentOrderDeliveredQueue, DirectExchange fashionEventsExchange) {
+        return RabbitTopology.bind(paymentOrderDeliveredQueue, fashionEventsExchange, EventTypes.ORDER_DELIVERED);
     }
 
+    /** Payload là JSON; kiểu đích suy ra từ tham số của @RabbitListener, không cần header __TypeId__. */
     @Bean
     MessageConverter jsonMessageConverter() {
         return new Jackson2JsonMessageConverter();
     }
-
 }
