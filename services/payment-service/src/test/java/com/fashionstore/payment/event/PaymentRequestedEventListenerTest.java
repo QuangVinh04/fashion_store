@@ -61,9 +61,25 @@ class PaymentRequestedEventListenerTest {
     PaymentHandler paymentHandler;
 
     PaymentRequestedEventListener listener;
+    Payment storedPayment;
 
     @BeforeEach
     void setUp() {
+        TransactionTemplate transactions = new TransactionTemplate(new InMemoryTransactionManager());
+        org.mockito.Mockito.lenient().when(paymentRepository.findByOrderId("order-1"))
+                .thenAnswer(call -> Optional.ofNullable(storedPayment));
+        org.mockito.Mockito.lenient().when(paymentRepository.findByIdForUpdate(anyString()))
+                .thenAnswer(call -> Optional.ofNullable(storedPayment));
+        org.mockito.Mockito.lenient().when(paymentRepository.save(any(Payment.class))).thenAnswer(call -> {
+            storedPayment = call.getArgument(0);
+            return storedPayment;
+        });
+        com.fashionstore.payment.service.PaymentService paymentService =
+                new com.fashionstore.payment.service.impl.PaymentServiceImpl(paymentRepository, paymentHandlerRegistry,
+                        org.mockito.Mockito.mock(com.fashionstore.payment.mapper.PaymentResponseMapper.class),
+                        org.mockito.Mockito.mock(com.fashionstore.common.security.CurrentUserProvider.class),
+                        transactions, outboxService,
+                        org.mockito.Mockito.mock(com.fashionstore.payment.service.CallbackPaymentService.class));
         listener = new PaymentRequestedEventListener(
                 paymentRepository,
                 paymentRefundRepository,
@@ -71,8 +87,14 @@ class PaymentRequestedEventListenerTest {
                 new ObjectMapper(),
                 outboxService,
                 paymentHandlerRegistry,
-                new TransactionTemplate(new InMemoryTransactionManager())
+                transactions,
+                paymentService
         );
+        org.springframework.aop.framework.ProxyFactory proxy = new org.springframework.aop.framework.ProxyFactory(listener);
+        proxy.setProxyTargetClass(true);
+        proxy.addAdvice(new org.springframework.transaction.interceptor.TransactionInterceptor(new InMemoryTransactionManager(),
+                new org.springframework.transaction.annotation.AnnotationTransactionAttributeSource()));
+        listener = (PaymentRequestedEventListener) proxy.getProxy();
         doAnswer(invocation -> {
             invocation.getArgument(2, Runnable.class).run();
             return null;
@@ -110,6 +132,7 @@ class PaymentRequestedEventListenerTest {
         when(paymentRepository.findByOrderIdForUpdate("order-1")).thenReturn(Optional.empty());
         when(paymentRepository.save(any(Payment.class))).thenAnswer(invocation -> {
             Payment saved = invocation.getArgument(0);
+            storedPayment = saved;
             if (saved.getId() == null) {
                 ReflectionTestUtils.setField(saved, "id", "payment-1");
             }
@@ -167,7 +190,7 @@ class PaymentRequestedEventListenerTest {
     }
 
     @Test
-    void gatewayFailureMarksPaymentFailedAndRepliesPaymentFailed() {
+    void gatewayTimeoutDoesNotPublishPaymentFailed() {
         EventEnvelope<AuthorizePaymentCommand> envelope = onlineRequest();
         when(paymentRepository.findByOrderIdForUpdate("order-1")).thenReturn(Optional.empty());
         stubPaymentSave();
@@ -175,11 +198,11 @@ class PaymentRequestedEventListenerTest {
         when(paymentHandlerRegistry.get(PaymentProvider.VNPAY)).thenReturn(paymentHandler);
         when(paymentHandler.initiate(any(Payment.class), anyString())).thenThrow(new IllegalStateException("gateway timeout"));
 
-        listener.handle(envelope, "message-1");
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> listener.handle(envelope, "message-1"))
+                .isInstanceOf(IllegalStateException.class).hasMessage("gateway timeout");
 
-        assertThat(lastSavedPayment().getStatus()).isEqualTo(PaymentStatus.FAILED);
-        assertThat(lastSavedPayment().getFailureReason()).contains("gateway timeout");
-        verify(outboxService).saveMessage(eq("order-1"), eq(EventTypes.PAYMENT_FAILED), any(EventEnvelope.class));
+        assertThat(lastSavedPayment().getStatus()).isEqualTo(PaymentStatus.INITIATION_UNKNOWN);
+        verify(outboxService, never()).saveMessage(eq("order-1"), eq(EventTypes.PAYMENT_FAILED), any(EventEnvelope.class));
         verify(outboxService, never()).saveMessage(eq("order-1"), eq(EventTypes.PAYMENT_INITIATED), any(EventEnvelope.class));
     }
 
@@ -189,16 +212,15 @@ class PaymentRequestedEventListenerTest {
         when(paymentRepository.findByOrderIdForUpdate("order-1")).thenReturn(Optional.empty());
         stubPaymentSave();
         when(paymentHandlerRegistry.get(PaymentProvider.VNPAY)).thenReturn(paymentHandler);
-        when(paymentHandler.initiate(any(Payment.class), anyString())).thenReturn(
-                PaymentInitiationResult.builder().paymentUrl("https://pay").build());
-        // Trong lúc gọi cổng, lệnh huỷ của saga đã chạy xong ở transaction khác.
-        Payment cancelled = Payment.builder().orderId("order-1").status(PaymentStatus.CANCELLED).build();
-        ReflectionTestUtils.setField(cancelled, "id", "payment-1");
-        when(paymentRepository.findByIdForUpdate("payment-1")).thenReturn(Optional.of(cancelled));
+        when(paymentHandler.initiate(any(Payment.class), anyString())).thenAnswer(call -> {
+            // Giả lập trạng thái đã đổi trước bước ghi kết quả provider.
+            storedPayment.setStatus(PaymentStatus.CANCELLED);
+            return PaymentInitiationResult.builder().paymentUrl("https://pay").build();
+        });
 
         listener.handle(envelope, "message-1");
 
-        assertThat(cancelled.getStatus()).isEqualTo(PaymentStatus.CANCELLED);
+        assertThat(storedPayment.getStatus()).isEqualTo(PaymentStatus.CANCELLED);
         verify(outboxService, never()).saveMessage(anyString(), eq(EventTypes.PAYMENT_INITIATED), any(EventEnvelope.class));
     }
 
@@ -227,9 +249,48 @@ class PaymentRequestedEventListenerTest {
                 "order-1", "user-1", "ONLINE", "VNPAY", new BigDecimal("450000"), "VND", "203.0.113.9"));
     }
 
+    @Test
+    void redeliveryRecoversInitiationEvenWhenPreparationMessageWasProcessed() {
+        storedPayment = onlineCompletedPayment();
+        storedPayment.setStatus(PaymentStatus.PENDING);
+        when(paymentHandlerRegistry.get(PaymentProvider.VNPAY)).thenReturn(paymentHandler);
+        when(paymentHandler.initiate(any(Payment.class), anyString())).thenAnswer(call -> {
+            assertThat(TransactionSynchronizationManager.isActualTransactionActive()).isFalse();
+            return PaymentInitiationResult.builder().paymentUrl("https://pay")
+                    .providerAmount(new BigDecimal("450000")).providerCurrency("VND").build();
+        });
+        // Marker đã commit trước khi process chết: bước chuẩn bị DB không chạy lại.
+        org.mockito.Mockito.reset(processedMessageService);
+        doAnswer(call -> null).when(processedMessageService)
+                .processOnce(eq("message-1"), eq("payment-requested-v2"), any(Runnable.class));
+
+        listener.handle(onlineRequest(), "message-1");
+
+        assertThat(storedPayment.getStatus()).isEqualTo(PaymentStatus.PENDING);
+        assertThat(storedPayment.getPaymentUrl()).isEqualTo("https://pay");
+        verify(paymentHandler).initiate(any(Payment.class), eq("203.0.113.9"));
+        verify(outboxService).saveMessage(eq("order-1"), eq(EventTypes.PAYMENT_INITIATED), any(EventEnvelope.class));
+    }
+
+    @Test
+    void cancellationCannotFinalizeWhileInitiationResultIsUnknown() {
+        Payment payment = onlineCompletedPayment();
+        payment.setStatus(PaymentStatus.INITIATION_UNKNOWN);
+        when(paymentRepository.findByOrderIdForUpdate("order-1")).thenReturn(Optional.of(payment));
+        var command = new com.fashionstore.contracts.payment.command.CancelPaymentCommand("order-1", "payment-1", "cancel");
+        var envelope = EventEnvelope.v1(EventTypes.PAYMENT_CANCELLATION_REQUESTED, "order-1", "saga-1", command);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> listener.handle(envelope, "cancel-1"))
+                .isInstanceOf(com.fashionstore.common.exception.AppException.class);
+
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.INITIATION_UNKNOWN);
+        verify(outboxService, never()).saveMessage(anyString(), eq(EventTypes.PAYMENT_CANCELLED), any());
+    }
+
     private void stubPaymentSave() {
         when(paymentRepository.save(any(Payment.class))).thenAnswer(invocation -> {
             Payment saved = invocation.getArgument(0);
+            storedPayment = saved;
             if (saved.getId() == null) {
                 ReflectionTestUtils.setField(saved, "id", "payment-1");
             }
@@ -271,6 +332,11 @@ class PaymentRequestedEventListenerTest {
         @Override
         protected Object doGetTransaction() {
             return new Object();
+        }
+
+        @Override
+        protected boolean isExistingTransaction(Object transaction) {
+            return TransactionSynchronizationManager.isActualTransactionActive();
         }
 
         @Override

@@ -25,6 +25,8 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.times;
 
 @ExtendWith(MockitoExtension.class)
 class CallbackPaymentServiceImplTest {
@@ -40,9 +42,23 @@ class CallbackPaymentServiceImplTest {
 
     CallbackPaymentServiceImpl service;
 
+    @Test
+    void returnVerifiesProviderOnlyOnceBeforeApplyingResult() {
+        when(paymentHandlerRegistry.get(PaymentProvider.VNPAY)).thenReturn(paymentHandler);
+        when(paymentHandler.verifyCallback(any(), any())).thenReturn(PaymentCallbackResult.builder()
+                .signatureValid(true).merchantReference("merchant-1").status(PaymentStatus.COMPLETED).build());
+        when(paymentRepository.findByMerchantReference("merchant-1"))
+                .thenReturn(Optional.of(pendingPayment(PaymentProvider.VNPAY)));
+        when(paymentStateService.isProviderAmountValid(any(), any())).thenReturn(true);
+        when(paymentStateService.applyResult(any(), any())).thenReturn(new PaymentResponse());
+        service.verifyReturn(PaymentProvider.VNPAY, Map.of("vnp_TxnRef", "merchant-1"));
+        verify(paymentHandler, times(1)).verifyCallback(any(), any());
+    }
+
     @BeforeEach
     void setUp() {
-        service = new CallbackPaymentServiceImpl(paymentRepository, paymentHandlerRegistry, paymentStateService);
+        service = new CallbackPaymentServiceImpl(paymentRepository, paymentHandlerRegistry, paymentStateService,
+                new org.springframework.transaction.support.TransactionTemplate(new PaymentServiceImplTest.TestTransactionManager()));
     }
 
     @Test
@@ -76,7 +92,7 @@ class CallbackPaymentServiceImplTest {
                         .status(PaymentStatus.COMPLETED)
                         .build());
         when(paymentRepository.findByMerchantReference("123")).thenReturn(Optional.empty());
-        when(paymentRepository.findByTransactionId("123")).thenReturn(Optional.of(payment));
+        when(paymentRepository.findByTransactionIdForUpdate("123")).thenReturn(Optional.of(payment));
         when(paymentStateService.isProviderAmountValid(any(), any())).thenReturn(true);
         when(paymentStateService.applyResult(any(), any())).thenReturn(new PaymentResponse());
 

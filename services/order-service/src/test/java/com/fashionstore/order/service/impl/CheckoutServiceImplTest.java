@@ -31,6 +31,14 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.aop.framework.ProxyFactory;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.annotation.AnnotationTransactionAttributeSource;
+import org.springframework.transaction.interceptor.TransactionInterceptor;
+import org.springframework.transaction.support.AbstractPlatformTransactionManager;
+import org.springframework.transaction.support.DefaultTransactionStatus;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import com.fashionstore.order.service.CheckoutService;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -74,12 +82,73 @@ class CheckoutServiceImplTest {
 
     private CheckoutServiceImpl service;
 
+    @Test
+    void updateCheckoutCallsIdentityAndGhnWithoutDatabaseTransaction() {
+        openCheckout("200000", "addr-1");
+        when(identityClient.getAddress("user-1", "addr-2")).thenAnswer(call -> {
+            assertEquals(false, TransactionSynchronizationManager.isActualTransactionActive());
+            return address(1542, "1A0101");
+        });
+        when(ghnClient.calculateFee(any(), any(Integer.class), any())).thenAnswer(call -> {
+            assertEquals(false, TransactionSynchronizationManager.isActualTransactionActive());
+            return BigDecimal.valueOf(45000);
+        });
+        ProxyFactory proxy = new ProxyFactory(service);
+        proxy.addAdvice(new TransactionInterceptor(new TestTransactionManager(),
+                new AnnotationTransactionAttributeSource()));
+        CheckoutService transactionalService = (CheckoutService) proxy.getProxy();
+        CheckoutResponse response = transactionalService.updateCheckout("checkout-1",
+                UpdateCheckoutRequest.builder().addressId("addr-2").build());
+        assertEquals(0, response.getShippingFee().compareTo(BigDecimal.valueOf(45000)));
+    }
+
+    @Test
+    void updateCheckoutRejectsCancellationWhileWaitingForShippingQuote() {
+        Checkout checkout = openCheckout("200000", "addr-1");
+        when(ghnClient.calculateFee(any(), any(Integer.class), any())).thenAnswer(call -> {
+            checkout.setStatus(CheckoutStatus.CANCELLED);
+            return BigDecimal.valueOf(45000);
+        });
+        AppException exception = assertThrows(AppException.class, () -> service.updateCheckout("checkout-1",
+                UpdateCheckoutRequest.builder().shippingMethod(ShippingMethod.EXPRESS).build()));
+        assertEquals(OrderErrorCode.CHECKOUT_STATUS_INVALID, exception.getErrorCode());
+        verify(checkoutRepository, never()).save(any());
+    }
+
+    @Test
+    void updateCheckoutRejectsVersionChangedWhileWaitingForShippingQuote() {
+        Checkout checkout = openCheckout("200000", "addr-1");
+        when(ghnClient.calculateFee(any(), any(Integer.class), any())).thenAnswer(call -> {
+            checkout.setVersion(1L);
+            return BigDecimal.valueOf(45000);
+        });
+        AppException exception = assertThrows(AppException.class, () -> service.updateCheckout("checkout-1",
+                UpdateCheckoutRequest.builder().shippingMethod(ShippingMethod.EXPRESS).build()));
+        assertEquals(OrderErrorCode.CHECKOUT_UPDATE_CONFLICT, exception.getErrorCode());
+        assertEquals(ShippingMethod.STANDARD, checkout.getShippingMethod());
+        verify(checkoutRepository, never()).save(any());
+    }
+
+    static class TestTransactionManager extends AbstractPlatformTransactionManager {
+        @Override protected Object doGetTransaction() { return new Object(); }
+        @Override protected boolean isExistingTransaction(Object transaction) {
+            return TransactionSynchronizationManager.isActualTransactionActive();
+        }
+        @Override protected void doBegin(Object transaction, TransactionDefinition definition) { }
+        @Override protected void doCommit(DefaultTransactionStatus status) { }
+        @Override protected void doRollback(DefaultTransactionStatus status) { }
+    }
+
     @BeforeEach
     void setUp() {
-        service = new CheckoutServiceImpl(checkoutRepository, cartService, currentUserProvider, promotionService, catalogClient, identityClient, ghnClient);
+        service = new CheckoutServiceImpl(checkoutRepository, cartService, currentUserProvider, promotionService,
+                catalogClient, identityClient, ghnClient,
+                new org.springframework.transaction.support.TransactionTemplate(new TestTransactionManager()));
         when(currentUserProvider.getCurrentUserId()).thenReturn("user-1");
         when(checkoutRepository.save(any(Checkout.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
+        when(checkoutRepository.findForUpdateByIdAndUserId(anyString(), anyString()))
+                .thenAnswer(invocation -> checkoutRepository.findByIdAndUserId(invocation.getArgument(0), invocation.getArgument(1)));
     }
 
     @Test

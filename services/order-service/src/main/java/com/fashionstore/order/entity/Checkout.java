@@ -24,6 +24,11 @@ import java.util.List;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class Checkout extends BaseEntity {
 
+    @Version
+    @Column(name = "version", nullable = false)
+    @Builder.Default
+    Long version = 0L;
+
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "order_id", unique = true)
     Order order;

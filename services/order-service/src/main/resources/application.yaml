@@ -5,6 +5,13 @@ springdoc:
   paths-to-match: /api/**
 
 spring:
+  cloud:
+    openfeign:
+      client:
+        config:
+          default:
+            connectTimeout: 2000
+            readTimeout: 5000
   security:
     oauth2:
       resourceserver:
@@ -58,6 +65,7 @@ spring:
       timeout: 2000ms
 
   jpa:
+    open-in-view: false
     database: postgresql
     hibernate:
       ddl-auto: none

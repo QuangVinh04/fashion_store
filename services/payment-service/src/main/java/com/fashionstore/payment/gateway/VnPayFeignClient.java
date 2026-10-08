@@ -15,4 +15,7 @@ public interface VnPayFeignClient {
     /** Sends a signed refund request to VNPay. */
     @PostMapping(value = "/merchant_webapi/api/transaction", consumes = MediaType.APPLICATION_JSON_VALUE)
     JsonNode refund(@RequestBody Map<String, String> request);
+
+    @PostMapping(value = "/merchant_webapi/api/transaction", consumes = MediaType.APPLICATION_JSON_VALUE)
+    JsonNode query(@RequestBody Map<String, String> request);
 }

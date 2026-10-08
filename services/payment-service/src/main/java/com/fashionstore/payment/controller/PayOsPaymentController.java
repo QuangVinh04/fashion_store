@@ -3,6 +3,7 @@ package com.fashionstore.payment.controller;
 import com.fashionstore.common.dto.ApiResponse;
 import com.fashionstore.common.payment.PaymentProvider;
 import com.fashionstore.payment.dto.CallbackProcessResult;
+import com.fashionstore.payment.dto.CallbackOutcome;
 import com.fashionstore.payment.dto.PaymentCallbackResult;
 import com.fashionstore.payment.service.CallbackPaymentService;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -16,13 +17,13 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.http.ResponseEntity;
 
 import java.util.Map;
 
 /**
- * PayOS chỉ cần HTTP 2xx để coi là đã nhận webhook — không có mã phản hồi số như VNPay, nên luôn trả
- * 200 kèm outcome để debug qua log/response, không throw để tránh PayOS lặp lại webhook vô ích khi lỗi
- * là do dữ liệu đơn hàng chứ không phải do phía chúng ta.
+ * Chỉ xác nhận webhook sau khi transaction cập nhật payment/outbox đã commit.
+ * Lỗi DB được trả về như lỗi server để provider có thể gửi lại.
  */
 @RestController
 @RequestMapping("/api/v1/payments/payos")
@@ -42,17 +43,14 @@ public class PayOsPaymentController {
                 .build();
     }
 
-    /*
-     * Webhook Callback Server-to-Server từ PayOS.
-     * Tạm thời comment lại do đang chạy môi trường nội bộ / chưa có domain HTTPS công khai để PayOS gọi tới localhost.
-     * Khi triển khai production có domain HTTPS, chỉ cần bỏ comment method này.
-     */
-    // @PostMapping("/webhook")
-    // public ApiResponse<Void> webhook(@RequestBody String rawBody) {
-    //     CallbackProcessResult result = callbackPaymentService.processCallback(PaymentProvider.PAYOS, Map.of(), rawBody);
-    //     log.info("[PayOS] webhook processed with outcome={}", result.outcome());
-    //     return ApiResponse.<Void>builder()
-    //             .message("Webhook processed: " + result.outcome())
-    //             .build();
-    // }
+    @PostMapping("/webhook")
+    public ResponseEntity<ApiResponse<Void>> webhook(@RequestBody String rawBody) {
+        CallbackProcessResult result = callbackPaymentService.processCallback(PaymentProvider.PAYOS, Map.of(), rawBody);
+        log.info("[PayOS] webhook processed with outcome={}", result.outcome());
+        int status = result.outcome() == CallbackOutcome.SIGNATURE_INVALID
+                || result.outcome() == CallbackOutcome.INVALID_REQUEST ? 400 : 200;
+        // PayOS gửi callback mẫu khi đăng ký URL: đã xác minh chữ ký nhưng không có payment là hợp lệ.
+        return ResponseEntity.status(status).body(ApiResponse.<Void>builder()
+                .message("Webhook processed: " + result.outcome()).build());
+    }
 }

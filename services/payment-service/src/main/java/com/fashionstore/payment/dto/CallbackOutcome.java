@@ -7,5 +7,6 @@ public enum CallbackOutcome {
     PAYMENT_NOT_FOUND,
     AMOUNT_INVALID,
     ALREADY_PROCESSED,
+    PENDING,
     APPLIED
 }

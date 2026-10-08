@@ -11,4 +11,7 @@ public interface CallbackPaymentService {
     PaymentCallbackResult verifyReturn(PaymentProvider provider, Map<String, String> queryParams);
 
     CallbackProcessResult processCallback(PaymentProvider provider, Map<String, String> queryParams, String rawBody);
+
+    /** Apply a provider-verified callback/query result; shared with reconciliation. */
+    CallbackProcessResult applyVerifiedResult(PaymentProvider provider, PaymentCallbackResult result);
 }

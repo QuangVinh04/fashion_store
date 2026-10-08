@@ -12,7 +12,8 @@ public enum PaymentErrorCode implements BaseErrorCode {
     PAYMENT_SIGNATURE_INVALID(5003, "Payment signature is invalid", HttpStatus.BAD_REQUEST),
     PAYMENT_STATUS_INVALID(5004, "Payment status does not allow this operation", HttpStatus.BAD_REQUEST),
     PAYMENT_PROVIDER_ERROR(5005, "Payment provider request failed", HttpStatus.BAD_GATEWAY),
-    PAYMENT_AMOUNT_INVALID(5006, "Payment amount is invalid", HttpStatus.BAD_REQUEST);
+    PAYMENT_AMOUNT_INVALID(5006, "Payment amount is invalid", HttpStatus.BAD_REQUEST),
+    PAYMENT_INITIATION_IN_PROGRESS(5007, "Payment initiation is in progress, please retry later", HttpStatus.CONFLICT);
 
     private final int code;
     private final String message;

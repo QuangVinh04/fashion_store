@@ -35,3 +35,5 @@ Publishes through outbox:
 - `payment.completed`, `payment.failed`, `payment.cancelled`, and `payment.cancellation.rejected`
 
 The service owns its own `payment`, `outbox_event`, and `processed_message` tables.
+
+See [payment/checkout flow and local confirmation](../../docs/local-payment-flow.md) for transaction boundaries, reconciliation, callback URLs and migrations.

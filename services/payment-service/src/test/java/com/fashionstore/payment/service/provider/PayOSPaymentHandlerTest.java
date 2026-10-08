@@ -30,6 +30,52 @@ class PayOSPaymentHandlerTest {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Test
+    void forgedCancelParameterDoesNotCancelPendingProviderPayment() {
+        PayOS client = mock(PayOS.class);
+        PaymentRequestsService requests = mock(PaymentRequestsService.class);
+        when(client.paymentRequests()).thenReturn(requests);
+        when(requests.get(123L)).thenReturn(vn.payos.model.v2.paymentRequests.PaymentLink.builder()
+                .id("link-1").orderCode(123L).amount(450000L).amountPaid(0L).amountRemaining(450000L)
+                .status(vn.payos.model.v2.paymentRequests.PaymentLinkStatus.PENDING)
+                .createdAt("2026-10-08T12:00:00Z").transactions(java.util.List.of()).build());
+        PaymentCallbackResult result = new PayOSPaymentHandler(client, objectMapper)
+                .verifyCallback(java.util.Map.of("orderCode", "123", "cancel", "true"), null);
+        assertThat(result.isSignatureValid()).isTrue();
+        assertThat(result.getStatus()).isEqualTo(PaymentStatus.PENDING);
+        org.mockito.Mockito.verify(requests, org.mockito.Mockito.never()).cancel(any(Long.class), any(String.class));
+    }
+
+    @Test
+    void providerLookupFailureCannotConfirmBrowserCancellation() {
+        PayOS client = mock(PayOS.class);
+        PaymentRequestsService requests = mock(PaymentRequestsService.class);
+        when(client.paymentRequests()).thenReturn(requests);
+        when(requests.get(123L)).thenThrow(new vn.payos.exception.ConnectionTimeoutException("timeout"));
+        assertThatThrownBy(() -> new PayOSPaymentHandler(client, objectMapper)
+                .verifyCallback(java.util.Map.of("orderCode", "123", "cancel", "true"), null))
+                .isInstanceOf(AppException.class);
+    }
+
+    @Test
+    void creationTimeoutRecoversExistingProviderLink() {
+        PayOS client = mock(PayOS.class);
+        PaymentRequestsService requests = mock(PaymentRequestsService.class);
+        when(client.paymentRequests()).thenReturn(requests);
+        when(requests.create(any())).thenThrow(new vn.payos.exception.ConnectionTimeoutException("lost response"));
+        when(requests.get(123L)).thenReturn(vn.payos.model.v2.paymentRequests.PaymentLink.builder()
+                .id("link-1").orderCode(123L).amount(450000L).amountPaid(0L).amountRemaining(450000L)
+                .status(vn.payos.model.v2.paymentRequests.PaymentLinkStatus.PENDING)
+                .createdAt("2026-10-08T12:00:00Z").transactions(java.util.List.of()).build());
+        PayOSPaymentHandler handler = new PayOSPaymentHandler(client, objectMapper);
+        ReflectionTestUtils.setField(handler, "returnUrl", "https://shop.test/success");
+        ReflectionTestUtils.setField(handler, "cancelUrl", "https://shop.test/cancel");
+        Payment payment = Payment.builder().orderId("order-1").merchantReference("123")
+                .amount(new BigDecimal("450000")).currency("VND").build();
+        assertThat(handler.initiate(payment, "127.0.0.1").getPaymentUrl())
+                .isEqualTo("https://pay.payos.vn/web/link-1");
+    }
+
+    @Test
     void initiateCreatesCheckoutLinkWithDeterministicOrderCode() {
         PayOS client = mock(PayOS.class);
         PaymentRequestsService paymentRequestsService = mock(PaymentRequestsService.class);
@@ -74,8 +120,9 @@ class PayOSPaymentHandlerTest {
         assertThat(again.getProviderTransactionId()).isEqualTo(result.getProviderTransactionId());
     }
 
-    @Test
-    void verifyCallbackAppliesSuccessfulWebhook() throws Exception {
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans = {true, false})
+    void verifyCallbackUsesSignedDataEvenWhenOuterSuccessFlagChanges(boolean outerSuccess) throws Exception {
         PayOS client = mock(PayOS.class);
         WebhooksService webhooksService = mock(WebhooksService.class);
         when(client.webhooks()).thenReturn(webhooksService);
@@ -101,8 +148,8 @@ class PayOSPaymentHandlerTest {
 
         PayOSPaymentHandler handler = new PayOSPaymentHandler(client, objectMapper);
         String rawBody = """
-                {"code":"00","desc":"success","success":true,"signature":"sig","data":{"orderCode":123,"amount":450000}}
-                """;
+                {"code":"00","desc":"success","success":%s,"signature":"sig","data":{"orderCode":123,"amount":450000}}
+                """.formatted(outerSuccess);
 
         PaymentCallbackResult result = handler.verifyCallback(java.util.Map.of(), rawBody);
 

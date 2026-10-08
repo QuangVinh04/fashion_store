@@ -28,6 +28,43 @@ class ShippingAddressMappingIntegrationTest {
     @Autowired
     TestEntityManager entityManager;
 
+    @Autowired
+    CheckoutRepository checkoutRepository;
+
+    @Test
+    void checkoutVersionChangesWhenExpiryUpdatesTheRowDirectly() {
+        java.time.LocalDateTime now = java.time.LocalDateTime.now();
+        Checkout checkout = Checkout.builder().userId("user-1").paymentMethod(PaymentMethod.COD)
+                .paymentProvider(PaymentProvider.COD).subtotalAmount(BigDecimal.TEN).totalAmount(BigDecimal.TEN).build();
+        checkout.setCreatedAt(now.minusHours(1));
+        checkout = entityManager.persistAndFlush(checkout);
+        String id = checkout.getId();
+        // JPA auditing đặt createdAt tại persist; đặt ngày cũ sau persist để mô phỏng checkout hết hạn.
+        entityManager.getEntityManager().createNativeQuery("update checkout set created_at = :createdAt where id = :id")
+                .setParameter("createdAt", now.minusHours(1)).setParameter("id", id).executeUpdate();
+        entityManager.clear();
+        int expired = checkoutRepository.expireOpenCheckoutsCreatedBefore(CheckoutStatus.EXPIRED,
+                java.util.List.of(CheckoutStatus.SUBMITTED), now.minusMinutes(30), now);
+        assertThat(expired).isEqualTo(1);
+        Checkout reloaded = entityManager.find(Checkout.class, id);
+        assertThat(reloaded.getStatus()).isEqualTo(CheckoutStatus.EXPIRED);
+        assertThat(reloaded.getVersion()).isEqualTo(1L);
+    }
+
+    @Test
+    void checkoutRejectsStaleDetachedEntityAfterAnotherUpdate() {
+        Checkout stale = entityManager.persistAndFlush(Checkout.builder().userId("user-1")
+                .paymentMethod(PaymentMethod.COD).paymentProvider(PaymentProvider.COD)
+                .subtotalAmount(BigDecimal.TEN).totalAmount(BigDecimal.TEN).build());
+        entityManager.detach(stale);
+        Checkout current = entityManager.find(Checkout.class, stale.getId());
+        current.setCouponCode("NEW");
+        entityManager.flush();
+        stale.setCouponCode("OLD");
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> entityManager.merge(stale))
+                .isInstanceOf(jakarta.persistence.OptimisticLockException.class);
+    }
+
     @Test
     void checkoutAndOrderEachPersistTheirOwnAddressSnapshot() {
         Checkout checkout = entityManager.persist(Checkout.builder()

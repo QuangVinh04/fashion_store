@@ -23,6 +23,8 @@ public class PayOSConfig {
                 .clientId(clientId != null ? clientId.trim() : "")
                 .apiKey(apiKey != null ? apiKey.trim() : "")
                 .checksumKey(cleanChecksumKey)
+                .timeoutMs(5000)
+                .maxRetries(0)
                 .build());
     }
 }

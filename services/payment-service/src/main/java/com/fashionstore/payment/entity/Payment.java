@@ -67,6 +67,26 @@ public class Payment extends AuditedEntity {
     @Column(name = "provider_transaction_date", length = 14)
     String providerTransactionDate;
 
+    /** URL được lưu để retry trả lại cùng link, không tạo giao dịch mới. */
+    @Column(name = "payment_url", length = 2048)
+    String paymentUrl;
+
+    @Column(name = "initiation_token", length = 36)
+    String initiationToken;
+
+    @Column(name = "initiation_started_at")
+    LocalDateTime initiationStartedAt;
+
+    @Column(name = "initiation_attempts", nullable = false)
+    @Builder.Default
+    int initiationAttempts = 0;
+
+    @Column(name = "client_ip", length = 45)
+    String clientIp;
+
+    @Column(name = "last_reconciled_at")
+    LocalDateTime lastReconciledAt;
+
     @Column(name = "failure_reason", length = 500)
     String failureReason;
 

@@ -34,7 +34,8 @@ public class PaymentStateServiceImpl implements PaymentStateService {
     @Override
     @Transactional
     public PaymentResponse applyResult(Payment payment, PaymentCallbackResult result) {
-        if (payment.getStatus() != PaymentStatus.PENDING) {
+        if (payment.getStatus() != PaymentStatus.PENDING && payment.getStatus() != PaymentStatus.INITIATING
+                && payment.getStatus() != PaymentStatus.INITIATION_UNKNOWN) {
             throw new AppException(PaymentErrorCode.PAYMENT_STATUS_INVALID);
         }
         if (result.getStatus() == PaymentStatus.COMPLETED && !isProviderAmountValid(payment, result)) {

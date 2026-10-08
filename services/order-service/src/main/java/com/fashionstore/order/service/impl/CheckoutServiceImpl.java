@@ -32,6 +32,8 @@ import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -53,6 +55,7 @@ public class CheckoutServiceImpl implements CheckoutService {
     CatalogClient catalogClient;
     IdentityClient identityClient;
     GhnClient ghnClient;
+    TransactionTemplate transactionTemplate;
 
     /**
      * Không có {@code @Transactional}: bước xác nhận lại giỏ với catalog là gọi mạng, không được giữ
@@ -122,36 +125,33 @@ public class CheckoutServiceImpl implements CheckoutService {
     }
 
     @Override
-    @Transactional
+    @Transactional(propagation = Propagation.NEVER)
     public CheckoutResponse updateCheckout(String checkoutId, UpdateCheckoutRequest request) {
         String userId = currentUserProvider.getCurrentUserId();
-        Checkout checkout = checkoutRepository.findByIdAndUserId(checkoutId, userId)
-                .orElseThrow(() -> new AppException(OrderErrorCode.CHECKOUT_NOT_FOUND));
+        // 1. Đọc đầy đủ items trong một transaction ngắn, rồi trả connection về pool.
+        Checkout checkout = transactionTemplate.execute(tx -> checkoutRepository.findByIdAndUserId(checkoutId, userId)
+                .orElseThrow(() -> new AppException(OrderErrorCode.CHECKOUT_NOT_FOUND)));
+        Long snapshotVersion = checkout.getVersion();
 
         if (checkout.getStatus() == CheckoutStatus.COMPLETED
                 || checkout.getStatus() == CheckoutStatus.CANCELLED
-                || checkout.getStatus() == CheckoutStatus.EXPIRED) {
+                || checkout.getStatus() == CheckoutStatus.EXPIRED
+                || checkout.getOrder() != null) {
             throw new AppException(OrderErrorCode.CHECKOUT_STATUS_INVALID);
         }
 
-        // Gửi addressId (kể cả id đang chọn, sau khi khách sửa sổ địa chỉ) là chụp lại và tính lại phí theo nó
-        if (request.getAddressId() != null) {
-            ShippingAddress shippingAddress = snapshotAddress(userId, request.getAddressId());
-            checkout.setAddressId(request.getAddressId());
-            checkout.setShippingAddress(shippingAddress);
-        }
-        if (request.getPaymentMethod() != null) {
-            checkout.setPaymentMethod(request.getPaymentMethod());
-        }
-        if (request.getPaymentMethod() != null || request.getPaymentProvider() != null) {
-            checkout.setPaymentProvider(resolvePaymentProvider(checkout.getPaymentMethod(), request.getPaymentProvider()));
-        }
-        if (request.getShippingMethod() != null) {
-            checkout.setShippingMethod(request.getShippingMethod());
-        }
-        if (request.getCouponCode() != null) {
-            checkout.setCouponCode(request.getCouponCode());
-        }
+        // 2. Tính trên biến cục bộ: identity/catalog/GHN đều chạy ngoài transaction.
+        // Không sửa entity vừa đọc: nếu HTTP thất bại thì checkout trong DB vẫn nguyên vẹn.
+        String addressId = request.getAddressId() != null ? request.getAddressId() : checkout.getAddressId();
+        ShippingAddress shippingAddress = request.getAddressId() != null
+                ? snapshotAddress(userId, addressId) : checkout.getShippingAddress();
+        PaymentMethod paymentMethod = request.getPaymentMethod() != null
+                ? request.getPaymentMethod() : checkout.getPaymentMethod();
+        PaymentProvider paymentProvider = request.getPaymentMethod() != null || request.getPaymentProvider() != null
+                ? resolvePaymentProvider(paymentMethod, request.getPaymentProvider()) : checkout.getPaymentProvider();
+        ShippingMethod shippingMethod = request.getShippingMethod() != null
+                ? request.getShippingMethod() : checkout.getShippingMethod();
+        String couponCode = request.getCouponCode() != null ? request.getCouponCode() : checkout.getCouponCode();
         List<PromotionItemDto> promoItems = checkout.getItems() == null ? List.of() : checkout.getItems().stream()
                 .map(item -> PromotionItemDto.builder()
                         .variantId(item.getVariantId())
@@ -162,16 +162,35 @@ public class CheckoutServiceImpl implements CheckoutService {
                         .lineTotal(item.getLineTotal())
                         .build())
                 .toList();
-        BigDecimal discount = calculateDiscount(checkout.getCouponCode(), userId, checkout.getSubtotalAmount(), promoItems);
+        BigDecimal discount = calculateDiscount(couponCode, userId, checkout.getSubtotalAmount(), promoItems);
         int totalWeightGram = calculateTotalWeightFromCheckoutItems(checkout.getItems());
-        BigDecimal shippingFee = calculateShippingFee(checkout.getSubtotalAmount(), checkout.getShippingMethod(), checkout.getShippingAddress(), totalWeightGram);
+        BigDecimal shippingFee = calculateShippingFee(checkout.getSubtotalAmount(), shippingMethod, shippingAddress, totalWeightGram);
         BigDecimal total = checkout.getSubtotalAmount().subtract(discount).add(shippingFee);
         validateAmounts(checkout.getSubtotalAmount(), discount, shippingFee, total);
-        checkout.setDiscountAmount(discount);
-        checkout.setShippingFee(shippingFee);
-        checkout.setTotalAmount(total);
-
-        return toResponse(checkoutRepository.save(checkout));
+        // 3. Khóa chỉ trong lúc kiểm tra và ghi. Request khác có thể đã sửa/hủy/đặt hàng
+        // trong lúc ta đợi GHN, nên phải đọc lại trạng thái và so version của snapshot.
+        return transactionTemplate.execute(tx -> {
+            Checkout current = checkoutRepository.findForUpdateByIdAndUserId(checkoutId, userId)
+                    .orElseThrow(() -> new AppException(OrderErrorCode.CHECKOUT_NOT_FOUND));
+            if (current.getStatus() == CheckoutStatus.COMPLETED
+                    || current.getStatus() == CheckoutStatus.CANCELLED
+                    || current.getStatus() == CheckoutStatus.EXPIRED || current.getOrder() != null) {
+                throw new AppException(OrderErrorCode.CHECKOUT_STATUS_INVALID);
+            }
+            if (!java.util.Objects.equals(snapshotVersion, current.getVersion())) {
+                throw new AppException(OrderErrorCode.CHECKOUT_UPDATE_CONFLICT);
+            }
+            current.setAddressId(addressId);
+            current.setShippingAddress(shippingAddress);
+            current.setPaymentMethod(paymentMethod);
+            current.setPaymentProvider(paymentProvider);
+            current.setShippingMethod(shippingMethod);
+            current.setCouponCode(couponCode);
+            current.setDiscountAmount(discount);
+            current.setShippingFee(shippingFee);
+            current.setTotalAmount(total);
+            return toResponse(checkoutRepository.save(current));
+        });
     }
 
     @Override

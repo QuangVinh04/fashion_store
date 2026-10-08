@@ -29,4 +29,7 @@ public interface PaymentHandler {
 
     /** Yêu cầu hoàn tiền. Provider không hỗ trợ hoàn tiền qua API thì ném AppException. */
     PaymentRefundResult refund(Payment payment, PaymentRefund refund);
+
+    /** Tra cứu từ server provider; phục vụ local và phục hồi khi callback bị mất. */
+    PaymentCallbackResult queryPayment(Payment payment);
 }

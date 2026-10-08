@@ -27,6 +27,64 @@ import static org.mockito.Mockito.when;
 class VnPayPaymentHandlerTest {
 
     @Test
+    void queryVerifiesProviderSignatureAndNormalizesAmount() throws Exception {
+        VnPayFeignClient client = mock(VnPayFeignClient.class);
+        com.fasterxml.jackson.databind.node.ObjectNode response = queryResponse("00", "00");
+        when(client.query(any())).thenReturn(response);
+        Payment payment = Payment.builder().orderId("order-1").merchantReference("merchant-1")
+                .amount(new BigDecimal("500000")).providerTransactionDate("20261008110000").build();
+        PaymentCallbackResult result = new VnPayPaymentHandler(properties(), client).queryPayment(payment);
+        assertThat(result.isSignatureValid()).isTrue();
+        assertThat(result.getStatus()).isEqualTo(PaymentStatus.COMPLETED);
+        assertThat(result.getAmount()).isEqualByComparingTo("500000");
+        ArgumentCaptor<Map<String, String>> request = ArgumentCaptor.forClass(Map.class);
+        verify(client).query(request.capture());
+        assertThat(request.getValue()).containsEntry("vnp_Command", "querydr")
+                .containsEntry("vnp_TxnRef", "merchant-1")
+                .containsEntry("vnp_TransactionDate", "20261008110000");
+    }
+
+    @Test
+    void queryApiErrorIsNotInterpretedAsPaymentFailure() throws Exception {
+        VnPayFeignClient client = mock(VnPayFeignClient.class);
+        when(client.query(any())).thenReturn(queryResponse("91", ""));
+        Payment payment = Payment.builder().orderId("order-1").merchantReference("merchant-1")
+                .providerTransactionDate("20261008110000").build();
+        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+                new VnPayPaymentHandler(properties(), client).queryPayment(payment))
+                .isInstanceOf(com.fashionstore.common.exception.AppException.class);
+    }
+
+    @Test
+    void queryRejectsTamperedProviderResponse() throws Exception {
+        VnPayFeignClient client = mock(VnPayFeignClient.class);
+        com.fasterxml.jackson.databind.node.ObjectNode response = queryResponse("00", "00");
+        response.put("vnp_SecureHash", "forged");
+        when(client.query(any())).thenReturn(response);
+        Payment payment = Payment.builder().orderId("order-1").merchantReference("merchant-1")
+                .providerTransactionDate("20261008110000").build();
+        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+                new VnPayPaymentHandler(properties(), client).queryPayment(payment))
+                .isInstanceOf(com.fashionstore.common.exception.AppException.class);
+    }
+
+    private com.fasterxml.jackson.databind.node.ObjectNode queryResponse(String code, String status) throws Exception {
+        com.fasterxml.jackson.databind.node.ObjectNode node = new ObjectMapper().createObjectNode();
+        node.put("vnp_ResponseId", "response-1").put("vnp_Command", "querydr").put("vnp_ResponseCode", code)
+                .put("vnp_Message", "Found").put("vnp_TmnCode", "tmn-code").put("vnp_TxnRef", "merchant-1")
+                .put("vnp_Amount", "50000000").put("vnp_BankCode", "NCB").put("vnp_PayDate", "20261008120000")
+                .put("vnp_TransactionNo", "123456").put("vnp_TransactionType", "01")
+                .put("vnp_TransactionStatus", status).put("vnp_OrderInfo", "Thanh toan order-1")
+                .put("vnp_PromotionCode", "").put("vnp_PromotionAmount", "");
+        javax.crypto.Mac mac = javax.crypto.Mac.getInstance("HmacSHA512");
+        mac.init(new javax.crypto.spec.SecretKeySpec("secret".getBytes(java.nio.charset.StandardCharsets.UTF_8), "HmacSHA512"));
+        String signed = "response-1|querydr|" + code + "|Found|tmn-code|merchant-1|50000000|NCB|20261008120000|123456|01|"
+                + status + "|Thanh toan order-1||";
+        node.put("vnp_SecureHash", java.util.HexFormat.of().formatHex(mac.doFinal(signed.getBytes(java.nio.charset.StandardCharsets.UTF_8))));
+        return node;
+    }
+
+    @Test
     void refundBuildsSignedVnPayRequest() throws Exception {
         VnPayFeignClient client = mock(VnPayFeignClient.class);
         when(client.refund(any())).thenReturn(new ObjectMapper().readTree("""

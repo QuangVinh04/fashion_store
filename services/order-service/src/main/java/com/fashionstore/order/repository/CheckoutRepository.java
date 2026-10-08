@@ -25,7 +25,8 @@ public interface CheckoutRepository extends JpaRepository<Checkout, String> {
             update Checkout c
                set c.status = :expiredStatus,
                    c.expiredAt = :now,
-                   c.updatedAt = :now
+                   c.updatedAt = :now,
+                   c.version = c.version + 1
              where c.status in :openStatuses
                and c.order is null
                and c.createdAt < :cutoff

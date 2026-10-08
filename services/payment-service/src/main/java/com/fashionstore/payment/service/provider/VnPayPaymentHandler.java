@@ -30,6 +30,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Component
@@ -48,7 +49,9 @@ public class VnPayPaymentHandler implements PaymentHandler {
 
     @Override
     public PaymentInitiationResult initiate(Payment payment, String clientIp) {
-        LocalDateTime now = LocalDateTime.now(VN_TIME_ZONE);
+        // Dùng lại ngày request đã commit để URL retry và QueryDr cùng trỏ một giao dịch.
+        LocalDateTime now = payment.getProviderTransactionDate() == null ? LocalDateTime.now(VN_TIME_ZONE)
+                : LocalDateTime.parse(payment.getProviderTransactionDate(), DATE_FORMATTER);
 
         Map<String, String> params = new LinkedHashMap<>();
         params.put("vnp_Version", properties.getVersion());
@@ -106,6 +109,64 @@ public class VnPayPaymentHandler implements PaymentHandler {
                 .status(successful ? PaymentStatus.COMPLETED : PaymentStatus.FAILED)
                 .failureReason(successful ? null : "VNPay response code: " + payload.get("vnp_ResponseCode"))
                 .signatureValid(signatureValid)
+                .build();
+    }
+
+    @Override
+    public PaymentCallbackResult queryPayment(Payment payment) {
+        if (!StringUtils.hasText(payment.getProviderTransactionDate())) {
+            throw new AppException(PaymentErrorCode.PAYMENT_STATUS_INVALID);
+        }
+        String requestId = UUID.randomUUID().toString().replace("-", "");
+        String createDate = LocalDateTime.now(VN_TIME_ZONE).format(DATE_FORMATTER);
+        String orderInfo = "Thanh toan don hang " + payment.getOrderId();
+        Map<String, String> request = new LinkedHashMap<>();
+        request.put("vnp_RequestId", requestId);
+        request.put("vnp_Version", properties.getVersion());
+        request.put("vnp_Command", "querydr");
+        request.put("vnp_TmnCode", properties.getTmnCode());
+        request.put("vnp_TxnRef", payment.getMerchantReference());
+        request.put("vnp_TransactionDate", payment.getProviderTransactionDate());
+        request.put("vnp_CreateDate", createDate);
+        request.put("vnp_IpAddr", properties.getServerIp());
+        request.put("vnp_OrderInfo", orderInfo);
+        request.put("vnp_SecureHash", hmacSha512(String.join("|", requestId, properties.getVersion(), "querydr",
+                properties.getTmnCode(), payment.getMerchantReference(), payment.getProviderTransactionDate(),
+                createDate, properties.getServerIp(), orderInfo)));
+
+        JsonNode response;
+        try {
+            response = vnPayFeignClient.query(request);
+        } catch (FeignException exception) {
+            throw new AppException(PaymentErrorCode.PAYMENT_PROVIDER_ERROR, exception);
+        }
+        // QueryDr dùng checksum chuỗi có dấu |, khác checksum query-string của IPN/return.
+        String signedData = java.util.List.of("vnp_ResponseId", "vnp_Command", "vnp_ResponseCode", "vnp_Message",
+                        "vnp_TmnCode", "vnp_TxnRef", "vnp_Amount", "vnp_BankCode", "vnp_PayDate",
+                        "vnp_TransactionNo", "vnp_TransactionType", "vnp_TransactionStatus", "vnp_OrderInfo",
+                        "vnp_PromotionCode", "vnp_PromotionAmount").stream()
+                .map(field -> response.path(field).asText("")).collect(Collectors.joining("|"));
+        String secureHash = response.path("vnp_SecureHash").asText("");
+        if (!MessageDigest.isEqual(hmacSha512(signedData).getBytes(StandardCharsets.UTF_8),
+                secureHash.toLowerCase(java.util.Locale.ROOT).getBytes(StandardCharsets.UTF_8))) {
+            throw new AppException(PaymentErrorCode.PAYMENT_SIGNATURE_INVALID);
+        }
+        if (!"00".equals(response.path("vnp_ResponseCode").asText())
+                || !properties.getTmnCode().equals(response.path("vnp_TmnCode").asText())
+                || !payment.getMerchantReference().equals(response.path("vnp_TxnRef").asText())) {
+            // Lỗi API / chưa tìm thấy giao dịch không có nghĩa thanh toán thất bại.
+            throw new AppException(PaymentErrorCode.PAYMENT_PROVIDER_ERROR);
+        }
+        String status = response.path("vnp_TransactionStatus").asText();
+        PaymentStatus paymentStatus = "00".equals(status) ? PaymentStatus.COMPLETED
+                : java.util.Set.of("02", "03", "04", "07", "09").contains(status)
+                ? PaymentStatus.FAILED : PaymentStatus.PENDING;
+        return PaymentCallbackResult.builder().signatureValid(true)
+                .merchantReference(payment.getMerchantReference())
+                .providerTransactionId(response.path("vnp_TransactionNo").asText(null))
+                .amount(fromVnPayAmount(response.path("vnp_Amount").asText(null)))
+                .currency(properties.getCurrency()).status(paymentStatus)
+                .failureReason(paymentStatus == PaymentStatus.FAILED ? "VNPay transaction status: " + status : null)
                 .build();
     }
 

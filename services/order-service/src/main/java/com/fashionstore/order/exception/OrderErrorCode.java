@@ -41,6 +41,7 @@ public enum OrderErrorCode implements BaseErrorCode {
     RETURN_REQUEST_ALREADY_EXISTS(4020, "Return request already exists for this order", HttpStatus.CONFLICT),
     RETURN_REQUEST_ALREADY_PROCESSED(4021, "Return request has already been processed", HttpStatus.BAD_REQUEST),
     RETURN_REJECT_REASON_REQUIRED(4022, "Rejection reason is required", HttpStatus.BAD_REQUEST),
+    CHECKOUT_UPDATE_CONFLICT(4023, "Checkout changed while calculating, please reload and retry", HttpStatus.CONFLICT),
     PAYMENT_PROVIDER_UNSUPPORTED(5002, "Payment provider is not supported", HttpStatus.UNSUPPORTED_MEDIA_TYPE);
 
 

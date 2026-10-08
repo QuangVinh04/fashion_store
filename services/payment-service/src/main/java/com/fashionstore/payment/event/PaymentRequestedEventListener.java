@@ -12,12 +12,10 @@ import com.fashionstore.contracts.payment.command.CancelPaymentCommand;
 import com.fashionstore.contracts.payment.command.RefundPaymentCommand;
 import com.fashionstore.contracts.payment.event.PaymentCancellationRejectedEvent;
 import com.fashionstore.contracts.payment.event.PaymentCancelledEvent;
-import com.fashionstore.contracts.payment.event.PaymentInitiatedEvent;
 import com.fashionstore.contracts.payment.event.PaymentRefundRejectedEvent;
 import com.fashionstore.contracts.payment.event.PaymentRefundedEvent;
 import com.fashionstore.contracts.payment.event.PaymentSuccessEvent;
 import com.fashionstore.payment.config.messaging.RabbitMQNames;
-import com.fashionstore.payment.dto.PaymentInitiationResult;
 import com.fashionstore.payment.dto.PaymentRefundResult;
 import com.fashionstore.payment.entity.Payment;
 import com.fashionstore.payment.entity.PaymentRefund;
@@ -33,42 +31,24 @@ import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Propagation;
+import com.fashionstore.payment.service.PaymentService;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * Nhận 3 lệnh saga của payment: xin thanh toán, huỷ, hoàn tiền.
- *
- * <p><b>Không gọi cổng thanh toán (PayOS, VNPay) bên trong DB transaction.</b> Một lời gọi HTTP có thể
- * mất vài giây; nếu đang mở transaction và giữ row lock trên payment thì mọi request khác chạm vào payment
- * đó (webhook, lệnh huỷ...) phải chờ, và connection DB bị chiếm suốt thời gian đó. Vì vậy xin thanh toán và
- * hoàn tiền chạy theo 3 pha:
- * <ol>
- *   <li><b>Pha 1 — transaction ngắn:</b> đánh dấu message đã xử lý, kiểm tra nghiệp vụ, ghi trạng thái chờ
- *       (payment PENDING / refund PENDING). Commit.</li>
- *   <li><b>Pha 2 — ngoài transaction:</b> gọi cổng thanh toán, bắt mọi lỗi thành một kết quả.</li>
- *   <li><b>Pha 3 — transaction ngắn:</b> khoá lại payment, ghi kết quả và reply cho saga qua outbox.</li>
- * </ol>
- *
- * <p>Đánh đổi: nếu service chết giữa pha 1 và pha 3 thì message đã được đánh dấu xử lý, nên không tự chạy
- * lại. Với xin thanh toán, saga quá hạn sẽ phát lại lệnh (message mới) và {@link #prepareAuthorization}
- * khởi tạo lại payment còn PENDING. Với hoàn tiền, refund nằm ở PENDING chờ đối soát với cổng — vẫn an toàn
- * hơn cách cũ (rollback rồi gọi refund lần nữa, có nguy cơ hoàn tiền hai lần).
+ * Nhận lệnh thanh toán, hủy và hoàn tiền từ saga.
+ * Khởi tạo payment dùng chung flow ba bước trong PaymentService (DB / provider / DB).
+ * Refund giữ flow ba bước riêng: chuẩn bị refund, gọi provider ngoài transaction, ghi kết quả.
+ * Marker chống trùng chỉ bảo vệ bước chuẩn bị DB; payment redelivery vẫn kiểm tra URL cần phục hồi.
  */
 @Component
 @RequiredArgsConstructor
 @Slf4j
 public class PaymentRequestedEventListener {
-
-    /** Payment cần gọi cổng để lấy link thanh toán, chuẩn bị xong ở pha 1. */
-    private record InitiationCall(Payment payment, String clientIp, String correlationId) {
-    }
-
-    /** Kết quả pha 2: hoặc có result, hoặc có error — không bao giờ ném exception ra ngoài. */
-    private record InitiationOutcome(PaymentInitiationResult result, String error) {
-    }
 
     /** Refund đã ghi PENDING ở pha 1, chờ gọi cổng. */
     private record RefundCall(Payment payment, PaymentRefund refund, BigDecimal previouslyRefunded, String correlationId) {
@@ -85,14 +65,27 @@ public class PaymentRequestedEventListener {
     private final PaymentHandlerRegistry paymentHandlerRegistry;
     /** Mở transaction bằng code (thay cho @Transactional) để chia một message thành nhiều transaction ngắn. */
     private final TransactionTemplate transactionTemplate;
+    private final PaymentService paymentService;
 
+    @Transactional(propagation = Propagation.NEVER)
     @RabbitListener(queues = RabbitMQNames.PAYMENT_SAGA_COMMAND_QUEUE)
     public void handle(
             EventEnvelope<?> envelope,
             @Header(RabbitTopology.OUTBOX_EVENT_ID_HEADER) String messageId
     ) {
         if (EventTypes.PAYMENT_REQUESTED.equals(envelope.eventType())) {
-            authorize(envelope, messageId);
+            // Chỉ lưu payment và dấu chống trùng trong transaction; provider chạy sau commit.
+            transactionTemplate.executeWithoutResult(tx -> processedMessageService.processOnce(
+                    messageId, "payment-requested-v2", () -> createPayment(envelope)));
+            AuthorizePaymentCommand request = objectMapper.convertValue(envelope.payload(), AuthorizePaymentCommand.class);
+            Payment payment = paymentRepository.findByOrderId(request.orderId()).orElse(null);
+            if (payment != null && payment.getMethod() != PaymentMethod.COD
+                    && (payment.getStatus() == PaymentStatus.PENDING || payment.getStatus() == PaymentStatus.INITIATING
+                    || payment.getStatus() == PaymentStatus.INITIATION_UNKNOWN)) {
+                // Chạy cả khi message được gửi lại: marker chỉ chống trùng bước lưu DB,
+                // còn link được tái sử dụng/đối soát theo merchantReference đã commit.
+                paymentService.initiateForOrder(request.orderId(), request.clientIp());
+            }
             return;
         }
         if (EventTypes.PAYMENT_CANCELLATION_REQUESTED.equals(envelope.eventType())) {
@@ -109,42 +102,15 @@ public class PaymentRequestedEventListener {
         throw new IllegalArgumentException("Unsupported payment saga command " + envelope.eventType());
     }
 
-    // ===================== Xin thanh toán =====================
-
-    private void authorize(EventEnvelope<?> envelope, String messageId) {
-        // Pha 1: transaction ngắn — tạo/khoá payment, quyết định có cần gọi cổng không.
-        AtomicReference<InitiationCall> call = new AtomicReference<>();
-        transactionTemplate.executeWithoutResult(status ->
-                processedMessageService.processOnce(messageId, "payment-requested-v2", () ->
-                        call.set(prepareAuthorization(envelope))));
-        if (call.get() == null) {
-            return; // message trùng, COD, hoặc payment đã xong — không cần gọi cổng
-        }
-
-        // Pha 2: ngoài transaction — gọi cổng thanh toán.
-        InitiationOutcome outcome = initiateAtGateway(call.get());
-
-        // Pha 3: transaction ngắn — ghi kết quả và reply cho saga.
-        transactionTemplate.executeWithoutResult(status -> applyInitiation(call.get(), outcome));
-    }
-
-    /**
-     * @return payment cần gọi cổng, hoặc {@code null} nếu đã xử lý xong ngay trong pha 1
-     */
-    private InitiationCall prepareAuthorization(EventEnvelope<?> envelope) {
+    private void createPayment(EventEnvelope<?> envelope) {
         AuthorizePaymentCommand request = objectMapper.convertValue(envelope.payload(), AuthorizePaymentCommand.class);
         Payment existing = paymentRepository.findByOrderIdForUpdate(request.orderId()).orElse(null);
         if (existing != null) {
             if (existing.getStatus() == PaymentStatus.COMPLETED
                     || existing.getStatus() == PaymentStatus.COD_PENDING) {
                 publishCompleted(existing, envelope.correlationId());
-            } else if (existing.getStatus() == PaymentStatus.PENDING
-                    && existing.getMethod() != PaymentMethod.COD) {
-                // Saga timeout đã phát lại AUTHORIZE_PAYMENT (PAYMENT_INITIATED lần trước có thể đã thất
-                // lạc) — thử khởi tạo lại, cùng merchantReference nên vẫn idempotent phía cổng thanh toán.
-                return new InitiationCall(withMerchantReference(existing), request.clientIp(), envelope.correlationId());
             }
-            return null;
+            return;
         }
 
         PaymentMethod method = PaymentMethod.valueOf(request.method());
@@ -161,79 +127,7 @@ public class PaymentRequestedEventListener {
         Payment saved = paymentRepository.save(payment);
         if (saved.getStatus() == PaymentStatus.COD_PENDING) {
             publishCompleted(saved, envelope.correlationId());
-            return null;
         }
-        return new InitiationCall(withMerchantReference(saved), request.clientIp(), envelope.correlationId());
-    }
-
-    /**
-     * Mã tham chiếu gửi cổng, suy ra từ id payment nên cố định qua mọi lần gọi lại. Lưu ngay ở pha 1
-     * (trước khi gọi cổng) để webhook của cổng luôn tra ra được payment.
-     */
-    private Payment withMerchantReference(Payment payment) {
-        if (payment.getMerchantReference() == null) {
-            payment.setMerchantReference(payment.getId().replace("-", ""));
-            return paymentRepository.save(payment);
-        }
-        return payment;
-    }
-
-    /**
-     * Khởi tạo giao dịch với cổng ngay khi vừa xin thanh toán, thay vì đợi client gọi
-     * {@code POST /payments/{id}/initiate} riêng — bớt 2 vòng round-trip cho frontend. Endpoint initiate
-     * cũ vẫn giữ nguyên, dùng khi cần tạo lại link đã hết hạn.
-     *
-     * <p>Chạy ngoài transaction: chỉ đọc payment đã chuẩn bị ở pha 1, không ghi gì vào DB.
-     */
-    private InitiationOutcome initiateAtGateway(InitiationCall call) {
-        Payment payment = call.payment();
-        try {
-            return new InitiationOutcome(
-                    paymentHandlerRegistry.get(payment.getProvider()).initiate(payment, call.clientIp()), null);
-        } catch (Exception ex) {
-            log.error("Khởi tạo thanh toán với cổng thất bại cho order {}: {}", payment.getOrderId(), ex.getMessage(), ex);
-            return new InitiationOutcome(null, ex.getMessage());
-        }
-    }
-
-    private void applyInitiation(InitiationCall call, InitiationOutcome outcome) {
-        Payment payment = paymentRepository.findByIdForUpdate(call.payment().getId())
-                .orElseThrow(() -> new IllegalStateException("Payment " + call.payment().getId() + " biến mất giữa hai pha"));
-        if (payment.getStatus() != PaymentStatus.PENDING) {
-            // Trong lúc gọi cổng, payment đã đổi trạng thái ở transaction khác (saga huỷ, webhook...):
-            // trạng thái mới thắng, không ghi đè và không gửi link thanh toán nữa.
-            log.info("Bỏ kết quả khởi tạo cho payment {} vì đã sang {}", payment.getId(), payment.getStatus());
-            return;
-        }
-
-        if (outcome.error() != null) {
-            payment.setStatus(PaymentStatus.FAILED);
-            payment.setFailureReason("Lỗi tạo link thanh toán: " + outcome.error());
-            paymentRepository.save(payment);
-            outboxService.saveMessage(payment.getOrderId(), EventTypes.PAYMENT_FAILED, EventEnvelope.v1(
-                    EventTypes.PAYMENT_FAILED,
-                    payment.getOrderId(),
-                    call.correlationId(),
-                    new com.fashionstore.contracts.payment.event.PaymentFailedEvent(payment.getOrderId(), payment.getId(), payment.getFailureReason())
-            ));
-            return;
-        }
-
-        PaymentInitiationResult result = outcome.result();
-        if (result.getProviderTransactionId() != null) {
-            payment.setTransactionId(result.getProviderTransactionId());
-        }
-        payment.setProviderAmount(result.getProviderAmount());
-        payment.setProviderCurrency(result.getProviderCurrency());
-        payment.setProviderTransactionDate(result.getProviderTransactionDate());
-        Payment saved = paymentRepository.save(payment);
-
-        outboxService.saveMessage(saved.getOrderId(), EventTypes.PAYMENT_INITIATED, EventEnvelope.v1(
-                EventTypes.PAYMENT_INITIATED,
-                saved.getOrderId(),
-                call.correlationId(),
-                new PaymentInitiatedEvent(saved.getOrderId(), saved.getId(), result.getPaymentUrl())
-        ));
     }
 
     // ===================== Huỷ =====================
@@ -257,6 +151,13 @@ public class PaymentRequestedEventListener {
             return;
         }
 
+        if (payment.getStatus() == PaymentStatus.INITIATING || payment.getStatus() == PaymentStatus.INITIATION_UNKNOWN) {
+            // Chưa biết provider đã nhận/tạo giao dịch hay chưa: không được chốt hủy rồi bỏ
+            // qua tiền về sau đó. Ném lỗi để rollback cả marker processOnce; saga có thể retry
+            // lệnh hủy sau khi callback/job đối soát xác định được trạng thái thật.
+            throw new com.fashionstore.common.exception.AppException(
+                    com.fashionstore.payment.exception.PaymentErrorCode.PAYMENT_INITIATION_IN_PROGRESS);
+        }
         if (payment.getStatus() == PaymentStatus.PENDING
                 || payment.getStatus() == PaymentStatus.COD_PENDING) {
             payment.setStatus(PaymentStatus.CANCELLED);
