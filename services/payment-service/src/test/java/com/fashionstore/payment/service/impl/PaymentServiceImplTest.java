@@ -44,8 +44,7 @@ class PaymentServiceImplTest {
                 new org.springframework.transaction.support.TransactionTemplate(new TestTransactionManager());
         com.fashionstore.payment.outbox.OutboxService outbox = mock(com.fashionstore.payment.outbox.OutboxService.class);
         PaymentResponseMapper mapper = mock(PaymentResponseMapper.class);
-        CallbackPaymentServiceImpl callbacks = new CallbackPaymentServiceImpl(repository, registry,
-                new PaymentStateServiceImpl(repository, mapper, outbox), transactions);
+        com.fashionstore.payment.service.CallbackPaymentService callbacks = new CallbackPaymentServiceImpl(registry, new com.fashionstore.payment.service.PaymentDbService(repository, null, null, outbox, new com.fashionstore.payment.service.impl.PaymentStateServiceImpl(repository, mapper, outbox)));
         target = new PaymentServiceImpl(repository, registry,
                 mapper, currentUser, transactions, outbox, callbacks);
         ProxyFactory proxy = new ProxyFactory(target);

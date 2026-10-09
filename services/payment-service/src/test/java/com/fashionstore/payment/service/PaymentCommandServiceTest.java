@@ -1,4 +1,4 @@
-package com.fashionstore.payment.event;
+package com.fashionstore.payment.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fashionstore.common.messaging.processed.ProcessedMessageService;
@@ -7,6 +7,7 @@ import com.fashionstore.common.payment.PaymentProvider;
 import com.fashionstore.contracts.common.EventEnvelope;
 import com.fashionstore.contracts.common.EventTypes;
 import com.fashionstore.contracts.payment.command.AuthorizePaymentCommand;
+import com.fashionstore.contracts.payment.command.CancelPaymentCommand;
 import com.fashionstore.contracts.payment.command.RefundPaymentCommand;
 import com.fashionstore.payment.dto.PaymentInitiationResult;
 import com.fashionstore.payment.dto.PaymentRefundResult;
@@ -45,7 +46,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
-class PaymentRequestedEventListenerTest {
+class PaymentCommandServiceTest {
 
     @Mock
     PaymentRepository paymentRepository;
@@ -60,7 +61,7 @@ class PaymentRequestedEventListenerTest {
     @Mock
     PaymentHandler paymentHandler;
 
-    PaymentRequestedEventListener listener;
+    PaymentCommandService service;
     Payment storedPayment;
 
     @BeforeEach
@@ -80,21 +81,20 @@ class PaymentRequestedEventListenerTest {
                         org.mockito.Mockito.mock(com.fashionstore.common.security.CurrentUserProvider.class),
                         transactions, outboxService,
                         org.mockito.Mockito.mock(com.fashionstore.payment.service.CallbackPaymentService.class));
-        listener = new PaymentRequestedEventListener(
+        service = new PaymentCommandService(
                 paymentRepository,
                 paymentRefundRepository,
                 processedMessageService,
-                new ObjectMapper(),
                 outboxService,
+                paymentService,
                 paymentHandlerRegistry,
-                transactions,
-                paymentService
+                transactions
         );
-        org.springframework.aop.framework.ProxyFactory proxy = new org.springframework.aop.framework.ProxyFactory(listener);
-        proxy.setProxyTargetClass(true);
-        proxy.addAdvice(new org.springframework.transaction.interceptor.TransactionInterceptor(new InMemoryTransactionManager(),
-                new org.springframework.transaction.annotation.AnnotationTransactionAttributeSource()));
-        listener = (PaymentRequestedEventListener) proxy.getProxy();
+        // proxy = new org.springframework.aop.framework.ProxyFactory(listener);
+        // proxy
+        // proxy(new org.springframework.transaction.interceptor.TransactionInterceptor(new InMemoryTransactionManager(),
+                // new org.springframework.transaction.annotation.AnnotationTransactionAttributeSource()));
+        
         doAnswer(invocation -> {
             invocation.getArgument(2, Runnable.class).run();
             return null;
@@ -112,7 +112,7 @@ class PaymentRequestedEventListenerTest {
         when(paymentRepository.findByOrderIdForUpdate("order-1")).thenReturn(Optional.empty());
         when(paymentRepository.save(any(Payment.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        listener.handle(envelope, "message-1");
+        service.authorize((AuthorizePaymentCommand) envelope.payload(), "message-1", envelope.correlationId());;
 
         ArgumentCaptor<Payment> captor = ArgumentCaptor.forClass(Payment.class);
         verify(paymentRepository).save(captor.capture());
@@ -151,7 +151,7 @@ class PaymentRequestedEventListenerTest {
                     .build();
         });
 
-        listener.handle(envelope, "message-1");
+        service.authorize((AuthorizePaymentCommand) envelope.payload(), "message-1", envelope.correlationId());;
 
         ArgumentCaptor<Payment> captor = ArgumentCaptor.forClass(Payment.class);
         verify(paymentRepository, org.mockito.Mockito.atLeastOnce()).save(captor.capture());
@@ -179,7 +179,7 @@ class PaymentRequestedEventListenerTest {
             return PaymentRefundResult.completed("vnpay-refund-1");
         });
 
-        listener.handle(envelope, "message-refund-1");
+        service.refund((RefundPaymentCommand) envelope.payload(), "message-refund-1", envelope.correlationId());
 
         assertThat(payment.getStatus()).isEqualTo(PaymentStatus.REFUNDED);
         ArgumentCaptor<PaymentRefund> captor = ArgumentCaptor.forClass(PaymentRefund.class);
@@ -198,7 +198,7 @@ class PaymentRequestedEventListenerTest {
         when(paymentHandlerRegistry.get(PaymentProvider.VNPAY)).thenReturn(paymentHandler);
         when(paymentHandler.initiate(any(Payment.class), anyString())).thenThrow(new IllegalStateException("gateway timeout"));
 
-        org.assertj.core.api.Assertions.assertThatThrownBy(() -> listener.handle(envelope, "message-1"))
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.authorize((AuthorizePaymentCommand) envelope.payload(), "message-1", envelope.correlationId()))
                 .isInstanceOf(IllegalStateException.class).hasMessage("gateway timeout");
 
         assertThat(lastSavedPayment().getStatus()).isEqualTo(PaymentStatus.INITIATION_UNKNOWN);
@@ -218,7 +218,7 @@ class PaymentRequestedEventListenerTest {
             return PaymentInitiationResult.builder().paymentUrl("https://pay").build();
         });
 
-        listener.handle(envelope, "message-1");
+        service.authorize((AuthorizePaymentCommand) envelope.payload(), "message-1", envelope.correlationId());;
 
         assertThat(storedPayment.getStatus()).isEqualTo(PaymentStatus.CANCELLED);
         verify(outboxService, never()).saveMessage(anyString(), eq(EventTypes.PAYMENT_INITIATED), any(EventEnvelope.class));
@@ -237,7 +237,7 @@ class PaymentRequestedEventListenerTest {
         when(paymentHandlerRegistry.get(PaymentProvider.VNPAY)).thenReturn(paymentHandler);
         when(paymentHandler.refund(any(Payment.class), any(PaymentRefund.class))).thenThrow(new IllegalStateException("VNPay 94"));
 
-        listener.handle(envelope, "message-refund-2");
+        service.refund((RefundPaymentCommand) envelope.payload(), "message-refund-2", envelope.correlationId());;
 
         assertThat(payment.getStatus()).isEqualTo(PaymentStatus.REFUND_FAILED);
         assertThat(saved[0].getStatus()).isEqualTo(PaymentRefundStatus.FAILED);
@@ -264,7 +264,7 @@ class PaymentRequestedEventListenerTest {
         doAnswer(call -> null).when(processedMessageService)
                 .processOnce(eq("message-1"), eq("payment-requested-v2"), any(Runnable.class));
 
-        listener.handle(onlineRequest(), "message-1");
+        service.authorize(onlineRequest().payload(), "message-1", onlineRequest().correlationId());;
 
         assertThat(storedPayment.getStatus()).isEqualTo(PaymentStatus.PENDING);
         assertThat(storedPayment.getPaymentUrl()).isEqualTo("https://pay");
@@ -280,8 +280,8 @@ class PaymentRequestedEventListenerTest {
         var command = new com.fashionstore.contracts.payment.command.CancelPaymentCommand("order-1", "payment-1", "cancel");
         var envelope = EventEnvelope.v1(EventTypes.PAYMENT_CANCELLATION_REQUESTED, "order-1", "saga-1", command);
 
-        org.assertj.core.api.Assertions.assertThatThrownBy(() -> listener.handle(envelope, "cancel-1"))
-                .isInstanceOf(com.fashionstore.common.exception.AppException.class);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.cancel((CancelPaymentCommand) envelope.payload(), "cancel-1", envelope.correlationId()))
+                .isInstanceOf(IllegalStateException.class).hasMessageContaining("retry later");
 
         assertThat(payment.getStatus()).isEqualTo(PaymentStatus.INITIATION_UNKNOWN);
         verify(outboxService, never()).saveMessage(anyString(), eq(EventTypes.PAYMENT_CANCELLED), any());

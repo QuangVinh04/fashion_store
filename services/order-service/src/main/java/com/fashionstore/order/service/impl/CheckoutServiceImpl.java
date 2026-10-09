@@ -1,12 +1,9 @@
 package com.fashionstore.order.service.impl;
 
 import com.fashionstore.common.exception.AppException;
+import com.fashionstore.order.dto.*;
 import com.fashionstore.order.exception.OrderErrorCode;
 import com.fashionstore.common.security.CurrentUserProvider;
-import com.fashionstore.order.dto.CheckoutItemResponse;
-import com.fashionstore.order.dto.CheckoutResponse;
-import com.fashionstore.order.dto.CreateCheckoutRequest;
-import com.fashionstore.order.dto.UpdateCheckoutRequest;
 import com.fashionstore.order.entity.Cart;
 import com.fashionstore.order.entity.CartItem;
 import com.fashionstore.order.entity.Checkout;
@@ -16,16 +13,14 @@ import com.fashionstore.order.entity.enumeration.CheckoutStatus;
 import com.fashionstore.order.entity.enumeration.ShippingMethod;
 import com.fashionstore.order.repository.CheckoutRepository;
 import com.fashionstore.order.service.CartService;
+import com.fashionstore.order.service.CheckoutDbService;
 import com.fashionstore.order.service.CheckoutService;
 import com.fashionstore.common.payment.PaymentMethod;
-import com.fashionstore.order.dto.PromotionItemDto;
 import com.fashionstore.order.service.PromotionService;
 import com.fashionstore.common.payment.PaymentProvider;
 import com.fashionstore.order.client.CatalogClient;
 import com.fashionstore.order.client.GhnClient;
 import com.fashionstore.order.client.IdentityClient;
-import com.fashionstore.order.dto.ProductVariantDto;
-import com.fashionstore.order.dto.UserAddressDto;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -49,19 +44,19 @@ import java.util.stream.Collectors;
 public class CheckoutServiceImpl implements CheckoutService {
 
     CheckoutRepository checkoutRepository;
+    CheckoutDbService checkoutDbService;
     CartService cartService;
     CurrentUserProvider currentUserProvider;
     PromotionService promotionService;
     CatalogClient catalogClient;
     IdentityClient identityClient;
     GhnClient ghnClient;
-    TransactionTemplate transactionTemplate;
 
-    /**
-     * Không có {@code @Transactional}: bước xác nhận lại giỏ với catalog là gọi mạng, không được giữ
-     * transaction DB. Checkout + items vẫn vào DB nguyên khối nhờ một lần save cascade ở cuối.
-     */
+
+
+    // Tách biệt riêng phần gọi ngoài service không nằm trong transaction, các phần cần gọi transaction qua CheckoutDbService
     @Override
+    @Transactional(propagation = Propagation.NEVER) // Ép buộc chạy ngoài transaction lớn
     public CheckoutResponse createCheckout(CreateCheckoutRequest request) {
         String userId = currentUserProvider.getCurrentUserId();
         // Giỏ đã được xác nhận lại với catalog (còn bán, giá hiện tại, kho còn đủ) và snapshot đã cập nhật.
@@ -119,9 +114,10 @@ public class CheckoutServiceImpl implements CheckoutService {
         List<CheckoutItem> snapshotItems = cartItems.stream()
                 .map(item -> toCheckoutItem(checkout, item))
                 .toList();
-        checkout.setItems(snapshotItems);
 
-        return toResponse(checkoutRepository.save(checkout));
+        Checkout savedCheckout = checkoutDbService.saveNewCheckout(checkout, snapshotItems);
+
+        return toResponse(savedCheckout);
     }
 
     @Override
@@ -129,17 +125,12 @@ public class CheckoutServiceImpl implements CheckoutService {
     public CheckoutResponse updateCheckout(String checkoutId, UpdateCheckoutRequest request) {
         String userId = currentUserProvider.getCurrentUserId();
         // 1. Đọc đầy đủ items trong một transaction ngắn, rồi trả connection về pool.
-        Checkout checkout = transactionTemplate.execute(tx -> checkoutRepository.findByIdAndUserId(checkoutId, userId)
-                .orElseThrow(() -> new AppException(OrderErrorCode.CHECKOUT_NOT_FOUND)));
+        Checkout checkout = checkoutDbService.getCheckoutSnapshot(checkoutId, userId);
         Long snapshotVersion = checkout.getVersion();
 
-        if (checkout.getStatus() == CheckoutStatus.COMPLETED
-                || checkout.getStatus() == CheckoutStatus.CANCELLED
-                || checkout.getStatus() == CheckoutStatus.EXPIRED
-                || checkout.getOrder() != null) {
+        if (isStatusInvalid(checkout.getStatus()) || checkout.getOrder() != null) {
             throw new AppException(OrderErrorCode.CHECKOUT_STATUS_INVALID);
         }
-
         // 2. Tính trên biến cục bộ: identity/catalog/GHN đều chạy ngoài transaction.
         // Không sửa entity vừa đọc: nếu HTTP thất bại thì checkout trong DB vẫn nguyên vẹn.
         String addressId = request.getAddressId() != null ? request.getAddressId() : checkout.getAddressId();
@@ -167,30 +158,31 @@ public class CheckoutServiceImpl implements CheckoutService {
         BigDecimal shippingFee = calculateShippingFee(checkout.getSubtotalAmount(), shippingMethod, shippingAddress, totalWeightGram);
         BigDecimal total = checkout.getSubtotalAmount().subtract(discount).add(shippingFee);
         validateAmounts(checkout.getSubtotalAmount(), discount, shippingFee, total);
+
+        CheckoutUpdateDto updateDto = new CheckoutUpdateDto(
+                addressId,
+                shippingAddress,
+                paymentMethod,
+                paymentProvider,
+                shippingMethod,
+                couponCode,
+                discount,
+                shippingFee,
+                total);
+
         // 3. Khóa chỉ trong lúc kiểm tra và ghi. Request khác có thể đã sửa/hủy/đặt hàng
         // trong lúc ta đợi GHN, nên phải đọc lại trạng thái và so version của snapshot.
-        return transactionTemplate.execute(tx -> {
-            Checkout current = checkoutRepository.findForUpdateByIdAndUserId(checkoutId, userId)
-                    .orElseThrow(() -> new AppException(OrderErrorCode.CHECKOUT_NOT_FOUND));
-            if (current.getStatus() == CheckoutStatus.COMPLETED
-                    || current.getStatus() == CheckoutStatus.CANCELLED
-                    || current.getStatus() == CheckoutStatus.EXPIRED || current.getOrder() != null) {
-                throw new AppException(OrderErrorCode.CHECKOUT_STATUS_INVALID);
-            }
-            if (!java.util.Objects.equals(snapshotVersion, current.getVersion())) {
-                throw new AppException(OrderErrorCode.CHECKOUT_UPDATE_CONFLICT);
-            }
-            current.setAddressId(addressId);
-            current.setShippingAddress(shippingAddress);
-            current.setPaymentMethod(paymentMethod);
-            current.setPaymentProvider(paymentProvider);
-            current.setShippingMethod(shippingMethod);
-            current.setCouponCode(couponCode);
-            current.setDiscountAmount(discount);
-            current.setShippingFee(shippingFee);
-            current.setTotalAmount(total);
-            return toResponse(checkoutRepository.save(current));
-        });
+        try {
+            Checkout updatedCheckout = checkoutDbService.saveUpdatedCheckout(checkoutId, userId, snapshotVersion, updateDto);
+            return toResponse(updatedCheckout);
+        } catch (org.springframework.orm.ObjectOptimisticLockingFailureException e) {
+            // Spring tự động bắt được xung đột tầng DB (luồng khác đã tăng version trước) và ném lỗi này
+            throw new AppException(OrderErrorCode.CHECKOUT_UPDATE_CONFLICT);
+        }
+    }
+
+    private boolean isStatusInvalid(CheckoutStatus status) {
+        return status == CheckoutStatus.COMPLETED || status == CheckoutStatus.CANCELLED || status == CheckoutStatus.EXPIRED;
     }
 
     @Override
@@ -403,4 +395,6 @@ public class CheckoutServiceImpl implements CheckoutService {
         }
         return resolved;
     }
+
+
 }

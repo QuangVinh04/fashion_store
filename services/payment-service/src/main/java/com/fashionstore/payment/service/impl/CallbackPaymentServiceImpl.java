@@ -5,20 +5,16 @@ import com.fashionstore.common.payment.PaymentProvider;
 import com.fashionstore.payment.dto.CallbackOutcome;
 import com.fashionstore.payment.dto.CallbackProcessResult;
 import com.fashionstore.payment.dto.PaymentCallbackResult;
-import com.fashionstore.payment.entity.Payment;
-import com.fashionstore.payment.entity.enumeration.PaymentStatus;
 import com.fashionstore.payment.exception.PaymentErrorCode;
-import com.fashionstore.payment.repository.PaymentRepository;
 import com.fashionstore.payment.service.CallbackPaymentService;
-import com.fashionstore.payment.service.PaymentStateService;
+import com.fashionstore.payment.service.PaymentDbService;
 import com.fashionstore.payment.service.provider.PaymentHandlerRegistry;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.annotation.Propagation;
-import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Map;
 
@@ -27,10 +23,8 @@ import java.util.Map;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class CallbackPaymentServiceImpl implements CallbackPaymentService {
 
-    PaymentRepository paymentRepository;
     PaymentHandlerRegistry paymentHandlerRegistry;
-    PaymentStateService paymentStateService;
-    TransactionTemplate transactionTemplate;
+    PaymentDbService paymentDbService;
 
     @Override
     @Transactional(propagation = Propagation.NEVER)
@@ -39,7 +33,6 @@ public class CallbackPaymentServiceImpl implements CallbackPaymentService {
         if (!result.isSignatureValid()) {
             throw new AppException(PaymentErrorCode.PAYMENT_SIGNATURE_INVALID);
         }
-        // PayOS return cần gọi API tra cứu. Chỉ xác minh một lần, ngoài transaction.
         CallbackProcessResult applied = applyVerifiedResult(provider, result);
         if (applied.outcome() == CallbackOutcome.AMOUNT_INVALID) {
             throw new AppException(PaymentErrorCode.PAYMENT_AMOUNT_INVALID);
@@ -74,27 +67,6 @@ public class CallbackPaymentServiceImpl implements CallbackPaymentService {
         if (result.getStatus() == null) {
             return CallbackProcessResult.of(CallbackOutcome.INVALID_REQUEST);
         }
-        // Khóa và cập nhật DB + outbox trong cùng transaction ngắn; không gọi mạng ở đây.
-        return transactionTemplate.execute(tx -> {
-            Payment payment = result.getMerchantReference() == null
-                    ? null
-                    : paymentRepository.findByMerchantReference(result.getMerchantReference())
-                            .or(() -> paymentRepository.findByTransactionIdForUpdate(result.getMerchantReference()))
-                            .orElse(null);
-            if (payment == null || payment.getProvider() != provider) {
-                return CallbackProcessResult.of(CallbackOutcome.PAYMENT_NOT_FOUND);
-            }
-            if (result.getStatus() == PaymentStatus.COMPLETED && !paymentStateService.isProviderAmountValid(payment, result)) {
-                return CallbackProcessResult.of(CallbackOutcome.AMOUNT_INVALID);
-            }
-            if (payment.getStatus() != PaymentStatus.PENDING && payment.getStatus() != PaymentStatus.INITIATING
-                    && payment.getStatus() != PaymentStatus.INITIATION_UNKNOWN) {
-                return CallbackProcessResult.of(CallbackOutcome.ALREADY_PROCESSED);
-            }
-            if (result.getStatus() == PaymentStatus.PENDING) {
-                return CallbackProcessResult.of(CallbackOutcome.PENDING);
-            }
-            return new CallbackProcessResult(CallbackOutcome.APPLIED, paymentStateService.applyResult(payment, result));
-        });
+        return paymentDbService.applyVerifiedCallbackResult(provider, result);
     }
 }

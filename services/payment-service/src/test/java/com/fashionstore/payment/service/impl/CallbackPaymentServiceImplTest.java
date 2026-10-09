@@ -57,8 +57,8 @@ class CallbackPaymentServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = new CallbackPaymentServiceImpl(paymentRepository, paymentHandlerRegistry, paymentStateService,
-                new org.springframework.transaction.support.TransactionTemplate(new PaymentServiceImplTest.TestTransactionManager()));
+        com.fashionstore.payment.service.PaymentDbService paymentDbService = new com.fashionstore.payment.service.PaymentDbService(paymentRepository, null, null, null, paymentStateService);
+        service = new CallbackPaymentServiceImpl(paymentHandlerRegistry, paymentDbService);
     }
 
     @Test

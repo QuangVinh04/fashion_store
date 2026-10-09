@@ -1,6 +1,10 @@
 package com.fashionstore.payment.service.impl;
 
 import com.fashionstore.common.exception.AppException;
+import com.fashionstore.contracts.payment.command.AuthorizePaymentCommand;
+import com.fashionstore.contracts.payment.command.CancelPaymentCommand;
+import com.fashionstore.contracts.payment.command.RefundPaymentCommand;
+import com.fashionstore.payment.dto.PaymentRefundResult;
 import com.fashionstore.payment.exception.PaymentErrorCode;
 import com.fashionstore.common.security.CurrentUserProvider;
 import com.fashionstore.payment.dto.PaymentInitiationResult;
@@ -9,6 +13,7 @@ import com.fashionstore.payment.entity.Payment;
 import com.fashionstore.payment.entity.enumeration.PaymentStatus;
 import com.fashionstore.payment.mapper.PaymentResponseMapper;
 import com.fashionstore.payment.repository.PaymentRepository;
+import com.fashionstore.payment.service.PaymentDbService;
 import com.fashionstore.payment.service.PaymentService;
 import com.fashionstore.payment.service.provider.PaymentHandlerRegistry;
 import lombok.AccessLevel;
@@ -24,15 +29,8 @@ import com.fashionstore.payment.service.CallbackPaymentService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.annotation.Propagation;
-import org.springframework.transaction.support.TransactionTemplate;
 import com.fashionstore.common.payment.PaymentProvider;
-import com.fashionstore.contracts.common.EventEnvelope;
-import com.fashionstore.contracts.common.EventTypes;
-import com.fashionstore.contracts.payment.event.PaymentInitiatedEvent;
-import com.fashionstore.payment.outbox.OutboxService;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
-import java.util.Objects;
 import java.util.UUID;
 
 @Service
@@ -45,8 +43,7 @@ public class PaymentServiceImpl implements PaymentService {
     PaymentHandlerRegistry paymentHandlerRegistry;
     PaymentResponseMapper paymentResponseMapper;
     CurrentUserProvider currentUserProvider;
-    TransactionTemplate transactionTemplate;
-    OutboxService outboxService;
+    PaymentDbService paymentDbService;
     CallbackPaymentService callbackPaymentService;
 
     @NonFinal
@@ -63,25 +60,12 @@ public class PaymentServiceImpl implements PaymentService {
         LocalDateTime dueBefore = LocalDateTime.now().minusSeconds(30);
         List<PaymentStatus> openStatuses = List.of(PaymentStatus.PENDING, PaymentStatus.INITIATING,
                 PaymentStatus.INITIATION_UNKNOWN);
-        List<Payment> candidates = transactionTemplate.execute(tx ->
-                paymentRepository.findForReconciliation(openStatuses, dueBefore, PageRequest.of(0, 50)));
+        List<Payment> candidates = paymentDbService.findForReconciliation(openStatuses, dueBefore, PageRequest.of(0, 50));
         for (Payment candidate : candidates) {
             try {
                 // Chỉ một worker nhận quyền tra cứu trong mỗi nhịp; ghi thời gian trước HTTP
                 // để payment lỗi cũng không chiếm mãi đầu danh sách quét.
-                Payment payment = transactionTemplate.execute(tx -> {
-                    Payment current = paymentRepository.findByIdForUpdate(candidate.getId()).orElse(null);
-                    if (current == null || !openStatuses.contains(current.getStatus())
-                            || (current.getLastReconciledAt() != null && !current.getLastReconciledAt().isBefore(dueBefore))) {
-                        return null;
-                    }
-                    if (current.getStatus() == PaymentStatus.INITIATING && current.getInitiationStartedAt() != null
-                            && current.getInitiationStartedAt().isAfter(LocalDateTime.now().minusMinutes(2))) {
-                        return null; // Request khởi tạo còn hoạt động, chưa nhận quyền phục hồi.
-                    }
-                    current.setLastReconciledAt(LocalDateTime.now());
-                    return paymentRepository.save(current);
-                });
+                Payment payment = paymentDbService.lockAndPrepareForReconciliation(candidate.getId(), openStatuses, dueBefore);
                 if (payment == null) {
                     continue;
                 }
@@ -104,8 +88,7 @@ public class PaymentServiceImpl implements PaymentService {
                     // Ứng dụng có thể chết sau HTTP nhưng trước bước lưu URL. Flow khởi tạo
                     // dùng lại reference; PayOS tra cứu link cũ trước khi tạo lại.
                     initiatePayment(payment.getId(), payment.getClientIp(), null);
-                    payment = transactionTemplate.execute(tx ->
-                            paymentRepository.findByIdForUpdate(candidate.getId()).orElseThrow());
+                    payment = paymentDbService.findByIdForUpdate(candidate.getId());
                 }
                 var result = paymentHandlerRegistry.get(payment.getProvider()).queryPayment(payment);
                 callbackPaymentService.applyVerifiedResult(payment.getProvider(), result);
@@ -138,52 +121,12 @@ public class PaymentServiceImpl implements PaymentService {
                 .orElseThrow(() -> new AppException(PaymentErrorCode.PAYMENT_NOT_FOUND));
         return initiatePayment(payment.getId(), clientIp, null);
     }
-
     /** Hai entry point dùng cùng flow; chỉ HTTP của khách hàng cần kiểm tra owner. */
     private PaymentInitiationResult initiatePayment(String paymentId, String clientIp, String requiredUserId) {
         String token = UUID.randomUUID().toString();
         // 1. Khóa ngắn để nhận quyền khởi tạo. Định danh và số tiền phải commit TRƯỚC HTTP,
         // vì webhook có thể đến ngay khi provider tạo link, trước khi trả response cho ta.
-        Payment payment = transactionTemplate.execute(tx -> {
-            Payment current = paymentRepository.findByIdForUpdate(paymentId)
-                    .orElseThrow(() -> new AppException(PaymentErrorCode.PAYMENT_NOT_FOUND));
-            if (requiredUserId != null && !requiredUserId.equals(current.getUserId())) {
-                throw new AppException(PaymentErrorCode.PAYMENT_NOT_FOUND);
-            }
-            if (current.getStatus() != PaymentStatus.PENDING && current.getStatus() != PaymentStatus.INITIATING
-                    && current.getStatus() != PaymentStatus.INITIATION_UNKNOWN) {
-                throw new AppException(PaymentErrorCode.PAYMENT_STATUS_INVALID);
-            }
-            if (current.getPaymentUrl() != null) {
-                // Phát lại URL cho saga nếu reply trước bị thất lạc; consumer đã chống trùng.
-                outboxService.saveMessage(current.getOrderId(), EventTypes.PAYMENT_INITIATED, EventEnvelope.v1(
-                        EventTypes.PAYMENT_INITIATED, current.getOrderId(),
-                        current.getSagaId() == null ? current.getOrderId() : current.getSagaId(),
-                        new PaymentInitiatedEvent(current.getOrderId(), current.getId(), current.getPaymentUrl())));
-                return current;
-            }
-            if (current.getStatus() == PaymentStatus.INITIATING && current.getInitiationStartedAt() != null
-                    && current.getInitiationStartedAt().isAfter(LocalDateTime.now().minusMinutes(2))) {
-                throw new AppException(PaymentErrorCode.PAYMENT_INITIATION_IN_PROGRESS);
-            }
-            if (current.getMerchantReference() == null) {
-                String reference = current.getId().replace("-", "");
-                current.setMerchantReference(current.getProvider() == PaymentProvider.PAYOS
-                        ? String.valueOf(Long.parseLong(reference.substring(0, 13), 16)) : reference);
-            }
-            current.setProviderAmount(current.getAmount());
-            current.setProviderCurrency(current.getCurrency());
-            if (current.getProviderTransactionDate() == null) {
-                current.setProviderTransactionDate(LocalDateTime.now(java.time.ZoneId.of("Asia/Ho_Chi_Minh"))
-                        .format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss")));
-            }
-            current.setClientIp(clientIp);
-            current.setStatus(PaymentStatus.INITIATING);
-            current.setInitiationToken(token);
-            current.setInitiationStartedAt(LocalDateTime.now());
-            current.setInitiationAttempts(current.getInitiationAttempts() + 1);
-            return paymentRepository.save(current);
-        });
+        Payment payment = paymentDbService.initiatePhaseOne(paymentId, clientIp, requiredUserId, token);
 
         if (payment.getPaymentUrl() != null) {
             return PaymentInitiationResult.builder().paymentUrl(payment.getPaymentUrl())
@@ -197,45 +140,82 @@ public class PaymentServiceImpl implements PaymentService {
         try {
             result = paymentHandlerRegistry.get(payment.getProvider()).initiate(payment, clientIp);
         } catch (RuntimeException exception) {
-            transactionTemplate.executeWithoutResult(tx -> {
-                Payment current = paymentRepository.findByIdForUpdate(paymentId).orElseThrow();
-                if (current.getStatus() == PaymentStatus.INITIATING
-                        && Objects.equals(token, current.getInitiationToken())) {
-                    // Timeout không chứng minh provider thất bại. Giữ định danh để đối soát/retry.
-                    current.setStatus(PaymentStatus.INITIATION_UNKNOWN);
-                    current.setFailureReason("Chưa xác định kết quả khởi tạo; cần tra cứu provider");
-                    paymentRepository.save(current);
-                }
-            });
+            paymentDbService.initiateHandleException(paymentId, token);
             throw exception;
         }
-
         // 3. Đọc lại dưới khóa: callback có thể đã hoàn tất thanh toán trong lúc HTTP chạy.
-        transactionTemplate.executeWithoutResult(tx -> {
-            Payment current = paymentRepository.findByIdForUpdate(paymentId).orElseThrow();
-            if (!Objects.equals(token, current.getInitiationToken())) {
-                return; // Kết quả thuộc worker cũ, không ghi đè lần phục hồi đang chạy.
-            }
-            current.setPaymentUrl(result.getPaymentUrl());
-            if (current.getStatus() == PaymentStatus.INITIATING) {
-                current.setStatus(PaymentStatus.PENDING);
-                current.setTransactionId(result.getProviderTransactionId());
-                current.setProviderAmount(result.getProviderAmount());
-                current.setProviderCurrency(result.getProviderCurrency());
-                current.setFailureReason(null);
-                outboxService.saveMessage(current.getOrderId(), EventTypes.PAYMENT_INITIATED, EventEnvelope.v1(
-                        EventTypes.PAYMENT_INITIATED, current.getOrderId(),
-                        current.getSagaId() == null ? current.getOrderId() : current.getSagaId(),
-                        new PaymentInitiatedEvent(current.getOrderId(), current.getId(), result.getPaymentUrl())));
-            }
-            paymentRepository.save(current);
-        });
+        paymentDbService.initiatePhaseTwo(paymentId, token, result);
         return result;
     }
+
+
 
     private void assertPaymentOwner(Payment payment) {
         if (!payment.getUserId().equals(currentUserProvider.getCurrentUserId())) {
             throw new AppException(PaymentErrorCode.PAYMENT_NOT_FOUND);
         }
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.NEVER)
+    public void authorize(AuthorizePaymentCommand request, String messageId, String correlationId) {
+        Payment payment = paymentDbService.createPaymentOnce(messageId, request, correlationId);
+
+        if (payment != null && payment.getMethod() != com.fashionstore.common.payment.PaymentMethod.COD
+                && (payment.getStatus() == PaymentStatus.PENDING || payment.getStatus() == PaymentStatus.INITIATING
+                || payment.getStatus() == PaymentStatus.INITIATION_UNKNOWN)) {
+            try {
+                this.initiateForOrder(request.orderId(), request.clientIp());
+            } catch (AppException ex) {
+                if (ex.getErrorCode() == PaymentErrorCode.PAYMENT_INITIATION_IN_PROGRESS) {
+                    throw new IllegalStateException("Payment initiation is in progress, please retry later");
+                }
+                throw ex;
+            }
+        }
+    }
+
+    @Override
+    public void cancel(CancelPaymentCommand request, String messageId, String correlationId) {
+        try {
+            paymentDbService.cancelPaymentOnce(messageId, request, correlationId);
+        } catch (AppException ex) {
+            if (ex.getErrorCode() == PaymentErrorCode.PAYMENT_INITIATION_IN_PROGRESS) {
+                throw new IllegalStateException("Payment initiation is in progress, please retry later");
+            }
+            throw ex;
+        }
+    }
+
+    @Override
+    public void refund(RefundPaymentCommand request, String messageId, String correlationId) {
+        PaymentDbService.RefundCall call = paymentDbService.prepareRefundOnce(messageId, request, correlationId);
+
+        if (call == null) {
+            return;
+        }
+
+        RefundOutcome outcome = refundAtGateway(call);
+        paymentDbService.applyRefund(call, outcome.result(), outcome.error());
+    }
+
+    private record RefundOutcome(PaymentRefundResult result, String error) {}
+
+    private RefundOutcome refundAtGateway(PaymentDbService.RefundCall call) {
+        try {
+            return new RefundOutcome(
+                    paymentHandlerRegistry.get(call.payment().getProvider()).refund(call.payment(), call.refund()), null);
+        } catch (RuntimeException exception) {
+            log.error("Hoàn tiền với cổng thất bại cho order {}: {}", call.payment().getOrderId(), exception.getMessage(), exception);
+            return new RefundOutcome(null, safeFailureReason(exception));
+        }
+    }
+
+    private String safeFailureReason(RuntimeException exception) {
+        String message = exception.getMessage();
+        if (message == null || message.isBlank()) {
+            return "Payment provider rejected the refund";
+        }
+        return message.substring(0, Math.min(message.length(), 500));
     }
 }
