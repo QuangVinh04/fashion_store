@@ -17,6 +17,9 @@ import java.util.Optional;
 
 public interface OrderSagaRepository extends JpaRepository<OrderSaga, String> {
 
+    @Query(
+            "select new com.fashionstore.order.repository.SagaTimeoutCandidate(s.id, s.orderId, s.type)"
+                    + " from OrderSaga s where s.status in :statuses and s.stepDeadline < :now")
     List<SagaTimeoutCandidate> findDueCandidates(
             @Param("statuses") List<OrderSagaStatus> statuses, @Param("now") LocalDateTime now);
 
