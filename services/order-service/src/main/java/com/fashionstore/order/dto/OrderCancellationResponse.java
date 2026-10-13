@@ -4,6 +4,7 @@ import com.fashionstore.order.entity.Order;
 import com.fashionstore.order.entity.OrderSaga;
 import com.fashionstore.order.entity.OrderStatusHistory;
 import com.fashionstore.order.entity.enumeration.OrderSagaStatus;
+import com.fashionstore.order.entity.enumeration.OrderStatus;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.time.Instant;
@@ -32,6 +33,10 @@ public record OrderCancellationResponse(
             OrderSaga saga, Order order, List<OrderStatusHistory> checkpoints) {
         String status;
         if (saga.getStatus() == OrderSagaStatus.COMPLETED) status = "COMPLETED";
+        else if (saga.getStatus() == OrderSagaStatus.FAILED
+                && "CARRIER_HANDOFF".equals(saga.getFailureCode())
+                && order.getStatus() != OrderStatus.CANCELLING)
+            status = "REJECTED"; // carrier lấy hàng trước khi dừng vận đơn, đơn tiếp tục giao
         else if (saga.getStatus() == OrderSagaStatus.FAILED)
             status =
                     Set.of("CARRIER_HANDOFF", "CARRIER_LABEL_CONFLICT")

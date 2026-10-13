@@ -128,6 +128,56 @@ class OrderCancellationSagaServiceTest {
     }
 
     @Test
+    void handoffBeforeCarrierStopRejectsCancellationAndResumesShipping() {
+        var order = order();
+        var saga = cancellation(order, OrderSagaStep.STOP_SHIPMENT);
+        order.setCancelReason("Changed mind");
+        var shipment = Shipment.builder().order(order).status(ShipmentStatus.PICKED).build();
+        when(shipments.findByOrderIdForUpdate(order.getId())).thenReturn(Optional.of(shipment));
+
+        service.lateHandoff(order.getId(), "GHN status picked");
+
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.SHIPPING);
+        assertThat(order.getCancelReason()).isNull();
+        assertThat(saga.getStatus()).isEqualTo(OrderSagaStatus.FAILED);
+        assertThat(saga.getFailureCode()).isEqualTo("CARRIER_HANDOFF");
+        var row = org.mockito.ArgumentCaptor.forClass(OrderStatusHistory.class);
+        verify(history).save(row.capture());
+        assertThat(row.getValue().getAction()).isEqualTo("CANCELLATION_REJECTED");
+        assertThat(row.getValue().getFromStatus()).isEqualTo(OrderStatus.CANCELLING);
+        assertThat(row.getValue().getToStatus()).isEqualTo(OrderStatus.SHIPPING);
+        verify(notifications).sendOrderShippedNotification(order, shipment);
+        verifyNoInteractions(outbox);
+    }
+
+    @Test
+    void handoffAfterInventoryCancellationStaysCancellingForReview() {
+        var order = order();
+        var saga = cancellation(order, OrderSagaStep.CANCEL_ORDER_INVENTORY);
+
+        service.lateHandoff(order.getId(), "GHN status picked");
+
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLING);
+        assertThat(saga.getStatus()).isEqualTo(OrderSagaStatus.FAILED);
+        assertThat(saga.getFailureCode()).isEqualTo("CARRIER_HANDOFF");
+        verifyNoInteractions(notifications);
+    }
+
+    @Test
+    void handoffAfterCompletedCancellationDoesNotReopenSaga() {
+        var order = order();
+        var saga = cancellation(order, OrderSagaStep.REFUND_ORDER_FUNDS);
+        saga.complete();
+        order.cancel("Changed mind");
+
+        service.lateHandoff(order.getId(), "GHN status picked");
+
+        assertThat(saga.getStatus()).isEqualTo(OrderSagaStatus.COMPLETED);
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
+        verify(history).save(any());
+    }
+
+    @Test
     void inventoryAcknowledgementEmitsRefundOnce() {
         var order = order();
         var saga = cancellation(order, OrderSagaStep.CANCEL_ORDER_INVENTORY);

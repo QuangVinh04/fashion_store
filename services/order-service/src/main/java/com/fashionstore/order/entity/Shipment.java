@@ -84,4 +84,10 @@ public class Shipment extends BaseEntity {
 
     @Column(name = "delivered_at")
     java.time.Instant deliveredAt;
+
+    /** Carrier đã nhận hàng (GHN {@code picked} trở đi) — mốc khách không còn được tự hủy đơn. */
+    public boolean isHandedOff() {
+        return handedOffAt != null
+                || status != ShipmentStatus.PENDING && status != ShipmentStatus.CANCELLED;
+    }
 }

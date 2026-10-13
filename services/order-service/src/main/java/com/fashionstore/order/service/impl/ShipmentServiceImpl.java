@@ -361,7 +361,9 @@ public class ShipmentServiceImpl implements ShipmentService {
                             if (payload.getWeight() != null && payload.getWeight() > 0) {
                                 shipment.setWeightGram(payload.getWeight());
                             }
-                            if (nextStatus == ShipmentStatus.SHIPPING
+                            // Carrier đã lấy hàng (picked) là đơn đang giao — không chờ tới storing/delivering
+                            if ((nextStatus == ShipmentStatus.PICKED
+                                            || nextStatus == ShipmentStatus.SHIPPING)
                                     && Set.of(
                                                     OrderStatus.CONFIRMED,
                                                     OrderStatus.PACKED,

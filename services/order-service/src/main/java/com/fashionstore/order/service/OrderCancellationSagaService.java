@@ -262,6 +262,24 @@ public class OrderCancellationSagaService {
             throw new AppException(OrderErrorCode.CANCELLATION_CONFLICT);
         }
 
+        // Hủy đã xong (kho nhả, tiền hoàn) mà hàng vẫn đi: chỉ ghi nhận để vận hành xử lý
+        if (saga.getStatus() == OrderSagaStatus.COMPLETED) {
+            recordHistory(order, order.getStatus(), order.getStatus(), "CANCELLATION_LATE_HANDOFF", "CARRIER", proofDescription, null);
+            return;
+        }
+
+        // Carrier lấy hàng trước khi dừng được vận đơn: chưa nhả kho/hoàn tiền → từ chối hủy, đơn đi tiếp
+        if (saga.getCurrentStep() == OrderSagaStep.STOP_SHIPMENT) {
+            saga.fail("CARRIER_HANDOFF", "Carrier handoff before cancellation: " + proofDescription);
+            OrderStatus previousStatus = order.getStatus();
+            order.setStatus(OrderStatus.SHIPPING);
+            order.setCancelReason(null);
+            recordHistory(order, previousStatus, OrderStatus.SHIPPING, "CANCELLATION_REJECTED", "CARRIER", proofDescription, null);
+            shipments.findByOrderIdForUpdate(orderId)
+                    .ifPresent(shipment -> notifications.sendOrderShippedNotification(order, shipment));
+            return;
+        }
+
         failCarrierHandoff(order, saga, "Carrier handoff after cancellation: " + proofDescription);
     }
 
@@ -507,9 +525,7 @@ public class OrderCancellationSagaService {
     }
 
     private boolean isShipmentHandedOff(Shipment shipment) {
-        return shipment != null
-                && (shipment.getHandedOffAt() != null
-                        || !Set.of(ShipmentStatus.PENDING, ShipmentStatus.CANCELLED).contains(shipment.getStatus()));
+        return shipment != null && shipment.isHandedOff();
     }
 
     private void failCarrierHandoff(Order order, OrderSaga saga, String reason) {

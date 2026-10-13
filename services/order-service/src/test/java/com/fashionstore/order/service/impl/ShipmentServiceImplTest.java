@@ -318,6 +318,31 @@ class ShipmentServiceImplTest {
     }
 
     @Test
+    void carrierPickedIsHandoffAndMovesOrderToShipping() {
+        var order = confirmedOrder(null);
+        order.setStatus(OrderStatus.PACKED);
+        var shipment =
+                Shipment.builder()
+                        .order(order)
+                        .provider(ShipmentProvider.GHN)
+                        .trackingCode("tracking")
+                        .status(ShipmentStatus.PENDING)
+                        .build();
+        when(shipmentRepository.findByGhnOrderCode("tracking")).thenReturn(Optional.of(shipment));
+        service.handleGhnCallback(
+                GhnWebhookPayload.builder()
+                        .shopId("123")
+                        .time("2026-10-01T03:00:00Z")
+                        .orderCode("tracking")
+                        .status("picked")
+                        .build());
+        assertThat(shipment.getStatus()).isEqualTo(ShipmentStatus.PICKED);
+        assertThat(shipment.getHandedOffAt()).isNotNull();
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.SHIPPING);
+        verify(orderNotificationService).sendOrderShippedNotification(order, shipment);
+    }
+
+    @Test
     void lateCarrierHandoffAfterCancellationKeepsFactAndCreatesException() {
         var order = confirmedOrder(null);
         order.setStatus(OrderStatus.CANCELLED);

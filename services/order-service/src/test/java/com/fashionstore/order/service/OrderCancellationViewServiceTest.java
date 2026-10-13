@@ -66,6 +66,30 @@ class OrderCancellationViewServiceTest {
     }
 
     @Test
+    void handoffBeforeCarrierStopIsShownAsRejected() {
+        var c = OrderSaga.startCancellation("order", "op", "payment", "reservation");
+        c.setId("cancellation");
+        c.fail("CARRIER_HANDOFF", "GHN status picked");
+        when(sagas.findByOrderIdAndType("order", OrderSagaType.CANCELLATION))
+                .thenReturn(Optional.of(c));
+        var response = project(order(OrderStatus.SHIPPING));
+        assertThat(response.isCanCancel()).isFalse();
+        assertThat(response.getCancellation().status()).isEqualTo("REJECTED");
+    }
+
+    @Test
+    void handoffWhileStillCancellingNeedsFulfillmentReview() {
+        var c = OrderSaga.startCancellation("order", "op", "payment", "reservation");
+        c.setId("cancellation");
+        c.setCurrentStep(OrderSagaStep.CANCEL_ORDER_INVENTORY);
+        c.fail("CARRIER_HANDOFF", "GHN status picked");
+        when(sagas.findByOrderIdAndType("order", OrderSagaType.CANCELLATION))
+                .thenReturn(Optional.of(c));
+        var response = project(order(OrderStatus.CANCELLING));
+        assertThat(response.getCancellation().status()).isEqualTo("FULFILLMENT_EXCEPTION");
+    }
+
+    @Test
     void cancellingOrderCannotOfferCancellationEvenBeforeSagaIsLoaded() {
         assertThat(project(order(OrderStatus.CANCELLING)).isCanCancel()).isFalse();
     }

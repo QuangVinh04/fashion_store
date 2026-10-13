@@ -39,11 +39,7 @@ public class OrderCancellationViewService {
                                 .contains(order.getStatus());
         if (eligible) {
             Shipment shipment = shipments.findByOrderId(order.getId()).orElse(null);
-            eligible =
-                    shipment == null
-                            || shipment.getHandedOffAt() == null
-                                    && Set.of(ShipmentStatus.PENDING, ShipmentStatus.CANCELLED)
-                                            .contains(shipment.getStatus());
+            eligible = shipment == null || !shipment.isHandedOff();
         }
         response.setCanCancel(eligible);
         return response;
