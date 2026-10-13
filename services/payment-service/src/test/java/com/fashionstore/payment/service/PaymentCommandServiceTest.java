@@ -15,11 +15,11 @@ import com.fashionstore.payment.entity.Payment;
 import com.fashionstore.payment.entity.PaymentRefund;
 import com.fashionstore.payment.entity.enumeration.PaymentRefundStatus;
 import com.fashionstore.payment.entity.enumeration.PaymentStatus;
-import com.fashionstore.payment.outbox.OutboxService;
+import com.fashionstore.payment.event.OutboxEventRecorder;
 import com.fashionstore.payment.repository.PaymentRefundRepository;
 import com.fashionstore.payment.repository.PaymentRepository;
-import com.fashionstore.payment.service.provider.PaymentHandler;
-import com.fashionstore.payment.service.provider.PaymentHandlerRegistry;
+import com.fashionstore.payment.client.PaymentHandler;
+import com.fashionstore.payment.client.PaymentHandlerRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -55,18 +55,21 @@ class PaymentCommandServiceTest {
     @Mock
     ProcessedMessageService processedMessageService;
     @Mock
-    OutboxService outboxService;
+    OutboxEventRecorder outboxEventRecorder;
     @Mock
     PaymentHandlerRegistry paymentHandlerRegistry;
     @Mock
     PaymentHandler paymentHandler;
 
-    PaymentCommandService service;
+    PaymentService service;
     Payment storedPayment;
 
     @BeforeEach
     void setUp() {
-        TransactionTemplate transactions = new TransactionTemplate(new InMemoryTransactionManager());
+        org.mockito.Mockito.lenient().when(paymentRefundRepository.sumReservedAmountByPaymentId(anyString())).thenAnswer(call -> {
+            BigDecimal completed=paymentRefundRepository.sumCompletedAmountByPaymentId(call.getArgument(0));
+            return completed==null?BigDecimal.ZERO:completed;
+        });
         org.mockito.Mockito.lenient().when(paymentRepository.findByOrderId("order-1"))
                 .thenAnswer(call -> Optional.ofNullable(storedPayment));
         org.mockito.Mockito.lenient().when(paymentRepository.findByIdForUpdate(anyString()))
@@ -75,21 +78,14 @@ class PaymentCommandServiceTest {
             storedPayment = call.getArgument(0);
             return storedPayment;
         });
-        com.fashionstore.payment.service.PaymentService paymentService =
-                new com.fashionstore.payment.service.impl.PaymentServiceImpl(paymentRepository, paymentHandlerRegistry,
-                        org.mockito.Mockito.mock(com.fashionstore.payment.mapper.PaymentResponseMapper.class),
-                        org.mockito.Mockito.mock(com.fashionstore.common.security.CurrentUserProvider.class),
-                        transactions, outboxService,
-                        org.mockito.Mockito.mock(com.fashionstore.payment.service.CallbackPaymentService.class));
-        service = new PaymentCommandService(
-                paymentRepository,
-                paymentRefundRepository,
-                processedMessageService,
-                outboxService,
-                paymentService,
-                paymentHandlerRegistry,
-                transactions
-        );
+        var jdbcTemplate = org.mockito.Mockito.mock(org.springframework.jdbc.core.JdbcTemplate.class);
+        org.mockito.Mockito.lenient().when(jdbcTemplate.queryForObject(anyString(), eq(Long.class))).thenReturn(5000000000000000L);
+        PaymentTransactionService database = new PaymentTransactionService(paymentRepository, jdbcTemplate, paymentRefundRepository,
+                processedMessageService, outboxEventRecorder, org.mockito.Mockito.mock(PaymentStateService.class), org.mockito.Mockito.mock(WalletService.class));
+        service = new com.fashionstore.payment.service.impl.PaymentServiceImpl(paymentRepository, paymentHandlerRegistry,
+                org.mockito.Mockito.mock(com.fashionstore.payment.mapper.PaymentResponseMapper.class),
+                org.mockito.Mockito.mock(com.fashionstore.common.security.CurrentUserProvider.class),
+                database, org.mockito.Mockito.mock(CallbackPaymentService.class), org.mockito.Mockito.mock(WalletService.class));
         // proxy = new org.springframework.aop.framework.ProxyFactory(listener);
         // proxy
         // proxy(new org.springframework.transaction.interceptor.TransactionInterceptor(new InMemoryTransactionManager(),
@@ -118,7 +114,7 @@ class PaymentCommandServiceTest {
         verify(paymentRepository).save(captor.capture());
         assertThat(captor.getValue().getStatus()).isEqualTo(PaymentStatus.COD_PENDING);
         assertThat(captor.getValue().getPaidAt()).isNull();
-        verify(outboxService).saveMessage(eq("order-1"), eq(EventTypes.PAYMENT_COMPLETED), any(EventEnvelope.class));
+        verify(outboxEventRecorder).saveMessage(eq("order-1"), eq(EventTypes.PAYMENT_COMPLETED), any(EventEnvelope.class));
     }
 
     @Test
@@ -157,7 +153,7 @@ class PaymentCommandServiceTest {
         verify(paymentRepository, org.mockito.Mockito.atLeastOnce()).save(captor.capture());
         assertThat(captor.getValue().getStatus()).isEqualTo(PaymentStatus.PENDING);
         assertThat(captor.getValue().getMerchantReference()).isNotBlank();
-        verify(outboxService).saveMessage(eq("order-1"), eq(EventTypes.PAYMENT_INITIATED), any(EventEnvelope.class));
+        verify(outboxEventRecorder).saveMessage(eq("order-1"), eq(EventTypes.PAYMENT_INITIATED), any(EventEnvelope.class));
     }
 
     @Test
@@ -186,7 +182,7 @@ class PaymentCommandServiceTest {
         verify(paymentRefundRepository, org.mockito.Mockito.atLeastOnce()).save(captor.capture());
         assertThat(captor.getValue().getStatus()).isEqualTo(PaymentRefundStatus.COMPLETED);
         assertThat(captor.getValue().getProviderRefundId()).isEqualTo("vnpay-refund-1");
-        verify(outboxService).saveMessage(eq("order-1"), eq(EventTypes.PAYMENT_REFUNDED), any(EventEnvelope.class));
+        verify(outboxEventRecorder).saveMessage(eq("order-1"), eq(EventTypes.PAYMENT_REFUNDED), any(EventEnvelope.class));
     }
 
     @Test
@@ -202,8 +198,8 @@ class PaymentCommandServiceTest {
                 .isInstanceOf(IllegalStateException.class).hasMessage("gateway timeout");
 
         assertThat(lastSavedPayment().getStatus()).isEqualTo(PaymentStatus.INITIATION_UNKNOWN);
-        verify(outboxService, never()).saveMessage(eq("order-1"), eq(EventTypes.PAYMENT_FAILED), any(EventEnvelope.class));
-        verify(outboxService, never()).saveMessage(eq("order-1"), eq(EventTypes.PAYMENT_INITIATED), any(EventEnvelope.class));
+        verify(outboxEventRecorder, never()).saveMessage(eq("order-1"), eq(EventTypes.PAYMENT_FAILED), any(EventEnvelope.class));
+        verify(outboxEventRecorder, never()).saveMessage(eq("order-1"), eq(EventTypes.PAYMENT_INITIATED), any(EventEnvelope.class));
     }
 
     @Test
@@ -221,7 +217,7 @@ class PaymentCommandServiceTest {
         service.authorize((AuthorizePaymentCommand) envelope.payload(), "message-1", envelope.correlationId());;
 
         assertThat(storedPayment.getStatus()).isEqualTo(PaymentStatus.CANCELLED);
-        verify(outboxService, never()).saveMessage(anyString(), eq(EventTypes.PAYMENT_INITIATED), any(EventEnvelope.class));
+        verify(outboxEventRecorder, never()).saveMessage(anyString(), eq(EventTypes.PAYMENT_INITIATED), any(EventEnvelope.class));
     }
 
     @Test
@@ -241,7 +237,7 @@ class PaymentCommandServiceTest {
 
         assertThat(payment.getStatus()).isEqualTo(PaymentStatus.REFUND_FAILED);
         assertThat(saved[0].getStatus()).isEqualTo(PaymentRefundStatus.FAILED);
-        verify(outboxService).saveMessage(eq("order-1"), eq(EventTypes.PAYMENT_REFUND_REJECTED), any(EventEnvelope.class));
+        verify(outboxEventRecorder).saveMessage(eq("order-1"), eq(EventTypes.PAYMENT_REFUND_REJECTED), any(EventEnvelope.class));
     }
 
     private EventEnvelope<AuthorizePaymentCommand> onlineRequest() {
@@ -269,7 +265,7 @@ class PaymentCommandServiceTest {
         assertThat(storedPayment.getStatus()).isEqualTo(PaymentStatus.PENDING);
         assertThat(storedPayment.getPaymentUrl()).isEqualTo("https://pay");
         verify(paymentHandler).initiate(any(Payment.class), eq("203.0.113.9"));
-        verify(outboxService).saveMessage(eq("order-1"), eq(EventTypes.PAYMENT_INITIATED), any(EventEnvelope.class));
+        verify(outboxEventRecorder).saveMessage(eq("order-1"), eq(EventTypes.PAYMENT_INITIATED), any(EventEnvelope.class));
     }
 
     @Test
@@ -284,7 +280,7 @@ class PaymentCommandServiceTest {
                 .isInstanceOf(IllegalStateException.class).hasMessageContaining("retry later");
 
         assertThat(payment.getStatus()).isEqualTo(PaymentStatus.INITIATION_UNKNOWN);
-        verify(outboxService, never()).saveMessage(anyString(), eq(EventTypes.PAYMENT_CANCELLED), any());
+        verify(outboxEventRecorder, never()).saveMessage(anyString(), eq(EventTypes.PAYMENT_CANCELLED), any());
     }
 
     private void stubPaymentSave() {

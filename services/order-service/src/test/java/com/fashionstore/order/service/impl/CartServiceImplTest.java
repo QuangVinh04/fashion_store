@@ -1,5 +1,7 @@
 package com.fashionstore.order.service.impl;
 
+import com.fashionstore.order.service.CartTransactionService;
+
 import com.fashionstore.order.client.CatalogClient;
 import com.fashionstore.order.dto.AddToCartRequest;
 import com.fashionstore.order.dto.CartResponse;
@@ -65,7 +67,8 @@ class CartServiceImplTest {
     void setUp() {
         CartMapper mapper = new CartMapperImpl();   // dùng mapper thật để bắt lỗi thiếu field
         service = new CartServiceImpl(
-                cartRepository, cartItemRepository, catalogClient, currentUserProvider, mapper
+                cartRepository, new com.fashionstore.order.service.CartTransactionService(cartRepository, cartItemRepository),
+                cartItemRepository, catalogClient, currentUserProvider, mapper
         );
         when(currentUserProvider.getCurrentUserId()).thenReturn("user-1");
         when(cartRepository.findByUserId(any())).thenAnswer(invocation -> {
@@ -153,7 +156,9 @@ class CartServiceImplTest {
 
     @Test
     void firstTimeBuyerGetsANewCartCreatedOnDemand() {
-        when(cartRepository.findByUserIdAndStatus("user-1", CartStatus.ACTIVE)).thenReturn(Optional.empty());
+        java.util.concurrent.atomic.AtomicReference<Cart> persisted = new java.util.concurrent.atomic.AtomicReference<>();
+        org.mockito.Mockito.doAnswer(invocation -> Optional.ofNullable(persisted.get()))
+                .when(cartRepository).findByUserIdAndStatus("user-1", CartStatus.ACTIVE);
         // save() đóng 2 vai trong 1 lần addToCart: (1) tạo cart mới — id còn null, Hibernate sẽ sinh id
         // lúc insert thật; (2) lưu lại cart sau khi thêm item — id đã có từ bước (1).
         when(cartRepository.save(any(Cart.class))).thenAnswer(invocation -> {
@@ -161,6 +166,7 @@ class CartServiceImplTest {
             if (c.getId() == null) {
                 c.setId("cart-1");
             }
+            persisted.set(c);
             return c;
         });
         when(catalogClient.getVariant("variant-1")).thenReturn(variant("variant-1", "20.00"));
@@ -181,9 +187,9 @@ class CartServiceImplTest {
     @Test
     void concurrentCartCreationForTheSameUserFallsBackToReadingTheWinnerRow() {
         Cart winner = cart();
-        when(cartRepository.findByUserIdAndStatus("user-1", CartStatus.ACTIVE))
-                .thenReturn(Optional.empty())      // lần 1: chưa có cart -> đi tạo mới
-                .thenReturn(Optional.of(winner));  // lần 2 (sau khi save() lần đầu đụng unique key): đọc lại
+        org.mockito.Mockito.doReturn(Optional.empty(), Optional.of(winner))
+                .when(cartRepository).findByUserId("user-1");
+        when(cartRepository.findByUserIdAndStatus("user-1", CartStatus.ACTIVE)).thenReturn(Optional.of(winner));
         when(cartRepository.save(any(Cart.class)))
                 .thenThrow(new DataIntegrityViolationException("duplicate key"))   // lần tạo cart mới
                 .thenAnswer(invocation -> invocation.getArgument(0));              // lần lưu item vào winner
@@ -307,6 +313,7 @@ class CartServiceImplTest {
     @Test
     void updateCartItemRefreshesTheSnapshot() {
         Cart cart = cart();
+        when(cartRepository.findByUserIdAndStatus("user-1", CartStatus.ACTIVE)).thenReturn(Optional.of(cart));
         CartItem item = cartItem(cart, "variant-1", 1, "20.00");
         cart.getItems().add(item);
         when(cartItemRepository.findByIdWithCart("item-1")).thenReturn(Optional.of(item));

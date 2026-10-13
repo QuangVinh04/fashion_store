@@ -83,6 +83,25 @@ curl -X POST -H "Authorization: Bearer $ADMIN_TOKEN" -H 'Content-Type: applicati
 
 ## Changing the realm
 
+### Login themes
+
+Docker Compose mounts both `lino` (the realm default for the storefront) and
+`backoffice`. The `backoffice-bff` client selects `backoffice` using its
+`attributes.login_theme` setting.
+
+After adding a theme mount, recreate only Keycloak:
+
+```bash
+docker compose up -d --no-deps --force-recreate keycloak
+```
+
+For an existing realm, also update the running configuration in the Admin Console:
+select realm `fashion-store`, then Clients → `backoffice-bff` → Settings →
+Login theme → `backoffice`, and save. To apply the storefront theme, set
+Realm settings → Themes → Login theme → `lino`, and save.
+Restarting with `--import-realm` does not update an existing realm; changing these
+theme settings does not require deleting the database or users.
+
 Import uses `IGNORE_EXISTING`: once the realm exists, edits to the JSON are **not** applied.
 To re-import after editing:
 

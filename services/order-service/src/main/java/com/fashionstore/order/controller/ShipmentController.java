@@ -6,12 +6,14 @@ import com.fashionstore.common.exception.ErrorCode;
 import com.fashionstore.order.config.GhnProperties;
 import com.fashionstore.order.dto.CreateShipmentRequest;
 import com.fashionstore.order.dto.ShipmentResponse;
-import com.fashionstore.order.dto.ghn.GhnWebhookPayload;
+import com.fashionstore.order.dto.GhnWebhookPayload;
 import com.fashionstore.order.service.ShipmentService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import lombok.experimental.FieldDefaults;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -62,7 +64,7 @@ public class ShipmentController {
         String expectedToken = ghnProperties.getWebhookToken();
         String providedToken = (token != null && !token.isBlank()) ? token : webhookTokenHeader;
 
-        if (expectedToken == null || expectedToken.isBlank() || providedToken == null || !expectedToken.equals(providedToken)) {
+        if (expectedToken == null || expectedToken.isBlank() || providedToken == null || !MessageDigest.isEqual(expectedToken.getBytes(StandardCharsets.UTF_8), providedToken.getBytes(StandardCharsets.UTF_8))) {
             throw new AppException(ErrorCode.UNAUTHENTICATED);
         }
 

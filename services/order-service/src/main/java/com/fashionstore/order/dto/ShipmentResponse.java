@@ -12,6 +12,7 @@ import lombok.experimental.FieldDefaults;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Getter
 @Setter
@@ -28,6 +29,13 @@ public class ShipmentResponse {
     BigDecimal fee;
     Integer weightGram;
     ShipmentStatus status;
+    String codStatus;
+    BigDecimal codAmount;
+    Instant codCollectedAt;
+    Instant codTransferredAt;
+    Instant deliveredAt;
+    Instant handedOffAt;
+    String podUrl;
     LocalDateTime createdAt;
     LocalDateTime updatedAt;
 }

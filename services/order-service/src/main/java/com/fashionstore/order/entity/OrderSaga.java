@@ -1,9 +1,11 @@
 package com.fashionstore.order.entity;
 
-
 import com.fashionstore.order.entity.enumeration.OrderSagaStatus;
 import com.fashionstore.order.entity.enumeration.OrderSagaStep;
+import com.fashionstore.order.entity.enumeration.OrderSagaType;
+
 import jakarta.persistence.*;
+
 import lombok.Getter;
 import lombok.Setter;
 
@@ -11,26 +13,44 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 /**
- * State điều phối của saga đặt hàng. Tách hẳn khỏi {@link Order}: bảng orders chỉ nói ngôn ngữ nghiệp vụ
- * mà client hiểu được, mọi chi tiết cơ chế nằm ở đây.
+ * State điều phối Saga checkout và hủy đơn. Tách khỏi {@link Order}: bảng orders chỉ nói ngôn ngữ
+ * nghiệp vụ mà client hiểu được, mọi chi tiết cơ chế nằm ở đây.
  *
- * <p>Các phương thức chuyển trạng thái ở lớp này <b>không tự kiểm tra bước</b>. Guard nằm một chỗ duy nhất
- * trong SagaReplyProcessor; nhân đôi guard vào entity chỉ tạo ra hai nguồn sự thật cho cùng một luật.
+ * <p>OrderSagaService viết trực tiếp guard và chuyển trạng thái trong từng event handler để dễ học.
+ * Các phương thức chuyển trạng thái ở đây vẫn phục vụ khởi tạo, hủy đơn và timeout/retry; chúng
+ * không tự kiểm tra bước. Caller chịu trách nhiệm khóa dữ liệu và kiểm tra trạng thái.
  */
 @Getter
 @Setter
 @Entity
-@Table(name = "order_saga")
+@Table(
+        name = "order_saga",
+        uniqueConstraints =
+                @UniqueConstraint(
+                        name = "uk_order_saga_order_type",
+                        columnNames = {"order_id", "type"}))
 public class OrderSaga {
 
     /** Cạn số lần này ở một bước bù trừ nghĩa là cần người can thiệp. */
     public static final int MAX_RETRIES = 5;
 
-    @Id
-    private String id;
+    @Id private String id;
 
-    @Column(name = "order_id", nullable = false, unique = true)
+    @Column(name = "order_id", nullable = false)
     private String orderId;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private OrderSagaType type;
+
+    @Column(name = "request_operation_id", length = 160)
+    private String requestOperationId;
+
+    @Column(name = "refund_id", length = 120)
+    private String refundId;
+
+    @Column(name = "refund_ledger_entry_id", length = 36)
+    private String refundLedgerEntryId;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
@@ -67,9 +87,7 @@ public class OrderSaga {
     @Column(name = "completed_at")
     private LocalDateTime completedAt;
 
-
-    protected OrderSaga() {
-    }
+    protected OrderSaga() {}
 
     public static OrderSaga start(String orderId) {
         LocalDateTime now = LocalDateTime.now();
@@ -77,9 +95,27 @@ public class OrderSaga {
         OrderSaga saga = new OrderSaga();
         saga.id = UUID.randomUUID().toString();
         saga.orderId = orderId;
+        saga.type = OrderSagaType.CHECKOUT;
         saga.status = OrderSagaStatus.RUNNING;
         saga.createdAt = now;
         saga.enterStep(OrderSagaStep.RESERVE_INVENTORY);
+        return saga;
+    }
+
+    /** Hủy đơn có tiến trình riêng; không mở lại Saga checkout đã hoàn thành. */
+    public static OrderSaga startCancellation(
+            String orderId, String operationId, String paymentId, String reservationId) {
+        OrderSaga saga = new OrderSaga();
+        saga.id = UUID.randomUUID().toString();
+        saga.orderId = orderId;
+        saga.type = OrderSagaType.CANCELLATION;
+        saga.status = OrderSagaStatus.RUNNING;
+        saga.requestOperationId = operationId;
+        saga.paymentId = paymentId;
+        saga.inventoryReservationId = reservationId;
+        saga.refundId = "cancel:" + saga.id;
+        saga.createdAt = LocalDateTime.now();
+        saga.enterStep(OrderSagaStep.STOP_SHIPMENT);
         return saga;
     }
 
@@ -143,7 +179,8 @@ public class OrderSaga {
     }
 
     /**
-     * Forward recovery (§08): không hủy được thanh toán vì tiền đã thu, nên đi tiếp thay vì lùi lại.
+     * Forward recovery (§08): không hủy được thanh toán vì tiền đã thu, nên đi tiếp thay vì lùi
+     * lại.
      */
     public void resumeAfterCancellationRejected() {
         this.status = OrderSagaStatus.RUNNING;
@@ -170,8 +207,8 @@ public class OrderSaga {
     }
 
     /**
-     * Reply giữ kho về sau khi saga đã đóng (§08): ghi lại reservationId để còn nhả kho,
-     * không đụng gì tới state machine.
+     * Reply giữ kho về sau khi saga đã đóng (§08): ghi lại reservationId để còn nhả kho, không đụng
+     * gì tới state machine.
      */
     public void recordOrphanReservation(String reservationId) {
         this.inventoryReservationId = reservationId;

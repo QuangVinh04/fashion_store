@@ -48,6 +48,8 @@ public class SecurityConfig {
                                 "/api/v1/payments/payos/return",
                                 "/api/v1/payments/payos/webhook"
                         ).permitAll()
+                        .requestMatchers("/internal/**").hasRole("INTERNAL_CALLER")
+                        .requestMatchers("/api/v1/admin/payments/**", "/api/v1/admin/wallets/**").hasRole("ADMIN")
                         .anyRequest().authenticated())
                 // JWT Keycloak do gateway chuyển tiếp; role qua KeycloakJwtAuthoritiesConverter (common-library)
                 .oauth2ResourceServer(resourceServer -> resourceServer

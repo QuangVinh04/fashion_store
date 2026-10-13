@@ -1,0 +1,274 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body.backoffice-body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background-color: #f4f5fa;
+  color: rgba(47, 43, 61, 0.9);
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow-x: hidden;
+  padding: 24px;
+}
+
+/* Background elements */
+.bo-mask-bg {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.bo-tree-left {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 200px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.bo-tree-right {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  height: 200px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+@media (max-width: 900px) {
+  .bo-tree-left, .bo-tree-right {
+    display: none;
+  }
+}
+
+/* Card */
+.bo-card {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 450px;
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 4px 18px 0 rgba(47, 43, 61, 0.1), 0 0 0 1px rgba(47, 43, 61, 0.05);
+  padding: 40px 32px;
+}
+
+/* Brand header */
+.bo-brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 24px;
+  text-decoration: none;
+}
+
+.bo-brand svg {
+  width: 32px;
+  height: 32px;
+  color: #8c57ff;
+}
+
+.bo-brand-name {
+  font-size: 22px;
+  font-weight: 700;
+  color: rgba(47, 43, 61, 0.9);
+  letter-spacing: 0.5px;
+}
+
+/* Title & Description */
+.bo-title {
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.3;
+  margin-bottom: 6px;
+  color: rgba(47, 43, 61, 0.9);
+}
+
+.bo-subtitle {
+  font-size: 14px;
+  color: rgba(47, 43, 61, 0.6);
+  margin-bottom: 24px;
+  line-height: 1.5;
+}
+
+/* Alerts */
+.bo-alert {
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.4;
+  margin-bottom: 20px;
+}
+
+.bo-alert-error {
+  background-color: #ffebee;
+  color: #d32f2f;
+  border: 1px solid #ffcdd2;
+}
+
+.bo-alert-success {
+  background-color: #e8f5e9;
+  color: #2e7d32;
+  border: 1px solid #c8e6c9;
+}
+
+.bo-alert-info {
+  background-color: #ede7f6;
+  color: #673ab7;
+  border: 1px solid #d1c4e9;
+}
+
+/* Form */
+.bo-form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.bo-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.bo-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(47, 43, 61, 0.8);
+}
+
+.bo-field-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.bo-input {
+  width: 100%;
+  height: 44px;
+  padding: 10px 14px;
+  font-size: 14px;
+  font-family: inherit;
+  color: rgba(47, 43, 61, 0.9);
+  background: #ffffff;
+  border: 1px solid rgba(47, 43, 61, 0.22);
+  border-radius: 8px;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.bo-input:focus {
+  border-color: #8c57ff;
+  box-shadow: 0 0 0 3px rgba(140, 87, 255, 0.15);
+}
+
+/* Password wrapper with eye icon */
+.bo-password-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.bo-password-wrap .bo-input {
+  padding-right: 42px;
+}
+
+.bo-toggle-pw {
+  position: absolute;
+  right: 12px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: rgba(47, 43, 61, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+}
+
+.bo-toggle-pw:hover {
+  color: rgba(47, 43, 61, 0.8);
+}
+
+/* Remember me & Forgot Password */
+.bo-options-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+}
+
+.bo-checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  color: rgba(47, 43, 61, 0.8);
+}
+
+.bo-checkbox {
+  accent-color: #8c57ff;
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.bo-link {
+  color: #8c57ff;
+  text-decoration: none;
+  font-weight: 500;
+  transition: color 0.15s;
+}
+
+.bo-link:hover {
+  color: #7e4ee6;
+  text-decoration: underline;
+}
+
+/* Submit Button */
+.bo-btn-submit {
+  width: 100%;
+  height: 44px;
+  background-color: #8c57ff;
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background-color 0.2s, box-shadow 0.2s;
+  box-shadow: 0 2px 6px rgba(140, 87, 255, 0.3);
+  margin-top: 6px;
+}
+
+.bo-btn-submit:hover {
+  background-color: #7e4ee6;
+  box-shadow: 0 4px 12px rgba(140, 87, 255, 0.4);
+}
+
+.bo-btn-submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Footer note */
+.bo-footer-note {
+  margin-top: 24px;
+  font-size: 12px;
+  color: rgba(47, 43, 61, 0.5);
+  text-align: center;
+}

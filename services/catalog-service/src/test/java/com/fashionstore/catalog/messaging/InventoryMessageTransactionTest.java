@@ -137,6 +137,7 @@ class InventoryMessageTransactionTest {
         }
         @Bean ProcessedMessageService processedMessages(JdbcTemplate jdbc) { return new ProcessedMessageService(null, jdbc); }
         @Bean ObjectMapper objectMapper() { return new ObjectMapper(); }
+        @Bean com.fashionstore.catalog.service.LegacyReturnRestockGuard legacyRestockGuard() { return mock(com.fashionstore.catalog.service.LegacyReturnRestockGuard.class); }
         @Bean AtomicInteger remainingFailures() { return new AtomicInteger(); }
         @Bean InventoryService inventoryService(JdbcTemplate jdbc, AtomicInteger remainingFailures) {
             InventoryService service = mock(InventoryService.class);

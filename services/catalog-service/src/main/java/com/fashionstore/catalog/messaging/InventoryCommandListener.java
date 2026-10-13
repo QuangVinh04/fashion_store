@@ -26,6 +26,7 @@ public class InventoryCommandListener {
     private final InventoryService inventoryService;
     private final ProcessedMessageService processedMessageService;
     private final ObjectMapper objectMapper;
+    private final com.fashionstore.catalog.service.LegacyReturnRestockGuard legacyRestock;
 
     @RabbitListener(queues = RabbitMQNames.INVENTORY_RESERVATION_REQUESTED_QUEUE)
     public void onReservationRequested(
@@ -76,7 +77,7 @@ public class InventoryCommandListener {
         processedMessageService.processOnce(
                 messageId,
                 RabbitMQNames.INVENTORY_RESERVATION_CONSUMER + "-restock-v1",
-                () -> handleRestock(envelope));
+                () -> legacyRestock.quarantine(messageId,envelope));
     }
 
     private void handleReservation(EventEnvelope<?> envelope) {
@@ -97,9 +98,4 @@ public class InventoryCommandListener {
         inventoryService.releaseSaga(cmd, envelope.correlationId());
     }
 
-    private void handleRestock(EventEnvelope<?> envelope) {
-        com.fashionstore.contracts.inventory.command.RestockInventoryCommand cmd =
-                objectMapper.convertValue(envelope.payload(), com.fashionstore.contracts.inventory.command.RestockInventoryCommand.class);
-        inventoryService.restock(cmd.orderId());
-    }
 }

@@ -19,6 +19,32 @@ import org.springframework.context.annotation.Configuration;
  */
 @Configuration
 public class RabbitMQConfig {
+    @Bean Declarables orderFundsRefundTopology() {
+        Queue queue=sagaQueue(RabbitMQNames.ORDER_FUNDS_REFUND_QUEUE);DirectExchange exchange=RabbitTopology.eventsExchange();
+        return new Declarables(queue,RabbitTopology.bind(queue,exchange,EventTypes.ORDER_FUNDS_REFUND_CREDITED),
+                RabbitTopology.bind(queue,exchange,EventTypes.ORDER_FUNDS_REFUND_REJECTED));
+    }
+    @Bean Queue orderWalletFinancialQueue() { return sagaQueue(RabbitMQNames.ORDER_WALLET_FINANCIAL_QUEUE); }
+    @Bean Binding walletRefundCreditedBinding(Queue orderWalletFinancialQueue,DirectExchange fashionEventsExchange) {
+        return RabbitTopology.bind(orderWalletFinancialQueue,fashionEventsExchange,EventTypes.WALLET_REFUND_CREDITED);
+    }
+    @Bean Binding walletRefundRejectedBinding(Queue orderWalletFinancialQueue,DirectExchange fashionEventsExchange) {
+        return RabbitTopology.bind(orderWalletFinancialQueue,fashionEventsExchange,EventTypes.WALLET_REFUND_REJECTED);
+    }
+
+    @Bean
+    Declarables inventoryConfirmationRejectionTopology() {
+        Queue queue=RabbitTopology.consumerQueue(RabbitMQNames.ORDER_INVENTORY_CONFIRMATION_REJECTED_QUEUE,RabbitMQNames.ORDER_DEAD_LETTER_QUEUE);
+        return new Declarables(queue,RabbitTopology.bind(queue,RabbitTopology.eventsExchange(),EventTypes.INVENTORY_CONFIRMATION_REJECTED));
+    }
+    @Bean
+    Declarables walletControlTopology() {
+        Queue queue=RabbitTopology.consumerQueue(RabbitMQNames.ORDER_WALLET_CONTROL_QUEUE,RabbitMQNames.ORDER_DEAD_LETTER_QUEUE);
+        DirectExchange exchange=RabbitTopology.eventsExchange();
+        return new Declarables(queue,
+                RabbitTopology.bind(queue,exchange,EventTypes.WALLET_SAGA_COMPENSATION_COMPLETED),
+                RabbitTopology.bind(queue,exchange,EventTypes.WALLET_SAGA_COMPENSATION_REJECTED));
+    }
 
     // ----- Hạ tầng dùng chung: khai báo y hệt ở mọi service (xem RabbitTopology) -----
 
@@ -104,6 +130,16 @@ public class RabbitMQConfig {
     @Bean
     Queue orderPaymentRefundRejectedQueue() {
         return sagaQueue(RabbitMQNames.ORDER_PAYMENT_REFUND_REJECTED_QUEUE);
+    }
+
+    @Bean
+    Queue orderConfirmedQueue() {
+        return sagaQueue(RabbitMQNames.ORDER_CONFIRMED_QUEUE);
+    }
+
+    @Bean
+    Binding orderConfirmedBinding(Queue orderConfirmedQueue, DirectExchange fashionEventsExchange) {
+        return RabbitTopology.bind(orderConfirmedQueue, fashionEventsExchange, EventTypes.ORDER_CONFIRMED);
     }
 
     @Bean

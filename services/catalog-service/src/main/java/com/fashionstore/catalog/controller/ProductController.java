@@ -3,6 +3,7 @@ package com.fashionstore.catalog.controller;
 import com.fashionstore.common.dto.ApiResponse;
 import com.fashionstore.common.dto.PageResponse;
 import com.fashionstore.catalog.dto.AssignProductAttributeRequest;
+import com.fashionstore.catalog.dto.AdminProductFilter;
 import com.fashionstore.catalog.dto.ProductRequest;
 import com.fashionstore.catalog.dto.ProductResponse;
 import com.fashionstore.catalog.dto.ProductSummaryResponse;
@@ -221,10 +222,11 @@ public class ProductController {
 
     @GetMapping("/admin/products")
     public ApiResponse<PageResponse<List<ProductSummaryResponse>>> getAdminProducts(
+            @Valid AdminProductFilter filter,
             @PageableDefault(page = 0, size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
         return ApiResponse.<PageResponse<List<ProductSummaryResponse>>>builder()
                 .message("Get products successfully")
-                .data(productService.getAllProductsForBackoffice(pageable))
+                .data(productService.getAllProductsForBackoffice(pageable, filter))
                 .build();
     }
 

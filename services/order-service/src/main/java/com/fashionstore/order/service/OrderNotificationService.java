@@ -7,7 +7,7 @@ import com.fashionstore.order.client.IdentityClient;
 import com.fashionstore.order.dto.InternalUserDto;
 import com.fashionstore.order.entity.Order;
 import com.fashionstore.order.entity.Shipment;
-import com.fashionstore.order.outbox.OutboxService;
+import com.fashionstore.order.event.OutboxEventRecorder;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -24,7 +24,7 @@ import java.util.Map;
 public class OrderNotificationService {
 
     IdentityClient identityClient;
-    OutboxService outboxService;
+    OutboxEventRecorder outboxEventRecorder;
 
     public void sendOrderConfirmedNotification(Order order) {
         if (order == null) return;
@@ -54,7 +54,7 @@ public class OrderNotificationService {
                 payload
         );
 
-        outboxService.saveMessage(order.getId(), EventTypes.NOTIFICATION_EMAIL_REQUESTED, envelope);
+        outboxEventRecorder.saveMessage(order.getId(), EventTypes.NOTIFICATION_EMAIL_REQUESTED, envelope);
         log.info("[OrderNotification] Emitted order-confirmed email event for orderId={}", order.getId());
     }
 
@@ -86,7 +86,7 @@ public class OrderNotificationService {
                 payload
         );
 
-        outboxService.saveMessage(order.getId(), EventTypes.NOTIFICATION_EMAIL_REQUESTED, envelope);
+        outboxEventRecorder.saveMessage(order.getId(), EventTypes.NOTIFICATION_EMAIL_REQUESTED, envelope);
         log.info("[OrderNotification] Emitted order-shipped email event for orderId={}", order.getId());
     }
 
@@ -116,7 +116,7 @@ public class OrderNotificationService {
                 payload
         );
 
-        outboxService.saveMessage(order.getId(), EventTypes.NOTIFICATION_EMAIL_REQUESTED, envelope);
+        outboxEventRecorder.saveMessage(order.getId(), EventTypes.NOTIFICATION_EMAIL_REQUESTED, envelope);
         log.info("[OrderNotification] Emitted order-delivered email event for orderId={}", order.getId());
     }
 
@@ -151,7 +151,7 @@ public class OrderNotificationService {
                 payload
         );
 
-        outboxService.saveMessage(order.getId(), EventTypes.NOTIFICATION_EMAIL_REQUESTED, envelope);
+        outboxEventRecorder.saveMessage(order.getId(), EventTypes.NOTIFICATION_EMAIL_REQUESTED, envelope);
         log.info("[OrderNotification] Emitted order-cancelled email event for orderId={}", order.getId());
     }
 

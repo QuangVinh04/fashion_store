@@ -14,7 +14,8 @@ public enum InventoryErrorCode implements BaseErrorCode {
     INVALID_STOCK_QUANTITY(4054, "Stock quantity cannot be negative",      HttpStatus.BAD_REQUEST),
     STOCK_BELOW_RESERVED  (4055, "Stock quantity cannot be below reserved quantity", HttpStatus.CONFLICT),
     OPERATION_ID_CONFLICT (4056, "Operation ID already used for another stock change", HttpStatus.CONFLICT),
-    INITIAL_STOCK_NOT_ALLOWED (4057, "Initial stock applies only to a new variant", HttpStatus.BAD_REQUEST);
+    INITIAL_STOCK_NOT_ALLOWED (4057, "Initial stock applies only to a new variant", HttpStatus.BAD_REQUEST),
+    LEGACY_RESTOCK_DISABLED (4058,"Returned goods require an independent manual inventory operation",HttpStatus.GONE);
     ;
 
     private final int code;

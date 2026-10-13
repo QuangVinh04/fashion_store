@@ -14,9 +14,12 @@ import org.springframework.stereotype.Repository;
 import java.util.Optional;
 
 @Repository
-public interface ReturnRequestRepository extends JpaRepository<ReturnRequest, String> {
+public interface ReturnRequestRepository extends JpaRepository<ReturnRequest, String>,org.springframework.data.jpa.repository.JpaSpecificationExecutor<ReturnRequest> {
 
     Optional<ReturnRequest> findByOrderId(String orderId);
+
+    @Query("select r.order.id from ReturnRequest r where r.id = :id")
+    Optional<String> findOrderIdByReturnId(@Param("id") String id);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select r from ReturnRequest r where r.id = :id")

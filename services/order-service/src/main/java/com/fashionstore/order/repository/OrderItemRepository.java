@@ -1,6 +1,6 @@
 package com.fashionstore.order.repository;
 
-import com.fashionstore.order.dto.dashboard.TopProductResponse;
+import com.fashionstore.order.dto.TopProductResponse;
 import com.fashionstore.order.entity.OrderItem;
 import com.fashionstore.order.entity.enumeration.OrderStatus;
 import org.springframework.data.domain.Pageable;
@@ -15,7 +15,7 @@ import java.util.List;
 @Repository
 public interface OrderItemRepository extends JpaRepository<OrderItem, String> {
 
-    @Query("SELECT new com.fashionstore.order.dto.dashboard.TopProductResponse(" +
+    @Query("SELECT new com.fashionstore.order.dto.TopProductResponse(" +
            "oi.variantId, oi.productName, SUM(CAST(oi.quantity as long)), SUM(oi.lineTotal)) " +
            "FROM OrderItem oi " +
            "JOIN oi.order o " +

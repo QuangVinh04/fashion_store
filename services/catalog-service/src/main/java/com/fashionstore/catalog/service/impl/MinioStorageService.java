@@ -33,6 +33,7 @@ public class MinioStorageService implements StorageService {
     private final MinioClient presignMinioClient;
     private final MinioProperties properties;
     private volatile boolean bucketReady;
+    private volatile boolean evidenceBucketReady;
 
     public MinioStorageService(MinioClient minioClient,
                                @Qualifier("presignMinioClient") MinioClient presignMinioClient,
@@ -40,6 +41,38 @@ public class MinioStorageService implements StorageService {
         this.minioClient = minioClient;
         this.presignMinioClient = presignMinioClient;
         this.properties = properties;
+    }
+
+    private String bucketFor(String key) {
+        return key.startsWith("evidence/") ? properties.evidenceBucket() : properties.bucket();
+    }
+
+    private void ensureBucketFor(String key) {
+        if (!key.startsWith("evidence/")) return;
+        if (evidenceBucketReady) return;
+        synchronized (this) {
+            if (evidenceBucketReady) return;
+            try {
+                String bucket = properties.evidenceBucket();
+                if (!minioClient.bucketExists(BucketExistsArgs.builder().bucket(bucket).build()))
+                    minioClient.makeBucket(MakeBucketArgs.builder().bucket(bucket).build());
+                try {
+                    String policy = minioClient.getBucketPolicy(io.minio.GetBucketPolicyArgs.builder().bucket(bucket).build());
+                    if (policy==null) throw new IllegalStateException("Evidence bucket policy unavailable");
+                    // MinIO SDK 8.5 returns an empty string for NoSuchBucketPolicy (private by default).
+                    var statements = new com.fasterxml.jackson.databind.ObjectMapper().readTree(
+                            policy.isBlank()?"{\"Statement\":[]}":policy).path("Statement");
+                    if (!statements.isArray()) throw new IllegalStateException("Invalid evidence bucket policy");
+                    for (var statement : statements) {
+                        if ("Allow".equals(statement.path("Effect").asText()))
+                            throw new IllegalStateException("Evidence bucket cannot contain an Allow bucket policy");
+                    }
+                } catch (ErrorResponseException exception) {
+                    if (!"NoSuchBucketPolicy".equals(exception.errorResponse().code())) throw exception;
+                }
+                evidenceBucketReady = true;
+            } catch (Exception exception) { throw new AppException(FileErrorCode.FILE_STORAGE_FAILED, exception); }
+        }
     }
 
     /**
@@ -83,13 +116,13 @@ public class MinioStorageService implements StorageService {
 
     @Override
     public PresignedUpload presignUpload(String storageKey, String contentType, Map<String, String> requiredHeaders) {
-        ensureBucket();
+        if (storageKey.startsWith("evidence/")) ensureBucketFor(storageKey); else ensureBucket();
         try {
             Map<String, String> headers = new HashMap<>(requiredHeaders);
             headers.put("Content-Type", contentType);
             String url = presignMinioClient.getPresignedObjectUrl(GetPresignedObjectUrlArgs.builder()
                     .method(Method.PUT)
-                    .bucket(properties.bucket())
+                    .bucket(bucketFor(storageKey))
                     .object(storageKey)
                     .extraHeaders(headers)
                     .expiry(properties.presignExpirySeconds(), TimeUnit.SECONDS)
@@ -102,10 +135,11 @@ public class MinioStorageService implements StorageService {
 
     @Override
     public String presignDownload(String storageKey) {
+        ensureBucketFor(storageKey);
         try {
             return presignMinioClient.getPresignedObjectUrl(GetPresignedObjectUrlArgs.builder()
                     .method(Method.GET)
-                    .bucket(properties.bucket())
+                    .bucket(bucketFor(storageKey))
                     .object(storageKey)
                     .expiry(properties.presignExpirySeconds(), TimeUnit.SECONDS)
                     .build());
@@ -116,9 +150,10 @@ public class MinioStorageService implements StorageService {
 
     @Override
     public StoredObject stat(String storageKey) {
+        ensureBucketFor(storageKey);
         try {
             StatObjectResponse stat = minioClient.statObject(StatObjectArgs.builder()
-                    .bucket(properties.bucket())
+                    .bucket(bucketFor(storageKey))
                     .object(storageKey)
                     .build());
             return new StoredObject(stat.size(), stat.contentType(), stat.etag());
@@ -134,8 +169,9 @@ public class MinioStorageService implements StorageService {
 
     @Override
     public byte[] readPrefix(String storageKey, int maxBytes) {
+        ensureBucketFor(storageKey);
         try (InputStream is = minioClient.getObject(GetObjectArgs.builder()
-                .bucket(properties.bucket())
+                .bucket(bucketFor(storageKey))
                 .object(storageKey)
                 .offset(0L)
                 .length((long) maxBytes)
@@ -153,9 +189,10 @@ public class MinioStorageService implements StorageService {
 
     @Override
     public void delete(String storageKey) {
+        ensureBucketFor(storageKey);
         try {
             minioClient.removeObject(RemoveObjectArgs.builder()
-                    .bucket(properties.bucket())
+                    .bucket(bucketFor(storageKey))
                     .object(storageKey)
                     .build());
         } catch (Exception exception) {

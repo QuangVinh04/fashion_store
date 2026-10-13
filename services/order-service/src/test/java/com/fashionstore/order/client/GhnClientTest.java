@@ -5,8 +5,8 @@ import com.fashionstore.common.exception.ErrorCode;
 import com.fashionstore.common.payment.PaymentMethod;
 import com.fashionstore.order.config.GhnProperties;
 import com.fashionstore.order.dto.UserAddressDto;
-import com.fashionstore.order.dto.ghn.GhnCreateOrderRequest;
-import com.fashionstore.order.dto.ghn.GhnCreateOrderResponse;
+import com.fashionstore.order.dto.GhnCreateOrderRequest;
+import com.fashionstore.order.dto.GhnCreateOrderResponse;
 import com.fashionstore.order.entity.Order;
 import com.fashionstore.order.entity.OrderItem;
 import com.fashionstore.order.entity.ShippingAddress;
@@ -44,6 +44,26 @@ class GhnClientTest {
         return ShippingAddress.builder().recipientName("Nguyen Van A").recipientPhone("0987654321")
                 .detailAddress("123 Le Loi").province("Hồ Chí Minh").ward("Phường Sài Gòn")
                 .provinceId(1000001).wardId(1003646).build();
+    }
+
+    @Test
+    void orderDetailVerifiesShopAndKeepsSeparateCollectionAndTransferDates() throws Exception {
+        properties.setToken("test-token");
+        properties.setShopId("42");
+        var response = new com.fasterxml.jackson.databind.ObjectMapper().readTree("""
+                {"code":200,"data":{"order_code":"GHN-1","shop_id":42,"client_order_code":"ORDER-1",
+                "status":"delivered","cod_amount":100000,"is_cod_collected":true,
+                "cod_collect_date":"2026-10-01T03:00:00Z","is_cod_transferred":true,
+                "cod_transfer_date":"2026-10-02T03:00:00Z"}}
+                """);
+        when(ghnFeignClient.getOrderDetail("test-token", "42", "GHN-1")).thenReturn(response);
+        var verified = client.getVerifiedShipment("GHN-1");
+        assertThat(verified.codCollected()).isTrue();
+        assertThat(verified.codTransferred()).isTrue();
+        assertThat(verified.codCollectedAt()).isEqualTo(java.time.Instant.parse("2026-10-01T03:00:00Z"));
+        assertThat(verified.codTransferredAt()).isEqualTo(java.time.Instant.parse("2026-10-02T03:00:00Z"));
+        ((com.fasterxml.jackson.databind.node.ObjectNode) response.path("data")).put("shop_id", 99);
+        assertThatThrownBy(() -> client.getVerifiedShipment("GHN-1")).isInstanceOf(AppException.class);
     }
 
     @Test void previewFee_usesNewAddressNamesAndReturnsTotalFee() {

@@ -5,9 +5,10 @@ import com.fashionstore.order.dto.CancelOrderRequest;
 import com.fashionstore.order.dto.OrderResponse;
 import com.fashionstore.order.dto.OrderSagaResponse;
 import com.fashionstore.order.dto.OrderSummaryResponse;
-import com.fashionstore.order.dto.ReturnOrderRequest;
 import com.fashionstore.order.dto.UpdateOrderStatusRequest;
+import com.fashionstore.order.entity.enumeration.OrderSagaType;
 import com.fashionstore.order.entity.enumeration.OrderStatus;
+
 import org.springframework.data.domain.Pageable;
 
 import java.util.List;
@@ -21,30 +22,35 @@ public interface OrderService {
     PageResponse<List<OrderSummaryResponse>> getMyOrders(OrderStatus status, Pageable pageable);
 
     /**
-     * Khách tự hủy đơn. Đơn còn nằm trong saga thì đây là yêu cầu bù trừ, không phải lệnh đổi trạng thái:
-     * đơn có thể vẫn ở PENDING khi trả về và chỉ CANCELLED sau khi participant nhả kho / hủy tiền xong.
+     * Khách tự hủy đơn. Đơn còn nằm trong saga thì đây là yêu cầu bù trừ, không phải lệnh đổi trạng
+     * thái: đơn có thể vẫn ở PENDING khi trả về và chỉ CANCELLED sau khi participant nhả kho / hủy
+     * tiền xong.
      */
     OrderResponse cancelMyOrder(String orderId, CancelOrderRequest request);
 
+    OrderResponse cancelOrderForAdmin(String orderId, CancelOrderRequest request);
 
     /**
-     * Chuyển sang REFUNDED không đổi trạng thái ngay: nó phát {@code payment.refund.requested} và giữ đơn
-     * ở RETURNED cho tới khi payment-service xác nhận đã hoàn tiền thật.
+     * Chuyển sang REFUNDED không đổi trạng thái ngay: nó phát {@code payment.refund.requested} và
+     * giữ đơn ở RETURNED cho tới khi payment-service xác nhận đã hoàn tiền thật.
      */
     OrderResponse updateOrderStatus(String orderId, UpdateOrderStatusRequest request);
 
     // ----- admin -----
 
-    PageResponse<List<OrderSummaryResponse>> searchOrders(String userId, OrderStatus status, Pageable pageable);
+    PageResponse<List<OrderSummaryResponse>> searchOrders(
+            String userId, OrderStatus status, Pageable pageable);
 
     OrderResponse getOrderById(String orderId);
 
     OrderSagaResponse getOrderSaga(String orderId);
 
+    OrderSagaResponse getOrderSaga(String orderId, OrderSagaType type);
+
     List<com.fashionstore.order.dto.OrderStatusHistoryResponse> getOrderHistory(String orderId);
 
     List<com.fashionstore.order.dto.OrderStatusHistoryResponse> getMyOrderHistory(String orderId);
 
-    com.fashionstore.contracts.order.dto.VerifyPurchaseResponse verifyPurchase(com.fashionstore.contracts.order.dto.VerifyPurchaseRequest request);
+    com.fashionstore.contracts.order.dto.VerifyPurchaseResponse verifyPurchase(
+            com.fashionstore.contracts.order.dto.VerifyPurchaseRequest request);
 }
-

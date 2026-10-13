@@ -14,6 +14,12 @@ import java.util.Optional;
 public interface PaymentRefundRepository extends JpaRepository<PaymentRefund, String> {
 
     Optional<PaymentRefund> findByIdempotencyKey(String idempotencyKey);
+    Optional<PaymentRefund> findByBusinessRefundId(String businessRefundId);
+    org.springframework.data.domain.Page<PaymentRefund> findByPaymentIdOrderByCreatedAtDescIdDesc(String paymentId, org.springframework.data.domain.Pageable pageable);
+
+    /** Until a failed/unknown provider refund is verified unpaid it keeps its refund budget. */
+    @Query("select coalesce(sum(r.amount),0) from PaymentRefund r where r.payment.id=:paymentId and r.budgetReserved=true")
+    BigDecimal sumReservedAmountByPaymentId(@Param("paymentId") String paymentId);
 
     @Query("""
             select coalesce(sum(refund.amount), 0)

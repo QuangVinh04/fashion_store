@@ -17,6 +17,13 @@ import java.util.Optional;
 
 @Repository
 public interface ProductRepository extends JpaRepository<Product, String>, JpaSpecificationExecutor<Product> {
+    interface CategoryProductCount {
+        String getCategoryId();
+        Long getProductCount();
+    }
+
+    @Query("select pc.category.id as categoryId, count(distinct pc.product.id) as productCount from ProductCategory pc group by pc.category.id")
+    java.util.List<CategoryProductCount> countDirectProductsByCategory();
     @EntityGraph(attributePaths = {"brand", "productCategories.category"})
     Page<Product> findAll(Pageable pageable);
 

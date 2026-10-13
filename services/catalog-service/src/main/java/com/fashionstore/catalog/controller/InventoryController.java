@@ -103,17 +103,10 @@ public class InventoryController {
                 .build();
     }
 
-    /**
-     * order-service gọi khi đơn hàng được duyệt hoàn trả (RETURN_APPROVED).
-     * Hoàn hàng về kho: cộng lại quantity.
-     * Idempotent: gọi nhiều lần chỉ hoàn 1 lần.
-     */
+    /** Legacy bulk return restock is retired; administrators use audited manual stock operations. */
     @PostMapping("/restock/{orderId}")
     public ApiResponse<Void> restock(@PathVariable String orderId) {
-        inventoryService.restock(orderId);
-        return ApiResponse.<Void>builder()
-                .message("Stock restocked successfully")
-                .build();
+        throw new com.fashionstore.common.exception.AppException(com.fashionstore.catalog.exception.InventoryErrorCode.LEGACY_RESTOCK_DISABLED);
     }
 
     @GetMapping("/low-stock")

@@ -49,6 +49,16 @@ public class OrderController {
     OrderService orderService;
     ReturnService returnService;
 
+    com.fashionstore.order.service.OrderReceiptService orderReceiptService;
+    com.fashionstore.order.service.OrderCancellationService orderCancellationService;
+
+    @PostMapping("/{id}/confirm-receipt")
+    public ApiResponse<OrderResponse> confirmReceipt(@PathVariable String id) {
+        return ApiResponse.<OrderResponse>builder().data(orderReceiptService.confirmReceipt(id)).build();
+    }
+
+
+
     @Operation(
             summary = "Đặt hàng từ một checkout",
             description = """
@@ -102,24 +112,24 @@ public class OrderController {
     }
 
     /**
-     * Đơn còn trong saga thì đây là yêu cầu bù trừ: response có thể vẫn là PENDING, đơn chỉ về CANCELLED
-     * sau khi kho được nhả và tiền được hủy.
+     * Chỉ huỷ được khi đơn đã được xác nhận (CONFIRMED, PROCESSING, PACKED) và chưa bàn giao vận chuyển.
+     * Đơn PENDING đang trong tiến trình checkout saga nên không thể huỷ.
      */
     @Operation(
             summary = "Khách tự huỷ đơn",
             description = """
-                    Chỉ huỷ được khi đơn còn `PENDING`, và đây là **yêu cầu bù trừ**: response có thể vẫn là
-                    `PENDING`, đơn chỉ về `CANCELLED` sau khi kho được nhả và tiền được huỷ. Nếu tiền đã thu
-                    và không huỷ được ở cổng thanh toán thì saga đi tiếp và đơn vẫn thành `CONFIRMED` —
-                    lúc đó là chuyện hoàn tiền, không phải huỷ. Huỷ hai lần trả cùng kết quả.
+                    Chỉ huỷ được sau khi đơn đã xác nhận và chưa bàn giao vận chuyển (`CONFIRMED`, `PROCESSING`, `PACKED`).
+                    Đơn ở trạng thái `PENDING` đang trong tiến trình checkout saga nên không thể huỷ thủ công.
+                    Hệ thống sẽ thực hiện huỷ đơn qua Cancellation Saga gồm: dừng vận đơn, nhả kho và hoàn tiền.
+                    Huỷ hai lần trả cùng kết quả.
 
-                    Mã lỗi: `4001` (404) · `4006` đơn đã qua PENDING, không huỷ được nữa (409).""")
+                    Mã lỗi: `4001` không tìm thấy đơn (404) · `4006` đơn ở trạng thái không thể huỷ (409) · `4029` xung đột yêu cầu huỷ (409).""")
     @PostMapping("/{id}/cancel")
     public ApiResponse<OrderResponse> cancelMyOrder(@PathVariable("id") String id,
                                                     @Valid @RequestBody(required = false) CancelOrderRequest request) {
         return ApiResponse.<OrderResponse>builder()
                 .message("Cancel order request accepted")
-                .data(orderService.cancelMyOrder(id, request))
+                .data(orderCancellationService.request(id, request))
                 .build();
     }
 
@@ -143,9 +153,7 @@ public class OrderController {
                 .build();
     }
 
-    @Operation(
-            summary = "Khách xem yêu cầu trả hàng của đơn mình",
-            description = "Trả về chi tiết yêu cầu hoàn trả hàng của đơn hàng.")
+    @Operation(summary = "Xem yêu cầu trả hàng của đơn")
     @GetMapping("/{id}/return-request")
     public ApiResponse<ReturnRequestResponse> getReturnRequest(@PathVariable("id") String id) {
         return ApiResponse.<ReturnRequestResponse>builder()
@@ -153,6 +161,7 @@ public class OrderController {
                 .data(returnService.getReturnRequestByOrderId(id))
                 .build();
     }
+
 
     @Operation(
             summary = "Cập nhật trạng thái đơn (ADMIN)",

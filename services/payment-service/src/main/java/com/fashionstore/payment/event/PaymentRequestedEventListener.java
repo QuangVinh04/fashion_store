@@ -7,8 +7,11 @@ import com.fashionstore.contracts.common.EventTypes;
 import com.fashionstore.contracts.payment.command.AuthorizePaymentCommand;
 import com.fashionstore.contracts.payment.command.CancelPaymentCommand;
 import com.fashionstore.contracts.payment.command.RefundPaymentCommand;
+import com.fashionstore.contracts.payment.command.RefundWalletSagaCommand;
+import com.fashionstore.contracts.payment.command.RefundOrderFundsCommand;
 import com.fashionstore.payment.config.messaging.RabbitMQNames;
 import com.fashionstore.payment.service.PaymentService;
+import com.fashionstore.payment.service.WalletService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
@@ -22,6 +25,7 @@ public class PaymentRequestedEventListener {
 
     private final ObjectMapper objectMapper;
     private final PaymentService paymentService;
+    private final WalletService walletService;
 
     @RabbitListener(queues = RabbitMQNames.PAYMENT_SAGA_COMMAND_QUEUE)
     public void handle(
@@ -31,6 +35,16 @@ public class PaymentRequestedEventListener {
         if (EventTypes.PAYMENT_REQUESTED.equals(envelope.eventType())) {
             AuthorizePaymentCommand request = objectMapper.convertValue(envelope.payload(), AuthorizePaymentCommand.class);
             paymentService.authorize(request, messageId, envelope.correlationId());
+            return;
+        }
+        if (EventTypes.WALLET_SAGA_COMPENSATION_REQUESTED.equals(envelope.eventType())) {
+            RefundWalletSagaCommand command = objectMapper.convertValue(envelope.payload(), RefundWalletSagaCommand.class);
+            walletService.compensate(command, messageId, envelope.correlationId());
+            return;
+        }
+        if (EventTypes.ORDER_FUNDS_REFUND_REQUESTED.equals(envelope.eventType())) {
+            RefundOrderFundsCommand command = objectMapper.convertValue(envelope.payload(), RefundOrderFundsCommand.class);
+            walletService.refundOrderFunds(command, messageId, envelope.correlationId());
             return;
         }
         if (EventTypes.PAYMENT_CANCELLATION_REQUESTED.equals(envelope.eventType())) {
@@ -43,6 +57,6 @@ public class PaymentRequestedEventListener {
             paymentService.refund(request, messageId, envelope.correlationId());
             return;
         }
-        throw new IllegalArgumentException("Unsupported payment saga command " + envelope.eventType());
+        log.warn("Ignored payment saga command {}", envelope.eventType());
     }
 }

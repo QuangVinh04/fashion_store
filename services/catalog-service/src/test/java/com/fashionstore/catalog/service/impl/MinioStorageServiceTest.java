@@ -104,4 +104,22 @@ class MinioStorageServiceTest {
     private String signature(String url) {
         return url.replaceAll("^.*X-Amz-Signature=", "");
     }
+
+    @Test
+    void evidenceUsesSeparatePrivateBucketForUploadAndDownload() {
+        whenPolicyIsPrivate();
+        assertThat(storageService.presignUpload("evidence/photo.png", "image/png",
+                java.util.Map.of("If-None-Match", "*")).url())
+                .contains("/fashion-media-evidence/evidence/photo.png?");
+        assertThat(storageService.presignDownload("evidence/photo.png"))
+                .contains("/fashion-media-evidence/evidence/photo.png?");
+    }
+
+    private void whenPolicyIsPrivate() {
+        // An existing bucket without a policy is private; the service must fail closed otherwise.
+        try {
+            when(internalClient.getBucketPolicy(any(io.minio.GetBucketPolicyArgs.class)))
+                    .thenReturn("{\"Statement\":[]}");
+        } catch (Exception exception) { throw new AssertionError(exception); }
+    }
 }

@@ -9,6 +9,11 @@ public record AuthorizePaymentCommand(
         String provider,
         BigDecimal amount,
         String currency,
-        String clientIp
+        String clientIp,
+        java.time.Instant expiresAt
 ) {
+    public AuthorizePaymentCommand(String orderId,String userId,String method,String provider,
+            BigDecimal amount,String currency,String clientIp) {
+        this(orderId,userId,method,provider,amount,currency,clientIp,null);
+    }
 }

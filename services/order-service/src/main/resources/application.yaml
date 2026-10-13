@@ -73,7 +73,14 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
 app:
+  returns:
+    pickup-automation-enabled: ${RETURN_PICKUP_AUTOMATION_ENABLED:false}
+    pickup-scan-delay-ms: ${RETURN_PICKUP_SCAN_DELAY_MS:60000}
+  order:
+    auto-completion-enabled: ${ORDER_AUTO_COMPLETION_ENABLED:true}
+    auto-completion-delay-ms: ${ORDER_AUTO_COMPLETION_DELAY_MS:60000}
   clients:
+    payment-base-url: ${PAYMENT_BASE_URL:http://localhost:8085}
     # product + inventory đã gộp thành catalog-service, chung một base URL.
     catalog-base-url: ${CATALOG_BASE_URL:http://localhost:8087}
     identity-base-url: ${IDENTITY_BASE_URL:http://localhost:8082}

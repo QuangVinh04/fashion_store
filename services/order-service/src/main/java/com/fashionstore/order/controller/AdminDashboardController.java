@@ -1,7 +1,7 @@
 package com.fashionstore.order.controller;
 
 import com.fashionstore.common.dto.ApiResponse;
-import com.fashionstore.order.dto.dashboard.AdminDashboardResponse;
+import com.fashionstore.order.dto.AdminDashboardResponse;
 import com.fashionstore.order.service.AdminDashboardService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;

@@ -128,12 +128,11 @@ class InventoryControllerTest {
     }
 
     @Test
-    void restock_returns200() throws Exception {
+    void legacyRestockIsRetiredAndDoesNotMutateStock() throws Exception {
         mockMvc.perform(post("/api/v1/inventory/restock/order-200"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.message").value("Stock restocked successfully"));
+                .andExpect(status().isGone());
 
-        verify(inventoryService).restock("order-200");
+        verify(inventoryService,org.mockito.Mockito.never()).restock("order-200");
     }
 
     @Test

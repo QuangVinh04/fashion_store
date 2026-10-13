@@ -15,8 +15,14 @@ public record MinioProperties(
         String secretKey,
         String bucket,
         int presignExpirySeconds,
-        long maxUploadBytes
+        long maxUploadBytes,
+        String evidenceBucket
 ) {
+    public MinioProperties(String endpoint, String publicEndpoint, String accessKey, String secretKey,
+                           String bucket, int presignExpirySeconds, long maxUploadBytes) {
+        this(endpoint, publicEndpoint, accessKey, secretKey, bucket, presignExpirySeconds, maxUploadBytes, null);
+    }
+    @org.springframework.boot.context.properties.bind.ConstructorBinding
     public MinioProperties {
         if (endpoint == null || endpoint.isBlank()) {
             endpoint = "http://localhost:9000";
@@ -27,6 +33,8 @@ public record MinioProperties(
         if (bucket == null || bucket.isBlank()) {
             bucket = "fashion-media";
         }
+        if (evidenceBucket == null || evidenceBucket.isBlank()) evidenceBucket = bucket + "-evidence";
+        if (evidenceBucket.equals(bucket)) throw new IllegalArgumentException("Evidence requires a separate private bucket");
         if (presignExpirySeconds <= 0) {
             presignExpirySeconds = 900;
         }

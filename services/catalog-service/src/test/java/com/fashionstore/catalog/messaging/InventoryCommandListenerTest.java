@@ -31,7 +31,7 @@ class InventoryCommandListenerTest {
 
     @BeforeEach
     void setUp() {
-        listener = new InventoryCommandListener(inventoryService, processedMessageService, new ObjectMapper());
+        listener = new InventoryCommandListener(inventoryService, processedMessageService, new ObjectMapper(), org.mockito.Mockito.mock(com.fashionstore.catalog.service.LegacyReturnRestockGuard.class));
         doAnswer(invocation -> {
             invocation.getArgument(2, Runnable.class).run();
             return null;

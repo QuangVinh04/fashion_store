@@ -1,0 +1,3 @@
+ALTER TABLE return_request ADD COLUMN IF NOT EXISTS kind VARCHAR(30) NOT NULL DEFAULT 'CUSTOMER_RETURN';
+ALTER TABLE return_request ADD COLUMN IF NOT EXISTS verification_by VARCHAR(120);
+ALTER TABLE return_request ADD COLUMN IF NOT EXISTS verification_evidence_ids TEXT;

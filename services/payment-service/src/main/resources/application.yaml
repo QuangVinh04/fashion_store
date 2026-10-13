@@ -20,6 +20,16 @@ spring:
           issuer-uri: ${KEYCLOAK_ISSUER:http://localhost:8180/realms/fashion-store}
           jwk-set-uri: ${KEYCLOAK_JWK_SET_URI:http://localhost:8180/realms/fashion-store/protocol/openid-connect/certs}
           audiences: fashion-api
+      client:
+        registration:
+          keycloak:
+            provider: keycloak
+            client-id: payment-service
+            client-secret: ${PAYMENT_SERVICE_CLIENT_SECRET:dev-payment-service-secret}
+            authorization-grant-type: client_credentials
+        provider:
+          keycloak:
+            token-uri: ${KEYCLOAK_TOKEN_URI:http://localhost:8180/realms/fashion-store/protocol/openid-connect/token}
   application:
     name: payment-service
   datasource:
@@ -61,6 +71,16 @@ app:
     publisher-delay-ms: ${OUTBOX_PUBLISHER_DELAY_MS:15000}
 
 payment:
+  wallet:
+    checkout-origin: ${WALLET_CHECKOUT_ORIGIN:http://localhost:3000}
+    top-up-enabled: ${WALLET_TOP_UP_ENABLED:false}
+    # Initial store limits; verify provider account settings before enabling top-ups.
+    min-top-up-amount: ${WALLET_MIN_TOP_UP_AMOUNT:10000}
+    max-top-up-amount: ${WALLET_MAX_TOP_UP_AMOUNT:5000000}
+    top-up-ttl-minutes: ${WALLET_TOP_UP_TTL_MINUTES:15}
+    reconciliation-delay-ms: ${WALLET_RECONCILIATION_DELAY_MS:60000}
+    top-up-return-url: ${WALLET_TOP_UP_RETURN_URL:http://localhost:3000/profile/wallet/top-up}
+    top-up-cancel-url: ${WALLET_TOP_UP_CANCEL_URL:http://localhost:3000/profile/wallet/top-up}
   reconciliation:
     enabled: ${PAYMENT_RECONCILIATION_ENABLED:true}
     delay-ms: ${PAYMENT_RECONCILIATION_DELAY_MS:30000}

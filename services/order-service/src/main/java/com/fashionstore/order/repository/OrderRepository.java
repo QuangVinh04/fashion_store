@@ -1,5 +1,7 @@
 package com.fashionstore.order.repository;
 
+import com.fashionstore.order.dto.OrderStatusCountResponse;
+
 import com.fashionstore.order.entity.Order;
 import com.fashionstore.order.entity.enumeration.OrderStatus;
 import jakarta.persistence.LockModeType;
@@ -14,6 +16,14 @@ import org.springframework.data.repository.query.Param;
 import java.util.Optional;
 
 public interface OrderRepository extends JpaRepository<Order, String> {
+    @Query("""
+            select o.id from Order o
+            where o.status = com.fashionstore.order.entity.enumeration.OrderStatus.DELIVERED
+              and o.deliveredAt <= :cutoff
+              and not exists (select 1 from ReturnRequest r where r.order.id = o.id and r.closedAt is null)
+            order by o.deliveredAt, o.id limit 100
+            """)
+    java.util.List<String> findReceiptCompletionCandidates(@org.springframework.data.repository.query.Param("cutoff") java.time.Instant cutoff);
 
     @EntityGraph(attributePaths = {"items"})
     Optional<Order> findWithItemsById(String id);
@@ -63,9 +73,9 @@ public interface OrderRepository extends JpaRepository<Order, String> {
             @Param("statuses") java.util.List<OrderStatus> statuses
     );
 
-    @Query("SELECT new com.fashionstore.order.dto.dashboard.OrderStatusCountResponse(o.status, COUNT(o)) " +
+    @Query("SELECT new com.fashionstore.order.dto.OrderStatusCountResponse(o.status, COUNT(o)) " +
            "FROM Order o GROUP BY o.status")
-    java.util.List<com.fashionstore.order.dto.dashboard.OrderStatusCountResponse> countOrdersByStatus();
+    java.util.List<com.fashionstore.order.dto.OrderStatusCountResponse> countOrdersByStatus();
 
     @Query("SELECT CAST(o.createdAt AS LocalDate) as orderDate, SUM(o.totalAmount) as totalRevenue, COUNT(o) as orderCount " +
            "FROM Order o " +

@@ -81,6 +81,7 @@ public class MediaFileServiceImpl implements MediaFileService {
     @Transactional
     public PresignUploadResponse presignUpload(PresignUploadRequest request, MediaPurpose purpose) {
         boolean avatar = purpose == MediaPurpose.AVATAR;
+        boolean evidence = purpose.isEvidence();
         String contentType = resolveContentType(request.getContentType());
         if (!ALLOWED_CONTENT_TYPES.contains(contentType)) {
             throw new AppException(FileErrorCode.FILE_TYPE_NOT_ALLOWED);
@@ -92,10 +93,10 @@ public class MediaFileServiceImpl implements MediaFileService {
         if (sizeBytes > minioProperties.maxUploadBytes()) {
             throw new AppException(FileErrorCode.FILE_TOO_LARGE);
         }
-        if (avatar && !AVATAR_CONTENT_TYPES.contains(contentType)) {
+        if ((avatar || evidence) && !AVATAR_CONTENT_TYPES.contains(contentType)) {
             throw new AppException(FileErrorCode.FILE_TYPE_NOT_ALLOWED);
         }
-        if (avatar && sizeBytes > MAX_AVATAR_BYTES) {
+        if ((avatar || evidence) && sizeBytes > MAX_AVATAR_BYTES) {
             throw new AppException(FileErrorCode.FILE_TOO_LARGE);
         }
 
@@ -110,7 +111,7 @@ public class MediaFileServiceImpl implements MediaFileService {
                 .replaceAll("[^A-Za-z0-9]", "").toLowerCase(Locale.ROOT));
         String storedFilename = UUID.randomUUID() + (extension == null ? "" : "." + extension);
         LocalDate today = LocalDate.now();
-        String storageKey = (avatar ? "avatars/" : "") + "%d/%02d/%s".formatted(today.getYear(), today.getMonthValue(), storedFilename);
+        String storageKey = (evidence ? "evidence/" : avatar ? "avatars/" : "") + "%d/%02d/%s".formatted(today.getYear(), today.getMonthValue(), storedFilename);
 
         MediaFile mediaFile = MediaFile.builder()
                 .ownerId(currentUserProvider.getCurrentUserId())
@@ -125,15 +126,15 @@ public class MediaFileServiceImpl implements MediaFileService {
                 .status(MediaStatus.PENDING)
                 .purpose(purpose)
                 .expiresAt(avatar ? LocalDateTime.now().plusHours(24) : null)
-                .visibility(avatar ? MediaVisibility.PRIVATE : (request.getVisibility() == null ? MediaVisibility.PUBLIC : request.getVisibility()))
+                .visibility(avatar || evidence ? MediaVisibility.PRIVATE : (request.getVisibility() == null ? MediaVisibility.PUBLIC : request.getVisibility()))
                 .altText(cleanNullable(request.getAltText()))
-                .folder(avatar ? "avatars" : cleanFolder(request.getFolder()))
+                .folder(evidence ? "evidence" : avatar ? "avatars" : cleanFolder(request.getFolder()))
                 .tags(normalizeTags(request.getTags()))
                 .build();
 
         MediaFile saved = mediaFileRepository.save(mediaFile);
-        Map<String, String> headers = avatar ? Map.of("Content-Type", contentType, "If-None-Match", "*") : Map.of("Content-Type", contentType);
-        PresignedUpload presigned = avatar ? storageService.presignUpload(storageKey, contentType, headers)
+        Map<String, String> headers = avatar || evidence ? Map.of("Content-Type", contentType, "If-None-Match", "*") : Map.of("Content-Type", contentType);
+        PresignedUpload presigned = avatar || evidence ? storageService.presignUpload(storageKey, contentType, headers)
                 : storageService.presignUpload(storageKey, contentType);
 
         return PresignUploadResponse.builder()
@@ -153,6 +154,8 @@ public class MediaFileServiceImpl implements MediaFileService {
                 .orElseThrow(() -> new AppException(FileErrorCode.FILE_NOT_FOUND));
         ensureOwner(mediaFile, currentUserProvider.getCurrentUserId());
         boolean avatar = mediaFile.getPurpose() == MediaPurpose.AVATAR;
+        boolean evidence = mediaFile.getPurpose().isEvidence();
+        if (evidence && mediaFile.getStatus() == MediaStatus.ACTIVE) return toResponse(mediaFile);
         if (avatar && mediaFile.getStatus() == MediaStatus.TEMP) return toResponse(mediaFile);
         if (mediaFile.getStatus() != MediaStatus.PENDING) {
             throw new AppException(FileErrorCode.FILE_ALREADY_COMPLETED);
@@ -167,18 +170,18 @@ public class MediaFileServiceImpl implements MediaFileService {
         if (stored == null) {
             throw new AppException(FileErrorCode.FILE_UPLOAD_NOT_COMPLETED);
         }
-        if (stored.sizeBytes() <= 0 || stored.sizeBytes() > (avatar ? MAX_AVATAR_BYTES : minioProperties.maxUploadBytes())) {
+        if (stored.sizeBytes() <= 0 || stored.sizeBytes() > (avatar || evidence ? MAX_AVATAR_BYTES : minioProperties.maxUploadBytes())) {
             rejectUpload(mediaFile);
             throw new AppException(FileErrorCode.FILE_TOO_LARGE);
         }
 
         String contentType = resolveContentType(stored.contentType());
-        if (!(avatar ? AVATAR_CONTENT_TYPES : ALLOWED_CONTENT_TYPES).contains(contentType)) {
+        if (!(avatar || evidence ? AVATAR_CONTENT_TYPES : ALLOWED_CONTENT_TYPES).contains(contentType)) {
             rejectUpload(mediaFile);
             throw new AppException(FileErrorCode.FILE_TYPE_NOT_ALLOWED);
         }
 
-        if (avatar && (!contentType.equals(mediaFile.getContentType())
+        if ((avatar || evidence) && (!contentType.equals(mediaFile.getContentType())
                 || !matchesSignature(contentType, storageService.readPrefix(mediaFile.getStorageKey(), 32)))) {
             rejectUpload(mediaFile);
             throw new AppException(FileErrorCode.FILE_TYPE_NOT_ALLOWED);
@@ -192,7 +195,7 @@ public class MediaFileServiceImpl implements MediaFileService {
             mediaFile.setHeight(request.getHeight());
         }
         mediaFile.setStatus(avatar ? MediaStatus.TEMP : MediaStatus.ACTIVE);
-        if (avatar) mediaFile.setVisibility(MediaVisibility.PRIVATE);
+        if (avatar || evidence) mediaFile.setVisibility(MediaVisibility.PRIVATE);
 
         return toResponse(mediaFileRepository.save(mediaFile));
     }
@@ -234,7 +237,7 @@ public class MediaFileServiceImpl implements MediaFileService {
     @Transactional
     public MediaFileResponse update(String id, MediaFileUpdateRequest request) {
         MediaFile mediaFile = findOwnedFile(id);
-        if (mediaFile.getPurpose() == MediaPurpose.AVATAR) {
+        if (mediaFile.getPurpose() != MediaPurpose.GENERAL) {
             throw new AppException(FileErrorCode.FILE_ACCESS_DENIED);
         }
         if (request.getDisplayName() != null) {
@@ -259,7 +262,7 @@ public class MediaFileServiceImpl implements MediaFileService {
     @Transactional
     public void moveToTrash(String id) {
         MediaFile mediaFile = findOwnedFile(id);
-        if (mediaFile.getPurpose() == MediaPurpose.AVATAR) {
+        if (mediaFile.getPurpose() != MediaPurpose.GENERAL) {
             throw new AppException(FileErrorCode.FILE_ACCESS_DENIED);
         }
         if (mediaFile.getStatus() == MediaStatus.TRASHED) {
@@ -274,7 +277,7 @@ public class MediaFileServiceImpl implements MediaFileService {
     @Transactional
     public MediaFileResponse restore(String id) {
         MediaFile mediaFile = findOwnedFile(id);
-        if (mediaFile.getPurpose() == MediaPurpose.AVATAR) throw new AppException(FileErrorCode.FILE_ACCESS_DENIED);
+        if (mediaFile.getPurpose() != MediaPurpose.GENERAL) throw new AppException(FileErrorCode.FILE_ACCESS_DENIED);
         if (mediaFile.getStatus() != MediaStatus.TRASHED) {
             throw new AppException(FileErrorCode.FILE_NOT_TRASHED);
         }
@@ -287,7 +290,7 @@ public class MediaFileServiceImpl implements MediaFileService {
     @Transactional
     public void deletePermanently(String id) {
         MediaFile mediaFile = findOwnedFile(id);
-        if (mediaFile.getPurpose() == MediaPurpose.AVATAR) {
+        if (mediaFile.getPurpose() != MediaPurpose.GENERAL) {
             throw new AppException(FileErrorCode.FILE_ACCESS_DENIED);
         }
         storageService.delete(mediaFile.getStorageKey());
@@ -299,6 +302,7 @@ public class MediaFileServiceImpl implements MediaFileService {
     public String resolveContentUrl(String id) {
         MediaFile mediaFile = mediaFileRepository.findById(id)
                 .orElseThrow(() -> new AppException(FileErrorCode.FILE_NOT_FOUND));
+        if (mediaFile.getPurpose().isEvidence()) throw new AppException(FileErrorCode.FILE_ACCESS_DENIED);
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         String userId = authentication == null ? null : authentication.getName();
         boolean owner = userId != null && userId.equals(mediaFile.getOwnerId());
@@ -447,7 +451,19 @@ public class MediaFileServiceImpl implements MediaFileService {
     }
 
     private MediaFileResponse toResponse(MediaFile mediaFile) {
-        return mediaFileMapper.toResponse(mediaFile, storageProperties.publicBaseUrl());
+        var response = mediaFileMapper.toResponse(mediaFile, storageProperties.publicBaseUrl());
+        if (mediaFile.getPurpose().isEvidence()) response.setUrl(null);
+        return response;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public String resolveEvidenceUrl(String id, String ownerId) {
+        MediaFile media = findOwnedFile(id, ownerId);
+        if (!media.getPurpose().isEvidence() || media.getStatus() != MediaStatus.ACTIVE
+                || media.getVisibility() != MediaVisibility.PRIVATE)
+            throw new AppException(FileErrorCode.FILE_ACCESS_DENIED);
+        return storageService.presignDownload(media.getStorageKey());
     }
 
     private String resolveDisplayName(String displayName, String originalFilename) {

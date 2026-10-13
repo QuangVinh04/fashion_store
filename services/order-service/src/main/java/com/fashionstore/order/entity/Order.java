@@ -4,7 +4,9 @@ import com.fashionstore.common.payment.PaymentMethod;
 import com.fashionstore.common.payment.PaymentProvider;
 import com.fashionstore.common.persistence.BaseEntity;
 import com.fashionstore.order.entity.enumeration.OrderStatus;
+
 import jakarta.persistence.*;
+
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 
@@ -21,6 +23,27 @@ import java.util.List;
 @NoArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class Order extends BaseEntity {
+
+    @Column(name = "shipment_initiation_token", length = 36)
+    String shipmentInitiationToken;
+
+    @Column(name = "shipment_initiation_started_at")
+    java.time.Instant shipmentInitiationStartedAt;
+
+    @Column(name = "delivered_at")
+    java.time.Instant deliveredAt;
+
+    @Column(name = "completed_at")
+    java.time.Instant completedAt;
+
+    @Column(name = "completion_source", length = 20)
+    String completionSource;
+
+    @Column(name = "delivery_evidence_issue", length = 500)
+    String deliveryEvidenceIssue;
+
+    @Column(name = "delivery_notified_at")
+    java.time.Instant deliveryNotifiedAt;
 
     @Column(name = "order_code", nullable = false, unique = true, length = 30)
     String orderCode;
@@ -66,9 +89,11 @@ public class Order extends BaseEntity {
     @Column(name = "shipping_address", nullable = false, length = 500)
     String shippingAddress;
 
-    /** Chép từ checkout lúc đặt đơn. Đơn tạo trước V19 chỉ có tên/SĐT, thiếu mã GHN — không tạo được vận đơn. */
-    @Embedded
-    ShippingAddress address;
+    /**
+     * Chép từ checkout lúc đặt đơn. Đơn tạo trước V19 chỉ có tên/SĐT, thiếu mã GHN — không tạo được
+     * vận đơn.
+     */
+    @Embedded ShippingAddress address;
 
     @Column(name = "shipping_provider", length = 100)
     String shippingProvider;
@@ -97,15 +122,19 @@ public class Order extends BaseEntity {
     @Column(name = "checkout_id", nullable = false, unique = true)
     String checkoutId;
 
-    /** IP của khách lúc đặt hàng — cần lại lúc saga xin thanh toán (VNPay yêu cầu vnp_IpAddr), lúc đó đã
-     * không còn HttpServletRequest gốc nên phải snapshot ngay tại đây. */
+    /**
+     * IP của khách lúc đặt hàng — cần lại lúc saga xin thanh toán (VNPay yêu cầu vnp_IpAddr), lúc
+     * đó đã không còn HttpServletRequest gốc nên phải snapshot ngay tại đây.
+     */
     @Column(name = "client_ip", length = 45)
     String clientIp;
 
-    /** URL/QR thanh toán, set khi saga có PAYMENT_INITIATED — chỉ để FE đọc, không phải trạng thái saga. */
+    /**
+     * URL/QR thanh toán, set khi saga có PAYMENT_INITIATED — chỉ để FE đọc, không phải trạng thái
+     * saga.
+     */
     @Column(name = "payment_url", length = 1000)
     String paymentUrl;
-
 
     // Saga chỉ chạm vào orders tại ba thời điểm: tạo đơn (PENDING), saga xong (CONFIRMED),
     // saga bù trừ xong (CANCELLED). Ngoài ba mốc đó, tiến độ điều phối nằm hết ở OrderSaga.
@@ -116,7 +145,9 @@ public class Order extends BaseEntity {
         this.cancelReason = null;
     }
 
-    /** @param reason câu viết cho người đọc; mã lỗi kỹ thuật nằm ở OrderSaga.failureCode. */
+    /**
+     * @param reason câu viết cho người đọc; mã lỗi kỹ thuật nằm ở OrderSaga.failureCode.
+     */
     public void cancel(String reason) {
         this.status = OrderStatus.CANCELLED;
         this.cancelReason = reason;

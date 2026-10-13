@@ -24,7 +24,7 @@ public interface PaymentRepository extends JpaRepository<Payment, String> {
     Optional<Payment> findByTransactionIdForUpdate(@Param("transactionId") String transactionId);
 
     @Query("""
-            select p from Payment p where p.status in :statuses and p.merchantReference is not null
+            select p from Payment p where p.status in :statuses and p.merchantReference is not null and p.method=com.fashionstore.common.payment.PaymentMethod.ONLINE
               and (p.lastReconciledAt is null or p.lastReconciledAt < :dueBefore)
             order by p.lastReconciledAt asc nulls first, p.createdAt asc
             """)
@@ -41,4 +41,10 @@ public interface PaymentRepository extends JpaRepository<Payment, String> {
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     Optional<Payment> findByMerchantReference(String merchantReference);
+
+    Optional<Payment> findByUserIdAndOperationId(String userId, String operationId);
+
+    Optional<Payment> findByIdAndUserId(String id, String userId);
+
+    org.springframework.data.domain.Page<Payment> findByUserIdAndTypeOrderByCreatedAtDesc(String userId, com.fashionstore.common.payment.PaymentType type, org.springframework.data.domain.Pageable pageable);
 }

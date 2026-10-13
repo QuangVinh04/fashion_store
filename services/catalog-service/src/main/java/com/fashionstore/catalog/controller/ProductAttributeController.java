@@ -97,6 +97,13 @@ public class ProductAttributeController {
                 .build();
     }
 
+    @GetMapping("/admin/product-attributes/{attributeId}/options")
+    public ApiResponse<List<ProductAttributeOptionResponse>> getAttributeOptions(@PathVariable String attributeId) {
+        return ApiResponse.<List<ProductAttributeOptionResponse>>builder()
+                .data(productAttributeService.getAttributeOptions(attributeId))
+                .build();
+    }
+
     @PutMapping("/admin/product-attributes/{attributeId}/options/{optionId}")
     public ApiResponse<ProductAttributeOptionResponse> updateAttributeOption(
             @PathVariable String attributeId,

@@ -1,0 +1,1 @@
+ALTER TABLE shipment ADD COLUMN IF NOT EXISTS cod_collected_at TIMESTAMPTZ;

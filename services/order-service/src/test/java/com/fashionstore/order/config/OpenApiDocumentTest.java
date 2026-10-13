@@ -36,7 +36,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         CartController.class,
         CheckoutController.class,
         OrderController.class,
-        AdminOrderController.class
+        AdminOrderController.class,
+        com.fashionstore.order.controller.AdminReturnController.class
 })
 // Chuỗi security thật không được nạp ở slice này (nó cần JWT decoder + issuer), mà test này kiểm tài liệu
 // chứ không kiểm phân quyền — nên tắt filter để đọc được /v3/api-docs.
@@ -47,7 +48,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         CartController.class,
         CheckoutController.class,
         OrderController.class,
-        AdminOrderController.class
+        AdminOrderController.class,
+        com.fashionstore.order.controller.AdminReturnController.class
 })
 @ImportAutoConfiguration({
         JacksonAutoConfiguration.class,
@@ -59,6 +61,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         SwaggerUiOAuthProperties.class
 })
 class OpenApiDocumentTest {
+    @MockitoBean private com.fashionstore.order.service.OrderCancellationService orderCancellationService;
+    @MockitoBean private com.fashionstore.order.service.OrderReceiptService orderReceiptService;
+    @MockitoBean
+    private com.fashionstore.order.service.ShipmentService shipmentService;
 
     /**
      * Context riêng, không dùng {@code OrderServiceApplication}: các {@code @Enable*} trên đó (outbox

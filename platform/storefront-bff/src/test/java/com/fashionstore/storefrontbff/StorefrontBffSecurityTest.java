@@ -167,6 +167,31 @@ class StorefrontBffSecurityTest {
                 .authorities(new SimpleGrantedAuthority("ROLE_USER"));
     }
 
+    @Test
+    void financialReadsRelayTokenAndFinancialWritesRequireCsrf() {
+        client.mutateWith(login()).get().uri("/api/v1/wallet").exchange().expectStatus().isOk();
+        assertThat(relayedAuthorization.get()).isEqualTo("Bearer access-token");
+        client.mutateWith(login()).get().uri("/api/v1/wallet/transactions").exchange().expectStatus().isOk();
+        assertThat(relayedAuthorization.get()).isEqualTo("Bearer access-token");
+        client.mutateWith(login()).get().uri("/api/v1/orders/order/return-request").exchange().expectStatus().isOk();
+        assertThat(relayedAuthorization.get()).isEqualTo("Bearer access-token");
+        relayedAuthorization.set(null);
+        client.mutateWith(login()).post().uri("/api/v1/payments/payment/wallet-confirm").exchange().expectStatus().isForbidden();
+        assertThat(relayedAuthorization.get()).isNull();
+        client.mutateWith(login()).mutateWith(csrf()).post().uri("/api/v1/payments/payment/wallet-confirm").exchange().expectStatus().isOk();
+        assertThat(relayedAuthorization.get()).isEqualTo("Bearer access-token");
+        relayedAuthorization.set(null);
+        client.mutateWith(login()).post().uri("/api/v1/wallet/top-ups").exchange().expectStatus().isForbidden();
+        assertThat(relayedAuthorization.get()).isNull();
+        client.mutateWith(login()).mutateWith(csrf()).post().uri("/api/v1/wallet/top-ups").exchange().expectStatus().isOk();
+        assertThat(relayedAuthorization.get()).isEqualTo("Bearer access-token");
+        relayedAuthorization.set(null);
+        client.mutateWith(login()).post().uri("/api/v1/orders/order/return-request").exchange().expectStatus().isForbidden();
+        assertThat(relayedAuthorization.get()).isNull();
+        client.mutateWith(login()).mutateWith(csrf()).post().uri("/api/v1/orders/order/return-request").exchange().expectStatus().isOk();
+        assertThat(relayedAuthorization.get()).isEqualTo("Bearer access-token");
+    }
+
     private static HttpServer startStubApiGateway() {
         try {
             HttpServer server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);

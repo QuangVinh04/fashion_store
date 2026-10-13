@@ -13,6 +13,39 @@ import static org.assertj.core.api.Assertions.assertThat;
 /** Optional real storage test; creates and removes its own isolated bucket. */
 @EnabledIfEnvironmentVariable(named = "AVATAR_TEST_MINIO_ENDPOINT", matches = ".+")
 class MinioStorageIntegrationTest {
+    @Test void evidenceStaysPrivateWhenCatalogBucketAllowsAnonymousReads() throws Exception {
+        String endpoint=System.getenv("AVATAR_TEST_MINIO_ENDPOINT");
+        String key=System.getenv("AVATAR_TEST_MINIO_ACCESS_KEY"),secret=System.getenv("AVATAR_TEST_MINIO_SECRET_KEY");
+        String bucket="proof-verify-"+UUID.randomUUID();
+        var client=MinioClient.builder().endpoint(endpoint).region("us-east-1").credentials(key,secret).build();
+        var storage=new MinioStorageService(client,client,new MinioProperties(endpoint,endpoint,key,secret,bucket,900,5242880));
+        String catalog="catalog/image.png",evidence="evidence/image.png";
+        var http=HttpClient.newHttpClient();
+        try {
+            for (String object:List.of(catalog,evidence)) {
+                var put=storage.presignUpload(object,"image/png",Map.of("If-None-Match","*"));
+                assertThat(http.send(HttpRequest.newBuilder(URI.create(put.url())).header("Content-Type","image/png")
+                        .header("If-None-Match","*").PUT(HttpRequest.BodyPublishers.ofString("test-only-image")).build(),
+                        HttpResponse.BodyHandlers.ofString()).statusCode()).isEqualTo(200);
+            }
+            client.setBucketPolicy(io.minio.SetBucketPolicyArgs.builder().bucket(bucket).config("""
+                    {"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"AWS":["*"]},
+                    "Action":["s3:GetObject"],"Resource":["arn:aws:s3:::%s/*"]}]}
+                    """.formatted(bucket)).build());
+            assertThat(http.send(HttpRequest.newBuilder(URI.create(endpoint+"/"+bucket+"/"+catalog)).GET().build(),
+                    HttpResponse.BodyHandlers.ofString()).statusCode()).isEqualTo(200);
+            assertThat(http.send(HttpRequest.newBuilder(URI.create(endpoint+"/"+bucket+"-evidence/"+evidence)).GET().build(),
+                    HttpResponse.BodyHandlers.ofString()).statusCode()).isEqualTo(403);
+            assertThat(http.send(HttpRequest.newBuilder(URI.create(storage.presignDownload(evidence))).GET().build(),
+                    HttpResponse.BodyHandlers.ofString()).statusCode()).isEqualTo(200);
+        } finally {
+            client.removeObject(io.minio.RemoveObjectArgs.builder().bucket(bucket).object(catalog).build());
+            client.removeObject(io.minio.RemoveObjectArgs.builder().bucket(bucket+"-evidence").object(evidence).build());
+            client.removeBucket(RemoveBucketArgs.builder().bucket(bucket).build());
+            client.removeBucket(RemoveBucketArgs.builder().bucket(bucket+"-evidence").build());
+        }
+    }
+
     @Test void conditionalUploadCannotOverwriteVerifiedObjectAndAllowsBrowserCors() throws Exception {
         String endpoint = System.getenv("AVATAR_TEST_MINIO_ENDPOINT");
         String key = System.getenv("AVATAR_TEST_MINIO_ACCESS_KEY");

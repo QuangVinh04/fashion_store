@@ -19,4 +19,10 @@ public class PageResponse<T> {
     private int pageSize;
     private long totalPage;
     private T items;
+    private Long totalElements;
+
+    /** Keeps the existing four-argument contract for callers that do not supply a count. */
+    public PageResponse(int pageNo, int pageSize, long totalPage, T items) {
+        this(pageNo, pageSize, totalPage, items, null);
+    }
 }

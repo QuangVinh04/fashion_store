@@ -5,8 +5,12 @@ import com.fashionstore.common.exception.ErrorCode;
 import com.fashionstore.common.payment.PaymentMethod;
 import com.fashionstore.order.config.GhnProperties;
 import com.fashionstore.order.dto.UserAddressDto;
-import com.fashionstore.order.dto.ghn.GhnCreateOrderRequest;
-import com.fashionstore.order.dto.ghn.GhnCreateOrderResponse;
+import com.fashionstore.order.dto.GhnCreateOrderRequest;
+import com.fashionstore.order.dto.GhnCreateOrderResponse;
+import com.fashionstore.order.dto.VerifiedGhnShipment;
+import java.time.Instant;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import com.fashionstore.order.entity.Order;
 import com.fashionstore.order.entity.OrderItem;
 import com.fashionstore.order.entity.ShippingAddress;
@@ -33,6 +37,68 @@ public class GhnClient {
 
     GhnFeignClient ghnFeignClient;
     GhnProperties ghnProperties;
+
+    @Transactional(propagation = Propagation.NEVER)
+    public VerifiedGhnShipment getVerifiedShipment(String orderCode) {
+        if (!Boolean.TRUE.equals(ghnProperties.getEnabled()) || ghnProperties.getToken() == null
+                || ghnProperties.getToken().isBlank() || ghnProperties.getShopId() == null
+                || !ghnProperties.getShopId().matches("[1-9][0-9]*")
+                || orderCode == null || orderCode.isBlank() || orderCode.startsWith("GHN_MOCK_")) {
+            throw new AppException(ErrorCode.UPSTREAM_SERVICE_ERROR);
+        }
+        try {
+            var response = ghnFeignClient.getOrderDetail(ghnProperties.getToken(), ghnProperties.getShopId(), orderCode);
+            var data = response == null ? null : response.path("data");
+            if (response == null || response.path("code").asInt() != 200 || data == null || !data.isObject()
+                    || !orderCode.equals(data.path("order_code").asText())
+                    || !ghnProperties.getShopId().equals(data.path("shop_id").asText())
+                    || !data.path("cod_amount").isIntegralNumber() || data.path("cod_amount").decimalValue().signum() < 0
+                    || data.path("status").asText().isBlank()) {
+                throw new AppException(ErrorCode.UPSTREAM_SERVICE_ERROR);
+            }
+            Instant collectedAt = data.path("cod_collect_date").isNull() || data.path("cod_collect_date").isMissingNode()
+                    ? null : Instant.parse(data.path("cod_collect_date").asText());
+            Instant transferredAt = data.path("cod_transfer_date").isNull() || data.path("cod_transfer_date").isMissingNode()
+                    ? null : Instant.parse(data.path("cod_transfer_date").asText());
+            return new VerifiedGhnShipment(orderCode, data.path("shop_id").asText(), data.path("client_order_code").asText(),
+                    data.path("status").asText(), data.path("cod_amount").decimalValue(),
+                    data.path("is_cod_collected").isBoolean() && data.path("is_cod_collected").booleanValue(), collectedAt,
+                    data.path("is_cod_transferred").isBoolean() && data.path("is_cod_transferred").booleanValue(), transferredAt);
+        } catch (AppException invalid) {
+            throw invalid;
+        } catch (RuntimeException unavailable) {
+            throw new AppException(ErrorCode.UPSTREAM_SERVICE_ERROR, unavailable);
+        }
+    }
+
+    @org.springframework.transaction.annotation.Transactional(propagation=org.springframework.transaction.annotation.Propagation.NEVER)
+    public com.fashionstore.order.dto.ShipmentCancellationResult cancelPendingShipment(String trackingCode) {
+        if(trackingCode==null || trackingCode.isBlank() || trackingCode.startsWith("GHN_MOCK_")
+                || !Boolean.TRUE.equals(ghnProperties.getEnabled()) || ghnProperties.getToken()==null || ghnProperties.getToken().isBlank()
+                || ghnProperties.getShopId()==null || ghnProperties.getShopId().isBlank())
+            return com.fashionstore.order.dto.ShipmentCancellationResult.unknown(trackingCode,"Carrier verification is not configured");
+        try {
+            var detail=ghnFeignClient.getOrderDetail(ghnProperties.getToken(),ghnProperties.getShopId(),trackingCode);
+            if(detail==null || detail.path("code").asInt()!=200 || !detail.path("data").isObject()
+                    || !trackingCode.equals(detail.path("data").path("order_code").asText())
+                    || !ghnProperties.getShopId().equals(detail.path("data").path("shop_id").asText()))
+                return com.fashionstore.order.dto.ShipmentCancellationResult.unknown(trackingCode,"Carrier shipment ownership is unverified");
+            String status=detail.path("data").path("status").asText();
+            if(java.util.Set.of("picked","storing","transporting","sorting","delivering","delivered","return","return_transporting","return_sorting","returning","returned").contains(status))
+                return new com.fashionstore.order.dto.ShipmentCancellationResult(trackingCode,"HANDED_OFF","Carrier status: "+status);
+            if("cancel".equals(status)) return new com.fashionstore.order.dto.ShipmentCancellationResult(trackingCode,"CANCELLED","Carrier confirmed cancellation");
+            if(!"ready_to_pick".equals(status)) return com.fashionstore.order.dto.ShipmentCancellationResult.unknown(trackingCode,"Carrier status requires verification: "+status);
+            var response=ghnFeignClient.cancelOrder(ghnProperties.getToken(),ghnProperties.getShopId(),java.util.Map.of("order_codes",java.util.List.of(trackingCode)));
+            if(response!=null && response.path("code").asInt()==200 && response.path("data").isArray()) {
+                for(var row:response.path("data")) if(trackingCode.equals(row.path("order_code").asText())
+                        && row.path("result").isBoolean() && row.path("result").booleanValue())
+                    return new com.fashionstore.order.dto.ShipmentCancellationResult(trackingCode,"CANCELLED","Carrier accepted cancellation");
+            }
+            return com.fashionstore.order.dto.ShipmentCancellationResult.unknown(trackingCode,"Carrier did not confirm cancellation");
+        } catch(RuntimeException error) {
+            return com.fashionstore.order.dto.ShipmentCancellationResult.unknown(trackingCode,"Carrier response is uncertain; reconciliation is required");
+        }
+    }
 
     /**
      * Tính phí vận chuyển qua GHN API.

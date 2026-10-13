@@ -1,7 +1,7 @@
 package com.fashionstore.order.client;
 
-import com.fashionstore.order.dto.ghn.GhnCreateOrderRequest;
-import com.fashionstore.order.dto.ghn.GhnCreateOrderResponse;
+import com.fashionstore.order.dto.GhnCreateOrderRequest;
+import com.fashionstore.order.dto.GhnCreateOrderResponse;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.http.MediaType;
@@ -16,6 +16,14 @@ import org.springframework.web.bind.annotation.RequestHeader;
         url = "${app.ghn.api-url:https://dev-online-gateway.ghn.vn/shiip/public-api}"
 )
 public interface GhnFeignClient {
+
+    @GetMapping("/v2/shipping-order/detail")
+    JsonNode getOrderDetail(@RequestHeader("Token") String token,@RequestHeader("ShopId") String shopId,
+                            @RequestParam("order_code") String orderCode);
+
+    @PostMapping(value="/v2/switch-status/cancel",consumes=MediaType.APPLICATION_JSON_VALUE)
+    JsonNode cancelOrder(@RequestHeader("Token") String token,@RequestHeader("ShopId") String shopId,
+                         @RequestBody java.util.Map<String,Object> request);
 
     @GetMapping("/v3/master-data/province/all")
     JsonNode newProvinces(@RequestHeader("Token") String token, @RequestHeader("ShopId") String shopId,

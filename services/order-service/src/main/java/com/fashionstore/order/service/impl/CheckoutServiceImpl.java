@@ -13,7 +13,7 @@ import com.fashionstore.order.entity.enumeration.CheckoutStatus;
 import com.fashionstore.order.entity.enumeration.ShippingMethod;
 import com.fashionstore.order.repository.CheckoutRepository;
 import com.fashionstore.order.service.CartService;
-import com.fashionstore.order.service.CheckoutDbService;
+import com.fashionstore.order.service.CheckoutTransactionService;
 import com.fashionstore.order.service.CheckoutService;
 import com.fashionstore.common.payment.PaymentMethod;
 import com.fashionstore.order.service.PromotionService;
@@ -44,7 +44,7 @@ import java.util.stream.Collectors;
 public class CheckoutServiceImpl implements CheckoutService {
 
     CheckoutRepository checkoutRepository;
-    CheckoutDbService checkoutDbService;
+    CheckoutTransactionService checkoutTransactionService;
     CartService cartService;
     CurrentUserProvider currentUserProvider;
     PromotionService promotionService;
@@ -54,7 +54,7 @@ public class CheckoutServiceImpl implements CheckoutService {
 
 
 
-    // Tách biệt riêng phần gọi ngoài service không nằm trong transaction, các phần cần gọi transaction qua CheckoutDbService
+    // Tách biệt riêng phần gọi ngoài service không nằm trong transaction, các phần cần gọi transaction qua CheckoutTransactionService
     @Override
     @Transactional(propagation = Propagation.NEVER) // Ép buộc chạy ngoài transaction lớn
     public CheckoutResponse createCheckout(CreateCheckoutRequest request) {
@@ -115,7 +115,7 @@ public class CheckoutServiceImpl implements CheckoutService {
                 .map(item -> toCheckoutItem(checkout, item))
                 .toList();
 
-        Checkout savedCheckout = checkoutDbService.saveNewCheckout(checkout, snapshotItems);
+        Checkout savedCheckout = checkoutTransactionService.saveNewCheckout(checkout, snapshotItems);
 
         return toResponse(savedCheckout);
     }
@@ -125,7 +125,7 @@ public class CheckoutServiceImpl implements CheckoutService {
     public CheckoutResponse updateCheckout(String checkoutId, UpdateCheckoutRequest request) {
         String userId = currentUserProvider.getCurrentUserId();
         // 1. Đọc đầy đủ items trong một transaction ngắn, rồi trả connection về pool.
-        Checkout checkout = checkoutDbService.getCheckoutSnapshot(checkoutId, userId);
+        Checkout checkout = checkoutTransactionService.getCheckoutSnapshot(checkoutId, userId);
         Long snapshotVersion = checkout.getVersion();
 
         if (isStatusInvalid(checkout.getStatus()) || checkout.getOrder() != null) {
@@ -173,7 +173,7 @@ public class CheckoutServiceImpl implements CheckoutService {
         // 3. Khóa chỉ trong lúc kiểm tra và ghi. Request khác có thể đã sửa/hủy/đặt hàng
         // trong lúc ta đợi GHN, nên phải đọc lại trạng thái và so version của snapshot.
         try {
-            Checkout updatedCheckout = checkoutDbService.saveUpdatedCheckout(checkoutId, userId, snapshotVersion, updateDto);
+            Checkout updatedCheckout = checkoutTransactionService.saveUpdatedCheckout(checkoutId, userId, snapshotVersion, updateDto);
             return toResponse(updatedCheckout);
         } catch (org.springframework.orm.ObjectOptimisticLockingFailureException e) {
             // Spring tự động bắt được xung đột tầng DB (luồng khác đã tăng version trước) và ném lỗi này
@@ -382,6 +382,10 @@ public class CheckoutServiceImpl implements CheckoutService {
     }
 
     private PaymentProvider resolvePaymentProvider(PaymentMethod method, PaymentProvider provider) {
+        if(method==PaymentMethod.WALLET) {
+            if(provider==null || provider==PaymentProvider.INTERNAL) return PaymentProvider.INTERNAL;
+            throw new AppException(OrderErrorCode.PAYMENT_PROVIDER_UNSUPPORTED);
+        }
         if (method == PaymentMethod.COD) {
             if (provider == null || provider == PaymentProvider.COD) {
                 return PaymentProvider.COD;

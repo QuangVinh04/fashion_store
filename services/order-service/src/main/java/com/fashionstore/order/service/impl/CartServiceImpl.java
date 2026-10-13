@@ -14,7 +14,7 @@ import com.fashionstore.order.entity.CartItem;
 import com.fashionstore.order.entity.enumeration.CartStatus;
 import com.fashionstore.order.repository.CartItemRepository;
 import com.fashionstore.order.repository.CartRepository;
-import com.fashionstore.order.service.CartDbService;
+import com.fashionstore.order.service.CartTransactionService;
 import com.fashionstore.order.service.CartService;
 import com.fashionstore.common.exception.AppException;
 import com.fashionstore.common.exception.ErrorCode;
@@ -41,13 +41,13 @@ import java.util.stream.Collectors;
 public class CartServiceImpl implements CartService {
 
     CartRepository cartRepository;
-    CartDbService cartDbService;
+    CartTransactionService cartTransactionService;
     CartItemRepository cartItemRepository;
     CatalogClient catalogClient;
     CurrentUserProvider currentUserProvider;
     CartMapper cartMapper;
 
-    // Tách biệt riêng phần gọi ngoài service không nằm trong transaction, các phần cần sẽ gọi transaction ngắn qua CartDbService
+    // Tách biệt riêng phần gọi ngoài service không nằm trong transaction, các phần cần sẽ gọi transaction ngắn qua CartTransactionService
     @Override
     public CartResponse getMyCart() {
         String userId = currentUserProvider.getCurrentUserId();
@@ -74,7 +74,7 @@ public class CartServiceImpl implements CartService {
         ProductVariantDto variant = catalogClient.getVariant(request.getVariantId());
         requireOnSale(variant);
 
-        int existingQty = cartDbService.getCartItemQuantity(userId, request.getVariantId());
+        int existingQty = cartTransactionService.getCartItemQuantity(userId, request.getVariantId());
         int totalQty = existingQty + request.getQuantity();
 
         StockCheckResult stock = catalogClient.checkStock(
@@ -86,7 +86,7 @@ public class CartServiceImpl implements CartService {
             throw new AppException(OrderErrorCode.STOCK_INSUFFICIENT);
         }
 
-        Cart saved = cartDbService.addOrUpdateCartItem(userId, request.getVariantId(), request.getQuantity(), variant);
+        Cart saved = cartTransactionService.addOrUpdateCartItem(userId, request.getVariantId(), request.getQuantity(), variant);
 
         CartResponse response = cartMapper.toCartResponse(saved);
         enrichCartItems(response, saved);
@@ -98,7 +98,7 @@ public class CartServiceImpl implements CartService {
     public CartResponse updateCartItem(String cartItemId, UpdateCartRequest request) {
         String userId = currentUserProvider.getCurrentUserId();
 
-        CartItem item = cartDbService.getCartItemWithValidation(cartItemId, userId);
+        CartItem item = cartTransactionService.getCartItemWithValidation(cartItemId, userId);
 
         ProductVariantDto variant = catalogClient.getVariant(item.getVariantId());
         requireOnSale(variant);
@@ -110,7 +110,7 @@ public class CartServiceImpl implements CartService {
             throw new AppException(OrderErrorCode.STOCK_INSUFFICIENT);
         }
 
-        Cart cart = cartDbService.updateCartItemQuantity(cartItemId, userId, request.getQuantity(), variant);
+        Cart cart = cartTransactionService.updateCartItemQuantity(cartItemId, userId, request.getQuantity(), variant);
 
         CartResponse response = cartMapper.toCartResponse(cart);
         enrichCartItems(response, cart);
@@ -122,7 +122,7 @@ public class CartServiceImpl implements CartService {
     public CartResponse removeCartItem(String cartItemId) {
         String userId = currentUserProvider.getCurrentUserId();
 
-        Cart saved = cartDbService.removeCartItem(cartItemId, userId);
+        Cart saved = cartTransactionService.removeCartItem(cartItemId, userId);
 
         CartResponse response = cartMapper.toCartResponse(saved);
         enrichCartItems(response, saved);
@@ -134,7 +134,7 @@ public class CartServiceImpl implements CartService {
     public CartResponse clearCart() {
         String userId = currentUserProvider.getCurrentUserId();
         
-        Cart saved = cartDbService.clearCart(userId);
+        Cart saved = cartTransactionService.clearCart(userId);
 
         return cartMapper.toCartResponse(saved);
     }
@@ -147,8 +147,8 @@ public class CartServiceImpl implements CartService {
     @Transactional(propagation = Propagation.NEVER)
     public Cart revalidateActiveCart() {
         String userId = currentUserProvider.getCurrentUserId();
-        // Bọc transaction ngắn hạn qua CartDbService
-        Cart cart = cartDbService.getActiveCartSnapshot(userId);
+        // Bọc transaction ngắn hạn qua CartTransactionService
+        Cart cart = cartTransactionService.getActiveCartSnapshot(userId);
         List<CartItem> items = cart.getItems();
         if (items.isEmpty()) {
             throw new AppException(OrderErrorCode.CART_EMPTY);
@@ -183,8 +183,8 @@ public class CartServiceImpl implements CartService {
                 throw new AppException(OrderErrorCode.STOCK_INSUFFICIENT);
             }
         }
-        // Bọc transaction ngắn hạn qua CartDbService
-        return cartDbService.saveUpdatedCart(cart);
+        // Bọc transaction ngắn hạn qua CartTransactionService
+        return cartTransactionService.saveUpdatedCart(cart);
     }
 
     private void requireOnSale(ProductVariantDto variant) {

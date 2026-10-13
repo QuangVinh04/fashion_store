@@ -95,7 +95,7 @@ class SizeChartServiceTest {
                 .weightMin(new BigDecimal("55"))
                 .weightMax(new BigDecimal("62"))
                 .build();
-        when(sizeChartRepository.findDetailById("sc1")).thenReturn(Optional.of(sizeChart));
+        when(sizeChartRepository.findLockedById("sc1")).thenReturn(Optional.of(sizeChart));
         when(sizeChartRowRepository.save(any(SizeChartRow.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -149,6 +149,7 @@ class SizeChartServiceTest {
                 .weightMax(new BigDecimal("64"))
                 .build();
         when(sizeChartRowRepository.findById("row1")).thenReturn(Optional.of(row));
+        when(sizeChartRepository.findLockedById("sc1")).thenReturn(Optional.of(sizeChart));
         when(sizeChartRowRepository.save(row)).thenReturn(row);
 
         var response = sizeChartService.updateRow("sc1", "row1", request);
@@ -173,5 +174,16 @@ class SizeChartServiceTest {
                                 .isEqualTo(ProductErrorCode.SIZE_CHART_RANGE_INVALID));
 
         verify(sizeChartRowRepository, never()).save(any(SizeChartRow.class));
+    }
+
+    @Test
+    void duplicateSizeCodeIsRejectedCaseInsensitivelyWithoutSaving() {
+        when(sizeChartRepository.findLockedById("sc1")).thenReturn(Optional.of(new SizeChart()));
+        when(sizeChartRowRepository.findBySizeChartId("sc1"))
+                .thenReturn(List.of(SizeChartRow.builder().sizeCode("M").build()));
+        assertThatThrownBy(() -> sizeChartService.addRow("sc1", SizeChartRowRequest.builder().sizeCode(" m ").build()))
+                .isInstanceOfSatisfying(AppException.class, exception -> assertThat(exception.getErrorCode())
+                        .isEqualTo(ProductErrorCode.SIZE_CHART_CODE_DUPLICATE));
+        verify(sizeChartRowRepository, never()).save(any());
     }
 }

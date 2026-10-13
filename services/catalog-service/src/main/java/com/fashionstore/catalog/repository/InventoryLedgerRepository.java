@@ -17,6 +17,7 @@ public interface InventoryLedgerRepository extends JpaRepository<InventoryLedger
     Page<InventoryLedger> findByVariantId(String variantId, Pageable pageable);
 
     Optional<InventoryLedger> findByOperationId(String operationId);
+    boolean existsByRefOrderIdAndType(String orderId,InventoryLedgerType type);
 
     @Query(value = "select 1 from pg_advisory_xact_lock(hashtext(:operationId))", nativeQuery = true)
     Integer lockOperationId(@Param("operationId") String operationId);

@@ -20,6 +20,11 @@ public final class RabbitMQNames {
     public static final String ORDER_PAYMENT_CANCELLATION_REJECTED_QUEUE = "order.payment-cancellation-rejected";
     public static final String ORDER_PAYMENT_REFUNDED_QUEUE = "order.payment-refunded";
     public static final String ORDER_PAYMENT_REFUND_REJECTED_QUEUE = "order.payment-refund-rejected";
+    public static final String ORDER_WALLET_CONTROL_QUEUE="order.wallet-control";
+    public static final String ORDER_WALLET_FINANCIAL_QUEUE="order.wallet-financial";
+    public static final String ORDER_FUNDS_REFUND_QUEUE="order.funds-refund";
+    public static final String ORDER_INVENTORY_CONFIRMATION_REJECTED_QUEUE="order.inventory-confirmation-rejected";
+    public static final String ORDER_CONFIRMED_QUEUE = "order.order-confirmed";
 
     private RabbitMQNames() {
     }

@@ -14,6 +14,8 @@ public class SecurityConfig {
     // token được chuyển tiếp nguyên vẹn, mỗi service tự kiểm tra lại
     @Bean
     SecurityWebFilterChain securityWebFilterChain(ServerHttpSecurity http) {
+        var keycloak = new org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter();
+        keycloak.setJwtGrantedAuthoritiesConverter(new com.fashionstore.common.security.KeycloakJwtAuthoritiesConverter());
         return http
                 .authorizeExchange(authorize -> authorize
                         .pathMatchers(
@@ -30,6 +32,7 @@ public class SecurityConfig {
                                 "/api/v1/payments/payos/webhook"
                         ).permitAll()
                         .pathMatchers("/internal/**").denyAll()
+                        .pathMatchers("/api/v1/admin/**", "/admin/**").hasRole("ADMIN")
                         .pathMatchers(HttpMethod.GET,
                                 "/api/v1/product/**",
                                 "/api/v1/products/**",
@@ -44,7 +47,8 @@ public class SecurityConfig {
                         .pathMatchers(HttpMethod.GET, "/api/v1/files/*/content").permitAll()
                         .pathMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .anyExchange().authenticated())
-                .oauth2ResourceServer(resourceServer -> resourceServer.jwt(Customizer.withDefaults()))
+                .oauth2ResourceServer(resourceServer -> resourceServer.jwt(jwt -> jwt.jwtAuthenticationConverter(
+                        new org.springframework.security.oauth2.server.resource.authentication.ReactiveJwtAuthenticationConverterAdapter(keycloak))))
                 .csrf(ServerHttpSecurity.CsrfSpec::disable)
                 .build();
     }

@@ -79,7 +79,7 @@ spring:
             - id: payment
               uri: ${PAYMENT_BASE_URL:http://payment-service:8085}
               predicates:
-                - Path=/api/v1/payments/**
+                - Path=/api/v1/payments/**,/api/v1/wallet/**,/api/v1/admin/payments/**,/api/v1/admin/wallets/**
             - id: payment-openapi
               uri: ${PAYMENT_BASE_URL:http://payment-service:8085}
               predicates:

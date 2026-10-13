@@ -33,7 +33,9 @@ class OrderControllerTest {
 
     @BeforeEach
     void setUp() {
-        mockMvc = MockMvcBuilders.standaloneSetup(new OrderController(orderService, returnService))
+        mockMvc = MockMvcBuilders.standaloneSetup(new OrderController(orderService, returnService,
+                org.mockito.Mockito.mock(com.fashionstore.order.service.OrderReceiptService.class),
+                org.mockito.Mockito.mock(com.fashionstore.order.service.OrderCancellationService.class)))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
     }

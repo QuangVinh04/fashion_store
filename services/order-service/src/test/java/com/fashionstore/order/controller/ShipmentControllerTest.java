@@ -4,7 +4,7 @@ import com.fashionstore.common.exception.GlobalExceptionHandler;
 import com.fashionstore.order.config.GhnProperties;
 import com.fashionstore.order.dto.CreateShipmentRequest;
 import com.fashionstore.order.dto.ShipmentResponse;
-import com.fashionstore.order.dto.ghn.GhnWebhookPayload;
+import com.fashionstore.order.dto.GhnWebhookPayload;
 import com.fashionstore.order.entity.enumeration.ShipmentProvider;
 import com.fashionstore.order.entity.enumeration.ShipmentStatus;
 import com.fashionstore.order.service.ShipmentService;

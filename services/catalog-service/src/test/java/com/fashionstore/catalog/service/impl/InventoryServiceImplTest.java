@@ -31,6 +31,34 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class InventoryServiceImplTest {
 
+    @Test void releasedReservationEmitsVerifiedConfirmationRejection() {
+        InventoryReservation reservation=InventoryReservation.builder().orderId("order-proof")
+                .status(InventoryReservationStatus.RELEASED).build();
+        reservation.setId("reservation-proof");
+        when(reservationRepository.findByOrderIdForUpdate("order-proof")).thenReturn(Optional.of(reservation));
+        service.confirmSaga(new com.fashionstore.contracts.inventory.command.ConfirmInventoryCommand("order-proof","reservation-proof"),"saga-proof");
+        verify(outboxService).saveMessage(eq("order-proof"),eq("inventory.confirmation.rejected"),any());
+        verify(inventoryRepository,never()).save(any());
+    }
+    @Test void confirmedReservationReplaysConfirmationWithoutDeductingAgain() {
+        InventoryReservation reservation=InventoryReservation.builder().orderId("order-replay")
+                .status(InventoryReservationStatus.CONFIRMED).build();
+        reservation.setId("reservation-replay");
+        when(reservationRepository.findByOrderIdForUpdate("order-replay")).thenReturn(Optional.of(reservation));
+        service.confirmSaga(new com.fashionstore.contracts.inventory.command.ConfirmInventoryCommand("order-replay","reservation-replay"),"saga-replay");
+        verify(outboxService).saveMessage(eq("order-replay"),eq("inventory.confirmed"),any());
+        verify(inventoryRepository,never()).save(any());
+    }
+    @Test void releasedReservationReplaysReleaseWithoutIncreasingStockAgain() {
+        InventoryReservation reservation=InventoryReservation.builder().orderId("order-release")
+                .status(InventoryReservationStatus.RELEASED).build();
+        reservation.setId("reservation-release");
+        when(reservationRepository.findByOrderIdForUpdate("order-release")).thenReturn(Optional.of(reservation));
+        service.releaseSaga(new com.fashionstore.contracts.inventory.command.ReleaseInventoryCommand("order-release","reservation-release"),"saga-release");
+        verify(outboxService).saveMessage(eq("order-release"),eq("inventory.released"),any());
+        verify(inventoryRepository,never()).save(any());
+    }
+
     @Mock
     private InventoryRepository inventoryRepository;
 
@@ -531,7 +559,7 @@ class InventoryServiceImplTest {
 
     @Test
     void getLedger_withVariantId_queriesByVariantId() {
-        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(0, 10);
+        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(1, 20);
         com.fashionstore.catalog.entity.InventoryLedger ledger = com.fashionstore.catalog.entity.InventoryLedger.builder()
                 .id("led-1")
                 .variantId("var-1")
@@ -542,7 +570,7 @@ class InventoryServiceImplTest {
                 .createdAt(java.time.LocalDateTime.now())
                 .build();
         org.springframework.data.domain.Page<com.fashionstore.catalog.entity.InventoryLedger> page =
-                new org.springframework.data.domain.PageImpl<>(List.of(ledger), pageable, 1);
+                new org.springframework.data.domain.PageImpl<>(List.of(ledger), pageable, 21);
 
         when(inventoryLedgerRepository.search("var-1", null, null, null, pageable)).thenReturn(page);
 
@@ -550,6 +578,8 @@ class InventoryServiceImplTest {
                 service.getLedger("var-1", null, null, null, pageable);
 
         assertThat(response.getItems()).hasSize(1);
+        assertThat(response.getTotalElements()).isEqualTo(21L);
+        assertThat(response.getTotalPage()).isEqualTo(2);
         assertThat(response.getItems().get(0).getId()).isEqualTo("led-1");
         assertThat(response.getItems().get(0).getVariantId()).isEqualTo("var-1");
         assertThat(response.getItems().get(0).getType()).isEqualTo(com.fashionstore.catalog.entity.enumeration.InventoryLedgerType.RESERVE);

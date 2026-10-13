@@ -37,6 +37,13 @@ public class InternalMediaFileController {
                 .build();
     }
 
+    @GetMapping("/{mediaId}/evidence-url")
+    @PreAuthorize("hasAuthority('" + KeycloakJwtAuthoritiesConverter.INTERNAL_CALLER + "')")
+    public ApiResponse<String> evidenceUrl(@PathVariable String mediaId, @RequestParam String ownerId) {
+        ensureInternalCaller();
+        return ApiResponse.<String>builder().data(mediaFileService.resolveEvidenceUrl(mediaId, ownerId)).build();
+    }
+
     private void ensureInternalCaller() {
         var authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || authentication.getAuthorities().stream()

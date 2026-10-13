@@ -18,6 +18,9 @@ import java.util.List;
 @AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class OrderResponse {
+    boolean canCancel;
+    boolean shipmentCreationPending;
+    OrderCancellationResponse cancellation;
     String id;
     String orderCode;
     String checkoutId;
@@ -26,6 +29,14 @@ public class OrderResponse {
     PaymentMethod paymentMethod;
     PaymentProvider paymentProvider;
     String paymentUrl;
+    java.time.Instant deliveredAt;
+    java.time.Instant completedAt;
+    String completionSource;
+    java.time.Instant returnEligibleUntil;
+    boolean canRequestReturn;
+    boolean canConfirmReceipt;
+    String activeReturnId;
+    String deliveryEvidenceIssue;
     String currency;
     /** Lý do hủy viết cho người đọc; mã lỗi kỹ thuật của saga không lộ ra API. */
     String cancelReason;

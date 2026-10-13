@@ -1,5 +1,7 @@
 package com.fashionstore.payment.service.impl;
 
+import com.fashionstore.payment.service.PaymentTransactionService;
+
 import com.fashionstore.common.payment.PaymentMethod;
 import com.fashionstore.common.payment.PaymentProvider;
 import com.fashionstore.payment.dto.CallbackOutcome;
@@ -10,8 +12,8 @@ import com.fashionstore.payment.entity.Payment;
 import com.fashionstore.payment.entity.enumeration.PaymentStatus;
 import com.fashionstore.payment.repository.PaymentRepository;
 import com.fashionstore.payment.service.PaymentStateService;
-import com.fashionstore.payment.service.provider.PaymentHandler;
-import com.fashionstore.payment.service.provider.PaymentHandlerRegistry;
+import com.fashionstore.payment.client.PaymentHandler;
+import com.fashionstore.payment.client.PaymentHandlerRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -57,8 +59,11 @@ class CallbackPaymentServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        com.fashionstore.payment.service.PaymentDbService paymentDbService = new com.fashionstore.payment.service.PaymentDbService(paymentRepository, null, null, null, paymentStateService);
-        service = new CallbackPaymentServiceImpl(paymentHandlerRegistry, paymentDbService);
+        var jdbcTemplate = org.mockito.Mockito.mock(org.springframework.jdbc.core.JdbcTemplate.class);
+        com.fashionstore.payment.service.PaymentTransactionService paymentTransactionService = new com.fashionstore.payment.service.PaymentTransactionService(
+                paymentRepository, jdbcTemplate, null, null, null, paymentStateService,
+                org.mockito.Mockito.mock(com.fashionstore.payment.service.WalletService.class));
+        service = new CallbackPaymentServiceImpl(paymentHandlerRegistry, paymentTransactionService);
     }
 
     @Test

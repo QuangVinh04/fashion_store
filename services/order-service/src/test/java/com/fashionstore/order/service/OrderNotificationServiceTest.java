@@ -10,7 +10,7 @@ import com.fashionstore.order.entity.Order;
 import com.fashionstore.order.entity.ShippingAddress;
 import com.fashionstore.order.entity.Shipment;
 import com.fashionstore.order.entity.enumeration.ShipmentProvider;
-import com.fashionstore.order.outbox.OutboxService;
+import com.fashionstore.order.event.OutboxEventRecorder;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -35,13 +35,13 @@ class OrderNotificationServiceTest {
     IdentityClient identityClient;
 
     @Mock
-    OutboxService outboxService;
+    OutboxEventRecorder outboxEventRecorder;
 
     OrderNotificationService notificationService;
 
     @BeforeEach
     void setUp() {
-        notificationService = new OrderNotificationService(identityClient, outboxService);
+        notificationService = new OrderNotificationService(identityClient, outboxEventRecorder);
     }
 
     @Test
@@ -68,7 +68,7 @@ class OrderNotificationServiceTest {
         notificationService.sendOrderConfirmedNotification(order);
 
         ArgumentCaptor<EventEnvelope<EmailNotificationRequested>> captor = ArgumentCaptor.forClass(EventEnvelope.class);
-        verify(outboxService).saveMessage(eq("order-uuid-1"), eq(EventTypes.NOTIFICATION_EMAIL_REQUESTED), captor.capture());
+        verify(outboxEventRecorder).saveMessage(eq("order-uuid-1"), eq(EventTypes.NOTIFICATION_EMAIL_REQUESTED), captor.capture());
 
         EventEnvelope<EmailNotificationRequested> envelope = captor.getValue();
         assertThat(envelope.eventType()).isEqualTo(EventTypes.NOTIFICATION_EMAIL_REQUESTED);
@@ -95,7 +95,7 @@ class OrderNotificationServiceTest {
         notificationService.sendOrderConfirmedNotification(order);
 
         ArgumentCaptor<EventEnvelope<EmailNotificationRequested>> captor = ArgumentCaptor.forClass(EventEnvelope.class);
-        verify(outboxService).saveMessage(eq("order-uuid-101"), eq(EventTypes.NOTIFICATION_EMAIL_REQUESTED), captor.capture());
+        verify(outboxEventRecorder).saveMessage(eq("order-uuid-101"), eq(EventTypes.NOTIFICATION_EMAIL_REQUESTED), captor.capture());
 
         EventEnvelope<EmailNotificationRequested> envelope = captor.getValue();
         EmailNotificationRequested payload = envelope.payload();
@@ -115,7 +115,7 @@ class OrderNotificationServiceTest {
 
         notificationService.sendOrderConfirmedNotification(order);
 
-        verify(outboxService, never()).saveMessage(anyString(), anyString(), any());
+        verify(outboxEventRecorder, never()).saveMessage(anyString(), anyString(), any());
     }
 
     @Test
@@ -146,7 +146,7 @@ class OrderNotificationServiceTest {
         notificationService.sendOrderShippedNotification(order, shipment);
 
         ArgumentCaptor<EventEnvelope<EmailNotificationRequested>> captor = ArgumentCaptor.forClass(EventEnvelope.class);
-        verify(outboxService).saveMessage(eq("order-uuid-2"), eq(EventTypes.NOTIFICATION_EMAIL_REQUESTED), captor.capture());
+        verify(outboxEventRecorder).saveMessage(eq("order-uuid-2"), eq(EventTypes.NOTIFICATION_EMAIL_REQUESTED), captor.capture());
 
         EventEnvelope<EmailNotificationRequested> envelope = captor.getValue();
         EmailNotificationRequested payload = envelope.payload();
@@ -178,7 +178,7 @@ class OrderNotificationServiceTest {
         notificationService.sendOrderDeliveredNotification(order);
 
         ArgumentCaptor<EventEnvelope<EmailNotificationRequested>> captor = ArgumentCaptor.forClass(EventEnvelope.class);
-        verify(outboxService).saveMessage(eq("order-uuid-3"), eq(EventTypes.NOTIFICATION_EMAIL_REQUESTED), captor.capture());
+        verify(outboxEventRecorder).saveMessage(eq("order-uuid-3"), eq(EventTypes.NOTIFICATION_EMAIL_REQUESTED), captor.capture());
 
         EventEnvelope<EmailNotificationRequested> envelope = captor.getValue();
         EmailNotificationRequested payload = envelope.payload();
@@ -201,7 +201,7 @@ class OrderNotificationServiceTest {
         notificationService.sendOrderCancelledNotification(order, "Thanh toán thất bại");
 
         ArgumentCaptor<EventEnvelope<EmailNotificationRequested>> captor = ArgumentCaptor.forClass(EventEnvelope.class);
-        verify(outboxService).saveMessage(eq("order-uuid-2"), eq(EventTypes.NOTIFICATION_EMAIL_REQUESTED), captor.capture());
+        verify(outboxEventRecorder).saveMessage(eq("order-uuid-2"), eq(EventTypes.NOTIFICATION_EMAIL_REQUESTED), captor.capture());
         EmailNotificationRequested payload = captor.getValue().payload();
         assertThat(payload.recipient()).isEqualTo("buyer@fashionstore.com");
         assertThat(payload.template()).isEqualTo("order-cancelled");

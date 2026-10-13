@@ -20,6 +20,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -32,6 +34,7 @@ public class CategoryServiceImpl implements CategoryService {
 
 
     @Override
+    @Transactional(readOnly = true)
     public CategoryResponse getCategoryById(String id) {
         Category category = categoryRepository.findById(id)
                 .orElseThrow(() -> new AppException(ProductErrorCode.CATEGORY_NOT_FOUND));
@@ -46,27 +49,33 @@ public class CategoryServiceImpl implements CategoryService {
                     .map(categoryMapper::toCategoryResponse)
                     .toList());
         }
+        attachCounts(List.of(response));
         return response;
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<CategoryResponse> getCategoryTree() {
-        return categoryRepository.findByParentIsNullOrderByNameAsc().stream()
+        List<CategoryResponse> result = categoryRepository.findByParentIsNullOrderByNameAsc().stream()
                 .map(categoryMapper::toCategoryResponse)
                 .toList();
+        attachCounts(result);
+        return result;
     }
 
     @Override
+    @Transactional(readOnly = true)
     public PageResponse<List<CategoryResponse>> getAllCategories(Pageable pageable) {
         Page<Category> categoryPage = categoryRepository.findAll(pageable);
         List<CategoryResponse> responses = categoryPage.stream()
                 .map(categoryMapper::toCategoryResponse)
                 .toList();
+        attachCounts(responses);
         return PageResponse.<List<CategoryResponse>>builder()
                 .pageNo(pageable.getPageNumber())
                 .pageSize(pageable.getPageSize())
                 .totalPage(categoryPage.getTotalPages())
+                .totalElements(categoryPage.getTotalElements())
                 .items(responses)
                 .build();
     }
@@ -79,8 +88,12 @@ public class CategoryServiceImpl implements CategoryService {
         if(categoryRepository.existsCategoryByName(request.getName())){
             throw new AppException(ProductErrorCode.CATEGORY_ALREADY_EXIST);
         }
+        String slug = resolveSlug(request);
+        if (categoryRepository.existsBySlug(slug)) throw new AppException(ProductErrorCode.CATEGORY_ALREADY_EXIST);
         Category category = categoryMapper.toCategory(request);
-        category.setSlug(SlugUtils.makeSlug(request.getName()));
+        category.setSlug(slug);
+        if (request.getActive() != null) category.setActive(request.getActive());
+        if (request.getDisplayOrder() != null) category.setDisplayOrder(request.getDisplayOrder());
 
         if(request.getParentId() != null && !request.getParentId().isBlank()){
             Category parent = categoryRepository.findById(request.getParentId())
@@ -119,7 +132,11 @@ public class CategoryServiceImpl implements CategoryService {
         }
 
         categoryMapper.updateCategory(category, request);
-        category.setSlug(SlugUtils.makeSlug(request.getName()));
+        String slug = resolveSlug(request);
+        if (categoryRepository.existsBySlugAndIdNot(slug, id)) throw new AppException(ProductErrorCode.CATEGORY_ALREADY_EXIST);
+        category.setSlug(slug);
+        if (request.getActive() != null) category.setActive(request.getActive());
+        if (request.getDisplayOrder() != null) category.setDisplayOrder(request.getDisplayOrder());
 
         category = categoryRepository.save(category);
         return categoryMapper.toCategoryResponse(category);
@@ -146,6 +163,21 @@ public class CategoryServiceImpl implements CategoryService {
             }
             current = current.getParent();
         }
+    }
+
+    private String resolveSlug(CategoryRequest request) {
+        return SlugUtils.makeSlug(request.getSlug() == null || request.getSlug().isBlank() ? request.getName() : request.getSlug());
+    }
+
+    private void attachCounts(List<CategoryResponse> responses) {
+        Map<String, Long> counts = productRepository.countDirectProductsByCategory().stream()
+                .collect(Collectors.toMap(ProductRepository.CategoryProductCount::getCategoryId, ProductRepository.CategoryProductCount::getProductCount));
+        responses.forEach(response -> attachCount(response, counts));
+    }
+
+    private void attachCount(CategoryResponse response, Map<String, Long> counts) {
+        response.setProductCount(counts.getOrDefault(response.getId(), 0L));
+        if (response.getChildren() != null) response.getChildren().forEach(child -> attachCount(child, counts));
     }
 }
 

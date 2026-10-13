@@ -25,6 +25,9 @@ public class CategoryResponse {
     String description;
 
     String parentId;
+    Boolean active;
+    Integer displayOrder;
+    Long productCount;
 
     List<CategoryResponse> children;
 

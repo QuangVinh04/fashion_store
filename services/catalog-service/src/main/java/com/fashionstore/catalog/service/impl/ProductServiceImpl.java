@@ -92,6 +92,16 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     @Transactional(readOnly = true)
+    public PageResponse<List<ProductSummaryResponse>> getAllProductsForBackoffice(Pageable pageable, AdminProductFilter filter) {
+        if (filter.getMinPrice() != null && filter.getMaxPrice() != null
+                && filter.getMinPrice().compareTo(filter.getMaxPrice()) > 0) {
+            throw new AppException(ProductErrorCode.INVALID_SEARCH_CRITERIA);
+        }
+        return getPageResponse(pageable, productRepository.findAll(AdminProductSpecifications.from(filter), pageable));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public ProductResponse getProductById(String id) {
         Product product = productRepository.findDetailProductById(id)
                 .orElseThrow(() -> new AppException(ProductErrorCode.PRODUCT_NOT_FOUND));
@@ -967,6 +977,7 @@ public class ProductServiceImpl implements ProductService {
                 .pageNo(pageable.getPageNumber())
                 .pageSize(pageable.getPageSize())
                 .totalPage(products.getTotalPages())
+                .totalElements(products.getTotalElements())
                 .items(responses)
                 .build();
     }

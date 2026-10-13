@@ -42,7 +42,17 @@ public enum OrderErrorCode implements BaseErrorCode {
     RETURN_REQUEST_ALREADY_PROCESSED(4021, "Return request has already been processed", HttpStatus.BAD_REQUEST),
     RETURN_REJECT_REASON_REQUIRED(4022, "Rejection reason is required", HttpStatus.BAD_REQUEST),
     CHECKOUT_UPDATE_CONFLICT(4023, "Checkout changed while calculating, please reload and retry", HttpStatus.CONFLICT),
-    PAYMENT_PROVIDER_UNSUPPORTED(5002, "Payment provider is not supported", HttpStatus.UNSUPPORTED_MEDIA_TYPE);
+    PAYMENT_PROVIDER_UNSUPPORTED(5002, "Payment provider is not supported", HttpStatus.UNSUPPORTED_MEDIA_TYPE),
+    PAYMENT_ATTEMPT_CONFLICT(4024,"Payment attempt changed, reload the order",HttpStatus.CONFLICT),
+    RETURN_WORKFLOW_CONFLICT(4025,"Return changed, reload and retry",HttpStatus.CONFLICT),
+    RETURN_EVIDENCE_INVALID(4026,"Return evidence is missing or invalid",HttpStatus.BAD_REQUEST),
+    RETURN_ITEM_INVALID(4027,"Return quantities must match the whole order snapshot",HttpStatus.BAD_REQUEST),
+    FULFILLMENT_BLOCKED(4028,"Fulfillment is blocked by an order cancellation",HttpStatus.CONFLICT),
+    CANCELLATION_CONFLICT(4029,"Cancellation changed or cannot proceed, reload the order",HttpStatus.CONFLICT),
+    SHIPMENT_EVIDENCE_INVALID(4033, "Carrier shipment or financial evidence does not match this order", HttpStatus.BAD_REQUEST),
+    RETURN_REFUND_AMOUNT_INVALID(4031, "Return refunds must equal the whole order paid amount", HttpStatus.BAD_REQUEST),
+    RETURN_REFUND_UNCONFIRMED(4032, "Wallet refund is not confirmed; retry the same return request", HttpStatus.BAD_GATEWAY),
+    SHIPMENT_INITIATION_CONFLICT(4030,"Shipment creation needs reconciliation before retrying",HttpStatus.CONFLICT);
 
 
     private final int code;

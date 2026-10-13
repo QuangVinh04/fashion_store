@@ -94,10 +94,12 @@ public class SizeChartService {
     @Transactional
     public SizeChartRowResponse addRow(String sizeChartId, SizeChartRowRequest request) {
         validateFitRanges(request);
-        SizeChart sizeChart = findDetail(sizeChartId);
+        SizeChart sizeChart = sizeChartRepository.findLockedById(sizeChartId)
+                .orElseThrow(() -> new AppException(ProductErrorCode.SIZE_CHART_NOT_FOUND));
+        validateUniqueCode(sizeChartId, null, request.getSizeCode());
         SizeChartRow row = SizeChartRow.builder()
                 .sizeChart(sizeChart)
-                .sizeCode(request.getSizeCode())
+                .sizeCode(request.getSizeCode().trim())
                 .chest(request.getChest())
                 .waist(request.getWaist())
                 .hip(request.getHip())
@@ -123,8 +125,11 @@ public class SizeChartService {
     @Transactional
     public SizeChartRowResponse updateRow(String sizeChartId, String rowId, SizeChartRowRequest request) {
         validateFitRanges(request);
+        sizeChartRepository.findLockedById(sizeChartId)
+                .orElseThrow(() -> new AppException(ProductErrorCode.SIZE_CHART_NOT_FOUND));
         SizeChartRow row = findOwnedRow(sizeChartId, rowId);
-        row.setSizeCode(request.getSizeCode());
+        validateUniqueCode(sizeChartId, rowId, request.getSizeCode());
+        row.setSizeCode(request.getSizeCode().trim());
         row.setChest(request.getChest());
         row.setWaist(request.getWaist());
         row.setHip(request.getHip());
@@ -193,6 +198,14 @@ public class SizeChartService {
     private void validateFitRanges(SizeChartRowRequest request) {
         validateRange(request.getHeightMin(), request.getHeightMax());
         validateRange(request.getWeightMin(), request.getWeightMax());
+    }
+
+    private void validateUniqueCode(String chartId, String currentId, String code) {
+        if (sizeChartRowRepository.findBySizeChartId(chartId).stream()
+                .anyMatch(row -> (currentId == null || !currentId.equals(row.getId()))
+                        && row.getSizeCode().trim().equalsIgnoreCase(code.trim()))) {
+            throw new AppException(ProductErrorCode.SIZE_CHART_CODE_DUPLICATE);
+        }
     }
 
     private void validateRange(BigDecimal minimum, BigDecimal maximum) {

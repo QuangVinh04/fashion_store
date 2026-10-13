@@ -186,6 +186,31 @@ class BackofficeBffSecurityTest {
                 .authorities(new SimpleGrantedAuthority(role));
     }
 
+    @Test
+    void financialReadsRelayTokenAndFinancialWritesRequireCsrf() {
+        client.mutateWith(login("ROLE_ADMIN")).get().uri("/api/v1/admin/payments/order/order").exchange().expectStatus().isOk();
+        assertThat(relayedAuthorization.get()).isEqualTo("Bearer access-token");
+        client.mutateWith(login("ROLE_ADMIN")).get().uri("/api/v1/admin/wallets/buyer").exchange().expectStatus().isOk();
+        assertThat(relayedAuthorization.get()).isEqualTo("Bearer access-token");
+        client.mutateWith(login("ROLE_ADMIN")).get().uri("/api/v1/admin/orders/returns/case").exchange().expectStatus().isOk();
+        assertThat(relayedAuthorization.get()).isEqualTo("Bearer access-token");
+        relayedAuthorization.set(null);
+        client.mutateWith(login("ROLE_ADMIN")).post().uri("/api/v1/admin/orders/returns/case/refund-approval").exchange().expectStatus().isForbidden();
+        assertThat(relayedAuthorization.get()).isNull();
+        client.mutateWith(login("ROLE_ADMIN")).mutateWith(csrf()).post().uri("/api/v1/admin/orders/returns/case/refund-approval").exchange().expectStatus().isOk();
+        assertThat(relayedAuthorization.get()).isEqualTo("Bearer access-token");
+        relayedAuthorization.set(null);
+        client.mutateWith(login("ROLE_ADMIN")).post().uri("/api/v1/admin/orders/order/cod-collection").exchange().expectStatus().isForbidden();
+        assertThat(relayedAuthorization.get()).isNull();
+        client.mutateWith(login("ROLE_ADMIN")).mutateWith(csrf()).post().uri("/api/v1/admin/orders/order/cod-collection").exchange().expectStatus().isOk();
+        assertThat(relayedAuthorization.get()).isEqualTo("Bearer access-token");
+        relayedAuthorization.set(null);
+        client.mutateWith(login("ROLE_ADMIN")).post().uri("/api/v1/files/evidence/returns/presign").exchange().expectStatus().isForbidden();
+        assertThat(relayedAuthorization.get()).isNull();
+        client.mutateWith(login("ROLE_ADMIN")).mutateWith(csrf()).post().uri("/api/v1/files/evidence/returns/presign").exchange().expectStatus().isOk();
+        assertThat(relayedAuthorization.get()).isEqualTo("Bearer access-token");
+    }
+
     private static HttpServer startStubApiGateway() {
         try {
             HttpServer server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);

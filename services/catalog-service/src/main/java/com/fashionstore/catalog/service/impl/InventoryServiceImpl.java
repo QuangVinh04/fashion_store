@@ -248,6 +248,13 @@ public class InventoryServiceImpl implements InventoryService {
     @Override
     @Transactional
     public void releaseSaga(ReleaseInventoryCommand command, String correlationId) {
+        InventoryReservation known=reservationRepository.findByOrderIdForUpdate(command.orderId()).orElse(null);
+        if(known!=null && known.getStatus()==InventoryReservationStatus.RELEASED
+                && (command.reservationId()==null || command.reservationId().equals(known.getId()))) {
+            outboxService.saveMessage(command.orderId(),EventTypes.INVENTORY_RELEASED,EventEnvelope.v1(
+                    EventTypes.INVENTORY_RELEASED,command.orderId(),correlationId,new InventoryReleasedEvent(command.orderId(),known.getId())));
+            return;
+        }
         log.info("[Inventory] saga release — orderId={}, reservationId={}", command.orderId(), command.reservationId());
         String reservationId = releaseInternal(command.orderId(), command.reservationId());
         // Chỉ emit RELEASED nếu thực sự đã release (idempotent: release 2 lần chỉ emit 1 lần)
@@ -308,6 +315,20 @@ public class InventoryServiceImpl implements InventoryService {
     @Override
     @Transactional
     public void confirmSaga(ConfirmInventoryCommand command, String correlationId) {
+        InventoryReservation known=reservationRepository.findByOrderIdForUpdate(command.orderId()).orElse(null);
+        boolean same=known!=null && (command.reservationId()==null || command.reservationId().equals(known.getId()));
+        if(same && (known.getStatus()==InventoryReservationStatus.RELEASED || known.getStatus()==InventoryReservationStatus.REJECTED)) {
+            var event=new com.fashionstore.contracts.inventory.event.InventoryConfirmationRejectedEvent(
+                    command.orderId(),known.getId(),"RESERVATION_"+known.getStatus().name(),"Reservation cannot commit because it was already released or rejected");
+            outboxService.saveMessage(command.orderId(),EventTypes.INVENTORY_CONFIRMATION_REJECTED,
+                    EventEnvelope.v1(EventTypes.INVENTORY_CONFIRMATION_REJECTED,command.orderId(),correlationId,event));
+            return;
+        }
+        if(same && known.getStatus()==InventoryReservationStatus.CONFIRMED) {
+            outboxService.saveMessage(command.orderId(),EventTypes.INVENTORY_CONFIRMED,EventEnvelope.v1(
+                    EventTypes.INVENTORY_CONFIRMED,command.orderId(),correlationId,new InventoryConfirmedEvent(command.orderId(),known.getId())));
+            return;
+        }
         log.info("[Inventory] saga confirm — orderId={}, reservationId={}", command.orderId(), command.reservationId());
         String reservationId = confirmInternal(command.orderId(), command.reservationId());
         if (reservationId != null) {
@@ -711,6 +732,7 @@ public class InventoryServiceImpl implements InventoryService {
                 .pageNo(page.getNumber())
                 .pageSize(page.getSize())
                 .totalPage(page.getTotalPages())
+                .totalElements(page.getTotalElements())
                 .items(items)
                 .build();
     }

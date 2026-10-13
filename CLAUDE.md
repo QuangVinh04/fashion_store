@@ -90,10 +90,10 @@ com.fashionstore.<service>
   <Service>Application.java
 ```
 
-- Sub-dividing is allowed **inside `model`/`entity` only** (e.g. `model/enumeration`, `model/attribute`, `model/option`).
+- Domain sub-dividing is allowed inside `model`/`entity` (e.g. `entity/enumeration`, `entity/attribute`, `entity/option`). Existing technical `config/security` and `config/messaging` remain; keep business DTOs flat.
 - `client/`, `cache/`, `messaging/`, `event/` exist only where a service actually needs them — do not create empty ones.
 - Entity package name differs by service: `model/` in catalog, `entity/` in order + identity + payment. Follow whatever the service you are editing already uses; do not rename a service's package wholesale unless asked.
-- `catalog-service` is the reference implementation of this layout (`services/catalog-service/README.md`). Known deviations still to be flattened: `order-service/{outbox,saga}/**`, `payment-service/{common,order,gateway}/**`.
+- `catalog-service` is the reference implementation of this layout (`services/catalog-service/README.md`). Order/payment now use the same layers: outbox entity/repository in their owning layers, listeners/relays in `event`, saga logic in `service`, and payment provider adapters in `client`. See `docs/backend-code-structure.md`.
 - Split by layer, not by domain: e.g. outbox lives as `model/OutboxEvent` + `repository/OutboxEventRepository` + `event/OutboxEventRecorder|OutboxEventRelay`.
 
 ## Constraints & Gotchas

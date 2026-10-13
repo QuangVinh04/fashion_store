@@ -198,6 +198,7 @@
       "attributes": {
         "pkce.code.challenge.method": "S256",
         "post.logout.redirect.uris": "http://localhost:8084/*",
+        "login_theme": "backoffice",
         "backchannel.logout.url": "${BACKOFFICE_BFF_BACKCHANNEL_LOGOUT_URL:http://backoffice-bff:8084/logout/connect/back-channel/keycloak}",
         "backchannel.logout.session.required": "true"
       },
@@ -342,6 +343,30 @@
           }
         }
       ]
+    },
+    {
+      "clientId": "payment-service",
+      "name": "Payment service",
+      "enabled": true,
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "dev-payment-service-secret",
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "protocolMappers": [
+        {
+          "name": "fashion-api-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.client.audience": "fashion-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
+        }
+      ]
     }
   ],
   "users": [
@@ -420,6 +445,16 @@
       "realmRoles": [
         "default-roles-fashion-store"
       ]
+    },
+    {
+      "username": "service-account-payment-service",
+      "enabled": true,
+      "serviceAccountClientId": "payment-service",
+      "clientRoles": {
+        "fashion-api": [
+          "internal-caller"
+        ]
+      }
     }
   ]
 }

@@ -12,6 +12,7 @@ import java.math.BigDecimal;
 @AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class OrderItemResponse {
+    String orderItemId;
     String variantId;
     String productName;
     String size;

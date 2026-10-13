@@ -14,6 +14,8 @@ public interface CategoryMapper {
     @Mapping(target = "parent", ignore = true)
     @Mapping(target = "productCategories", ignore = true)
     @Mapping(target = "children", ignore = true)
+    @Mapping(target = "active", ignore = true)
+    @Mapping(target = "displayOrder", ignore = true)
     Category toCategory (CategoryRequest request);
 
     @Mapping(target = "parentId", source = "parent.id")
@@ -26,6 +28,8 @@ public interface CategoryMapper {
     @Mapping(target = "updatedAt", ignore = true)
     @Mapping(target = "productCategories", ignore = true)
     @Mapping(target = "children", ignore = true)
+    @Mapping(target = "active", ignore = true)
+    @Mapping(target = "displayOrder", ignore = true)
     void updateCategory(@MappingTarget Category category, CategoryRequest request);
 }
 

@@ -111,6 +111,7 @@ services:
       IDENTITY_SERVICE_CLIENT_SECRET: ${IDENTITY_SERVICE_CLIENT_SECRET:-dev-identity-service-secret}
       KEYCLOAK_ADMIN_URL: http://keycloak:8080/admin/realms/fashion-store
       CATALOG_BASE_URL: http://catalog-service:8087
+      PAYMENT_BASE_URL: http://payment-service:8085
       SPRING_MAIN_ALLOW_BEAN_DEFINITION_OVERRIDING: "true"
     depends_on:
       identity-postgres:
@@ -288,6 +289,7 @@ services:
     volumes:
       - ./platform/keycloak/realm-fashion-store.json:/opt/keycloak/data/import/realm-fashion-store.json:ro
       - ./platform/keycloak/themes/lino:/opt/keycloak/themes/lino:ro
+      - ./platform/keycloak/themes/backoffice:/opt/keycloak/themes/backoffice:ro
     networks:
       - fashion-network
 

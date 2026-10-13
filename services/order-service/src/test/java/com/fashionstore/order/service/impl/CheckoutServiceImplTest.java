@@ -1,5 +1,7 @@
 package com.fashionstore.order.service.impl;
 
+import com.fashionstore.order.service.CheckoutTransactionService;
+
 import com.fashionstore.common.exception.AppException;
 import com.fashionstore.common.exception.ErrorCode;
 import com.fashionstore.common.payment.PaymentMethod;
@@ -141,9 +143,8 @@ class CheckoutServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = new CheckoutServiceImpl(checkoutRepository, cartService, currentUserProvider, promotionService,
-                catalogClient, identityClient, ghnClient,
-                new org.springframework.transaction.support.TransactionTemplate(new TestTransactionManager()));
+        service = new CheckoutServiceImpl(checkoutRepository, new com.fashionstore.order.service.CheckoutTransactionService(checkoutRepository),
+                cartService, currentUserProvider, promotionService, catalogClient, identityClient, ghnClient);
         when(currentUserProvider.getCurrentUserId()).thenReturn("user-1");
         when(checkoutRepository.save(any(Checkout.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));

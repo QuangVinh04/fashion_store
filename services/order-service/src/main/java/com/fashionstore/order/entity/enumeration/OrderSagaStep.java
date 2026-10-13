@@ -3,10 +3,10 @@ package com.fashionstore.order.entity.enumeration;
 import java.time.Duration;
 
 /**
- * Bước hiện tại của saga. Mỗi bước tự mang deadline của nó — saga sở hữu thời hạn, bảng orders không biết gì.
+ * Bước hiện tại của saga. Mỗi bước tự mang deadline của nó — saga sở hữu thời hạn, bảng orders
+ * không biết gì.
  */
 public enum OrderSagaStep {
-
     RESERVE_INVENTORY(Duration.ofSeconds(60)),
 
     /** Deadline dài vì người dùng có thể đang thao tác trên cổng thanh toán. */
@@ -17,6 +17,10 @@ public enum OrderSagaStep {
     CANCEL_PAYMENT(Duration.ofSeconds(60)),
 
     RELEASE_INVENTORY(Duration.ofSeconds(60)),
+    REFUND_WALLET(Duration.ofSeconds(60)),
+    REFUND_ORDER_FUNDS(Duration.ofSeconds(60)),
+    STOP_SHIPMENT(Duration.ofSeconds(60)),
+    CANCEL_ORDER_INVENTORY(Duration.ofSeconds(60)),
 
     /** Bước cuối, không còn chờ reply nào nên không có deadline. */
     DONE(null);

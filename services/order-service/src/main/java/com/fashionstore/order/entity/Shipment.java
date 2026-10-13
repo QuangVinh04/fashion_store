@@ -31,6 +31,8 @@ import java.math.BigDecimal;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class Shipment extends BaseEntity {
 
+    @Column(name="handed_off_at") java.time.Instant handedOffAt;
+
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "order_id", nullable = false, unique = true)
     Order order;
@@ -62,4 +64,24 @@ public class Shipment extends BaseEntity {
     @Column(nullable = false, length = 50)
     @Builder.Default
     ShipmentStatus status = ShipmentStatus.PENDING;
+
+    @Column(name = "cod_status", length = 20)
+    @Builder.Default
+    String codStatus = "PENDING";
+
+    @Column(name = "cod_amount", precision = 19, scale = 2)
+    BigDecimal codAmount;
+
+
+    @Column(name = "cod_collected_at")
+    java.time.Instant codCollectedAt;
+
+    @Column(name = "cod_transferred_at")
+    java.time.Instant codTransferredAt;
+
+    @Column(name = "pod_url", length = 1000)
+    String podUrl;
+
+    @Column(name = "delivered_at")
+    java.time.Instant deliveredAt;
 }

@@ -25,6 +25,12 @@ import java.util.List;
 )
 public interface CatalogFeignClient {
 
+    @GetMapping("/internal/v1/media/{mediaId}")
+    ApiResponse<com.fashionstore.order.dto.ReturnEvidenceMetadata> getReturnEvidence(@PathVariable String mediaId,@RequestParam String ownerId);
+
+    @GetMapping("/internal/v1/media/{mediaId}/evidence-url")
+    ApiResponse<String> getEvidenceReadUrl(@PathVariable String mediaId,@RequestParam String ownerId);
+
     @GetMapping("/api/v1/products/variants/{id}")
     ApiResponse<ProductVariantDto> getVariant(@PathVariable("id") String variantId);
 

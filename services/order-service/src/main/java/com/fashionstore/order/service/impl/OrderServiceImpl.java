@@ -1,35 +1,36 @@
 package com.fashionstore.order.service.impl;
 
-import com.fashionstore.common.exception.AppException;
-import com.fashionstore.order.dto.*;
-import com.fashionstore.order.exception.OrderErrorCode;
-import com.fashionstore.common.security.CurrentUserProvider;
 import com.fashionstore.common.dto.PageResponse;
-import com.fashionstore.order.saga.SagaCancellationService;
-import com.fashionstore.order.saga.SagaCommands;
-import com.fashionstore.order.saga.SagaOutbox;
-import com.fashionstore.order.entity.*;
+import com.fashionstore.common.exception.AppException;
+import com.fashionstore.common.security.CurrentUserProvider;
 import com.fashionstore.contracts.common.EventEnvelope;
 import com.fashionstore.contracts.common.EventTypes;
 import com.fashionstore.contracts.inventory.command.InventoryItem;
 import com.fashionstore.contracts.inventory.command.ReservationInventoryCommand;
 import com.fashionstore.contracts.order.dto.VerifyPurchaseRequest;
 import com.fashionstore.contracts.order.dto.VerifyPurchaseResponse;
-import java.util.Optional;
+import com.fashionstore.order.dto.*;
+import com.fashionstore.order.entity.*;
 import com.fashionstore.order.entity.enumeration.CheckoutStatus;
+import com.fashionstore.order.entity.enumeration.OrderSagaType;
 import com.fashionstore.order.entity.enumeration.OrderStatus;
+import com.fashionstore.order.event.OutboxEventRecorder;
+import com.fashionstore.order.event.SagaOutbox;
+import com.fashionstore.order.exception.OrderErrorCode;
 import com.fashionstore.order.repository.CheckoutRepository;
 import com.fashionstore.order.repository.OrderRepository;
 import com.fashionstore.order.repository.OrderSagaRepository;
 import com.fashionstore.order.repository.OrderStatusHistoryRepository;
 import com.fashionstore.order.repository.ShipmentRepository;
-import com.fashionstore.order.service.OrderService;
 import com.fashionstore.order.service.OrderNotificationService;
+import com.fashionstore.order.service.OrderService;
 import com.fashionstore.order.service.PromotionService;
-import com.fashionstore.order.outbox.OutboxService;
+import com.fashionstore.order.service.SagaCancellationService;
+
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
+
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -38,6 +39,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -48,7 +50,7 @@ public class OrderServiceImpl implements OrderService {
     OrderRepository orderRepository;
     CheckoutRepository checkoutRepository;
     OrderSagaRepository orderSagaRepository;
-    OutboxService outboxService;
+    OutboxEventRecorder outboxEventRecorder;
     SagaOutbox sagaOutbox;
     SagaCancellationService sagaCancellationService;
     CurrentUserProvider currentUserProvider;
@@ -56,29 +58,36 @@ public class OrderServiceImpl implements OrderService {
     OrderStatusHistoryRepository orderStatusHistoryRepository;
     ShipmentRepository shipmentRepository;
     OrderNotificationService orderNotificationService;
-
+    com.fashionstore.order.service.OrderReceiptService orderReceiptService;
+    com.fashionstore.order.service.OrderCancellationViewService cancellationProjection;
 
     @Override
     @Transactional
     public OrderResponse createOrder(String checkoutId, String idempotencyKey, String clientIp) {
         String userId = currentUserProvider.getCurrentUserId();
-        String effectiveIdempotencyKey = idempotencyKey == null || idempotencyKey.isBlank()
-                ? checkoutId
-                : idempotencyKey.trim();
+        String effectiveIdempotencyKey =
+                idempotencyKey == null || idempotencyKey.isBlank()
+                        ? checkoutId
+                        : idempotencyKey.trim();
 
-        Order existingOrder = orderRepository.findByUserIdAndIdempotencyKey(userId, effectiveIdempotencyKey)
-                .orElse(null);
+        Order existingOrder =
+                orderRepository
+                        .findByUserIdAndIdempotencyKey(userId, effectiveIdempotencyKey)
+                        .orElse(null);
         if (existingOrder != null) {
             return toResponse(existingOrder, existingOrder.getCheckoutId());
         }
 
-        Checkout checkout = checkoutRepository.findForUpdateByIdAndUserId(checkoutId, userId)
-                .orElseThrow(() -> new AppException(OrderErrorCode.CHECKOUT_NOT_FOUND));
+        Checkout checkout =
+                checkoutRepository
+                        .findForUpdateByIdAndUserId(checkoutId, userId)
+                        .orElseThrow(() -> new AppException(OrderErrorCode.CHECKOUT_NOT_FOUND));
 
         if (checkout.getOrder() != null) {
             return toResponse(checkout.getOrder(), checkoutId);
         }
-        if (checkout.getStatus() == CheckoutStatus.CANCELLED || checkout.getStatus() == CheckoutStatus.EXPIRED) {
+        if (checkout.getStatus() == CheckoutStatus.CANCELLED
+                || checkout.getStatus() == CheckoutStatus.EXPIRED) {
             throw new AppException(OrderErrorCode.CHECKOUT_STATUS_INVALID);
         }
 
@@ -89,45 +98,59 @@ public class OrderServiceImpl implements OrderService {
 
         ShippingAddress address = copyAddress(checkout.getShippingAddress());
 
-        Order order = Order.builder()
-                .orderCode(generateOrderCode())
-                .paymentMethod(checkout.getPaymentMethod())
-                .paymentProvider(checkout.getPaymentProvider())
-                .userId(userId)
-                .idempotencyKey(effectiveIdempotencyKey)
-                .status(OrderStatus.PENDING)
-                .checkoutId(checkout.getId())
-                .clientIp(clientIp)
-                .recipientEmail(checkout.getRecipientEmail())
-                .shippingAddress(fullAddress(address))
-                .address(address)
-                .subtotalAmount(checkout.getSubtotalAmount())
-                .discountAmount(checkout.getDiscountAmount())
-                .shippingFee(checkout.getShippingFee())
-                .totalAmount(checkout.getTotalAmount())
-                .build();
+        Order order =
+                Order.builder()
+                        .orderCode(generateOrderCode())
+                        .paymentMethod(checkout.getPaymentMethod())
+                        .paymentProvider(checkout.getPaymentProvider())
+                        .userId(userId)
+                        .idempotencyKey(effectiveIdempotencyKey)
+                        .status(OrderStatus.PENDING)
+                        .checkoutId(checkout.getId())
+                        .clientIp(clientIp)
+                        .recipientEmail(checkout.getRecipientEmail())
+                        .shippingAddress(fullAddress(address))
+                        .address(address)
+                        .subtotalAmount(checkout.getSubtotalAmount())
+                        .discountAmount(checkout.getDiscountAmount())
+                        .shippingFee(checkout.getShippingFee())
+                        .totalAmount(checkout.getTotalAmount())
+                        .build();
 
-        List<OrderItem> orderItems = checkoutItems.stream()
-                .map(item -> buildOrderItem(order, item))
-                .toList();
+        List<OrderItem> orderItems =
+                checkoutItems.stream().map(item -> buildOrderItem(order, item)).toList();
 
         order.setItems(orderItems);
         orderRepository.save(order);
-        recordHistory(order, null, OrderStatus.PENDING, "ORDER_CREATED", userId, "Khách hàng tạo đơn hàng từ checkout");
+        recordHistory(
+                order,
+                null,
+                OrderStatus.PENDING,
+                "ORDER_CREATED",
+                userId,
+                "Khách hàng tạo đơn hàng từ checkout");
 
         if (checkout.getCouponCode() != null && !checkout.getCouponCode().isBlank()) {
 
-            List<PromotionItemDto> promoItems = checkoutItems.stream()
-                    .map(item -> PromotionItemDto.builder()
-                            .variantId(item.getVariantId())
-                            .productId(item.getProductId())
-                            .categoryId(item.getCategoryId())
-                            .unitPrice(item.getUnitPrice())
-                            .quantity(item.getQuantity())
-                            .lineTotal(item.getLineTotal())
-                            .build())
-                    .toList();
-            promotionService.reserve(checkout.getCouponCode(), userId, order.getId(), checkout.getSubtotalAmount(), promoItems);
+            List<PromotionItemDto> promoItems =
+                    checkoutItems.stream()
+                            .map(
+                                    item ->
+                                            PromotionItemDto.builder()
+                                                    .variantId(item.getVariantId())
+                                                    .productId(item.getProductId())
+                                                    .categoryId(item.getCategoryId())
+                                                    .unitPrice(item.getUnitPrice())
+                                                    .quantity(item.getQuantity())
+                                                    .lineTotal(item.getLineTotal())
+                                                    .build())
+                            .toList();
+            promotionService.reserve(
+                    checkout.getCouponCode(),
+                    userId,
+                    order.getId(),
+                    checkout.getSubtotalAmount(),
+                    promoItems);
         }
 
         checkout.setOrder(order);
@@ -137,18 +160,17 @@ public class OrderServiceImpl implements OrderService {
         OrderSaga saga = OrderSaga.start(order.getId());
         orderSagaRepository.save(saga);
 
-        outboxService.saveMessage(
+        outboxEventRecorder.saveMessage(
                 order.getId(),
                 EventTypes.INVENTORY_RESERVATION_REQUESTED,
-                reserveInventory(order, saga, checkoutItems)
-        );
+                reserveInventory(order, saga, checkoutItems));
 
         return toResponse(order, checkoutId);
     }
 
     /**
-     * Đơn chỉ chép bản chụp địa chỉ của checkout (chụp cùng lúc tính phí ship) — không đọc lại identity.
-     * Chép ra object mới: hai entity không được dùng chung một instance embeddable.
+     * Đơn chỉ chép bản chụp địa chỉ của checkout (chụp cùng lúc tính phí ship) — không đọc lại
+     * identity. Chép ra object mới: hai entity không được dùng chung một instance embeddable.
      */
     private static ShippingAddress copyAddress(ShippingAddress source) {
         if (source == null) {
@@ -158,7 +180,11 @@ public class OrderServiceImpl implements OrderService {
     }
 
     private static String fullAddress(ShippingAddress address) {
-        return java.util.stream.Stream.of(address.getDetailAddress(), address.getWard(), address.getDistrict(), address.getProvince())
+        return java.util.stream.Stream.of(
+                        address.getDetailAddress(),
+                        address.getWard(),
+                        address.getDistrict(),
+                        address.getProvince())
                 .filter(part -> part != null && !part.isBlank())
                 .collect(java.util.stream.Collectors.joining(", "));
     }
@@ -167,8 +193,10 @@ public class OrderServiceImpl implements OrderService {
     @Transactional(readOnly = true)
     public OrderResponse getMyOrderById(String orderId) {
         String userId = currentUserProvider.getCurrentUserId();
-        Order order = orderRepository.findWithItemsById(orderId)
-                .orElseThrow(() -> new AppException(OrderErrorCode.ORDER_NOT_FOUND));
+        Order order =
+                orderRepository
+                        .findWithItemsById(orderId)
+                        .orElseThrow(() -> new AppException(OrderErrorCode.ORDER_NOT_FOUND));
         if (!order.getUserId().equals(userId)) {
             throw new AppException(OrderErrorCode.ORDER_NOT_FOUND);
         }
@@ -177,66 +205,50 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     @Transactional(readOnly = true)
-    public PageResponse<List<OrderSummaryResponse>> getMyOrders(OrderStatus status, Pageable pageable) {
+    public PageResponse<List<OrderSummaryResponse>> getMyOrders(
+            OrderStatus status, Pageable pageable) {
         String userId = currentUserProvider.getCurrentUserId();
-        Page<Order> orders = status == null
-                ? orderRepository.findByUserId(userId, pageable)
-                : orderRepository.findByUserIdAndStatus(userId, status, pageable);
+        Page<Order> orders =
+                status == null
+                        ? orderRepository.findByUserId(userId, pageable)
+                        : orderRepository.findByUserIdAndStatus(userId, status, pageable);
         return toPageResponse(orders, pageable);
     }
 
     @Override
     @Transactional
     public OrderResponse cancelMyOrder(String orderId, CancelOrderRequest request) {
-        String userId = currentUserProvider.getCurrentUserId();
-        Order order = orderRepository.findWithItemsById(orderId)
-                .orElseThrow(() -> new AppException(OrderErrorCode.ORDER_NOT_FOUND));
-        if (!order.getUserId().equals(userId)) {
+        return cancelPendingOrder(orderId, request, currentUserProvider.getCurrentUserId(), false);
+    }
+
+    @Override
+    @Transactional
+    @PreAuthorize("hasRole('ADMIN')")
+    public OrderResponse cancelOrderForAdmin(String orderId, CancelOrderRequest request) {
+        return cancelPendingOrder(orderId, request, currentUserProvider.getCurrentUserId(), true);
+    }
+
+    private OrderResponse cancelPendingOrder(
+            String orderId, CancelOrderRequest request, String userId, boolean admin) {
+        Order order =
+                orderRepository
+                        .findWithItemsById(orderId)
+                        .orElseThrow(() -> new AppException(OrderErrorCode.ORDER_NOT_FOUND));
+        if (!admin && !order.getUserId().equals(userId)) {
             throw new AppException(OrderErrorCode.ORDER_NOT_FOUND);
         }
         if (order.getStatus() == OrderStatus.CANCELLED) {
-            return toResponse(order, order.getCheckoutId());   // hủy hai lần vẫn ra cùng kết quả
+            return toResponse(order, order.getCheckoutId()); // hủy hai lần vẫn ra cùng kết quả
         }
-        // Đơn đã qua CONFIRMED là chuyện hoàn tiền / hủy giao, không còn là bù trừ saga.
-        if (order.getStatus() != OrderStatus.PENDING) {
-            throw new AppException(OrderErrorCode.ORDER_CANNOT_BE_CANCELLED);
-        }
-
-        String reason = reasonOrDefault(request);
-
-        // Khóa saga trước, orders sau — cùng thứ tự với handler saga.
-        OrderSaga saga = orderSagaRepository.findByOrderIdForUpdate(orderId).orElse(null);
-        Order locked = orderRepository.findByIdForUpdate(orderId)
-                .orElseThrow(() -> new AppException(OrderErrorCode.ORDER_NOT_FOUND));
-
-        if (saga == null) {
-            // Đơn cũ tạo trước khi có saga: không có gì để bù trừ.
-            locked.cancel(reason);
-            orderRepository.save(locked);
-            promotionService.release(locked.getId());
-            recordHistory(locked, OrderStatus.PENDING, OrderStatus.CANCELLED, "ORDER_CANCELLED", userId, reason);
-            orderNotificationService.sendOrderCancelledNotification(locked, reason);
-            return toResponse(locked, locked.getCheckoutId());
-        }
-
-        SagaCancellationService.Outcome outcome = sagaCancellationService.cancel(saga, locked, reason);
-        if (outcome == SagaCancellationService.Outcome.NOT_ALLOWED) {
-            throw new AppException(OrderErrorCode.ORDER_CANNOT_BE_CANCELLED);
-        }
-        if (outcome == SagaCancellationService.Outcome.CANCELLED) {
-            promotionService.release(locked.getId());
-            recordHistory(locked, OrderStatus.PENDING, OrderStatus.CANCELLED, "ORDER_CANCELLED", userId, reason);
-            orderNotificationService.sendOrderCancelledNotification(locked, reason);
-        }
-        return toResponse(locked, locked.getCheckoutId());
+        // Đơn PENDING đang trong tiến trình checkout saga không được phép huỷ chủ động; các trạng thái khác đi qua OrderCancellationService.
+        throw new AppException(OrderErrorCode.ORDER_CANNOT_BE_CANCELLED);
     }
-
-
 
     @Override
     @Transactional(readOnly = true)
     @PreAuthorize("hasRole('ADMIN')")
-    public PageResponse<List<OrderSummaryResponse>> searchOrders(String userId, OrderStatus status, Pageable pageable) {
+    public PageResponse<List<OrderSummaryResponse>> searchOrders(
+            String userId, OrderStatus status, Pageable pageable) {
         Page<Order> orders;
         if (userId != null && status != null) {
             orders = orderRepository.findByUserIdAndStatus(userId, status, pageable);
@@ -254,8 +266,10 @@ public class OrderServiceImpl implements OrderService {
     @Transactional(readOnly = true)
     @PreAuthorize("hasRole('ADMIN')")
     public OrderResponse getOrderById(String orderId) {
-        Order order = orderRepository.findWithItemsById(orderId)
-                .orElseThrow(() -> new AppException(OrderErrorCode.ORDER_NOT_FOUND));
+        Order order =
+                orderRepository
+                        .findWithItemsById(orderId)
+                        .orElseThrow(() -> new AppException(OrderErrorCode.ORDER_NOT_FOUND));
         return toResponse(order, order.getCheckoutId());
     }
 
@@ -263,11 +277,21 @@ public class OrderServiceImpl implements OrderService {
     @Transactional(readOnly = true)
     @PreAuthorize("hasRole('ADMIN')")
     public OrderSagaResponse getOrderSaga(String orderId) {
-        OrderSaga saga = orderSagaRepository.findByOrderId(orderId)
-                .orElseThrow(() -> new AppException(OrderErrorCode.ORDER_SAGA_NOT_FOUND));
+        return getOrderSaga(orderId, OrderSagaType.CHECKOUT);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    @PreAuthorize("hasRole('ADMIN')")
+    public OrderSagaResponse getOrderSaga(String orderId, OrderSagaType type) {
+        OrderSaga saga =
+                orderSagaRepository
+                        .findByOrderIdAndType(orderId, type)
+                        .orElseThrow(() -> new AppException(OrderErrorCode.ORDER_SAGA_NOT_FOUND));
         return OrderSagaResponse.builder()
                 .sagaId(saga.getId())
                 .orderId(saga.getOrderId())
+                .type(saga.getType())
                 .status(saga.getStatus())
                 .currentStep(saga.getCurrentStep())
                 .inventoryReservationId(saga.getInventoryReservationId())
@@ -286,19 +310,35 @@ public class OrderServiceImpl implements OrderService {
     @Transactional
     @PreAuthorize("hasRole('ADMIN')")
     public OrderResponse updateOrderStatus(String orderId, UpdateOrderStatusRequest request) {
-        Order order = orderRepository.findWithItemsById(orderId)
-                .orElseThrow(() -> new AppException(OrderErrorCode.ORDER_NOT_FOUND));
+        Order order =
+                orderRepository
+                        .findByIdForUpdate(orderId)
+                        .orElseThrow(() -> new AppException(OrderErrorCode.ORDER_NOT_FOUND));
 
         OrderStatus fromStatus = order.getStatus();
         if (fromStatus == request.getStatus()) {
             return toResponse(order, order.getCheckoutId());
         }
+        if (request.getStatus() == OrderStatus.COMPLETED
+                || request.getStatus() == OrderStatus.RETURNED
+                || request.getStatus() == OrderStatus.REFUNDED)
+            throw new AppException(OrderErrorCode.ORDER_STATUS_INVALID);
+        if (order.getStatus() == OrderStatus.CANCELLING
+                && java.util.Set.of(
+                                OrderStatus.PROCESSING,
+                                OrderStatus.PACKED,
+                                OrderStatus.SHIPPING,
+                                OrderStatus.DELIVERED)
+                        .contains(request.getStatus()))
+            throw new AppException(OrderErrorCode.FULFILLMENT_BLOCKED);
         validateTransition(fromStatus, request.getStatus());
 
         // Guard: Chỉ cho phép chuyển sang SHIPPING khi đã có vận đơn hoặc trackingCode
         if (request.getStatus() == OrderStatus.SHIPPING) {
-            boolean hasShipment = shipmentRepository.findByOrderId(order.getId()).isPresent()
-                    || (order.getTrackingCode() != null && !order.getTrackingCode().isBlank());
+            boolean hasShipment =
+                    shipmentRepository.findByOrderId(order.getId()).isPresent()
+                            || (order.getTrackingCode() != null
+                                    && !order.getTrackingCode().isBlank());
             if (!hasShipment) {
                 throw new AppException(OrderErrorCode.SHIPMENT_REQUIRED);
             }
@@ -306,9 +346,8 @@ public class OrderServiceImpl implements OrderService {
 
         // REFUNDED không phải một cột cần set — nó là kết quả của một reply từ payment-service.
         // Đơn giữ nguyên RETURNED cho tới khi RefundEventListener nhận payment.refunded xác nhận.
-        if (request.getStatus() == OrderStatus.REFUNDED) {
-            sagaOutbox.emit(order.getId(), order.getId(),
-                    SagaCommands.refundPayment(order, order.getTotalAmount(), order.getCancelReason()));
+        if (request.getStatus() == OrderStatus.DELIVERED) {
+            orderReceiptService.markDelivered(orderId, orderReceiptService.now(), "ADMIN");
             return toResponse(order, order.getCheckoutId());
         }
 
@@ -322,22 +361,28 @@ public class OrderServiceImpl implements OrderService {
 
         Order saved = orderRepository.save(order);
         String changedBy = currentUserProvider.getCurrentUserId();
-        recordHistory(saved, fromStatus, request.getStatus(), "ADMIN_UPDATE", changedBy != null ? changedBy : "ADMIN", request.getReason());
+        recordHistory(
+                saved,
+                fromStatus,
+                request.getStatus(),
+                "ADMIN_UPDATE",
+                changedBy != null ? changedBy : "ADMIN",
+                request.getReason());
         return toResponse(saved, saved.getCheckoutId());
     }
 
-
     /** correlationId = sagaId ngay từ command đầu tiên, để mọi reply về đúng một saga instance. */
-    private EventEnvelope<ReservationInventoryCommand> reserveInventory(Order order, OrderSaga saga, List<CheckoutItem> checkoutItems) {
-        List<InventoryItem> items = checkoutItems.stream()
-                .map(item -> new InventoryItem(item.getVariantId(), item.getQuantity()))
-                .toList();
+    private EventEnvelope<ReservationInventoryCommand> reserveInventory(
+            Order order, OrderSaga saga, List<CheckoutItem> checkoutItems) {
+        List<InventoryItem> items =
+                checkoutItems.stream()
+                        .map(item -> new InventoryItem(item.getVariantId(), item.getQuantity()))
+                        .toList();
         return EventEnvelope.v1(
                 EventTypes.INVENTORY_RESERVATION_REQUESTED,
                 order.getId(),
                 saga.getId(),
-                new ReservationInventoryCommand(order.getId(), order.getUserId(), items)
-        );
+                new ReservationInventoryCommand(order.getId(), order.getUserId(), items));
     }
 
     private OrderItem buildOrderItem(Order order, CheckoutItem checkoutItem) {
@@ -359,15 +404,17 @@ public class OrderServiceImpl implements OrderService {
             return;
         }
         // Đơn PENDING còn nằm trong saga — admin không được can thiệp giữa chừng.
-        boolean valid = switch (current) {
-            case CONFIRMED -> target == OrderStatus.PROCESSING;
-            case PROCESSING -> target == OrderStatus.PACKED;
-            case PACKED -> target == OrderStatus.SHIPPING;
-            case SHIPPING -> target == OrderStatus.DELIVERED;
-            case DELIVERED -> target == OrderStatus.COMPLETED || target == OrderStatus.RETURNED;
-            case RETURNED -> target == OrderStatus.REFUNDED;
-            default -> false;
-        };
+        boolean valid =
+                switch (current) {
+                    case CONFIRMED -> target == OrderStatus.PROCESSING;
+                    case PROCESSING -> target == OrderStatus.PACKED;
+                    case PACKED -> target == OrderStatus.SHIPPING;
+                    case SHIPPING -> target == OrderStatus.DELIVERED;
+                    case DELIVERED ->
+                            target == OrderStatus.COMPLETED || target == OrderStatus.RETURNED;
+                    case RETURNED -> target == OrderStatus.REFUNDED;
+                    default -> false;
+                };
 
         if (!valid) {
             throw new AppException(OrderErrorCode.ORDER_STATUS_INVALID);
@@ -386,14 +433,14 @@ public class OrderServiceImpl implements OrderService {
         return request.getReason().trim();
     }
 
-    private PageResponse<List<OrderSummaryResponse>> toPageResponse(Page<Order> orders, Pageable pageable) {
-        List<OrderSummaryResponse> items = orders.stream()
-                .map(this::toSummary)
-                .toList();
+    private PageResponse<List<OrderSummaryResponse>> toPageResponse(
+            Page<Order> orders, Pageable pageable) {
+        List<OrderSummaryResponse> items = orders.stream().map(this::toSummary).toList();
         return PageResponse.<List<OrderSummaryResponse>>builder()
                 .pageNo(pageable.getPageNumber())
                 .pageSize(pageable.getPageSize())
                 .totalPage(orders.getTotalPages())
+                .totalElements(orders.getTotalElements())
                 .items(items)
                 .build();
     }
@@ -414,51 +461,24 @@ public class OrderServiceImpl implements OrderService {
     }
 
     private OrderResponse toResponse(Order order, String checkoutId) {
-        List<OrderItemResponse> itemResponses = order.getItems().stream()
-                .map(item -> OrderItemResponse.builder()
-                        .variantId(item.getVariantId())
-                        .productName(item.getProductName())
-                        .size(item.getSize())
-                        .color(item.getColor())
-                        .unitPrice(item.getUnitPrice())
-                        .quantity(item.getQuantity())
-                        .lineTotal(item.getLineTotal())
-                        .build())
-                .toList();
-
-        return OrderResponse.builder()
-                .id(order.getId())
-                .orderCode(order.getOrderCode())
-                .checkoutId(checkoutId)
-                .status(order.getStatus())
-                .paymentId(order.getPaymentId())
-                .paymentMethod(order.getPaymentMethod())
-                .paymentProvider(order.getPaymentProvider())
-                .paymentUrl(order.getPaymentUrl())
-                .currency(order.getCurrency())
-                .cancelReason(order.getCancelReason())
-                .recipientName(order.getAddress() != null ? order.getAddress().getRecipientName() : null)
-                .recipientPhone(order.getAddress() != null ? order.getAddress().getRecipientPhone() : null)
-                .shippingAddress(order.getShippingAddress())
-                .shippingProvider(order.getShippingProvider())
-                .trackingCode(order.getTrackingCode())
-                .subtotalAmount(order.getSubtotalAmount())
-                .discountAmount(order.getDiscountAmount())
-                .shippingFee(order.getShippingFee())
-                .totalAmount(order.getTotalAmount())
-                .items(itemResponses)
-                .createdAt(order.getCreatedAt())
-                .updatedAt(order.getUpdatedAt())
-                .build();
+        return cancellationProjection.enrich(
+                order,
+                orderReceiptService.enrich(
+                        order,
+                        com.fashionstore.order.mapper.OrderResponseMapper.create(
+                                order, checkoutId)));
     }
 
     @Override
     @Transactional(readOnly = true)
     @PreAuthorize("hasRole('ADMIN')")
     public List<OrderStatusHistoryResponse> getOrderHistory(String orderId) {
-        Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new AppException(OrderErrorCode.ORDER_NOT_FOUND));
-        return orderStatusHistoryRepository.findByOrderIdOrderByCreatedAtDescIdDesc(order.getId())
+        Order order =
+                orderRepository
+                        .findById(orderId)
+                        .orElseThrow(() -> new AppException(OrderErrorCode.ORDER_NOT_FOUND));
+        return orderStatusHistoryRepository
+                .findByOrderIdOrderByCreatedAtDescIdDesc(order.getId())
                 .stream()
                 .map(this::toHistoryResponse)
                 .toList();
@@ -468,26 +488,36 @@ public class OrderServiceImpl implements OrderService {
     @Transactional(readOnly = true)
     public List<OrderStatusHistoryResponse> getMyOrderHistory(String orderId) {
         String userId = currentUserProvider.getCurrentUserId();
-        Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new AppException(OrderErrorCode.ORDER_NOT_FOUND));
+        Order order =
+                orderRepository
+                        .findById(orderId)
+                        .orElseThrow(() -> new AppException(OrderErrorCode.ORDER_NOT_FOUND));
         if (!order.getUserId().equals(userId)) {
             throw new AppException(OrderErrorCode.ORDER_NOT_FOUND);
         }
-        return orderStatusHistoryRepository.findByOrderIdOrderByCreatedAtDescIdDesc(order.getId())
+        return orderStatusHistoryRepository
+                .findByOrderIdOrderByCreatedAtDescIdDesc(order.getId())
                 .stream()
                 .map(this::toHistoryResponse)
                 .toList();
     }
 
-    private void recordHistory(Order order, OrderStatus fromStatus, OrderStatus toStatus, String action, String changedBy, String reason) {
-        OrderStatusHistory history = OrderStatusHistory.builder()
-                .order(order)
-                .fromStatus(fromStatus)
-                .toStatus(toStatus)
-                .action(action)
-                .changedBy(changedBy != null && !changedBy.isBlank() ? changedBy : "SYSTEM")
-                .reason(reason)
-                .build();
+    private void recordHistory(
+            Order order,
+            OrderStatus fromStatus,
+            OrderStatus toStatus,
+            String action,
+            String changedBy,
+            String reason) {
+        OrderStatusHistory history =
+                OrderStatusHistory.builder()
+                        .order(order)
+                        .fromStatus(fromStatus)
+                        .toStatus(toStatus)
+                        .action(action)
+                        .changedBy(changedBy != null && !changedBy.isBlank() ? changedBy : "SYSTEM")
+                        .reason(reason)
+                        .build();
         orderStatusHistoryRepository.save(history);
     }
 
@@ -507,28 +537,29 @@ public class OrderServiceImpl implements OrderService {
     @Override
     @Transactional(readOnly = true)
     public VerifyPurchaseResponse verifyPurchase(VerifyPurchaseRequest request) {
-        if (request == null || request.userId() == null || request.variantIds() == null || request.variantIds().isEmpty()) {
+        if (request == null
+                || request.userId() == null
+                || request.variantIds() == null
+                || request.variantIds().isEmpty()) {
             return new VerifyPurchaseResponse(false, null);
         }
 
         List<OrderStatus> eligibleStatuses = List.of(OrderStatus.DELIVERED, OrderStatus.COMPLETED);
 
         if (request.orderId() != null && !request.orderId().isBlank()) {
-            Optional<Order> orderOpt = orderRepository.findEligibleOrderForReviewById(
-                    request.orderId().trim(),
-                    request.userId(),
-                    request.variantIds(),
-                    eligibleStatuses
-            );
+            Optional<Order> orderOpt =
+                    orderRepository.findEligibleOrderForReviewById(
+                            request.orderId().trim(),
+                            request.userId(),
+                            request.variantIds(),
+                            eligibleStatuses);
             return orderOpt.map(order -> new VerifyPurchaseResponse(true, order.getId()))
                     .orElseGet(() -> new VerifyPurchaseResponse(false, null));
         }
 
-        List<Order> orders = orderRepository.findEligibleOrdersForReview(
-                request.userId(),
-                request.variantIds(),
-                eligibleStatuses
-        );
+        List<Order> orders =
+                orderRepository.findEligibleOrdersForReview(
+                        request.userId(), request.variantIds(), eligibleStatuses);
 
         if (orders.isEmpty()) {
             return new VerifyPurchaseResponse(false, null);
@@ -537,4 +568,3 @@ public class OrderServiceImpl implements OrderService {
         return new VerifyPurchaseResponse(true, orders.get(0).getId());
     }
 }
-

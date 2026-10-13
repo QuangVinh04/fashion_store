@@ -4,6 +4,7 @@ public enum InventoryLedgerType {
     RESERVE,
     CONFIRM,
     RELEASE,
+    CANCEL_UNSHIPPED,
     RESTOCK,
     ADJUST,
     IN,

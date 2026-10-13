@@ -3,6 +3,8 @@ package com.fashionstore.catalog.dto;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.Min;
+import com.fashionstore.catalog.entity.enumeration.AttributeType;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -21,7 +23,7 @@ import java.util.List;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class ProductAttributeCreateRequest {
     @NotBlank(message = "Attribute title is required")
-    @Size(max = 255)
+    @Size(max = 50)
     String name; // "Attribute Title"
 
     @Size(max = 255)
@@ -32,4 +34,8 @@ public class ProductAttributeCreateRequest {
     List<String> variants;
 
     Boolean published;
+    AttributeType type;
+    Boolean filterable;
+    Boolean searchable;
+    @Min(0) Integer displayOrder;
 }

@@ -157,6 +157,21 @@ class SecurityConfigTest {
                 .exchange().expectStatus().isForbidden();
     }
 
+    @Test
+    void walletAndAdminMoneyRoutesRelayOnlyAuthorizedTokens() throws Exception {
+        String buyer=sign(keycloakKey,claims(KEYCLOAK_ISSUER,"fashion-api"));
+        client.get().uri("/api/v1/wallet").header(HttpHeaders.AUTHORIZATION,"Bearer "+buyer).exchange().expectStatus().isOk();
+        for (String path:java.util.List.of("/api/v1/admin/payments/order/order","/api/v1/admin/wallets/buyer")) {
+            forwardedAuthorization.set(null);
+            client.get().uri(path).header(HttpHeaders.AUTHORIZATION,"Bearer "+buyer).exchange().expectStatus().isForbidden();
+            assertThat(forwardedAuthorization.get()).isNull();
+            String admin=sign(keycloakKey,new JWTClaimsSet.Builder(claims(KEYCLOAK_ISSUER,"fashion-api"))
+                    .claim("realm_access",java.util.Map.of("roles",java.util.List.of("ADMIN"))).build());
+            client.get().uri(path).header(HttpHeaders.AUTHORIZATION,"Bearer "+admin).exchange().expectStatus().isOk();
+            assertThat(forwardedAuthorization.get()).isEqualTo("Bearer "+admin);
+        }
+    }
+
     private static JWTClaimsSet claims(String issuer, String audience) {
         return new JWTClaimsSet.Builder()
                 .issuer(issuer)

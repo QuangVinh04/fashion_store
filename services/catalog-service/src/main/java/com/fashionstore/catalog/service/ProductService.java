@@ -11,6 +11,7 @@ public interface ProductService {
 
     PageResponse<List<ProductSummaryResponse>> getAllProducts(Pageable pageable);
     PageResponse<List<ProductSummaryResponse>> getAllProductsForBackoffice(Pageable pageable);
+    PageResponse<List<ProductSummaryResponse>> getAllProductsForBackoffice(Pageable pageable, AdminProductFilter filter);
 
     ProductResponse getProductById(String id);
     ProductResponse getProductBySlug(String slug);

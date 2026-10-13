@@ -48,7 +48,7 @@ public class ProductAttributeServiceImpl implements ProductAtrributeService {
 
         Set<String> normalizedValues = new HashSet<>();
 
-        List<ProductAttributeOption> options = request.getVariants().stream()
+        List<ProductAttributeOption> options = (request.getVariants() == null ? List.<String>of() : request.getVariants()).stream()
                 .map(StringUtils::cleanText)
                 .filter(Objects::nonNull)
                 .filter(value -> !value.isBlank())
@@ -80,6 +80,10 @@ public class ProductAttributeServiceImpl implements ProductAtrributeService {
         ProductAttribute attribute = getAttribute(id);
         String code = StringUtils.normalizeCode(request.getName());
         validateCodeAvailable(code, id);
+        if (request.getType() != null && request.getType() != attribute.getType()
+                && productAttributeValueRepository.existsByAttributeId(id)) {
+            throw new AppException(ProductErrorCode.PRODUCT_ATTRIBUTE_IN_USE);
+        }
 
         productAttributeMapper.updateAttribute(attribute, request);
         attribute = productAttributeRepository.save(attribute);
@@ -131,6 +135,7 @@ public class ProductAttributeServiceImpl implements ProductAtrributeService {
                 .pageNo(pageable.getPageNumber())
                 .pageSize(pageable.getPageSize())
                 .totalPage(attributePage.getTotalPages())
+                .totalElements(attributePage.getTotalElements())
                 .items(responses)
                 .build();
     }
@@ -144,6 +149,14 @@ public class ProductAttributeServiceImpl implements ProductAtrributeService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public List<ProductAttributeOptionResponse> getAttributeOptions(String attributeId) {
+        getAttribute(attributeId);
+        return productAttributeOptionRepository.findByAttributeIdOrderByValueAsc(attributeId).stream()
+                .map(productAttributeOptionMapper::toOptionResponse).toList();
+    }
+
+    @Override
     @Transactional
     public ProductAttributeOptionResponse addAttributeOption(String attributeId, ProductAttributeOptionRequest request) {
         ProductAttribute attribute = getAttribute(attributeId);
@@ -154,6 +167,9 @@ public class ProductAttributeServiceImpl implements ProductAtrributeService {
 
         ProductAttributeOption option = productAttributeOptionMapper.toOption(request);
         option.setAttribute(attribute);
+        option.setValue(StringUtils.cleanText(request.getName()));
+        option.setNormalizedValue(normalizedValue);
+        option.setPublished(Boolean.TRUE.equals(request.getPublished()));
 
         return productAttributeOptionMapper.toOptionResponse(productAttributeOptionRepository.save(option));
     }
@@ -168,12 +184,16 @@ public class ProductAttributeServiceImpl implements ProductAtrributeService {
                 .orElseThrow(() -> new AppException(ProductErrorCode.PRODUCT_ATTRIBUTE_NOT_FOUND));
 
         String normalizedValue = StringUtils.normalizeCode(request.getName());
-        if (productAttributeOptionRepository.existsByAttributeIdAndNormalizedValue(attributeId, normalizedValue)) {
+        if (productAttributeOptionRepository.existsByAttributeIdAndNormalizedValueAndIdNot(attributeId, normalizedValue, optionId)) {
             throw new AppException(ProductErrorCode.PRODUCT_ATTRIBUTE_ALREADY_EXIST);
         }
+        if (!Objects.equals(option.getNormalizedValue(), normalizedValue) && optionInUse(attributeId, option)) {
+            throw new AppException(ProductErrorCode.PRODUCT_ATTRIBUTE_OPTION_IN_USE);
+        }
 
-        option.setPublished(request.getPublished());
-        option.setValue(request.getName());
+        option.setPublished(Boolean.TRUE.equals(request.getPublished()));
+        option.setValue(StringUtils.cleanText(request.getName()));
+        option.setNormalizedValue(normalizedValue);
         return productAttributeOptionMapper.toOptionResponse(productAttributeOptionRepository.save(option));
     }
 
@@ -191,8 +211,7 @@ public class ProductAttributeServiceImpl implements ProductAtrributeService {
                         )
                 );
 
-        if (productAttributeValueRepository
-                .existsByAttributeOptionId(optionId)) {
+        if (optionInUse(attributeId, option)) {
             throw new AppException(
                     ProductErrorCode.PRODUCT_ATTRIBUTE_OPTION_IN_USE
             );
@@ -205,6 +224,11 @@ public class ProductAttributeServiceImpl implements ProductAtrributeService {
     private ProductAttribute getAttribute(String id) {
         return productAttributeRepository.findById(id)
                 .orElseThrow(() -> new AppException(ProductErrorCode.PRODUCT_ATTRIBUTE_NOT_FOUND));
+    }
+
+    private boolean optionInUse(String attributeId, ProductAttributeOption option) {
+        return productAttributeValueRepository.existsByAttributeOptionId(option.getId())
+                || productAttributeValueRepository.existsByAttributeIdAndNormalizedValue(attributeId, option.getNormalizedValue());
     }
 
     private List<ProductAttributeValue> getValues(String attributeId) {

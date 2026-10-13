@@ -2,6 +2,8 @@ package com.fashionstore.order.dto;
 
 import com.fashionstore.order.entity.enumeration.OrderSagaStatus;
 import com.fashionstore.order.entity.enumeration.OrderSagaStep;
+import com.fashionstore.order.entity.enumeration.OrderSagaType;
+
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -13,7 +15,8 @@ import lombok.experimental.FieldDefaults;
 import java.time.LocalDateTime;
 
 /**
- * Chỗ duy nhất state saga lộ ra ngoài, chỉ cho ADMIN, phục vụ việc chẩn đoán khi một saga rơi vào FAILED.
+ * Chỗ duy nhất state saga lộ ra ngoài, chỉ cho ADMIN, phục vụ việc chẩn đoán khi một saga rơi vào
+ * FAILED.
  */
 @Getter
 @Setter
@@ -24,6 +27,7 @@ import java.time.LocalDateTime;
 public class OrderSagaResponse {
     String sagaId;
     String orderId;
+    OrderSagaType type;
     OrderSagaStatus status;
     OrderSagaStep currentStep;
     String inventoryReservationId;

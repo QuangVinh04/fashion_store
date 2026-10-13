@@ -9,6 +9,8 @@ import java.math.BigDecimal;
 @Getter
 @Builder
 public class PaymentCallbackResult {
+    public record ProviderReceipt(String providerTransactionId,BigDecimal amount,String currency) {}
+    java.util.List<ProviderReceipt> transactionReceipts;
     String merchantReference;
     String providerTransactionId;
     PaymentStatus status;

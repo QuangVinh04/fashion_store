@@ -2,6 +2,7 @@ package com.fashionstore.catalog.controller;
 
 import com.fashionstore.catalog.dto.ProductResponse;
 import com.fashionstore.catalog.dto.ProductAdvanceSearchRequest;
+import com.fashionstore.catalog.dto.AdminProductFilter;
 import com.fashionstore.catalog.dto.SizeChartResponse;
 import com.fashionstore.catalog.service.ProductService;
 import com.fashionstore.catalog.service.SizeChartService;
@@ -54,6 +55,21 @@ class ProductControllerTest {
         assertThat(page.getValue().getPageSize()).isEqualTo(12);
         assertThat(page.getValue().getPageNumber()).isEqualTo(1);
         assertThat(filters.getValue().getSize()).isNull();
+    }
+
+    @Test
+    void adminFiltersArePassedAlongWithPagination() throws Exception {
+        mockMvc.perform(get("/admin/products").param("page", "1").param("size", "10")
+                .param("keyword", "shirt").param("status", "DRAFT").param("brandId", "b1")
+                .param("categoryId", "c1").param("minPrice", "100"))
+                .andExpect(status().isOk());
+        ArgumentCaptor<Pageable> page = ArgumentCaptor.forClass(Pageable.class);
+        ArgumentCaptor<AdminProductFilter> filters = ArgumentCaptor.forClass(AdminProductFilter.class);
+        verify(productService).getAllProductsForBackoffice(page.capture(), filters.capture());
+        assertThat(page.getValue().getPageNumber()).isEqualTo(1);
+        assertThat(filters.getValue().getKeyword()).isEqualTo("shirt");
+        assertThat(filters.getValue().getBrandId()).isEqualTo("b1");
+        assertThat(filters.getValue().getMinPrice()).isEqualByComparingTo("100");
     }
 
     @Test

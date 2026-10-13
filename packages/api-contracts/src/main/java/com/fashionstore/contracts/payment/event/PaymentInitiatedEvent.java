@@ -4,6 +4,10 @@ package com.fashionstore.contracts.payment.event;
 public record PaymentInitiatedEvent(
         String orderId,
         String paymentId,
-        String paymentUrl
+        String paymentUrl,
+        int generation
 ) {
+    public PaymentInitiatedEvent(String orderId,String paymentId,String paymentUrl) {
+        this(orderId,paymentId,paymentUrl,0);
+    }
 }

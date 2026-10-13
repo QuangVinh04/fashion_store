@@ -24,7 +24,10 @@ public interface ProductAttributeMapper {
         return ProductAttribute.builder()
                 .name(cleanText(request.getName()))
                 .code(normalizeCode(request.getName()))
-                .type(defaultAttributeType())
+                .type(request.getType() == null ? defaultAttributeType() : request.getType())
+                .filterable(Boolean.TRUE.equals(request.getFilterable()))
+                .searchable(Boolean.TRUE.equals(request.getSearchable()))
+                .displayOrder(request.getDisplayOrder() == null ? 0 : request.getDisplayOrder())
                 .displayName(cleanText(request.getDisplayName()))
                 .published(request.getPublished() == null || request.getPublished())
                 .build();
@@ -37,6 +40,10 @@ public interface ProductAttributeMapper {
         attribute.setName(cleanText(request.getName()));
         attribute.setCode(normalizeCode(request.getName()));
         attribute.setDisplayName(cleanText(request.getDisplayName()));
+        if (request.getType() != null) attribute.setType(request.getType());
+        if (request.getFilterable() != null) attribute.setFilterable(request.getFilterable());
+        if (request.getSearchable() != null) attribute.setSearchable(request.getSearchable());
+        if (request.getDisplayOrder() != null) attribute.setDisplayOrder(request.getDisplayOrder());
         if (request.getPublished() != null) {
             attribute.setPublished(request.getPublished());
         }

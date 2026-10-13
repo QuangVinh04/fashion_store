@@ -3,6 +3,7 @@ package com.fashionstore.payment.entity;
 import com.fashionstore.common.persistence.AuditedEntity;
 import com.fashionstore.common.payment.PaymentMethod;
 import com.fashionstore.common.payment.PaymentProvider;
+import com.fashionstore.common.payment.PaymentType;
 import com.fashionstore.payment.entity.enumeration.PaymentStatus;
 import jakarta.persistence.*;
 import lombok.*;
@@ -21,8 +22,23 @@ import java.time.LocalDateTime;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class Payment extends AuditedEntity {
 
-    @Column(name = "order_id", nullable = false, unique = true)
+
+    @Column(name="delivery_recorded_at") java.time.Instant deliveryRecordedAt;
+    @Column(name="cod_collected_at") java.time.Instant codCollectedAt;
+    @Column(name="cod_collection_operation_id",length=160) String codCollectionOperationId;
+
+    @Column(name="authorization_expires_at")
+    java.time.Instant authorizationExpiresAt;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "type", nullable = false, length = 20)
+    @Builder.Default
+    PaymentType type = PaymentType.ORDER;
+
+    @Column(name = "order_id")
     String orderId;
+    @Column(name = "operation_id", length = 160)
+    String operationId;
 
     @Column(name = "user_id", nullable = false)
     String userId;

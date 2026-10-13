@@ -1,6 +1,7 @@
 package com.fashionstore.catalog.dto;
 
 import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.NotBlank;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 
@@ -11,6 +12,7 @@ import lombok.experimental.FieldDefaults;
 @NoArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class ProductAttributeOptionRequest {
+    @NotBlank
     @Size(max = 255)
     String name;
 

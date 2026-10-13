@@ -1,5 +1,8 @@
 package com.fashionstore.payment.service.impl;
 
+import com.fashionstore.payment.event.OutboxEventRecorder;
+import com.fashionstore.payment.service.PaymentTransactionService;
+
 import com.fashionstore.common.payment.PaymentMethod;
 import com.fashionstore.common.payment.PaymentProvider;
 import com.fashionstore.common.security.CurrentUserProvider;
@@ -9,8 +12,8 @@ import com.fashionstore.payment.entity.enumeration.PaymentStatus;
 import com.fashionstore.payment.mapper.PaymentResponseMapper;
 import com.fashionstore.payment.repository.PaymentRepository;
 import com.fashionstore.payment.service.PaymentService;
-import com.fashionstore.payment.service.provider.PaymentHandler;
-import com.fashionstore.payment.service.provider.PaymentHandlerRegistry;
+import com.fashionstore.payment.client.PaymentHandler;
+import com.fashionstore.payment.client.PaymentHandlerRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.aop.framework.ProxyFactory;
@@ -40,13 +43,20 @@ class PaymentServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        org.springframework.transaction.support.TransactionTemplate transactions =
-                new org.springframework.transaction.support.TransactionTemplate(new TestTransactionManager());
-        com.fashionstore.payment.outbox.OutboxService outbox = mock(com.fashionstore.payment.outbox.OutboxService.class);
+        com.fashionstore.payment.event.OutboxEventRecorder outbox = mock(com.fashionstore.payment.event.OutboxEventRecorder.class);
         PaymentResponseMapper mapper = mock(PaymentResponseMapper.class);
-        com.fashionstore.payment.service.CallbackPaymentService callbacks = new CallbackPaymentServiceImpl(registry, new com.fashionstore.payment.service.PaymentDbService(repository, null, null, outbox, new com.fashionstore.payment.service.impl.PaymentStateServiceImpl(repository, mapper, outbox)));
+        var jdbcTemplate = mock(org.springframework.jdbc.core.JdbcTemplate.class);
+        when(jdbcTemplate.queryForObject(anyString(), eq(Long.class))).thenReturn(5000000000000000L);
+        var databaseTarget = new com.fashionstore.payment.service.PaymentTransactionService(repository, jdbcTemplate, null, null, outbox,
+                new PaymentStateServiceImpl(repository, mapper, outbox), mock(com.fashionstore.payment.service.WalletService.class));
+        ProxyFactory databaseProxy = new ProxyFactory(databaseTarget);
+        databaseProxy.addAdvice(new TransactionInterceptor(new TestTransactionManager(),
+                new AnnotationTransactionAttributeSource()));
+        var database = (com.fashionstore.payment.service.PaymentTransactionService) databaseProxy.getProxy();
+        com.fashionstore.payment.service.CallbackPaymentService callbacks = new CallbackPaymentServiceImpl(
+                registry, database);
         target = new PaymentServiceImpl(repository, registry,
-                mapper, currentUser, transactions, outbox, callbacks);
+                mapper, currentUser, database, callbacks, mock(com.fashionstore.payment.service.WalletService.class));
         ProxyFactory proxy = new ProxyFactory(target);
         proxy.addAdvice(new TransactionInterceptor(new TestTransactionManager(),
                 new AnnotationTransactionAttributeSource()));
@@ -104,7 +114,7 @@ class PaymentServiceImplTest {
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.initiate(payment.getId(), "127.0.0.1"))
                 .isInstanceOf(RuntimeException.class);
         assertThat(payment.getStatus()).isEqualTo(PaymentStatus.INITIATION_UNKNOWN);
-        assertThat(payment.getMerchantReference()).isEqualTo("0");
+        assertThat(payment.getMerchantReference()).isEqualTo("5000000000000000");
     }
 
     @Test

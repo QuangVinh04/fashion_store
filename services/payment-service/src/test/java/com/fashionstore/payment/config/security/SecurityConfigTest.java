@@ -41,8 +41,21 @@ class SecurityConfigTest {
         when(jwtDecoder.decode(anyString())).thenAnswer(invocation -> switch (invocation.<String>getArgument(0)) {
             case "user-token" -> jwt("USER");
             case "admin-token" -> jwt("ADMIN", "USER");
+            case "service-token" -> jwt("INTERNAL_CALLER");
             default -> throw new BadJwtException("invalid");
         });
+    }
+
+    @Test
+    void customerCannotCallInternalWalletRefund() throws Exception {
+        mockMvc.perform(get("/internal/wallets/u-1/refund").header("Authorization", "Bearer user-token"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void serviceAccountCanCallInternalWalletRefund() throws Exception {
+        mockMvc.perform(get("/internal/wallets/u-1/refund").header("Authorization", "Bearer service-token"))
+                .andExpect(status().isOk());
     }
 
     @Test
@@ -85,6 +98,11 @@ class SecurityConfigTest {
 
     @RestController
     static class ProbeController {
+
+        @GetMapping("/internal/wallets/{id}/refund")
+        String internalRefund(@PathVariable String id) {
+            return id;
+        }
 
         @GetMapping("/api/v1/payments/vnpay/ipn")
         String ipn() {

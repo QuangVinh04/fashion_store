@@ -2,6 +2,7 @@ package com.fashionstore.catalog.dto;
 
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -23,12 +24,19 @@ import java.math.BigDecimal;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class SizeChartRowRequest {
     @NotBlank(message = "Size code is required")
+    @Size(max = 50)
     String sizeCode;
+    @DecimalMin(value = "0", inclusive = false)
     BigDecimal chest;
+    @DecimalMin(value = "0", inclusive = false)
     BigDecimal waist;
+    @DecimalMin(value = "0", inclusive = false)
     BigDecimal hip;
+    @DecimalMin(value = "0", inclusive = false)
     BigDecimal shoulder;
+    @DecimalMin(value = "0", inclusive = false)
     BigDecimal length;
+    @DecimalMin(value = "0", inclusive = false)
     BigDecimal inseam;
 
     @DecimalMin(value = "0", inclusive = false, message = "Minimum height must be greater than zero")

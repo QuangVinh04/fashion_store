@@ -19,6 +19,7 @@ public interface ProductAtrributeService {
     PageResponse<List<ProductAttributeResponse>> getAllAttributes(Pageable pageable, String keyword);
 
     List<ProductAttributeResponse> getAllPublishedAttributes();
+    List<ProductAttributeOptionResponse> getAttributeOptions(String attributeId);
 
     // Thêm/sửa từng Value riêng lẻ (Ảnh 2)
     ProductAttributeOptionResponse addAttributeOption(String attributeId, ProductAttributeOptionRequest request);

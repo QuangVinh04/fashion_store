@@ -17,6 +17,11 @@ import lombok.experimental.FieldDefaults;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class CancelOrderRequest {
 
+    @Size(max=160)
+    String operationId;
+
+    public CancelOrderRequest(String reason) {this.reason=reason;}
+
     @Size(max = 500)
     String reason;
 }

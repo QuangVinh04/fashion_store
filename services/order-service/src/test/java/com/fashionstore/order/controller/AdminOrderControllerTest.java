@@ -30,10 +30,13 @@ class AdminOrderControllerTest {
 
     @Mock
     private com.fashionstore.order.service.ReturnService returnService;
+    @Mock
+    private com.fashionstore.order.service.ShipmentService shipmentService;
 
     @BeforeEach
     void setUp() {
-        mockMvc = MockMvcBuilders.standaloneSetup(new AdminOrderController(orderService, returnService))
+        mockMvc = MockMvcBuilders.standaloneSetup(new AdminOrderController(orderService, returnService, shipmentService,
+                org.mockito.Mockito.mock(com.fashionstore.order.service.OrderCancellationService.class)))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
     }

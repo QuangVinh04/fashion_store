@@ -2,6 +2,7 @@ package com.fashionstore.order.entity;
 
 import com.fashionstore.common.persistence.BaseEntity;
 import com.fashionstore.order.entity.enumeration.OrderStatus;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -10,6 +11,7 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -48,4 +50,7 @@ public class OrderStatusHistory extends BaseEntity {
 
     @Column(name = "reason", length = 500)
     String reason;
+
+    @Column(name = "details_json", columnDefinition = "TEXT")
+    String detailsJson;
 }

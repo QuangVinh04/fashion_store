@@ -74,6 +74,7 @@ app:
     access-key: ${MINIO_ACCESS_KEY:minioadmin}
     secret-key: ${MINIO_SECRET_KEY:minioadmin}
     bucket: ${MINIO_BUCKET:fashion-media}
+    evidence-bucket: ${MINIO_EVIDENCE_BUCKET:}
     presign-expiry-seconds: ${MINIO_PRESIGN_EXPIRY_SECONDS:900}
     max-upload-bytes: ${MINIO_MAX_UPLOAD_BYTES:20971520}
 

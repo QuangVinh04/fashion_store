@@ -33,6 +33,14 @@ import java.time.LocalDateTime;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class PaymentRefund extends AuditedEntity {
 
+    @Column(name="business_refund_id",unique=true,length=160) String businessRefundId;
+    @Column(nullable=false,length=20) @Builder.Default String destination="PROVIDER";
+    @Column(name="reason_type",length=40) String reasonType;
+    @Column(name="ledger_entry_id") String ledgerEntryId;
+    @Column(name="source_id",length=160) String sourceId;
+    @Column(name="currency",nullable=false,length=3) @Builder.Default String currency="VND";
+    @Column(name="budget_reserved",nullable=false) @Builder.Default boolean budgetReserved=true;
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "payment_id", nullable = false)
     Payment payment;

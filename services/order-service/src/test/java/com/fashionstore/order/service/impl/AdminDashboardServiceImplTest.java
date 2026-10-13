@@ -1,9 +1,9 @@
 package com.fashionstore.order.service.impl;
 
 import com.fashionstore.order.client.CatalogClient;
-import com.fashionstore.order.dto.dashboard.AdminDashboardResponse;
-import com.fashionstore.order.dto.dashboard.OrderStatusCountResponse;
-import com.fashionstore.order.dto.dashboard.TopProductResponse;
+import com.fashionstore.order.dto.AdminDashboardResponse;
+import com.fashionstore.order.dto.OrderStatusCountResponse;
+import com.fashionstore.order.dto.TopProductResponse;
 import com.fashionstore.order.entity.enumeration.OrderStatus;
 import com.fashionstore.order.repository.OrderItemRepository;
 import com.fashionstore.order.repository.OrderRepository;
