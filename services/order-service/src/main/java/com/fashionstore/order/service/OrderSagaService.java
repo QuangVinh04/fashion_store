@@ -51,22 +51,24 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
- * Điều phối Saga đặt hàng, viết trực tiếp từng bước để đọc và debug luồng chạy.
+ * Điều phối Saga đặt hàng.
  *
- * <p>Luồng tiến: giữ kho → yêu cầu thanh toán → chốt kho → xác nhận đơn. Luồng bù trừ: hủy/hoàn
- * tiền → nhả kho → hủy đơn (tùy tài nguyên đã giữ). Mỗi handler xử lý một event trong một
- * transaction; event tiếp theo chạy ở transaction khác. Ghi outbox chỉ lưu lệnh cần gửi; relay gửi
- * RabbitMQ sau khi transaction commit.
+ * <pre>
+ * Luồng tiến:  RESERVE_INVENTORY → AUTHORIZE_PAYMENT → CONFIRM_INVENTORY → DONE (COMPLETED)
+ * Bù trừ:      [CANCEL_PAYMENT | REFUND_WALLET | REFUND_ORDER_FUNDS] → RELEASE_INVENTORY → DONE
+ *              (COMPENSATED, hủy đơn)
+ * </pre>
  *
- * <p>Cố ý lặp lại guard, chuyển trạng thái và payload để không phải nhảy qua helper. Khi chuyển
- * bước luôn reset retryCount, đặt deadline và updatedAt. Timeout/retry được xử lý riêng trong
+ * <p>Mỗi handler xử lý một event trong một transaction và luôn theo cùng khung: chống trùng
+ * ({@code processOnce}) → khóa Order rồi Saga ({@link #lockCheckout}) → kiểm tra Saga đang chờ
+ * đúng event này ({@link #atStep}) → chuyển bước trên {@link OrderSaga} → ghi command vào outbox
+ * ({@link #emit}). Relay gửi RabbitMQ sau khi transaction commit. Timeout/retry nằm ở
  * OrderSagaTimeoutScanner.
  */
 @Slf4j
@@ -87,472 +89,160 @@ public class OrderSagaService {
     // PHẦN 1: LUỒNG THÀNH CÔNG (GIỮ KHO → THANH TOÁN → CHỐT KHO → XÁC NHẬN ĐƠN)
     // =========================================================================
 
-    /** BƯỚC 1: RESERVE_INVENTORY → AUTHORIZE_PAYMENT; nhả reservation mồ côi nếu event về muộn. */
+    /** BƯỚC 1: RESERVE_INVENTORY → AUTHORIZE_PAYMENT. */
     @Transactional
     public void inventoryReserved(EventEnvelope<?> envelope, String messageId) {
-        // 1. Chống xử lý message trùng; lỗi hạ tầng được ném ra để RabbitMQ retry.
         processedMessageService.processOnce(
                 messageId,
                 SagaConsumers.INVENTORY_RESERVED,
                 () -> {
-                    // 2. Đọc payload và khóa Order trước Saga để giữ cùng thứ tự khóa.
                     InventoryReservationEvent event =
-                            objectMapper.convertValue(
-                                    envelope.payload(), InventoryReservationEvent.class);
-                    if (event.orderId() == null) {
+                            read(envelope, InventoryReservationEvent.class);
+                    Locked locked = lockCheckout(envelope, event.orderId(), messageId);
+                    if (locked == null) {
                         return;
                     }
-                    Order order = orderRepository.findByIdForUpdate(event.orderId()).orElse(null);
-                    OrderSaga saga =
-                            sagaRepository.findByIdForUpdate(envelope.correlationId()).orElse(null);
+                    Order order = locked.order();
+                    OrderSaga saga = locked.saga();
 
-                    // 3. Event phải thuộc đúng Saga và đúng Order.
-                    if (saga == null || saga.getType() != OrderSagaType.CHECKOUT) {
-                        log.warn(
-                                "Bỏ qua message {}: Saga {} không tồn tại",
-                                messageId,
-                                envelope.correlationId());
-                        return;
-                    }
-                    if (!saga.getOrderId().equals(event.orderId())) {
-                        log.error(
-                                "Bỏ qua message {}: Order {} không thuộc Saga {}",
-                                messageId,
-                                event.orderId(),
-                                saga.getId());
-                        return;
-                    }
-
-                    // 4. Xử lý trạng thái kết thúc/event muộn trước khi kiểm tra bước hiện tại.
-                    // Reservation về muộn: nhả kho mồ côi, giữ nguyên trạng thái kết thúc.
+                    // Giữ kho về muộn khi Saga đã đóng: nhả reservation mồ côi.
                     if (saga.isTerminal()) {
-                        // Xử lý giữ kho muộn khi Saga đã kết thúc
-                        if (saga.getInventoryReservationId() != null) {
-                            // Lưu Saga và command trong cùng transaction.
-                            sagaRepository.save(saga);
-                            return;
+                        if (saga.getInventoryReservationId() == null) {
+                            saga.recordOrphanReservation(event.reservationId());
+                            emit(
+                                    saga,
+                                    EventTypes.INVENTORY_RELEASE_REQUESTED,
+                                    new ReleaseInventoryCommand(
+                                            saga.getOrderId(), event.reservationId()));
                         }
-                        saga.setInventoryReservationId(event.reservationId());
-                        saga.setUpdatedAt(LocalDateTime.now());
-                        // Lưu Saga và command trong cùng transaction.
-                        sagaRepository.save(saga);
-                        sagaOutbox.emit(
-                                saga,
-                                SagaCommand.of(
-                                        EventTypes.INVENTORY_RELEASE_REQUESTED,
-                                        new ReleaseInventoryCommand(
-                                                saga.getOrderId(), event.reservationId())));
                         return;
                     }
-                    if (saga.getCurrentStep() != OrderSagaStep.RESERVE_INVENTORY) {
-                        log.info(
-                                "Bỏ qua message {}: Saga {} đang ở bước {}",
-                                messageId,
-                                saga.getId(),
-                                saga.getCurrentStep());
+                    if (!atStep(saga, OrderSagaStep.RESERVE_INVENTORY, messageId)) {
                         return;
                     }
 
-                    // 5. Xử lý nghiệp vụ, đổi trạng thái và dựng payload của bước tiếp theo.
-                    // [1.1] Lưu ID giữ kho và chuyển bước sang AUTHORIZE_PAYMENT
-                    LocalDateTime now = LocalDateTime.now();
-                    saga.setInventoryReservationId(event.reservationId());
-                    saga.setCurrentStep(OrderSagaStep.AUTHORIZE_PAYMENT);
-                    saga.setRetryCount(0);
-                    saga.setStepDeadline(
-                            OrderSagaStep.AUTHORIZE_PAYMENT.timeout() == null
-                                    ? null
-                                    : now.plus(OrderSagaStep.AUTHORIZE_PAYMENT.timeout()));
-                    saga.setUpdatedAt(now);
+                    // [1.1] Lưu ID giữ kho, sang AUTHORIZE_PAYMENT
+                    saga.inventoryReserved(event.reservationId());
 
-                    // [1.2] Phát lệnh yêu cầu thanh toán kèm deadline của bước
-                    // Lưu Saga và command trong cùng transaction.
-                    sagaRepository.save(saga);
-                    sagaOutbox.emit(
+                    // [1.2] Yêu cầu thanh toán, kèm deadline của bước
+                    emit(
                             saga,
-                            SagaCommand.of(
-                                    EventTypes.PAYMENT_REQUESTED,
-                                    new AuthorizePaymentCommand(
-                                            order.getId(),
-                                            order.getUserId(),
-                                            order.getPaymentMethod().name(),
-                                            order.getPaymentProvider().name(),
-                                            order.getTotalAmount(),
-                                            order.getCurrency(),
-                                            order.getClientIp(),
-                                            saga.getStepDeadline()
-                                                    .atZone(ZoneId.systemDefault())
-                                                    .toInstant())));
-                    return;
+                            EventTypes.PAYMENT_REQUESTED,
+                            new AuthorizePaymentCommand(
+                                    order.getId(),
+                                    order.getUserId(),
+                                    order.getPaymentMethod().name(),
+                                    order.getPaymentProvider().name(),
+                                    order.getTotalAmount(),
+                                    order.getCurrency(),
+                                    order.getClientIp(),
+                                    saga.getStepDeadline()
+                                            .atZone(ZoneId.systemDefault())
+                                            .toInstant()));
                 });
     }
 
-    /** BƯỚC 1b: Lưu link/QR; vẫn chờ thanh toán ở AUTHORIZE_PAYMENT. */
+    /** BƯỚC 1b: Lưu link/QR thanh toán; Saga vẫn chờ ở AUTHORIZE_PAYMENT. */
     @Transactional
     public void paymentInitiated(EventEnvelope<?> envelope, String messageId) {
-        // 1. Chống xử lý message trùng; lỗi hạ tầng được ném ra để RabbitMQ retry.
         processedMessageService.processOnce(
                 messageId,
                 SagaConsumers.PAYMENT_INITIATED,
                 () -> {
-                    // 2. Đọc payload và khóa Order trước Saga để giữ cùng thứ tự khóa.
-                    PaymentInitiatedEvent event =
-                            objectMapper.convertValue(
-                                    envelope.payload(), PaymentInitiatedEvent.class);
-                    if (event.orderId() == null) {
-                        return;
-                    }
-                    Order order = orderRepository.findByIdForUpdate(event.orderId()).orElse(null);
-                    OrderSaga saga =
-                            sagaRepository.findByIdForUpdate(envelope.correlationId()).orElse(null);
-
-                    // 3. Event phải thuộc đúng Saga và đúng Order.
-                    if (saga == null || saga.getType() != OrderSagaType.CHECKOUT) {
-                        log.warn(
-                                "Bỏ qua message {}: Saga {} không tồn tại",
-                                messageId,
-                                envelope.correlationId());
-                        return;
-                    }
-                    if (!saga.getOrderId().equals(event.orderId())) {
-                        log.error(
-                                "Bỏ qua message {}: Order {} không thuộc Saga {}",
-                                messageId,
-                                event.orderId(),
-                                saga.getId());
+                    PaymentInitiatedEvent event = read(envelope, PaymentInitiatedEvent.class);
+                    Locked locked = lockCheckout(envelope, event.orderId(), messageId);
+                    if (locked == null
+                            || !atStep(locked.saga(), OrderSagaStep.AUTHORIZE_PAYMENT, messageId)) {
                         return;
                     }
 
-                    // 4. Xử lý trạng thái kết thúc/event muộn trước khi kiểm tra bước hiện tại.
-                    if (saga.isTerminal()) {
-                        return;
-                    }
-                    if (saga.getCurrentStep() != OrderSagaStep.AUTHORIZE_PAYMENT) {
-                        log.info(
-                                "Bỏ qua message {}: Saga {} đang ở bước {}",
-                                messageId,
-                                saga.getId(),
-                                saga.getCurrentStep());
-                        return;
-                    }
-
-                    // 5. Xử lý nghiệp vụ, đổi trạng thái và dựng payload của bước tiếp theo.
-
+                    Order order = locked.order();
                     order.setPaymentUrl(event.paymentUrl());
                     orderRepository.save(order);
-                    // Lưu Saga và command trong cùng transaction.
-                    sagaRepository.save(saga);
-                    return;
                 });
     }
 
-    /** BƯỚC 2: AUTHORIZE_PAYMENT → CONFIRM_INVENTORY; phục hồi tiền về muộn ngay trong handler. */
+    /** BƯỚC 2: AUTHORIZE_PAYMENT → CONFIRM_INVENTORY. */
     @Transactional
     public void paymentCompleted(EventEnvelope<?> envelope, String messageId) {
-        // 1. Chống xử lý message trùng; lỗi hạ tầng được ném ra để RabbitMQ retry.
         processedMessageService.processOnce(
                 messageId,
                 SagaConsumers.PAYMENT_COMPLETED,
                 () -> {
-                    // 2. Đọc payload và khóa Order trước Saga để giữ cùng thứ tự khóa.
-                    PaymentSuccessEvent event =
-                            objectMapper.convertValue(
-                                    envelope.payload(), PaymentSuccessEvent.class);
-                    if (event.orderId() == null) {
+                    PaymentSuccessEvent event = read(envelope, PaymentSuccessEvent.class);
+                    Locked locked = lockCheckout(envelope, event.orderId(), messageId);
+                    if (locked == null) {
                         return;
                     }
-                    Order order = orderRepository.findByIdForUpdate(event.orderId()).orElse(null);
-                    OrderSaga saga =
-                            sagaRepository.findByIdForUpdate(envelope.correlationId()).orElse(null);
+                    OrderSaga saga = locked.saga();
 
-                    // 3. Event phải thuộc đúng Saga và đúng Order.
-                    if (saga == null || saga.getType() != OrderSagaType.CHECKOUT) {
-                        log.warn(
-                                "Bỏ qua message {}: Saga {} không tồn tại",
-                                messageId,
-                                envelope.correlationId());
-                        return;
-                    }
-                    if (!saga.getOrderId().equals(event.orderId())) {
-                        log.error(
-                                "Bỏ qua message {}: Order {} không thuộc Saga {}",
-                                messageId,
-                                event.orderId(),
-                                saga.getId());
-                        return;
-                    }
-
-                    // 4. Xử lý trạng thái kết thúc/event muộn trước khi kiểm tra bước hiện tại.
-                    // Nhận tiền muộn khi Saga đã đóng hoặc đang hủy thanh toán/nhả kho.
+                    // Tiền về khi Saga đã đóng hoặc đang hủy thanh toán/nhả kho.
                     if (saga.isTerminal()
                             || saga.getCurrentStep() == OrderSagaStep.CANCEL_PAYMENT
                             || saga.getCurrentStep() == OrderSagaStep.RELEASE_INVENTORY) {
-                        boolean stockReleased = saga.getStatus() == OrderSagaStatus.COMPENSATED;
-
-                        if (order.getPaymentMethod() != PaymentMethod.ONLINE
-                                || saga.getStatus() == OrderSagaStatus.COMPLETED) {
-                            // Lưu Saga và command trong cùng transaction.
-                            sagaRepository.save(saga);
-                            return;
-                        }
-                        if (event.paymentId() == null
-                                || event.paymentId().isBlank()
-                                || saga.getPaymentId() != null
-                                        && !saga.getPaymentId().equals(event.paymentId())) {
-                            orderStatusHistoryRepository.save(
-                                    OrderStatusHistory.builder()
-                                            .order(order)
-                                            .fromStatus(order.getStatus())
-                                            .toStatus(order.getStatus())
-                                            .action("LATE_PAYMENT_REVIEW_REQUIRED")
-                                            .changedBy("PAYMENT_SERVICE")
-                                            .reason(
-                                                    "Late capture payment identity does not match"
-                                                            + " the checkout saga")
-                                            .build());
-                            // Lưu Saga và command trong cùng transaction.
-                            sagaRepository.save(saga);
-                            return;
-                        }
-                        saga.setPaymentId(event.paymentId());
-                        order.setPaymentId(event.paymentId());
-                        orderRepository.save(order);
-                        if (order.getStatus() != OrderStatus.PENDING
-                                        && order.getStatus() != OrderStatus.CANCELLED
-                                || order.getShipmentInitiationToken() != null
-                                || order.getTrackingCode() != null
-                                        && !order.getTrackingCode().isBlank()
-                                || saga.getInventoryReservationId() == null
-                                || saga.getStatus() == OrderSagaStatus.FAILED) {
-                            orderStatusHistoryRepository.save(
-                                    OrderStatusHistory.builder()
-                                            .order(order)
-                                            .fromStatus(order.getStatus())
-                                            .toStatus(order.getStatus())
-                                            .action("LATE_PAYMENT_REVIEW_REQUIRED")
-                                            .changedBy("PAYMENT_SERVICE")
-                                            .reason(
-                                                    "Verified late funds retained; fulfillment and"
-                                                            + " inventory disposition need"
-                                                            + " verification")
-                                            .build());
-                            // Lưu Saga và command trong cùng transaction.
-                            sagaRepository.save(saga);
-                            return;
-                        }
-                        if (stockReleased) {
-                            LocalDateTime now = LocalDateTime.now();
-                            saga.setStatus(OrderSagaStatus.COMPENSATING);
-                            saga.setFailureCode("LATE_PAYMENT_STOCK_RELEASED");
-                            saga.setFailureReason(
-                                    "Late online capture after verified inventory release");
-                            saga.setCurrentStep(OrderSagaStep.REFUND_ORDER_FUNDS);
-                            saga.setRetryCount(0);
-                            saga.setStepDeadline(
-                                    OrderSagaStep.REFUND_ORDER_FUNDS.timeout() == null
-                                            ? null
-                                            : now.plus(OrderSagaStep.REFUND_ORDER_FUNDS.timeout()));
-                            saga.setUpdatedAt(now);
-                            // Lưu Saga và command trong cùng transaction.
-                            sagaRepository.save(saga);
-                            sagaOutbox.emit(
-                                    saga,
-                                    SagaCommand.of(
-                                            EventTypes.ORDER_FUNDS_REFUND_REQUESTED,
-                                            new RefundOrderFundsCommand(
-                                                    "saga-online:" + saga.getPaymentId(),
-                                                    order.getId(),
-                                                    saga.getPaymentId(),
-                                                    order.getTotalAmount(),
-                                                    order.getCurrency(),
-                                                    "SAGA_COMPENSATION",
-                                                    saga.getId())));
-                            return;
-                        }
-                        LocalDateTime now = LocalDateTime.now();
-                        saga.setStatus(OrderSagaStatus.COMPENSATING);
-                        saga.setFailureCode("LATE_PAYMENT_STOCK_PENDING");
-                        saga.setFailureReason(
-                                "Late online capture; refund waits for inventory release"
-                                        + " acknowledgement");
-                        saga.setCurrentStep(OrderSagaStep.RELEASE_INVENTORY);
-                        saga.setRetryCount(0);
-                        saga.setStepDeadline(
-                                OrderSagaStep.RELEASE_INVENTORY.timeout() == null
-                                        ? null
-                                        : now.plus(OrderSagaStep.RELEASE_INVENTORY.timeout()));
-                        saga.setUpdatedAt(now);
-                        // Lưu Saga và command trong cùng transaction.
-                        sagaRepository.save(saga);
-                        sagaOutbox.emit(
-                                saga,
-                                SagaCommand.of(
-                                        EventTypes.INVENTORY_RELEASE_REQUESTED,
-                                        new ReleaseInventoryCommand(
-                                                saga.getOrderId(),
-                                                saga.getInventoryReservationId())));
+                        recoverLatePayment(locked.order(), saga, event);
                         return;
                     }
-                    if (saga.getCurrentStep() != OrderSagaStep.AUTHORIZE_PAYMENT) {
-                        log.info(
-                                "Bỏ qua message {}: Saga {} đang ở bước {}",
-                                messageId,
-                                saga.getId(),
-                                saga.getCurrentStep());
+                    if (!atStep(saga, OrderSagaStep.AUTHORIZE_PAYMENT, messageId)) {
                         return;
                     }
 
-                    // 5. Xử lý nghiệp vụ, đổi trạng thái và dựng payload của bước tiếp theo.
-                    // [2.1] Ghi nhận mã thanh toán và chuyển bước sang CONFIRM_INVENTORY
-                    LocalDateTime now = LocalDateTime.now();
-                    saga.setPaymentId(event.paymentId());
-                    saga.setCurrentStep(OrderSagaStep.CONFIRM_INVENTORY);
-                    saga.setRetryCount(0);
-                    saga.setStepDeadline(
-                            OrderSagaStep.CONFIRM_INVENTORY.timeout() == null
-                                    ? null
-                                    : now.plus(OrderSagaStep.CONFIRM_INVENTORY.timeout()));
-                    saga.setUpdatedAt(now);
+                    // [2.1] Ghi nhận paymentId, sang CONFIRM_INVENTORY
+                    saga.paymentAuthorized(event.paymentId());
 
-                    // [2.2] Phát lệnh chốt kho
-                    // Lưu Saga và command trong cùng transaction.
-                    sagaRepository.save(saga);
-                    sagaOutbox.emit(
+                    // [2.2] Yêu cầu chốt kho
+                    emit(
                             saga,
-                            SagaCommand.of(
-                                    EventTypes.INVENTORY_CONFIRMATION_REQUESTED,
-                                    new ConfirmInventoryCommand(
-                                            saga.getOrderId(), saga.getInventoryReservationId())));
-                    return;
+                            EventTypes.INVENTORY_CONFIRMATION_REQUESTED,
+                            confirmInventoryCommand(saga));
                 });
     }
 
-    /** BƯỚC 3: CONFIRM_INVENTORY → DONE; xác nhận đơn, coupon, lịch sử, giỏ hàng và thông báo. */
+    /** BƯỚC 3: CONFIRM_INVENTORY → DONE; xác nhận đơn, coupon, lịch sử, giỏ hàng, thông báo. */
     @Transactional
     public void inventoryConfirmed(EventEnvelope<?> envelope, String messageId) {
-        // 1. Chống xử lý message trùng; lỗi hạ tầng được ném ra để RabbitMQ retry.
         processedMessageService.processOnce(
                 messageId,
                 SagaConsumers.INVENTORY_CONFIRMED,
                 () -> {
-                    // 2. Đọc payload và khóa Order trước Saga để giữ cùng thứ tự khóa.
-                    InventoryConfirmedEvent event =
-                            objectMapper.convertValue(
-                                    envelope.payload(), InventoryConfirmedEvent.class);
-                    if (event.orderId() == null) {
+                    InventoryConfirmedEvent event = read(envelope, InventoryConfirmedEvent.class);
+                    Locked locked = lockCheckout(envelope, event.orderId(), messageId);
+                    if (locked == null
+                            || !atStep(locked.saga(), OrderSagaStep.CONFIRM_INVENTORY, messageId)) {
                         return;
                     }
-                    Order order = orderRepository.findByIdForUpdate(event.orderId()).orElse(null);
-                    OrderSaga saga =
-                            sagaRepository.findByIdForUpdate(envelope.correlationId()).orElse(null);
+                    Order order = locked.order();
+                    OrderSaga saga = locked.saga();
 
-                    // 3. Event phải thuộc đúng Saga và đúng Order.
-                    if (saga == null || saga.getType() != OrderSagaType.CHECKOUT) {
-                        log.warn(
-                                "Bỏ qua message {}: Saga {} không tồn tại",
-                                messageId,
-                                envelope.correlationId());
-                        return;
-                    }
-                    if (!saga.getOrderId().equals(event.orderId())) {
-                        log.error(
-                                "Bỏ qua message {}: Order {} không thuộc Saga {}",
-                                messageId,
-                                event.orderId(),
-                                saga.getId());
-                        return;
-                    }
-
-                    // 4. Xử lý trạng thái kết thúc/event muộn trước khi kiểm tra bước hiện tại.
-                    if (saga.isTerminal()) {
-                        return;
-                    }
-                    if (saga.getCurrentStep() != OrderSagaStep.CONFIRM_INVENTORY) {
-                        log.info(
-                                "Bỏ qua message {}: Saga {} đang ở bước {}",
-                                messageId,
-                                saga.getId(),
-                                saga.getCurrentStep());
-                        return;
-                    }
-
-                    // 5. Xử lý nghiệp vụ, đổi trạng thái và dựng payload của bước tiếp theo.
                     // [3.1] Saga hoàn tất thành công
-                    LocalDateTime now = LocalDateTime.now();
-                    saga.setStatus(OrderSagaStatus.COMPLETED);
-                    saga.setFailureCode(null);
-                    saga.setFailureReason(null);
-                    saga.setCurrentStep(OrderSagaStep.DONE);
-                    saga.setRetryCount(0);
-                    saga.setStepDeadline(null);
-                    saga.setUpdatedAt(now);
-                    saga.setCompletedAt(now);
+                    saga.complete();
 
-                    // [3.2] Cập nhật đơn hàng sang CONFIRMED
-
+                    // [3.2] Xác nhận đơn và coupon
                     order.confirm(saga.getPaymentId());
                     orderRepository.save(order);
                     promotionService.confirm(order.getId());
 
                     // [3.3] Ghi lịch sử trạng thái
-                    orderStatusHistoryRepository.save(
-                            OrderStatusHistory.builder()
-                                    .order(order)
-                                    .fromStatus(OrderStatus.PENDING)
-                                    .toStatus(OrderStatus.CONFIRMED)
-                                    .action("ORDER_CONFIRMED")
-                                    .changedBy("SYSTEM")
-                                    .reason("Saga hoàn tất thanh toán và giữ kho thành công")
-                                    .build());
+                    recordHistory(
+                            order,
+                            OrderStatus.PENDING,
+                            OrderStatus.CONFIRMED,
+                            "ORDER_CONFIRMED",
+                            "SYSTEM",
+                            "Saga hoàn tất thanh toán và giữ kho thành công");
 
-                    // [3.4] Xóa sản phẩm tương ứng khỏi giỏ hàng
-                    // Xóa đúng số lượng sản phẩm đã đặt khỏi giỏ hàng.
-                    Cart cart =
-                            cartRepository
-                                    .findByUserIdAndStatus(order.getUserId(), CartStatus.ACTIVE)
-                                    .orElse(null);
-                    if (cart != null) {
+                    // [3.4] Bớt đúng số lượng đã đặt khỏi giỏ hàng
+                    removeOrderedItemsFromCart(order);
 
-                        Map<String, Integer> orderedQuantities =
-                                order.getItems().stream()
-                                        .collect(
-                                                Collectors.toMap(
-                                                        OrderItem::getVariantId,
-                                                        OrderItem::getQuantity,
-                                                        Integer::sum));
-
-                        cart.getItems()
-                                .removeIf(
-                                        item -> {
-                                            Integer ordered =
-                                                    orderedQuantities.get(item.getVariantId());
-                                            if (ordered == null) {
-                                                return false;
-                                            }
-                                            if (item.getQuantity() <= ordered) {
-                                                return true;
-                                            }
-                                            item.setQuantity(item.getQuantity() - ordered);
-                                            return false;
-                                        });
-                        cartRepository.save(cart);
-                    }
-
-                    // [3.5] Gửi thông báo cho khách hàng
+                    // [3.5] Thông báo cho khách hàng
                     orderNotificationService.sendOrderConfirmedNotification(order);
 
-                    // [3.6] Phát sự kiện xác nhận đơn hàng
-                    // Lưu Saga và command trong cùng transaction.
-                    sagaRepository.save(saga);
-                    sagaOutbox.emit(
+                    // [3.6] Phát sự kiện đơn đã xác nhận
+                    emit(
                             saga,
-                            SagaCommand.of(
-                                    EventTypes.ORDER_CONFIRMED,
-                                    new OrderConfirmedEvent(
-                                            order.getId(),
-                                            order.getUserId(),
-                                            order.getCheckoutId())));
-                    return;
+                            EventTypes.ORDER_CONFIRMED,
+                            new OrderConfirmedEvent(
+                                    order.getId(), order.getUserId(), order.getCheckoutId()));
                 });
     }
 
@@ -560,804 +250,281 @@ public class OrderSagaService {
     // PHẦN 2: BÙ TRỪ VÀ PHỤC HỒI (HỦY/HOÀN TIỀN → NHẢ KHO → HỦY ĐƠN)
     // =========================================================================
 
-    /** BÙ TRỪ: Không giữ được kho; đóng Saga và hủy đơn. */
+    /** BÙ TRỪ: Không giữ được kho; chưa giữ tài nguyên nào nên đóng Saga và hủy đơn ngay. */
     @Transactional
     public void inventoryRejected(EventEnvelope<?> envelope, String messageId) {
-        // 1. Chống xử lý message trùng; lỗi hạ tầng được ném ra để RabbitMQ retry.
         processedMessageService.processOnce(
                 messageId,
                 SagaConsumers.INVENTORY_REJECTED,
                 () -> {
-                    // 2. Đọc payload và khóa Order trước Saga để giữ cùng thứ tự khóa.
                     InventoryReservationFailedEvent event =
-                            objectMapper.convertValue(
-                                    envelope.payload(), InventoryReservationFailedEvent.class);
-                    if (event.orderId() == null) {
-                        return;
-                    }
-                    Order order = orderRepository.findByIdForUpdate(event.orderId()).orElse(null);
-                    OrderSaga saga =
-                            sagaRepository.findByIdForUpdate(envelope.correlationId()).orElse(null);
-
-                    // 3. Event phải thuộc đúng Saga và đúng Order.
-                    if (saga == null || saga.getType() != OrderSagaType.CHECKOUT) {
-                        log.warn(
-                                "Bỏ qua message {}: Saga {} không tồn tại",
-                                messageId,
-                                envelope.correlationId());
-                        return;
-                    }
-                    if (!saga.getOrderId().equals(event.orderId())) {
-                        log.error(
-                                "Bỏ qua message {}: Order {} không thuộc Saga {}",
-                                messageId,
-                                event.orderId(),
-                                saga.getId());
+                            read(envelope, InventoryReservationFailedEvent.class);
+                    Locked locked = lockCheckout(envelope, event.orderId(), messageId);
+                    if (locked == null
+                            || !atStep(locked.saga(), OrderSagaStep.RESERVE_INVENTORY, messageId)) {
                         return;
                     }
 
-                    // 4. Xử lý trạng thái kết thúc/event muộn trước khi kiểm tra bước hiện tại.
-                    if (saga.isTerminal()) {
-                        return;
-                    }
-                    if (saga.getCurrentStep() != OrderSagaStep.RESERVE_INVENTORY) {
-                        log.info(
-                                "Bỏ qua message {}: Saga {} đang ở bước {}",
-                                messageId,
-                                saga.getId(),
-                                saga.getCurrentStep());
-                        return;
-                    }
-
-                    // 5. Xử lý nghiệp vụ, đổi trạng thái và dựng payload của bước tiếp theo.
-                    // Đóng saga dạng bù trừ (vì không có tài nguyên nào cần thu hồi)
-                    LocalDateTime now = LocalDateTime.now();
-                    saga.setStatus(OrderSagaStatus.COMPENSATED);
-                    saga.setFailureCode(event.failureCode());
-                    saga.setFailureReason(event.failureMessage());
-                    saga.setCurrentStep(OrderSagaStep.DONE);
-                    saga.setRetryCount(0);
-                    saga.setStepDeadline(null);
-                    saga.setUpdatedAt(now);
-                    saga.setCompletedAt(now);
-
-                    if (order.getStatus() == OrderStatus.CANCELLED) {
-                        // Lưu Saga và command trong cùng transaction.
-                        sagaRepository.save(saga);
-                        return;
-                    }
-                    order.cancel(event.failureMessage());
-                    orderRepository.save(order);
-                    promotionService.release(order.getId());
-                    orderStatusHistoryRepository.save(
-                            OrderStatusHistory.builder()
-                                    .order(order)
-                                    .fromStatus(OrderStatus.PENDING)
-                                    .toStatus(OrderStatus.CANCELLED)
-                                    .action("ORDER_CANCELLED")
-                                    .changedBy("SYSTEM")
-                                    .reason(event.failureMessage())
-                                    .build());
-                    orderNotificationService.sendOrderCancelledNotification(
-                            order, event.failureMessage());
-                    // Lưu Saga và command trong cùng transaction.
-                    sagaRepository.save(saga);
-                    sagaOutbox.emit(
-                            saga,
-                            SagaCommand.of(
-                                    EventTypes.ORDER_CANCELLED,
-                                    new OrderCancelledEvent(
-                                            order.getId(),
-                                            order.getUserId(),
-                                            event.failureMessage())));
-                    return;
+                    locked.saga().compensated(event.failureCode(), event.failureMessage());
+                    cancelOrder(locked.order(), locked.saga(), event.failureMessage());
                 });
     }
 
-    /** BÙ TRỪ: Thanh toán lỗi; chuyển sang RELEASE_INVENTORY. */
+    /** BÙ TRỪ: Thanh toán lỗi; AUTHORIZE_PAYMENT → RELEASE_INVENTORY. */
     @Transactional
     public void paymentFailed(EventEnvelope<?> envelope, String messageId) {
-        // 1. Chống xử lý message trùng; lỗi hạ tầng được ném ra để RabbitMQ retry.
         processedMessageService.processOnce(
                 messageId,
                 SagaConsumers.PAYMENT_FAILED,
                 () -> {
-                    // 2. Đọc payload và khóa Order trước Saga để giữ cùng thứ tự khóa.
-                    PaymentFailedEvent event =
-                            objectMapper.convertValue(envelope.payload(), PaymentFailedEvent.class);
-                    if (event.orderId() == null) {
+                    PaymentFailedEvent event = read(envelope, PaymentFailedEvent.class);
+                    Locked locked = lockCheckout(envelope, event.orderId(), messageId);
+                    if (locked == null
+                            || !atStep(locked.saga(), OrderSagaStep.AUTHORIZE_PAYMENT, messageId)) {
                         return;
                     }
-                    Order order = orderRepository.findByIdForUpdate(event.orderId()).orElse(null);
-                    OrderSaga saga =
-                            sagaRepository.findByIdForUpdate(envelope.correlationId()).orElse(null);
+                    OrderSaga saga = locked.saga();
 
-                    // 3. Event phải thuộc đúng Saga và đúng Order.
-                    if (saga == null || saga.getType() != OrderSagaType.CHECKOUT) {
-                        log.warn(
-                                "Bỏ qua message {}: Saga {} không tồn tại",
-                                messageId,
-                                envelope.correlationId());
-                        return;
-                    }
-                    if (!saga.getOrderId().equals(event.orderId())) {
-                        log.error(
-                                "Bỏ qua message {}: Order {} không thuộc Saga {}",
-                                messageId,
-                                event.orderId(),
-                                saga.getId());
-                        return;
-                    }
-
-                    // 4. Xử lý trạng thái kết thúc/event muộn trước khi kiểm tra bước hiện tại.
-                    if (saga.isTerminal()) {
-                        return;
-                    }
-                    if (saga.getCurrentStep() != OrderSagaStep.AUTHORIZE_PAYMENT) {
-                        log.info(
-                                "Bỏ qua message {}: Saga {} đang ở bước {}",
-                                messageId,
-                                saga.getId(),
-                                saga.getCurrentStep());
-                        return;
-                    }
-
-                    // 5. Xử lý nghiệp vụ, đổi trạng thái và dựng payload của bước tiếp theo.
-                    LocalDateTime now = LocalDateTime.now();
-                    saga.setStatus(OrderSagaStatus.COMPENSATING);
-                    saga.setFailureCode("PAYMENT_FAILED");
-                    saga.setFailureReason(event.reason());
-                    saga.setCurrentStep(OrderSagaStep.RELEASE_INVENTORY);
-                    saga.setRetryCount(0);
-                    saga.setStepDeadline(
-                            OrderSagaStep.RELEASE_INVENTORY.timeout() == null
-                                    ? null
-                                    : now.plus(OrderSagaStep.RELEASE_INVENTORY.timeout()));
-                    saga.setUpdatedAt(now);
-                    // Lưu Saga và command trong cùng transaction.
-                    sagaRepository.save(saga);
-                    sagaOutbox.emit(
-                            saga,
-                            SagaCommand.of(
-                                    EventTypes.INVENTORY_RELEASE_REQUESTED,
-                                    new ReleaseInventoryCommand(
-                                            saga.getOrderId(), saga.getInventoryReservationId())));
-                    return;
+                    saga.startCompensation(
+                            OrderSagaStep.RELEASE_INVENTORY, "PAYMENT_FAILED", event.reason());
+                    emit(saga, EventTypes.INVENTORY_RELEASE_REQUESTED, releaseInventoryCommand(saga));
                 });
     }
 
-    /** BÙ TRỪ: Hủy thanh toán thành công; chuyển sang RELEASE_INVENTORY. */
+    /** BÙ TRỪ: Hủy thanh toán thành công; CANCEL_PAYMENT → RELEASE_INVENTORY. */
     @Transactional
     public void paymentCancelled(EventEnvelope<?> envelope, String messageId) {
-        // 1. Chống xử lý message trùng; lỗi hạ tầng được ném ra để RabbitMQ retry.
         processedMessageService.processOnce(
                 messageId,
                 SagaConsumers.PAYMENT_CANCELLED,
                 () -> {
-                    // 2. Đọc payload và khóa Order trước Saga để giữ cùng thứ tự khóa.
-                    PaymentCancelledEvent event =
-                            objectMapper.convertValue(
-                                    envelope.payload(), PaymentCancelledEvent.class);
-                    if (event.orderId() == null) {
+                    PaymentCancelledEvent event = read(envelope, PaymentCancelledEvent.class);
+                    Locked locked = lockCheckout(envelope, event.orderId(), messageId);
+                    if (locked == null
+                            || !atStep(locked.saga(), OrderSagaStep.CANCEL_PAYMENT, messageId)) {
                         return;
                     }
-                    Order order = orderRepository.findByIdForUpdate(event.orderId()).orElse(null);
-                    OrderSaga saga =
-                            sagaRepository.findByIdForUpdate(envelope.correlationId()).orElse(null);
+                    OrderSaga saga = locked.saga();
 
-                    // 3. Event phải thuộc đúng Saga và đúng Order.
-                    if (saga == null || saga.getType() != OrderSagaType.CHECKOUT) {
-                        log.warn(
-                                "Bỏ qua message {}: Saga {} không tồn tại",
-                                messageId,
-                                envelope.correlationId());
-                        return;
-                    }
-                    if (!saga.getOrderId().equals(event.orderId())) {
-                        log.error(
-                                "Bỏ qua message {}: Order {} không thuộc Saga {}",
-                                messageId,
-                                event.orderId(),
-                                saga.getId());
-                        return;
-                    }
-
-                    // 4. Xử lý trạng thái kết thúc/event muộn trước khi kiểm tra bước hiện tại.
-                    if (saga.isTerminal()) {
-                        return;
-                    }
-                    if (saga.getCurrentStep() != OrderSagaStep.CANCEL_PAYMENT) {
-                        log.info(
-                                "Bỏ qua message {}: Saga {} đang ở bước {}",
-                                messageId,
-                                saga.getId(),
-                                saga.getCurrentStep());
-                        return;
-                    }
-
-                    // 5. Xử lý nghiệp vụ, đổi trạng thái và dựng payload của bước tiếp theo.
-                    LocalDateTime now = LocalDateTime.now();
-                    saga.setCurrentStep(OrderSagaStep.RELEASE_INVENTORY);
-                    saga.setRetryCount(0);
-                    saga.setStepDeadline(
-                            OrderSagaStep.RELEASE_INVENTORY.timeout() == null
-                                    ? null
-                                    : now.plus(OrderSagaStep.RELEASE_INVENTORY.timeout()));
-                    saga.setUpdatedAt(now);
-                    // Lưu Saga và command trong cùng transaction.
-                    sagaRepository.save(saga);
-                    sagaOutbox.emit(
-                            saga,
-                            SagaCommand.of(
-                                    EventTypes.INVENTORY_RELEASE_REQUESTED,
-                                    new ReleaseInventoryCommand(
-                                            saga.getOrderId(), saga.getInventoryReservationId())));
-                    return;
+                    saga.releaseInventory();
+                    emit(saga, EventTypes.INVENTORY_RELEASE_REQUESTED, releaseInventoryCommand(saga));
                 });
     }
 
-    /** PHỤC HỒI TIẾN: Tiền đã thu nên tiếp tục CONFIRM_INVENTORY. */
+    /** PHỤC HỒI TIẾN: Không hủy được vì tiền đã thu; CANCEL_PAYMENT → CONFIRM_INVENTORY. */
     @Transactional
     public void paymentCancellationRejected(EventEnvelope<?> envelope, String messageId) {
-        // 1. Chống xử lý message trùng; lỗi hạ tầng được ném ra để RabbitMQ retry.
         processedMessageService.processOnce(
                 messageId,
                 SagaConsumers.PAYMENT_CANCELLATION_REJECTED,
                 () -> {
-                    // 2. Đọc payload và khóa Order trước Saga để giữ cùng thứ tự khóa.
                     PaymentCancellationRejectedEvent event =
-                            objectMapper.convertValue(
-                                    envelope.payload(), PaymentCancellationRejectedEvent.class);
-                    if (event.orderId() == null) {
+                            read(envelope, PaymentCancellationRejectedEvent.class);
+                    Locked locked = lockCheckout(envelope, event.orderId(), messageId);
+                    if (locked == null
+                            || !atStep(locked.saga(), OrderSagaStep.CANCEL_PAYMENT, messageId)) {
                         return;
                     }
-                    Order order = orderRepository.findByIdForUpdate(event.orderId()).orElse(null);
-                    OrderSaga saga =
-                            sagaRepository.findByIdForUpdate(envelope.correlationId()).orElse(null);
+                    OrderSaga saga = locked.saga();
 
-                    // 3. Event phải thuộc đúng Saga và đúng Order.
-                    if (saga == null || saga.getType() != OrderSagaType.CHECKOUT) {
-                        log.warn(
-                                "Bỏ qua message {}: Saga {} không tồn tại",
-                                messageId,
-                                envelope.correlationId());
-                        return;
-                    }
-                    if (!saga.getOrderId().equals(event.orderId())) {
-                        log.error(
-                                "Bỏ qua message {}: Order {} không thuộc Saga {}",
-                                messageId,
-                                event.orderId(),
-                                saga.getId());
-                        return;
-                    }
-
-                    // 4. Xử lý trạng thái kết thúc/event muộn trước khi kiểm tra bước hiện tại.
-                    if (saga.isTerminal()) {
-                        return;
-                    }
-                    if (saga.getCurrentStep() != OrderSagaStep.CANCEL_PAYMENT) {
-                        log.info(
-                                "Bỏ qua message {}: Saga {} đang ở bước {}",
-                                messageId,
-                                saga.getId(),
-                                saga.getCurrentStep());
-                        return;
-                    }
-
-                    // 5. Xử lý nghiệp vụ, đổi trạng thái và dựng payload của bước tiếp theo.
-                    LocalDateTime now = LocalDateTime.now();
-                    saga.setStatus(OrderSagaStatus.RUNNING);
-                    saga.setFailureCode(null);
-                    saga.setFailureReason(null);
-                    saga.setCurrentStep(OrderSagaStep.CONFIRM_INVENTORY);
-                    saga.setRetryCount(0);
-                    saga.setStepDeadline(
-                            OrderSagaStep.CONFIRM_INVENTORY.timeout() == null
-                                    ? null
-                                    : now.plus(OrderSagaStep.CONFIRM_INVENTORY.timeout()));
-                    saga.setUpdatedAt(now);
-                    // Lưu Saga và command trong cùng transaction.
-                    sagaRepository.save(saga);
-                    sagaOutbox.emit(
+                    saga.resumeAfterCancellationRejected();
+                    emit(
                             saga,
-                            SagaCommand.of(
-                                    EventTypes.INVENTORY_CONFIRMATION_REQUESTED,
-                                    new ConfirmInventoryCommand(
-                                            saga.getOrderId(), saga.getInventoryReservationId())));
-                    return;
+                            EventTypes.INVENTORY_CONFIRMATION_REQUESTED,
+                            confirmInventoryCommand(saga));
                 });
     }
 
-    /** BÙ TRỪ: Chốt kho bị từ chối; chọn hoàn ví, hoàn tiền online hoặc nhả kho COD. */
+    /** BÙ TRỪ: Chốt kho bị từ chối; hoàn ví, hoàn tiền online hoặc chỉ nhả kho (COD). */
     @Transactional
     public void inventoryConfirmationRejected(EventEnvelope<?> envelope, String messageId) {
-        // 1. Chống xử lý message trùng; lỗi hạ tầng được ném ra để RabbitMQ retry.
         processedMessageService.processOnce(
                 messageId,
-                "order.inventory-confirmation-rejected.v1",
+                SagaConsumers.INVENTORY_CONFIRMATION_REJECTED,
                 () -> {
-                    // 2. Đọc payload và khóa Order trước Saga để giữ cùng thứ tự khóa.
                     InventoryConfirmationRejectedEvent event =
-                            objectMapper.convertValue(
-                                    envelope.payload(), InventoryConfirmationRejectedEvent.class);
-                    if (event.orderId() == null) {
+                            read(envelope, InventoryConfirmationRejectedEvent.class);
+                    Locked locked = lockCheckout(envelope, event.orderId(), messageId);
+                    if (locked == null
+                            || !atStep(locked.saga(), OrderSagaStep.CONFIRM_INVENTORY, messageId)) {
                         return;
                     }
-                    Order order = orderRepository.findByIdForUpdate(event.orderId()).orElse(null);
-                    OrderSaga saga =
-                            sagaRepository.findByIdForUpdate(envelope.correlationId()).orElse(null);
+                    Order order = locked.order();
+                    OrderSaga saga = locked.saga();
 
-                    // 3. Event phải thuộc đúng Saga và đúng Order.
-                    if (saga == null || saga.getType() != OrderSagaType.CHECKOUT) {
-                        log.warn(
-                                "Bỏ qua message {}: Saga {} không tồn tại",
-                                messageId,
-                                envelope.correlationId());
-                        return;
-                    }
-                    if (!saga.getOrderId().equals(event.orderId())) {
-                        log.error(
-                                "Bỏ qua message {}: Order {} không thuộc Saga {}",
-                                messageId,
-                                event.orderId(),
-                                saga.getId());
-                        return;
-                    }
-
-                    // 4. Xử lý trạng thái kết thúc/event muộn trước khi kiểm tra bước hiện tại.
-                    if (saga.isTerminal()) {
-                        return;
-                    }
-                    if (saga.getCurrentStep() != OrderSagaStep.CONFIRM_INVENTORY) {
-                        log.info(
-                                "Bỏ qua message {}: Saga {} đang ở bước {}",
-                                messageId,
-                                saga.getId(),
-                                saga.getCurrentStep());
-                        return;
-                    }
-
-                    // 5. Xử lý nghiệp vụ, đổi trạng thái và dựng payload của bước tiếp theo.
                     if (!Objects.equals(saga.getInventoryReservationId(), event.reservationId())
                             || (!"RESERVATION_RELEASED".equals(event.code())
                                     && !"RESERVATION_REJECTED".equals(event.code()))) {
-                        // Lưu Saga và command trong cùng transaction.
-                        sagaRepository.save(saga);
+                        logIgnored(messageId, saga, "reply chốt kho không khớp reservation/code");
                         return;
                     }
 
-                    // Case A: Hoàn ví nội bộ
+                    // Case A: Ví nội bộ → hoàn ví
                     if (order.getPaymentMethod() == PaymentMethod.WALLET
                             && order.getPaymentProvider() == PaymentProvider.INTERNAL) {
-                        LocalDateTime now = LocalDateTime.now();
-                        saga.setStatus(OrderSagaStatus.COMPENSATING);
-                        saga.setFailureCode(event.code());
-                        saga.setFailureReason(event.reason());
-                        saga.setCurrentStep(OrderSagaStep.REFUND_WALLET);
-                        saga.setRetryCount(0);
-                        saga.setStepDeadline(
-                                OrderSagaStep.REFUND_WALLET.timeout() == null
-                                        ? null
-                                        : now.plus(OrderSagaStep.REFUND_WALLET.timeout()));
-                        saga.setUpdatedAt(now);
-                        // Lưu Saga và command trong cùng transaction.
-                        sagaRepository.save(saga);
-                        sagaOutbox.emit(
+                        saga.startCompensation(
+                                OrderSagaStep.REFUND_WALLET, event.code(), event.reason());
+                        emit(
                                 saga,
-                                SagaCommand.of(
-                                        EventTypes.WALLET_SAGA_COMPENSATION_REQUESTED,
-                                        new RefundWalletSagaCommand(
-                                                "saga:" + saga.getPaymentId(),
-                                                order.getId(),
-                                                saga.getPaymentId(),
-                                                0,
-                                                order.getTotalAmount(),
-                                                order.getCurrency(),
-                                                saga.getFailureReason())));
+                                EventTypes.WALLET_SAGA_COMPENSATION_REQUESTED,
+                                new RefundWalletSagaCommand(
+                                        "saga:" + saga.getPaymentId(),
+                                        order.getId(),
+                                        saga.getPaymentId(),
+                                        0,
+                                        order.getTotalAmount(),
+                                        order.getCurrency(),
+                                        saga.getFailureReason()));
                         return;
                     }
 
-                    // Case B: Đơn COD không cần hoàn tiền, chỉ nhả kho
+                    // Case B: COD chưa thu tiền → chỉ nhả kho
                     if (order.getPaymentMethod() == PaymentMethod.COD) {
-                        LocalDateTime now = LocalDateTime.now();
-                        saga.setStatus(OrderSagaStatus.COMPENSATING);
-                        saga.setFailureCode(event.code());
-                        saga.setFailureReason(event.reason());
-                        saga.setCurrentStep(OrderSagaStep.RELEASE_INVENTORY);
-                        saga.setRetryCount(0);
-                        saga.setStepDeadline(
-                                OrderSagaStep.RELEASE_INVENTORY.timeout() == null
-                                        ? null
-                                        : now.plus(OrderSagaStep.RELEASE_INVENTORY.timeout()));
-                        saga.setUpdatedAt(now);
-                        // Lưu Saga và command trong cùng transaction.
-                        sagaRepository.save(saga);
-                        sagaOutbox.emit(
+                        saga.startCompensation(
+                                OrderSagaStep.RELEASE_INVENTORY, event.code(), event.reason());
+                        emit(
                                 saga,
-                                SagaCommand.of(
-                                        EventTypes.INVENTORY_RELEASE_REQUESTED,
-                                        new ReleaseInventoryCommand(
-                                                saga.getOrderId(),
-                                                saga.getInventoryReservationId())));
+                                EventTypes.INVENTORY_RELEASE_REQUESTED,
+                                releaseInventoryCommand(saga));
                         return;
                     }
 
-                    // Case C: Hoàn tiền trực tuyến
+                    // Case C: Online → hoàn tiền
                     if (order.getPaymentMethod() == PaymentMethod.ONLINE) {
-                        LocalDateTime now = LocalDateTime.now();
-                        saga.setStatus(OrderSagaStatus.COMPENSATING);
-                        saga.setFailureCode(event.code());
-                        saga.setFailureReason(event.reason());
-                        saga.setCurrentStep(OrderSagaStep.REFUND_ORDER_FUNDS);
-                        saga.setRetryCount(0);
-                        saga.setStepDeadline(
-                                OrderSagaStep.REFUND_ORDER_FUNDS.timeout() == null
-                                        ? null
-                                        : now.plus(OrderSagaStep.REFUND_ORDER_FUNDS.timeout()));
-                        saga.setUpdatedAt(now);
-                        // Lưu Saga và command trong cùng transaction.
-                        sagaRepository.save(saga);
-                        sagaOutbox.emit(
+                        saga.startCompensation(
+                                OrderSagaStep.REFUND_ORDER_FUNDS, event.code(), event.reason());
+                        emit(
                                 saga,
-                                SagaCommand.of(
-                                        EventTypes.ORDER_FUNDS_REFUND_REQUESTED,
-                                        new RefundOrderFundsCommand(
-                                                "saga-online:" + saga.getPaymentId(),
-                                                order.getId(),
-                                                saga.getPaymentId(),
-                                                order.getTotalAmount(),
-                                                order.getCurrency(),
-                                                "SAGA_COMPENSATION",
-                                                saga.getId())));
+                                EventTypes.ORDER_FUNDS_REFUND_REQUESTED,
+                                refundOrderFundsCommand(order, saga));
                         return;
                     }
 
-                    // Nếu không rõ hình thức thu tiền, đánh dấu cần đối soát
-                    saga.setStatus(OrderSagaStatus.FAILED);
-                    saga.setFailureCode("CAPTURED_PAYMENT_NEEDS_RECONCILIATION");
-                    saga.setFailureReason(event.reason());
-                    saga.setStepDeadline(null);
-                    saga.setUpdatedAt(LocalDateTime.now());
-                    // Lưu Saga và command trong cùng transaction.
+                    // Không rõ hình thức thu tiền → dừng để đối soát
+                    saga.fail("CAPTURED_PAYMENT_NEEDS_RECONCILIATION", event.reason());
                     sagaRepository.save(saga);
-                    return;
                 });
     }
 
-    /** BÙ TRỪ: Kiểm chứng hoàn tiền online; nhả kho hoặc đóng Saga nếu kho đã nhả. */
+    /** BÙ TRỪ: Hoàn tiền online xong; REFUND_ORDER_FUNDS → RELEASE_INVENTORY (hoặc DONE). */
     @Transactional
     public void orderFundsRefundCredited(EventEnvelope<?> envelope, String messageId) {
-        // 1. Chống xử lý message trùng; lỗi hạ tầng được ném ra để RabbitMQ retry.
         processedMessageService.processOnce(
                 messageId,
-                "order.online-saga-refund-credited.v1",
+                SagaConsumers.ORDER_FUNDS_REFUND_CREDITED,
                 () -> {
-                    // 2. Đọc payload và khóa Order trước Saga để giữ cùng thứ tự khóa.
                     OrderFundsRefundCreditedEvent event =
-                            objectMapper.convertValue(
-                                    envelope.payload(), OrderFundsRefundCreditedEvent.class);
-                    if (event.orderId() == null) {
+                            read(envelope, OrderFundsRefundCreditedEvent.class);
+                    Locked locked = lockCheckout(envelope, event.orderId(), messageId);
+                    if (locked == null
+                            || !atStep(
+                                    locked.saga(), OrderSagaStep.REFUND_ORDER_FUNDS, messageId)) {
                         return;
                     }
-                    Order order = orderRepository.findByIdForUpdate(event.orderId()).orElse(null);
-                    OrderSaga saga =
-                            sagaRepository.findByIdForUpdate(envelope.correlationId()).orElse(null);
-
-                    // 3. Event phải thuộc đúng Saga và đúng Order.
-                    if (saga == null || saga.getType() != OrderSagaType.CHECKOUT) {
-                        log.warn(
-                                "Bỏ qua message {}: Saga {} không tồn tại",
-                                messageId,
-                                envelope.correlationId());
-                        return;
-                    }
-                    if (!saga.getOrderId().equals(event.orderId())) {
-                        log.error(
-                                "Bỏ qua message {}: Order {} không thuộc Saga {}",
-                                messageId,
-                                event.orderId(),
-                                saga.getId());
-                        return;
-                    }
-
-                    // 4. Xử lý trạng thái kết thúc/event muộn trước khi kiểm tra bước hiện tại.
-                    if (saga.isTerminal()) {
-                        return;
-                    }
-                    if (saga.getCurrentStep() != OrderSagaStep.REFUND_ORDER_FUNDS) {
-                        log.info(
-                                "Bỏ qua message {}: Saga {} đang ở bước {}",
-                                messageId,
-                                saga.getId(),
-                                saga.getCurrentStep());
-                        return;
-                    }
-
-                    // 5. Xử lý nghiệp vụ, đổi trạng thái và dựng payload của bước tiếp theo.
+                    Order order = locked.order();
+                    OrderSaga saga = locked.saga();
 
                     if (!"SAGA_COMPENSATION".equals(event.reasonType())
                             || !saga.getId().equals(event.sourceId())
                             || !Objects.equals(saga.getPaymentId(), event.paymentId())
-                            || !("saga-online:" + saga.getPaymentId()).equals(event.refundId())
+                            || !refundId(saga).equals(event.refundId())
                             || event.ledgerEntryId() == null
                             || event.ledgerEntryId().isBlank()
                             || event.amount() == null
                             || order.getTotalAmount() == null
                             || event.amount().compareTo(order.getTotalAmount()) != 0) {
-                        // Lưu Saga và command trong cùng transaction.
-                        sagaRepository.save(saga);
+                        logIgnored(messageId, saga, "reply hoàn tiền không khớp yêu cầu hoàn");
                         return;
                     }
 
-                    orderStatusHistoryRepository.save(
-                            OrderStatusHistory.builder()
-                                    .order(order)
-                                    .fromStatus(order.getStatus())
-                                    .toStatus(order.getStatus())
-                                    .action("SAGA_WALLET_REFUNDED")
-                                    .changedBy("PAYMENT_SERVICE")
-                                    .reason("Wallet ledger: " + event.ledgerEntryId())
-                                    .build());
+                    recordHistory(
+                            order,
+                            order.getStatus(),
+                            order.getStatus(),
+                            "SAGA_WALLET_REFUNDED",
+                            "PAYMENT_SERVICE",
+                            "Wallet ledger: " + event.ledgerEntryId());
 
-                    // Nếu kho đã nhả trước đó (case thanh toán muộn), đóng saga luôn
+                    // Tiền về muộn sau khi kho đã nhả → đóng Saga và hủy đơn
                     if ("LATE_PAYMENT_STOCK_RELEASED".equals(saga.getFailureCode())) {
-                        LocalDateTime now = LocalDateTime.now();
-                        saga.setStatus(OrderSagaStatus.COMPENSATED);
-                        saga.setCurrentStep(OrderSagaStep.DONE);
-                        saga.setRetryCount(0);
-                        saga.setStepDeadline(null);
-                        saga.setUpdatedAt(now);
-                        saga.setCompletedAt(now);
-
-                        if (order.getStatus() == OrderStatus.CANCELLED) {
-                            // Lưu Saga và command trong cùng transaction.
-                            sagaRepository.save(saga);
-                            return;
-                        }
-                        order.cancel("Late payment refunded after inventory release");
-                        orderRepository.save(order);
-                        promotionService.release(order.getId());
-                        orderStatusHistoryRepository.save(
-                                OrderStatusHistory.builder()
-                                        .order(order)
-                                        .fromStatus(OrderStatus.PENDING)
-                                        .toStatus(OrderStatus.CANCELLED)
-                                        .action("ORDER_CANCELLED")
-                                        .changedBy("SYSTEM")
-                                        .reason("Late payment refunded after inventory release")
-                                        .build());
-                        orderNotificationService.sendOrderCancelledNotification(
-                                order, "Late payment refunded after inventory release");
-                        // Lưu Saga và command trong cùng transaction.
-                        sagaRepository.save(saga);
-                        sagaOutbox.emit(
-                                saga,
-                                SagaCommand.of(
-                                        EventTypes.ORDER_CANCELLED,
-                                        new OrderCancelledEvent(
-                                                order.getId(),
-                                                order.getUserId(),
-                                                "Late payment refunded after inventory release")));
+                        saga.compensated();
+                        cancelOrder(order, saga, "Late payment refunded after inventory release");
                         return;
                     }
 
-                    // Chưa nhả kho thì chuyển sang nhả kho
-                    LocalDateTime now = LocalDateTime.now();
-                    saga.setStatus(OrderSagaStatus.COMPENSATING);
-                    saga.setCurrentStep(OrderSagaStep.RELEASE_INVENTORY);
-                    saga.setRetryCount(0);
-                    saga.setStepDeadline(
-                            OrderSagaStep.RELEASE_INVENTORY.timeout() == null
-                                    ? null
-                                    : now.plus(OrderSagaStep.RELEASE_INVENTORY.timeout()));
-                    saga.setUpdatedAt(now);
-                    // Lưu Saga và command trong cùng transaction.
-                    sagaRepository.save(saga);
-                    sagaOutbox.emit(
-                            saga,
-                            SagaCommand.of(
-                                    EventTypes.INVENTORY_RELEASE_REQUESTED,
-                                    new ReleaseInventoryCommand(
-                                            saga.getOrderId(), saga.getInventoryReservationId())));
-                    return;
+                    // Kho chưa nhả → nhả kho
+                    saga.releaseInventory();
+                    emit(saga, EventTypes.INVENTORY_RELEASE_REQUESTED, releaseInventoryCommand(saga));
                 });
     }
 
-    /** BÙ TRỪ: Kiểm chứng reply rồi đánh dấu FAILED khi hoàn tiền online bị từ chối. */
+    /** BÙ TRỪ: Hoàn tiền online bị từ chối; FAILED để đối soát. */
     @Transactional
     public void orderFundsRefundRejected(EventEnvelope<?> envelope, String messageId) {
-        // 1. Chống xử lý message trùng; lỗi hạ tầng được ném ra để RabbitMQ retry.
         processedMessageService.processOnce(
                 messageId,
-                "order.online-saga-refund-rejected.v1",
+                SagaConsumers.ORDER_FUNDS_REFUND_REJECTED,
                 () -> {
-                    // 2. Đọc payload và khóa Order trước Saga để giữ cùng thứ tự khóa.
                     OrderFundsRefundRejectedEvent event =
-                            objectMapper.convertValue(
-                                    envelope.payload(), OrderFundsRefundRejectedEvent.class);
-                    if (event.orderId() == null) {
+                            read(envelope, OrderFundsRefundRejectedEvent.class);
+                    Locked locked = lockCheckout(envelope, event.orderId(), messageId);
+                    if (locked == null
+                            || !atStep(
+                                    locked.saga(), OrderSagaStep.REFUND_ORDER_FUNDS, messageId)) {
                         return;
                     }
-                    Order order = orderRepository.findByIdForUpdate(event.orderId()).orElse(null);
-                    OrderSaga saga =
-                            sagaRepository.findByIdForUpdate(envelope.correlationId()).orElse(null);
-
-                    // 3. Event phải thuộc đúng Saga và đúng Order.
-                    if (saga == null || saga.getType() != OrderSagaType.CHECKOUT) {
-                        log.warn(
-                                "Bỏ qua message {}: Saga {} không tồn tại",
-                                messageId,
-                                envelope.correlationId());
-                        return;
-                    }
-                    if (!saga.getOrderId().equals(event.orderId())) {
-                        log.error(
-                                "Bỏ qua message {}: Order {} không thuộc Saga {}",
-                                messageId,
-                                event.orderId(),
-                                saga.getId());
-                        return;
-                    }
-
-                    // 4. Xử lý trạng thái kết thúc/event muộn trước khi kiểm tra bước hiện tại.
-                    if (saga.isTerminal()) {
-                        return;
-                    }
-                    if (saga.getCurrentStep() != OrderSagaStep.REFUND_ORDER_FUNDS) {
-                        log.info(
-                                "Bỏ qua message {}: Saga {} đang ở bước {}",
-                                messageId,
-                                saga.getId(),
-                                saga.getCurrentStep());
-                        return;
-                    }
-
-                    // 5. Xử lý nghiệp vụ, đổi trạng thái và dựng payload của bước tiếp theo.
+                    OrderSaga saga = locked.saga();
 
                     if (!"SAGA_COMPENSATION".equals(event.reasonType())
                             || !saga.getId().equals(event.sourceId())
                             || !Objects.equals(saga.getPaymentId(), event.paymentId())
-                            || !("saga-online:" + saga.getPaymentId()).equals(event.refundId())) {
-                        // Lưu Saga và command trong cùng transaction.
-                        sagaRepository.save(saga);
+                            || !refundId(saga).equals(event.refundId())) {
+                        logIgnored(messageId, saga, "reply hoàn tiền không khớp yêu cầu hoàn");
                         return;
                     }
-                    saga.setStatus(OrderSagaStatus.FAILED);
-                    saga.setFailureCode(event.code());
-                    saga.setFailureReason(event.reason());
-                    saga.setStepDeadline(null);
-                    saga.setUpdatedAt(LocalDateTime.now());
-                    // Lưu Saga và command trong cùng transaction.
+
+                    saga.fail(event.code(), event.reason());
                     sagaRepository.save(saga);
-                    return;
                 });
     }
 
-    /** BÙ TRỪ: Kho đã nhả; hoàn tiền muộn nếu cần, hoặc đóng Saga và hủy đơn. */
+    /** BÙ TRỪ: Kho đã nhả; RELEASE_INVENTORY → DONE và hủy đơn (hoặc hoàn tiền về muộn). */
     @Transactional
     public void inventoryReleased(EventEnvelope<?> envelope, String messageId) {
-        // 1. Chống xử lý message trùng; lỗi hạ tầng được ném ra để RabbitMQ retry.
         processedMessageService.processOnce(
                 messageId,
                 SagaConsumers.INVENTORY_RELEASED,
                 () -> {
-                    // 2. Đọc payload và khóa Order trước Saga để giữ cùng thứ tự khóa.
-                    InventoryReleasedEvent event =
-                            objectMapper.convertValue(
-                                    envelope.payload(), InventoryReleasedEvent.class);
-                    if (event.orderId() == null) {
+                    InventoryReleasedEvent event = read(envelope, InventoryReleasedEvent.class);
+                    Locked locked = lockCheckout(envelope, event.orderId(), messageId);
+                    if (locked == null
+                            || !atStep(locked.saga(), OrderSagaStep.RELEASE_INVENTORY, messageId)) {
                         return;
                     }
-                    Order order = orderRepository.findByIdForUpdate(event.orderId()).orElse(null);
-                    OrderSaga saga =
-                            sagaRepository.findByIdForUpdate(envelope.correlationId()).orElse(null);
+                    Order order = locked.order();
+                    OrderSaga saga = locked.saga();
 
-                    // 3. Event phải thuộc đúng Saga và đúng Order.
-                    if (saga == null || saga.getType() != OrderSagaType.CHECKOUT) {
-                        log.warn(
-                                "Bỏ qua message {}: Saga {} không tồn tại",
-                                messageId,
-                                envelope.correlationId());
-                        return;
-                    }
-                    if (!saga.getOrderId().equals(event.orderId())) {
-                        log.error(
-                                "Bỏ qua message {}: Order {} không thuộc Saga {}",
-                                messageId,
-                                event.orderId(),
-                                saga.getId());
-                        return;
-                    }
-
-                    // 4. Xử lý trạng thái kết thúc/event muộn trước khi kiểm tra bước hiện tại.
-                    if (saga.isTerminal()) {
-                        return;
-                    }
-                    if (saga.getCurrentStep() != OrderSagaStep.RELEASE_INVENTORY) {
-                        log.info(
-                                "Bỏ qua message {}: Saga {} đang ở bước {}",
-                                messageId,
-                                saga.getId(),
-                                saga.getCurrentStep());
-                        return;
-                    }
-
-                    // 5. Xử lý nghiệp vụ, đổi trạng thái và dựng payload của bước tiếp theo.
                     if (!Objects.equals(saga.getInventoryReservationId(), event.reservationId())) {
-                        // Lưu Saga và command trong cùng transaction.
-                        sagaRepository.save(saga);
+                        logIgnored(messageId, saga, "reservation đã nhả không khớp");
                         return;
                     }
 
-                    // Nếu là case thanh toán muộn đang đợi nhả kho xong mới hoàn tiền
+                    // Tiền về muộn đang chờ nhả kho xong → giờ mới hoàn tiền
                     if ("LATE_PAYMENT_STOCK_PENDING".equals(saga.getFailureCode())) {
-                        LocalDateTime now = LocalDateTime.now();
-                        saga.setStatus(OrderSagaStatus.COMPENSATING);
-                        saga.setFailureCode("LATE_PAYMENT_STOCK_RELEASED");
-                        saga.setFailureReason(
+                        saga.startCompensation(
+                                OrderSagaStep.REFUND_ORDER_FUNDS,
+                                "LATE_PAYMENT_STOCK_RELEASED",
                                 "Late online capture after verified inventory release");
-                        saga.setCurrentStep(OrderSagaStep.REFUND_ORDER_FUNDS);
-                        saga.setRetryCount(0);
-                        saga.setStepDeadline(
-                                OrderSagaStep.REFUND_ORDER_FUNDS.timeout() == null
-                                        ? null
-                                        : now.plus(OrderSagaStep.REFUND_ORDER_FUNDS.timeout()));
-                        saga.setUpdatedAt(now);
-                        // Lưu Saga và command trong cùng transaction.
-                        sagaRepository.save(saga);
-                        sagaOutbox.emit(
+                        emit(
                                 saga,
-                                SagaCommand.of(
-                                        EventTypes.ORDER_FUNDS_REFUND_REQUESTED,
-                                        new RefundOrderFundsCommand(
-                                                "saga-online:" + saga.getPaymentId(),
-                                                order.getId(),
-                                                saga.getPaymentId(),
-                                                order.getTotalAmount(),
-                                                order.getCurrency(),
-                                                "SAGA_COMPENSATION",
-                                                saga.getId())));
+                                EventTypes.ORDER_FUNDS_REFUND_REQUESTED,
+                                refundOrderFundsCommand(order, saga));
                         return;
                     }
 
-                    // Hoàn tất bù trừ bình thường
-                    String reason = saga.getFailureReason();
-                    LocalDateTime now = LocalDateTime.now();
-                    saga.setStatus(OrderSagaStatus.COMPENSATED);
-                    saga.setCurrentStep(OrderSagaStep.DONE);
-                    saga.setRetryCount(0);
-                    saga.setStepDeadline(null);
-                    saga.setUpdatedAt(now);
-                    saga.setCompletedAt(now);
-
-                    if (order.getStatus() == OrderStatus.CANCELLED) {
-                        // Lưu Saga và command trong cùng transaction.
-                        sagaRepository.save(saga);
-                        return;
-                    }
-                    order.cancel(reason);
-                    orderRepository.save(order);
-                    promotionService.release(order.getId());
-                    orderStatusHistoryRepository.save(
-                            OrderStatusHistory.builder()
-                                    .order(order)
-                                    .fromStatus(OrderStatus.PENDING)
-                                    .toStatus(OrderStatus.CANCELLED)
-                                    .action("ORDER_CANCELLED")
-                                    .changedBy("SYSTEM")
-                                    .reason(reason)
-                                    .build());
-                    orderNotificationService.sendOrderCancelledNotification(order, reason);
-                    // Lưu Saga và command trong cùng transaction.
-                    sagaRepository.save(saga);
-                    sagaOutbox.emit(
-                            saga,
-                            SagaCommand.of(
-                                    EventTypes.ORDER_CANCELLED,
-                                    new OrderCancelledEvent(
-                                            order.getId(), order.getUserId(), reason)));
-                    return;
+                    // Bù trừ xong → đóng Saga và hủy đơn
+                    saga.compensated();
+                    cancelOrder(order, saga, saga.getFailureReason());
                 });
     }
 
@@ -1365,140 +532,281 @@ public class OrderSagaService {
     // PHẦN 3: REPLY HOÀN VÍ (TIẾP TỤC NHẢ KHO HOẶC DỪNG ĐỂ ĐỐI SOÁT)
     // =========================================================================
 
-    /** BÙ TRỪ VÍ: Hoàn ví thành công; tiếp tục RELEASE_INVENTORY. */
+    /** BÙ TRỪ VÍ: Hoàn ví thành công; REFUND_WALLET → RELEASE_INVENTORY. */
     @Transactional
     public void walletCompensated(EventEnvelope<?> envelope, String messageId) {
-        // 1. Chống xử lý message trùng; lỗi hạ tầng được ném ra để RabbitMQ retry.
         processedMessageService.processOnce(
                 messageId,
-                "order.wallet-compensated.v1",
+                SagaConsumers.WALLET_COMPENSATED,
                 () -> {
-                    // 2. Đọc payload và khóa Order trước Saga để giữ cùng thứ tự khóa.
                     WalletSagaCompensatedEvent event =
-                            objectMapper.convertValue(
-                                    envelope.payload(), WalletSagaCompensatedEvent.class);
-                    if (event.orderId() == null) {
+                            read(envelope, WalletSagaCompensatedEvent.class);
+                    Locked locked = lockCheckout(envelope, event.orderId(), messageId);
+                    if (locked == null
+                            || !atStep(locked.saga(), OrderSagaStep.REFUND_WALLET, messageId)) {
                         return;
                     }
-                    Order order = orderRepository.findByIdForUpdate(event.orderId()).orElse(null);
-                    OrderSaga saga =
-                            sagaRepository.findByIdForUpdate(envelope.correlationId()).orElse(null);
+                    OrderSaga saga = locked.saga();
 
-                    // 3. Event phải thuộc đúng Saga và đúng Order.
-                    if (saga == null || saga.getType() != OrderSagaType.CHECKOUT) {
-                        log.warn(
-                                "Bỏ qua message {}: Saga {} không tồn tại",
-                                messageId,
-                                envelope.correlationId());
-                        return;
-                    }
-                    if (!saga.getOrderId().equals(event.orderId())) {
-                        log.error(
-                                "Bỏ qua message {}: Order {} không thuộc Saga {}",
-                                messageId,
-                                event.orderId(),
-                                saga.getId());
+                    if (!Objects.equals(event.paymentId(), saga.getPaymentId())) {
+                        logIgnored(messageId, saga, "reply hoàn ví khác paymentId");
                         return;
                     }
 
-                    // 4. Xử lý trạng thái kết thúc/event muộn trước khi kiểm tra bước hiện tại.
-                    if (saga.isTerminal()) {
-                        return;
-                    }
-                    if (saga.getCurrentStep() != OrderSagaStep.REFUND_WALLET) {
-                        log.info(
-                                "Bỏ qua message {}: Saga {} đang ở bước {}",
-                                messageId,
-                                saga.getId(),
-                                saga.getCurrentStep());
-                        return;
-                    }
-
-                    // 5. Reply hoàn ví phải thuộc đúng payment đang bù trừ.
-                    if (!event.paymentId().equals(saga.getPaymentId())) {
-                        return;
-                    }
-                    LocalDateTime now = LocalDateTime.now();
-                    saga.setCurrentStep(OrderSagaStep.RELEASE_INVENTORY);
-                    saga.setRetryCount(0);
-                    saga.setStepDeadline(
-                            OrderSagaStep.RELEASE_INVENTORY.timeout() == null
-                                    ? null
-                                    : now.plus(OrderSagaStep.RELEASE_INVENTORY.timeout()));
-                    saga.setUpdatedAt(now);
-                    // Lưu Saga và command trong cùng transaction.
-                    sagaRepository.save(saga);
-                    sagaOutbox.emit(
-                            saga,
-                            SagaCommand.of(
-                                    EventTypes.INVENTORY_RELEASE_REQUESTED,
-                                    new ReleaseInventoryCommand(
-                                            saga.getOrderId(), saga.getInventoryReservationId())));
-                    return;
+                    saga.releaseInventory();
+                    emit(saga, EventTypes.INVENTORY_RELEASE_REQUESTED, releaseInventoryCommand(saga));
                 });
     }
 
     /** BÙ TRỪ VÍ: Hoàn ví bị từ chối; FAILED để đối soát. */
     @Transactional
     public void walletCompensationRejected(EventEnvelope<?> envelope, String messageId) {
-        // 1. Chống xử lý message trùng; lỗi hạ tầng được ném ra để RabbitMQ retry.
         processedMessageService.processOnce(
                 messageId,
-                "order.wallet-compensation-rejected.v1",
+                SagaConsumers.WALLET_COMPENSATION_REJECTED,
                 () -> {
-                    // 2. Đọc payload và khóa Order trước Saga để giữ cùng thứ tự khóa.
                     WalletSagaCompensationRejectedEvent event =
-                            objectMapper.convertValue(
-                                    envelope.payload(), WalletSagaCompensationRejectedEvent.class);
-                    if (event.orderId() == null) {
+                            read(envelope, WalletSagaCompensationRejectedEvent.class);
+                    Locked locked = lockCheckout(envelope, event.orderId(), messageId);
+                    if (locked == null
+                            || !atStep(locked.saga(), OrderSagaStep.REFUND_WALLET, messageId)) {
                         return;
                     }
-                    Order order = orderRepository.findByIdForUpdate(event.orderId()).orElse(null);
-                    OrderSaga saga =
-                            sagaRepository.findByIdForUpdate(envelope.correlationId()).orElse(null);
+                    OrderSaga saga = locked.saga();
 
-                    // 3. Event phải thuộc đúng Saga và đúng Order.
-                    if (saga == null || saga.getType() != OrderSagaType.CHECKOUT) {
-                        log.warn(
-                                "Bỏ qua message {}: Saga {} không tồn tại",
-                                messageId,
-                                envelope.correlationId());
-                        return;
-                    }
-                    if (!saga.getOrderId().equals(event.orderId())) {
-                        log.error(
-                                "Bỏ qua message {}: Order {} không thuộc Saga {}",
-                                messageId,
-                                event.orderId(),
-                                saga.getId());
+                    if (!Objects.equals(event.paymentId(), saga.getPaymentId())) {
+                        logIgnored(messageId, saga, "reply hoàn ví khác paymentId");
                         return;
                     }
 
-                    // 4. Xử lý trạng thái kết thúc/event muộn trước khi kiểm tra bước hiện tại.
-                    if (saga.isTerminal()) {
-                        return;
-                    }
-                    if (saga.getCurrentStep() != OrderSagaStep.REFUND_WALLET) {
-                        log.info(
-                                "Bỏ qua message {}: Saga {} đang ở bước {}",
-                                messageId,
-                                saga.getId(),
-                                saga.getCurrentStep());
-                        return;
-                    }
-
-                    // 5. Reply hoàn ví phải thuộc đúng payment đang bù trừ.
-                    if (!event.paymentId().equals(saga.getPaymentId())) {
-                        return;
-                    }
-                    saga.setStatus(OrderSagaStatus.FAILED);
-                    saga.setFailureCode(event.code());
-                    saga.setFailureReason(event.reason());
-                    saga.setStepDeadline(null);
-                    saga.setUpdatedAt(LocalDateTime.now());
-                    // Lưu Saga và command trong cùng transaction.
+                    saga.fail(event.code(), event.reason());
                     sagaRepository.save(saga);
-                    return;
                 });
+    }
+
+    // =========================================================================
+    // PHỤC HỒI TIỀN VỀ MUỘN
+    // =========================================================================
+
+    /**
+     * Tiền online về khi Saga đã đóng hoặc đang lùi: giữ paymentId, rồi hoàn tiền (sau khi kho đã
+     * nhả). Trường hợp không chắc chắn chỉ ghi lịch sử để người kiểm tra.
+     */
+    private void recoverLatePayment(Order order, OrderSaga saga, PaymentSuccessEvent event) {
+        boolean stockReleased = saga.getStatus() == OrderSagaStatus.COMPENSATED;
+
+        if (order.getPaymentMethod() != PaymentMethod.ONLINE
+                || saga.getStatus() == OrderSagaStatus.COMPLETED) {
+            return;
+        }
+        if (event.paymentId() == null
+                || event.paymentId().isBlank()
+                || saga.getPaymentId() != null && !saga.getPaymentId().equals(event.paymentId())) {
+            recordHistory(
+                    order,
+                    order.getStatus(),
+                    order.getStatus(),
+                    "LATE_PAYMENT_REVIEW_REQUIRED",
+                    "PAYMENT_SERVICE",
+                    "Late capture payment identity does not match the checkout saga");
+            return;
+        }
+
+        saga.setPaymentId(event.paymentId());
+        order.setPaymentId(event.paymentId());
+        orderRepository.save(order);
+
+        // Đơn đã đi tiếp (giao hàng/khác PENDING-CANCELLED) hoặc thiếu reservation → kiểm tra tay
+        if (order.getStatus() != OrderStatus.PENDING && order.getStatus() != OrderStatus.CANCELLED
+                || order.getShipmentInitiationToken() != null
+                || order.getTrackingCode() != null && !order.getTrackingCode().isBlank()
+                || saga.getInventoryReservationId() == null
+                || saga.getStatus() == OrderSagaStatus.FAILED) {
+            recordHistory(
+                    order,
+                    order.getStatus(),
+                    order.getStatus(),
+                    "LATE_PAYMENT_REVIEW_REQUIRED",
+                    "PAYMENT_SERVICE",
+                    "Verified late funds retained; fulfillment and inventory disposition need"
+                            + " verification");
+            sagaRepository.save(saga);
+            return;
+        }
+
+        // Kho đã nhả → hoàn tiền ngay
+        if (stockReleased) {
+            saga.startCompensation(
+                    OrderSagaStep.REFUND_ORDER_FUNDS,
+                    "LATE_PAYMENT_STOCK_RELEASED",
+                    "Late online capture after verified inventory release");
+            emit(saga, EventTypes.ORDER_FUNDS_REFUND_REQUESTED, refundOrderFundsCommand(order, saga));
+            return;
+        }
+
+        // Kho chưa nhả → nhả kho trước, inventoryReleased sẽ hoàn tiền
+        saga.startCompensation(
+                OrderSagaStep.RELEASE_INVENTORY,
+                "LATE_PAYMENT_STOCK_PENDING",
+                "Late online capture; refund waits for inventory release acknowledgement");
+        emit(saga, EventTypes.INVENTORY_RELEASE_REQUESTED, releaseInventoryCommand(saga));
+    }
+
+    // =========================================================================
+    // KHUNG CHUNG CỦA HANDLER
+    // =========================================================================
+
+    private record Locked(Order order, OrderSaga saga) {}
+
+    private <T> T read(EventEnvelope<?> envelope, Class<T> type) {
+        return objectMapper.convertValue(envelope.payload(), type);
+    }
+
+    /**
+     * Khóa Order trước Saga (cùng thứ tự khóa ở mọi nơi). Trả null nếu event không thuộc Saga
+     * checkout của đúng Order này.
+     */
+    private Locked lockCheckout(EventEnvelope<?> envelope, String orderId, String messageId) {
+        if (orderId == null) {
+            return null;
+        }
+        Order order = orderRepository.findByIdForUpdate(orderId).orElse(null);
+        OrderSaga saga = sagaRepository.findByIdForUpdate(envelope.correlationId()).orElse(null);
+
+        if (saga == null || saga.getType() != OrderSagaType.CHECKOUT) {
+            log.warn("Bỏ qua message {}: Saga {} không tồn tại", messageId, envelope.correlationId());
+            return null;
+        }
+        if (!saga.getOrderId().equals(orderId)) {
+            log.error(
+                    "Bỏ qua message {}: Order {} không thuộc Saga {}",
+                    messageId,
+                    orderId,
+                    saga.getId());
+            return null;
+        }
+        if (order == null) {
+            throw new IllegalStateException(
+                    "Saga " + saga.getId() + " trỏ tới Order " + orderId + " không tồn tại");
+        }
+        return new Locked(order, saga);
+    }
+
+    /** Saga còn chạy và đang chờ đúng bước này; event trùng/muộn của bước khác bị bỏ qua. */
+    private boolean atStep(OrderSaga saga, OrderSagaStep expected, String messageId) {
+        if (saga.isTerminal()) {
+            return false;
+        }
+        if (saga.getCurrentStep() != expected) {
+            log.info(
+                    "Bỏ qua message {}: Saga {} đang ở bước {}",
+                    messageId,
+                    saga.getId(),
+                    saga.getCurrentStep());
+            return false;
+        }
+        return true;
+    }
+
+    private void logIgnored(String messageId, OrderSaga saga, String reason) {
+        log.warn("Bỏ qua message {}: {} (Saga {})", messageId, reason, saga.getId());
+    }
+
+    /** Lưu Saga và ghi command vào outbox trong cùng transaction. */
+    private void emit(OrderSaga saga, String eventType, Object payload) {
+        sagaRepository.save(saga);
+        sagaOutbox.emit(saga, SagaCommand.of(eventType, payload));
+    }
+
+    /** Bước cuối của bù trừ: hủy đơn, nhả coupon, ghi lịch sử, báo khách, phát ORDER_CANCELLED. */
+    private void cancelOrder(Order order, OrderSaga saga, String reason) {
+        if (order.getStatus() == OrderStatus.CANCELLED) {
+            sagaRepository.save(saga);
+            return;
+        }
+        order.cancel(reason);
+        orderRepository.save(order);
+        promotionService.release(order.getId());
+        recordHistory(
+                order, OrderStatus.PENDING, OrderStatus.CANCELLED, "ORDER_CANCELLED", "SYSTEM", reason);
+        orderNotificationService.sendOrderCancelledNotification(order, reason);
+        emit(
+                saga,
+                EventTypes.ORDER_CANCELLED,
+                new OrderCancelledEvent(order.getId(), order.getUserId(), reason));
+    }
+
+    private void removeOrderedItemsFromCart(Order order) {
+        Cart cart =
+                cartRepository
+                        .findByUserIdAndStatus(order.getUserId(), CartStatus.ACTIVE)
+                        .orElse(null);
+        if (cart == null) {
+            return;
+        }
+        Map<String, Integer> orderedQuantities =
+                order.getItems().stream()
+                        .collect(
+                                Collectors.toMap(
+                                        OrderItem::getVariantId,
+                                        OrderItem::getQuantity,
+                                        Integer::sum));
+        cart.getItems()
+                .removeIf(
+                        item -> {
+                            Integer ordered = orderedQuantities.get(item.getVariantId());
+                            if (ordered == null) {
+                                return false;
+                            }
+                            if (item.getQuantity() <= ordered) {
+                                return true;
+                            }
+                            item.setQuantity(item.getQuantity() - ordered);
+                            return false;
+                        });
+        cartRepository.save(cart);
+    }
+
+    private void recordHistory(
+            Order order,
+            OrderStatus from,
+            OrderStatus to,
+            String action,
+            String changedBy,
+            String reason) {
+        orderStatusHistoryRepository.save(
+                OrderStatusHistory.builder()
+                        .order(order)
+                        .fromStatus(from)
+                        .toStatus(to)
+                        .action(action)
+                        .changedBy(changedBy)
+                        .reason(reason)
+                        .build());
+    }
+
+    // ----- payload command -----
+
+    private static String refundId(OrderSaga saga) {
+        return "saga-online:" + saga.getPaymentId();
+    }
+
+    private static ReleaseInventoryCommand releaseInventoryCommand(OrderSaga saga) {
+        return new ReleaseInventoryCommand(saga.getOrderId(), saga.getInventoryReservationId());
+    }
+
+    private static ConfirmInventoryCommand confirmInventoryCommand(OrderSaga saga) {
+        return new ConfirmInventoryCommand(saga.getOrderId(), saga.getInventoryReservationId());
+    }
+
+    private static RefundOrderFundsCommand refundOrderFundsCommand(Order order, OrderSaga saga) {
+        return new RefundOrderFundsCommand(
+                refundId(saga),
+                order.getId(),
+                saga.getPaymentId(),
+                order.getTotalAmount(),
+                order.getCurrency(),
+                "SAGA_COMPENSATION",
+                saga.getId());
     }
 }

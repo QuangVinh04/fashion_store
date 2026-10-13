@@ -160,7 +160,8 @@ public class OrderSaga {
         enterStep(step);
     }
 
-    public void paymentCancelled() {
+    /** Bước bù trừ trước (hủy thanh toán / hoàn ví / hoàn tiền) đã xong — chuyển sang nhả kho. */
+    public void releaseInventory() {
         enterStep(OrderSagaStep.RELEASE_INVENTORY);
     }
 
