@@ -23,6 +23,7 @@ public class ReturnOrderRequest {
     @Size(max = 500, message = "Lý do trả hàng tối đa 500 ký tự")
     String reason;
 
+    /** Media id ảnh minh chứng khách upload qua {@code /api/v1/files/evidence/returns/presign}. */
     @Size(max = 5, message = "Tối đa 5 hình ảnh minh chứng")
-    List<@Size(max = 2048, message = "Đường dẫn ảnh tối đa 2048 ký tự") String> images;
+    List<@Size(max = 36, message = "Mã ảnh minh chứng không hợp lệ") String> images;
 }

@@ -29,6 +29,15 @@ public interface ReturnRequestRepository extends JpaRepository<ReturnRequest, St
     @Query("select r from ReturnRequest r where r.order.id = :orderId")
     Optional<ReturnRequest> findByOrderIdForUpdate(@Param("orderId") String orderId);
 
+    /** Yêu cầu trả hàng của khách đã duyệt nhưng chưa nhận được hàng, duyệt trước {@code cutoff}. */
+    @Query(
+            "select r.id from ReturnRequest r"
+                    + " where r.kind = com.fashionstore.order.entity.enumeration.ReturnRequestKind.CUSTOMER_RETURN"
+                    + " and r.status in (com.fashionstore.order.entity.enumeration.ReturnRequestStatus.APPROVED,"
+                    + " com.fashionstore.order.entity.enumeration.ReturnRequestStatus.RETURN_APPROVED)"
+                    + " and r.receivedAt is null and r.closedAt is null and r.approvedAt <= :cutoff")
+    java.util.List<String> findUnsentCustomerReturnIds(@Param("cutoff") java.time.Instant cutoff);
+
     Page<ReturnRequest> findByStatus(ReturnRequestStatus status, Pageable pageable);
 
     Page<ReturnRequest> findByUserId(String userId, Pageable pageable);

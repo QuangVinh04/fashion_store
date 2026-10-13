@@ -155,6 +155,38 @@ public class OrderNotificationService {
         log.info("[OrderNotification] Emitted order-cancelled email event for orderId={}", order.getId());
     }
 
+    /** Báo khách một mốc của yêu cầu trả hàng (duyệt, từ chối, nhận hàng, hủy, hoàn tiền). */
+    public void sendReturnStatusNotification(Order order, String title, String message) {
+        if (order == null) return;
+        String recipientEmail = resolveRecipientEmail(order);
+        if (recipientEmail == null || recipientEmail.isBlank()) {
+            log.warn("[OrderNotification] Cannot send return-status email: No email found for userId={}", order.getUserId());
+            return;
+        }
+
+        Map<String, String> variables = new HashMap<>();
+        variables.put("orderCode", order.getOrderCode());
+        variables.put("recipientName", recipientName(order));
+        variables.put("title", title);
+        variables.put("message", message);
+
+        EmailNotificationRequested payload = new EmailNotificationRequested(
+                recipientEmail,
+                "return-status",
+                variables
+        );
+
+        EventEnvelope<EmailNotificationRequested> envelope = EventEnvelope.v1(
+                EventTypes.NOTIFICATION_EMAIL_REQUESTED,
+                order.getId(),
+                null,
+                payload
+        );
+
+        outboxEventRecorder.saveMessage(order.getId(), EventTypes.NOTIFICATION_EMAIL_REQUESTED, envelope);
+        log.info("[OrderNotification] Emitted return-status email event for orderId={}", order.getId());
+    }
+
     private String resolveRecipientEmail(Order order) {
         if (order == null) return null;
         if (order.getRecipientEmail() != null && !order.getRecipientEmail().isBlank()) {

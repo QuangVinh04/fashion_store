@@ -31,6 +31,8 @@ class ReturnRefundMessagingTest {
     final OrderStatusHistoryRepository history = mock(OrderStatusHistoryRepository.class);
     final PaymentFeignClient payment = mock(PaymentFeignClient.class);
     final OutboxEventRecorder outbox = mock(OutboxEventRecorder.class);
+    final com.fashionstore.order.service.OrderNotificationService notifications =
+            mock(com.fashionstore.order.service.OrderNotificationService.class);
     ReturnServiceImpl service;
     Order order;
     ReturnRequest returned;
@@ -53,7 +55,8 @@ class ReturnRefundMessagingTest {
                         Clock.fixed(Instant.parse("2026-10-12T01:00:00Z"), ZoneOffset.UTC),
                         mock(GhnClient.class),
                         mock(ShipmentRepository.class),
-                        outbox);
+                        outbox,
+                        notifications);
         order =
                 Order.builder()
                         .userId("buyer")
@@ -97,6 +100,16 @@ class ReturnRefundMessagingTest {
         assertThat(returned.getClosedAt()).isNull();
         assertThat(order.getStatus()).isEqualTo(OrderStatus.DELIVERED);
         verifyNoInteractions(payment, history);
+    }
+
+    @Test
+    void creditedRefundNotifiesCustomerOnce() {
+        service.refundReturn("return-1", null);
+        var reply = credited("pay-1", "return:return-1", "ledger-1", "100000");
+        service.refundCredited(reply);
+        service.refundCredited(reply);
+        verify(notifications, times(1))
+                .sendReturnStatusNotification(eq(order), anyString(), contains("100000"));
     }
 
     @Test

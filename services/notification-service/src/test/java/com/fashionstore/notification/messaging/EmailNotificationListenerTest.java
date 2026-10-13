@@ -78,6 +78,14 @@ class EmailNotificationListenerTest {
     }
 
     @Test
+    void returnStatusSetsCorrectSubject() throws Exception {
+        MimeMessage mimeMessage = runOnce("return-status", Map.of("orderCode", "ORD-999", "title", "Đã duyệt"), "<html>Return</html>");
+
+        verify(mailSender).send(mimeMessage);
+        assertThat(mimeMessage.getSubject()).isEqualTo("Cập nhật yêu cầu trả hàng đơn #ORD-999 - Fashion Store");
+    }
+
+    @Test
     void orderCancelledSetsCorrectSubject() throws Exception {
         MimeMessage mimeMessage = runOnce("order-cancelled", Map.of("orderCode", "ORD-999", "reason", "Hết hàng"), "<html>Cancelled</html>");
 

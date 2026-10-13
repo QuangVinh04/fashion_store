@@ -141,7 +141,8 @@ public class OrderController {
             summary = "Khách yêu cầu trả hàng",
             description = """
                     Chỉ nhận cho đơn đã `DELIVERED`; trước đó dùng đường huỷ đơn (`cancelMyOrder`).
-                    Tạo yêu cầu hoàn trả với trạng thái `PENDING`, đơn hàng vẫn giữ `DELIVERED` để chờ Admin xét duyệt.
+                    Tạo yêu cầu hoàn trả với trạng thái `REQUESTED`, đơn hàng vẫn giữ `DELIVERED` để chờ Admin xét duyệt.
+                    `images` là media id ảnh minh chứng (tối đa 5) đã upload qua `POST /api/v1/files/evidence/returns/presign`.
 
                     Mã lỗi: `4001` (404) · `4008` đơn chưa DELIVERED (409) · `4021` yêu cầu đã được xử lý (400).""")
     @PostMapping("/{id}/return-request")

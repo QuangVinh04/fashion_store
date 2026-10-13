@@ -32,6 +32,7 @@ import com.fashionstore.order.repository.OrderRepository;
 import com.fashionstore.order.repository.OrderStatusHistoryRepository;
 import com.fashionstore.order.repository.ReturnRequestRepository;
 import com.fashionstore.order.repository.ShipmentRepository;
+import com.fashionstore.order.service.OrderNotificationService;
 import com.fashionstore.order.service.OrderReceiptService;
 import com.fashionstore.order.service.ReturnService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -77,11 +78,20 @@ public class ReturnServiceImpl implements ReturnService {
     GhnClient ghnClient;
     ShipmentRepository shipmentRepository;
     OutboxEventRecorder outboxEventRecorder;
+    OrderNotificationService notifications;
 
     @Override
-    @Transactional
+    @Transactional(propagation = Propagation.NEVER)
     public ReturnRequestResponse createReturnRequest(String orderId, ReturnOrderRequest request) {
         String userId = currentUserProvider.getCurrentUserId();
+        // Ảnh là media RETURN_EVIDENCE khách tự upload; kiểm với catalog trước khi khóa đơn
+        String images = verifyEvidence(request != null ? request.getImages() : null, userId, false);
+        return new TransactionTemplate(transactionManager)
+                .execute(status -> createReturnRequest(orderId, request, userId, images));
+    }
+
+    private ReturnRequestResponse createReturnRequest(
+            String orderId, ReturnOrderRequest request, String userId, String images) {
         Order order =
                 orderRepository
                         .findByIdForUpdate(orderId)
@@ -127,9 +137,7 @@ public class ReturnServiceImpl implements ReturnService {
                         .order(order)
                         .userId(userId)
                         .reason(reason)
-                        .images(
-                                ReturnRequestMapper.serializeImages(
-                                        objectMapper, request != null ? request.getImages() : null))
+                        .images(images)
                         .status(ReturnRequestStatus.REQUESTED)
                         .build();
         returnRequest = returnRequestRepository.save(returnRequest);
@@ -196,6 +204,12 @@ public class ReturnServiceImpl implements ReturnService {
                             .reason("Admin phê duyệt yêu cầu trả hàng")
                             .build();
             orderStatusHistoryRepository.save(history);
+            notifyCustomer(
+                    returnRequest,
+                    "Yêu cầu trả hàng đã được duyệt",
+                    "Vui lòng gửi hàng trả về trước ngày "
+                            + formatDate(returnRequest.getApprovedAt().plus(OrderReceiptService.RETURN_WINDOW))
+                            + ". Quá hạn, yêu cầu trả hàng sẽ tự động bị hủy.");
         }
 
         log.info(
@@ -257,6 +271,10 @@ public class ReturnServiceImpl implements ReturnService {
                             .reason(request.getRejectReason().trim())
                             .build();
             orderStatusHistoryRepository.save(history);
+            notifyCustomer(
+                    returnRequest,
+                    "Yêu cầu trả hàng bị từ chối",
+                    "Lý do: " + request.getRejectReason().trim());
         }
 
         log.info(
@@ -279,7 +297,7 @@ public class ReturnServiceImpl implements ReturnService {
                 || request.qcNote().length() > 500) {
             throw new AppException(OrderErrorCode.RETURN_EVIDENCE_INVALID);
         }
-        String evidenceJson = verifyAdminEvidence(request.mediaIds(), adminId, !request.qcPassed());
+        String evidenceJson = verifyEvidence(request.mediaIds(), adminId, !request.qcPassed());
         return new TransactionTemplate(transactionManager)
                 .execute(
                         status -> {
@@ -334,8 +352,8 @@ public class ReturnServiceImpl implements ReturnService {
                             orderStatusHistoryRepository.save(
                                     OrderStatusHistory.builder()
                                             .order(returned.getOrder())
-                                            .fromStatus(OrderStatus.DELIVERED)
-                                            .toStatus(OrderStatus.DELIVERED)
+                                            .fromStatus(returned.getOrder().getStatus())
+                                            .toStatus(returned.getOrder().getStatus())
                                             .action("RETURN_RECEIVED")
                                             .changedBy(adminId)
                                             .reason(
@@ -343,6 +361,14 @@ public class ReturnServiceImpl implements ReturnService {
                                                             ? "Return received, QC passed"
                                                             : "Return received, QC failed")
                                             .build());
+                            notifyCustomer(
+                                    returned,
+                                    "Đã nhận hàng trả",
+                                    request.qcPassed()
+                                            ? "Hàng trả đạt kiểm tra chất lượng. Chúng tôi sẽ hoàn"
+                                                    + " tiền cho bạn trong thời gian sớm nhất."
+                                            : "Hàng trả không đạt kiểm tra chất lượng. Bộ phận"
+                                                    + " CSKH sẽ liên hệ với bạn để xử lý.");
                             return toResponse(returned);
                         });
     }
@@ -385,22 +411,65 @@ public class ReturnServiceImpl implements ReturnService {
                         && returned.getStatus() != ReturnRequestStatus.RETURN_APPROVED) {
             throw new AppException(OrderErrorCode.RETURN_WORKFLOW_CONFLICT);
         }
+        closeAsCancelled(returned, adminId, "RETURN_CANCELLED", request.reason().trim());
+        return toResponse(returned);
+    }
+
+    @Override
+    @Transactional
+    public void expireUnsentReturns(Instant now) {
+        for (String id :
+                returnRequestRepository.findUnsentCustomerReturnIds(
+                        now.minus(OrderReceiptService.RETURN_WINDOW))) {
+            String orderId = returnRequestRepository.findOrderIdByReturnId(id).orElse(null);
+            if (orderId == null || orderRepository.findByIdForUpdate(orderId).isEmpty()) continue;
+            ReturnRequest returned = returnRequestRepository.findByIdForUpdate(id).orElse(null);
+            // Kiểm lại sau khi khóa: admin có thể vừa nhận hàng hoặc đóng yêu cầu
+            if (returned == null
+                    || returned.getKind() != ReturnRequestKind.CUSTOMER_RETURN
+                    || returned.getStatus() != ReturnRequestStatus.APPROVED
+                            && returned.getStatus() != ReturnRequestStatus.RETURN_APPROVED
+                    || returned.getReceivedAt() != null
+                    || returned.getClosedAt() != null
+                    || returned.getApprovedAt() == null
+                    || now.isBefore(returned.getApprovedAt().plus(OrderReceiptService.RETURN_WINDOW))) {
+                continue;
+            }
+            closeAsCancelled(returned, "SYSTEM", "RETURN_EXPIRED", "Quá hạn gửi hàng trả");
+            log.info("[Return] Expired unsent return request {} for order {}", id, orderId);
+        }
+    }
+
+    private void closeAsCancelled(ReturnRequest returned, String actor, String action, String reason) {
         returned.setStatus(ReturnRequestStatus.CANCELLED);
-        returned.setRejectReason(request.reason().trim());
-        returned.setReviewedBy(adminId);
+        returned.setRejectReason(reason);
+        returned.setReviewedBy(actor);
         returned.setReviewedAt(LocalDateTime.now(clock));
         returned.setClosedAt(clock.instant());
         orderStatusHistoryRepository.save(
                 OrderStatusHistory.builder()
                         .order(returned.getOrder())
-                        .fromStatus(OrderStatus.DELIVERED)
-                        .toStatus(OrderStatus.DELIVERED)
-                        .action("RETURN_CANCELLED")
-                        .changedBy(adminId)
-                        .reason(request.reason().trim())
+                        .fromStatus(returned.getOrder().getStatus())
+                        .toStatus(returned.getOrder().getStatus())
+                        .action(action)
+                        .changedBy(actor)
+                        .reason(reason)
                         .build());
         returnRequestRepository.save(returned);
-        return toResponse(returned);
+        notifyCustomer(returned, "Yêu cầu trả hàng đã bị hủy", "Lý do: " + reason);
+    }
+
+    /** Chỉ yêu cầu trả hàng do khách tạo mới báo khách; ca carrier/thất lạc là nghiệp vụ nội bộ. */
+    private void notifyCustomer(ReturnRequest returned, String title, String message) {
+        if (returned.getKind() == ReturnRequestKind.CUSTOMER_RETURN) {
+            notifications.sendReturnStatusNotification(returned.getOrder(), title, message);
+        }
+    }
+
+    private static String formatDate(Instant instant) {
+        return java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy")
+                .withZone(java.time.ZoneId.of("Asia/Ho_Chi_Minh"))
+                .format(instant);
     }
 
     @Override
@@ -613,6 +682,11 @@ public class ReturnServiceImpl implements ReturnService {
                                         + reply.amount().toPlainString()
                                         + " VND")
                         .build());
+        // Mọi loại hoàn tiền (trả hàng, carrier hoàn, thất lạc) khách đều nhận tiền nên đều báo
+        notifications.sendReturnStatusNotification(
+                order,
+                "Đã hoàn tiền",
+                "Đã hoàn " + reply.amount().toPlainString() + " VND vào ví Fashion Store của bạn.");
     }
 
     @Override
@@ -682,7 +756,7 @@ public class ReturnServiceImpl implements ReturnService {
             throw new AppException(OrderErrorCode.RETURN_WORKFLOW_CONFLICT);
         }
         String evidence =
-                verifyAdminEvidence(
+                verifyEvidence(
                         request.mediaIds(), adminId, kind == ReturnRequestKind.VERIFIED_LOSS);
         var snapshot =
                 shipmentRepository
@@ -932,6 +1006,29 @@ public class ReturnServiceImpl implements ReturnService {
     @Override
     @Transactional(propagation = Propagation.NEVER)
     @PreAuthorize("hasRole('ADMIN')")
+    public String getCustomerEvidenceReadUrl(String returnRequestId, String mediaId) {
+        ReturnRequest returned =
+                returnRequestRepository
+                        .findById(returnRequestId)
+                        .orElseThrow(
+                                () -> new AppException(OrderErrorCode.RETURN_REQUEST_NOT_FOUND));
+        if (!ReturnRequestMapper.deserializeImages(objectMapper, returned.getImages())
+                .contains(mediaId)) {
+            throw new AppException(OrderErrorCode.RETURN_EVIDENCE_INVALID);
+        }
+        var response = catalogFeignClient.getEvidenceReadUrl(mediaId, returned.getUserId());
+        if (response == null
+                || response.getCode() != 1000
+                || response.getData() == null
+                || response.getData().isBlank()) {
+            throw new AppException(OrderErrorCode.RETURN_EVIDENCE_INVALID);
+        }
+        return response.getData();
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.NEVER)
+    @PreAuthorize("hasRole('ADMIN')")
     public String getQcEvidenceReadUrl(String returnRequestId, String mediaId) {
         ReturnRequest returned =
                 returnRequestRepository
@@ -1003,7 +1100,7 @@ public class ReturnServiceImpl implements ReturnService {
                 .build();
     }
 
-    private String verifyAdminEvidence(List<String> mediaIds, String actorId, boolean required) {
+    private String verifyEvidence(List<String> mediaIds, String actorId, boolean required) {
         List<String> evidence = mediaIds == null ? List.of() : new java.util.ArrayList<>(mediaIds);
         if (evidence.size() > 5
                 || required && evidence.isEmpty()

@@ -91,6 +91,7 @@ public class EmailNotificationListener {
             case "order-cancelled" -> "Đơn hàng #" + orderCode + " đã bị hủy - Fashion Store";
             case "order-shipped" -> "Đơn hàng #" + orderCode + " đang được giao - Fashion Store";
             case "order-delivered" -> "Đơn hàng #" + orderCode + " đã giao thành công - Fashion Store";
+            case "return-status" -> "Cập nhật yêu cầu trả hàng đơn #" + orderCode + " - Fashion Store";
             case "verify-email" -> "Xác nhận email - Fashion Store";
             default -> "Thông báo từ Fashion Store";
         };

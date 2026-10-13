@@ -56,6 +56,7 @@ class ReturnServiceImplTest {
     @Mock private com.fashionstore.order.client.GhnClient ghnClient;
     @Mock private com.fashionstore.order.repository.ShipmentRepository shipmentRepository;
     @Mock private com.fashionstore.order.event.OutboxEventRecorder outboxEventRecorder;
+    @Mock private com.fashionstore.order.service.OrderNotificationService notifications;
 
     private ObjectMapper objectMapper;
     private ReturnServiceImpl service;
@@ -75,11 +76,14 @@ class ReturnServiceImplTest {
                         java.time.Clock.systemUTC(),
                         ghnClient,
                         shipmentRepository,
-                        outboxEventRecorder);
+                        outboxEventRecorder,
+                        notifications);
         org.mockito.Mockito.lenient()
                 .when(transactionManager.getTransaction(any()))
                 .thenReturn(new org.springframework.transaction.support.SimpleTransactionStatus());
-        when(currentUserProvider.getCurrentUserId()).thenReturn("user-1");
+        org.mockito.Mockito.lenient()
+                .when(currentUserProvider.getCurrentUserId())
+                .thenReturn("user-1");
     }
 
     @Test
@@ -209,10 +213,12 @@ class ReturnServiceImplTest {
                             return req;
                         });
 
+        stubEvidence("media-1", "user-1");
+        stubEvidence("media-2", "user-1");
         ReturnOrderRequest request =
                 ReturnOrderRequest.builder()
                         .reason("Sản phẩm lỗi đường chỉ")
-                        .images(List.of("https://img1.jpg", "https://img2.jpg"))
+                        .images(List.of("media-1", "media-2"))
                         .build();
 
         ReturnRequestResponse response = service.createReturnRequest("ord-1", request);
@@ -221,7 +227,7 @@ class ReturnServiceImplTest {
         assertThat(response.getId()).isEqualTo("ret-1");
         assertThat(response.getStatus()).isEqualTo(ReturnRequestStatus.REQUESTED);
         assertThat(response.getReason()).isEqualTo("Sản phẩm lỗi đường chỉ");
-        assertThat(response.getImages()).containsExactly("https://img1.jpg", "https://img2.jpg");
+        assertThat(response.getImages()).containsExactly("media-1", "media-2");
 
         // Order vẫn giữ nguyên DELIVERED
         assertThat(order.getStatus()).isEqualTo(OrderStatus.DELIVERED);
@@ -623,5 +629,239 @@ class ReturnServiceImplTest {
                         ex ->
                                 assertThat(((AppException) ex).getErrorCode())
                                         .isEqualTo(OrderErrorCode.RETURN_REQUEST_NOT_FOUND));
+    }
+
+    // ----- ảnh khách gửi phải là media RETURN_EVIDENCE của chính khách -----
+
+    @Test
+    void createReturnRequest_rejectsImageNotOwnedByCustomer() {
+        stubEvidence("media-1", "another-user");
+
+        assertThatThrownBy(
+                        () ->
+                                service.createReturnRequest(
+                                        "ord-1",
+                                        ReturnOrderRequest.builder()
+                                                .reason("Lỗi")
+                                                .images(List.of("media-1"))
+                                                .build()))
+                .isInstanceOf(AppException.class)
+                .satisfies(
+                        ex ->
+                                assertThat(((AppException) ex).getErrorCode())
+                                        .isEqualTo(OrderErrorCode.RETURN_EVIDENCE_INVALID));
+        verify(returnRequestRepository, never()).save(any());
+    }
+
+    @Test
+    void customerEvidenceReadUrlUsesCustomerAsOwner() {
+        Order order = deliveredOrder();
+        ReturnRequest request = returnRequest(order, ReturnRequestStatus.REQUESTED);
+        request.setImages("[\"media-1\"]");
+        when(returnRequestRepository.findById("ret-1")).thenReturn(Optional.of(request));
+        when(catalogFeignClient.getEvidenceReadUrl("media-1", "user-1"))
+                .thenReturn(
+                        com.fashionstore.common.dto.ApiResponse.<String>builder()
+                                .data("https://signed")
+                                .build());
+
+        assertThat(service.getCustomerEvidenceReadUrl("ret-1", "media-1"))
+                .isEqualTo("https://signed");
+        assertThatThrownBy(() -> service.getCustomerEvidenceReadUrl("ret-1", "media-x"))
+                .isInstanceOf(AppException.class);
+    }
+
+    // ----- quá hạn gửi hàng trả -----
+
+    @Test
+    void expireUnsentReturns_cancelsApprovedReturnPastSendBackDeadlineAndNotifies() {
+        Order order = deliveredOrder();
+        ReturnRequest request = returnRequest(order, ReturnRequestStatus.APPROVED);
+        java.time.Instant now = java.time.Instant.now();
+        request.setApprovedAt(now.minus(java.time.Duration.ofDays(8)));
+        when(returnRequestRepository.findUnsentCustomerReturnIds(any()))
+                .thenReturn(List.of("ret-1"));
+        stubLocks(order, request);
+
+        service.expireUnsentReturns(now);
+
+        assertThat(request.getStatus()).isEqualTo(ReturnRequestStatus.CANCELLED);
+        assertThat(request.getClosedAt()).isNotNull();
+        assertThat(request.getRejectReason()).isEqualTo("Quá hạn gửi hàng trả");
+        ArgumentCaptor<OrderStatusHistory> history = ArgumentCaptor.forClass(OrderStatusHistory.class);
+        verify(orderStatusHistoryRepository).save(history.capture());
+        assertThat(history.getValue().getAction()).isEqualTo("RETURN_EXPIRED");
+        assertThat(history.getValue().getChangedBy()).isEqualTo("SYSTEM");
+        verify(notifications)
+                .sendReturnStatusNotification(
+                        org.mockito.ArgumentMatchers.eq(order),
+                        org.mockito.ArgumentMatchers.anyString(),
+                        org.mockito.ArgumentMatchers.contains("Quá hạn gửi hàng trả"));
+    }
+
+    @Test
+    void expireUnsentReturns_skipsReturnReceivedMeanwhile() {
+        Order order = deliveredOrder();
+        ReturnRequest request = returnRequest(order, ReturnRequestStatus.RECEIVED);
+        request.setApprovedAt(java.time.Instant.now().minus(java.time.Duration.ofDays(8)));
+        request.setReceivedAt(java.time.Instant.now());
+        when(returnRequestRepository.findUnsentCustomerReturnIds(any()))
+                .thenReturn(List.of("ret-1"));
+        stubLocks(order, request);
+
+        service.expireUnsentReturns(java.time.Instant.now());
+
+        assertThat(request.getStatus()).isEqualTo(ReturnRequestStatus.RECEIVED);
+        verify(orderStatusHistoryRepository, never()).save(any());
+        org.mockito.Mockito.verifyNoInteractions(notifications);
+    }
+
+    // ----- thông báo cho khách -----
+
+    @Test
+    void approveReturn_notifiesCustomerWithSendBackDeadline() {
+        Order order = deliveredOrder();
+        ReturnRequest request = returnRequest(order, ReturnRequestStatus.REQUESTED);
+        stubLocks(order, request);
+
+        service.approveReturn("ret-1");
+
+        verify(notifications)
+                .sendReturnStatusNotification(
+                        org.mockito.ArgumentMatchers.eq(order),
+                        org.mockito.ArgumentMatchers.anyString(),
+                        org.mockito.ArgumentMatchers.contains("trước ngày"));
+    }
+
+    @Test
+    void rejectReturn_notifiesCustomerWithReason() {
+        Order order = deliveredOrder();
+        ReturnRequest request = returnRequest(order, ReturnRequestStatus.REQUESTED);
+        stubLocks(order, request);
+
+        service.rejectReturn(
+                "ret-1", RejectReturnRequest.builder().rejectReason("Quá thời hạn").build());
+
+        verify(notifications)
+                .sendReturnStatusNotification(
+                        org.mockito.ArgumentMatchers.eq(order),
+                        org.mockito.ArgumentMatchers.anyString(),
+                        org.mockito.ArgumentMatchers.contains("Quá thời hạn"));
+    }
+
+    @Test
+    void receiveReturn_failedQcTellsCustomerSupportWillContact() {
+        Order order = deliveredOrder();
+        ReturnRequest request = returnRequest(order, ReturnRequestStatus.APPROVED);
+        stubLocks(order, request);
+        stubEvidence("qc-1", "user-1");
+
+        service.receiveReturn(
+                "ret-1",
+                new com.fashionstore.order.dto.ReceiveReturnRequest(
+                        false, "Mất tem", List.of("qc-1")));
+
+        verify(notifications)
+                .sendReturnStatusNotification(
+                        org.mockito.ArgumentMatchers.eq(order),
+                        org.mockito.ArgumentMatchers.anyString(),
+                        org.mockito.ArgumentMatchers.contains("CSKH sẽ liên hệ"));
+    }
+
+    // ----- lịch sử ghi đúng trạng thái order -----
+
+    @Test
+    void receiveCarrierReturn_recordsReturnedStatusAndDoesNotNotify() {
+        Order order = deliveredOrder();
+        order.setStatus(OrderStatus.RETURNED);
+        ReturnRequest request = returnRequest(order, ReturnRequestStatus.APPROVED);
+        request.setKind(com.fashionstore.order.entity.enumeration.ReturnRequestKind.CARRIER_RETURN);
+        stubLocks(order, request);
+
+        service.receiveReturn(
+                "ret-1",
+                new com.fashionstore.order.dto.ReceiveReturnRequest(true, "Nguyên tem", List.of()));
+
+        ArgumentCaptor<OrderStatusHistory> history = ArgumentCaptor.forClass(OrderStatusHistory.class);
+        verify(orderStatusHistoryRepository).save(history.capture());
+        assertThat(history.getValue().getFromStatus()).isEqualTo(OrderStatus.RETURNED);
+        assertThat(history.getValue().getToStatus()).isEqualTo(OrderStatus.RETURNED);
+        org.mockito.Mockito.verifyNoInteractions(notifications);
+    }
+
+    @Test
+    void cancelCarrierReturn_recordsReturnedStatus() {
+        Order order = deliveredOrder();
+        order.setStatus(OrderStatus.RETURNED);
+        ReturnRequest request = returnRequest(order, ReturnRequestStatus.APPROVED);
+        request.setKind(com.fashionstore.order.entity.enumeration.ReturnRequestKind.CARRIER_RETURN);
+        stubLocks(order, request);
+
+        service.cancelReturn(
+                "ret-1", new com.fashionstore.order.dto.CancelReturnRequest("Nhầm đơn"));
+
+        ArgumentCaptor<OrderStatusHistory> history = ArgumentCaptor.forClass(OrderStatusHistory.class);
+        verify(orderStatusHistoryRepository).save(history.capture());
+        assertThat(history.getValue().getFromStatus()).isEqualTo(OrderStatus.RETURNED);
+        assertThat(history.getValue().getToStatus()).isEqualTo(OrderStatus.RETURNED);
+    }
+
+    private Order deliveredOrder() {
+        Order order =
+                Order.builder()
+                        .userId("user-1")
+                        .orderCode("ORD-1")
+                        .status(OrderStatus.DELIVERED)
+                        .totalAmount(new BigDecimal("500000"))
+                        .paymentId("pay-1")
+                        .deliveredAt(java.time.Instant.now().minusSeconds(24 * 3600))
+                        .build();
+        order.setId("ord-1");
+        return order;
+    }
+
+    private ReturnRequest returnRequest(Order order, ReturnRequestStatus status) {
+        ReturnRequest request =
+                ReturnRequest.builder()
+                        .order(order)
+                        .userId("user-1")
+                        .reason("Lỗi")
+                        .status(status)
+                        .build();
+        request.setId("ret-1");
+        return request;
+    }
+
+    private void stubLocks(Order order, ReturnRequest request) {
+        org.mockito.Mockito.lenient()
+                .when(returnRequestRepository.findOrderIdByReturnId("ret-1"))
+                .thenReturn(Optional.of("ord-1"));
+        org.mockito.Mockito.lenient()
+                .when(orderRepository.findByIdForUpdate("ord-1"))
+                .thenReturn(Optional.of(order));
+        org.mockito.Mockito.lenient()
+                .when(returnRequestRepository.findByIdForUpdate("ret-1"))
+                .thenReturn(Optional.of(request));
+        org.mockito.Mockito.lenient()
+                .when(returnRequestRepository.save(any(ReturnRequest.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+    }
+
+    private void stubEvidence(String mediaId, String ownerId) {
+        when(catalogFeignClient.getReturnEvidence(
+                        org.mockito.ArgumentMatchers.eq(mediaId),
+                        org.mockito.ArgumentMatchers.anyString()))
+                .thenReturn(
+                        com.fashionstore.common.dto.ApiResponse
+                                .<com.fashionstore.order.dto.ReturnEvidenceMetadata>builder()
+                                .data(
+                                        new com.fashionstore.order.dto.ReturnEvidenceMetadata(
+                                                mediaId,
+                                                ownerId,
+                                                "RETURN_EVIDENCE",
+                                                "ACTIVE",
+                                                "PRIVATE",
+                                                "image/jpeg"))
+                                .build());
     }
 }

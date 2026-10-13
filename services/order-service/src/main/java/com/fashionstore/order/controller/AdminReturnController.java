@@ -75,6 +75,14 @@ public class AdminReturnController {
                 .build();
     }
 
+    @GetMapping("/{id}/customer-evidence/{mediaId}/url")
+    public ApiResponse<String> customerEvidenceUrl(
+            @PathVariable String id, @PathVariable String mediaId) {
+        return ApiResponse.<String>builder()
+                .data(returnService.getCustomerEvidenceReadUrl(id, mediaId))
+                .build();
+    }
+
     @GetMapping("/{id}/qc-evidence/{mediaId}/url")
     public ApiResponse<String> qcEvidenceUrl(
             @PathVariable String id, @PathVariable String mediaId) {

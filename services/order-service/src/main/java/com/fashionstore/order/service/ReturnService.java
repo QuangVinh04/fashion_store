@@ -37,6 +37,11 @@ public interface ReturnService {
 
     String getQcEvidenceReadUrl(String returnRequestId, String mediaId);
 
+    String getCustomerEvidenceReadUrl(String returnRequestId, String mediaId);
+
+    /** Hủy yêu cầu trả hàng đã duyệt mà khách không gửi hàng trong hạn. */
+    void expireUnsentReturns(java.time.Instant now);
+
     ReturnRequestResponse refundReturn(String returnRequestId, BigDecimal amount);
 
     void refundCredited(
