@@ -2,6 +2,13 @@ server:
   port: ${SERVER_PORT:8090}
 
 spring:
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${KEYCLOAK_ISSUER:http://localhost:8180/realms/fashion-store}
+          jwk-set-uri: ${KEYCLOAK_JWK_SET_URI:http://localhost:8180/realms/fashion-store/protocol/openid-connect/certs}
+          audiences: fashion-api
   application:
     name: notification-service
   datasource:
@@ -46,6 +53,8 @@ spring:
 
 app:
   frontend-url: ${FRONTEND_URL:http://localhost:3000}
+  websocket:
+    allowed-origins: ${NOTIFICATION_ALLOWED_ORIGINS:http://localhost:8083,http://127.0.0.1:8083}
 
 management:
   endpoints:

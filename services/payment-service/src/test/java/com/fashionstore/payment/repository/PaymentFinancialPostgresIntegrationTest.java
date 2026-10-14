@@ -225,7 +225,7 @@ class PaymentFinancialPostgresIntegrationTest {
         deliveryEvents.handle(envelope, UUID.randomUUID().toString());
         Payment collected = payments.findById(payment.getId()).orElseThrow();
         assertThat(collected.getStatus()).isEqualTo(PaymentStatus.COMPLETED);
-        assertThat(collected.getCodCollectedAt()).isEqualTo(collectedAt);
+        assertThat(collected.getOperationId()).isEqualTo("ghn:123:GHN-1");
         assertThat(collected.getPaidAt()).isNotNull();
         walletController.refundToWallet(
                 payment.getUserId(),

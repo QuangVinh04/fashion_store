@@ -1,6 +1,7 @@
 import { Link, useLocation } from "react-router";
 import {
   User,
+  Wallet,
   MapPin,
   ShoppingBag,
   Heart,
@@ -10,6 +11,7 @@ import {
 import { useAuth } from "../context/AuthContext";
 
 const NAV = [
+  { href: "/profile/wallet", label: "V\u00ed c\u1eeda h\u00e0ng", icon: Wallet },
   { href: "/profile", label: "Hồ Sơ Cá Nhân", icon: User },
   { href: "/profile/orders", label: "Đơn Hàng Của Tôi", icon: ShoppingBag },
   { href: "/profile/addresses", label: "Quản Lý Địa Chỉ", icon: MapPin },

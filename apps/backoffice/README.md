@@ -12,7 +12,13 @@ yarn dev
 pnpm dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:8084](http://localhost:8084) through `backoffice-bff` to use
+Keycloak login and the authenticated APIs. The Next.js dev server listens on
+`http://localhost:5173`; the BFF proxies the interface to this server.
+
+Development output uses `.next-dev`, separate from the production `.next` output.
+This avoids startup hanging while Next.js cleans a locked production build on
+Windows. `BACKOFFICE_BUILD_DIR` can override either directory.
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 

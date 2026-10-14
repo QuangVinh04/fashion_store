@@ -65,8 +65,7 @@ public class OrderDeliveredEventListener {
                 }
                 if (payment.getStatus() == PaymentStatus.COD_PENDING || payment.getStatus() == PaymentStatus.CANCELLED) {
                     payment.setStatus(PaymentStatus.COMPLETED);
-                    payment.setCodCollectedAt(event.codCollectedAt());
-                    payment.setCodCollectionOperationId("ghn:" + event.carrierShopId() + ":" + event.trackingCode());
+                    payment.setOperationId("ghn:" + event.carrierShopId() + ":" + event.trackingCode());
                     payment.setPaidAt(LocalDateTime.ofInstant(event.codCollectedAt(), ZoneId.systemDefault()));
                     payment.setFailureReason(null);
                 }

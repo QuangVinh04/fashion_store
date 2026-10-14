@@ -42,6 +42,14 @@ spring:
       server:
         webflux:
           routes:
+            - id: notifications-websocket
+              uri: ${NOTIFICATION_WS_URL:ws://notification-service:8090}
+              predicates:
+                - Path=/api/v1/notifications/ws
+            - id: notifications
+              uri: ${NOTIFICATION_BASE_URL:http://notification-service:8090}
+              predicates:
+                - Path=/api/v1/notifications,/api/v1/notifications/**
             - id: identity-users
               uri: ${IDENTITY_BASE_URL:http://identity-service:8082}
               predicates:

@@ -4,6 +4,23 @@ target/
 !**/src/main/**/target/
 !**/src/test/**/target/
 
+reports/
+apps/**
+!apps/
+!apps/storefront/
+!apps/storefront/src/
+!apps/storefront/src/api/
+!apps/storefront/src/api/notifications.ts
+!apps/storefront/src/api/notification-socket.ts
+!apps/storefront/src/components/
+!apps/storefront/src/components/notifications/
+!apps/storefront/src/components/notifications/*.ts
+!apps/storefront/src/components/notifications/*.tsx
+!apps/storefront/tests/
+!apps/storefront/tests/notifications.test.mjs
+docs/
+.superpowers/
+
 .env
 ### STS ###
 .apt_generated

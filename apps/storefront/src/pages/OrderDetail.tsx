@@ -22,6 +22,9 @@ import type { Order, Payment, ReturnRequest } from "../api/types";
 import OrderActivityTimeline from "../components/OrderActivityTimeline";
 import ProfileLayout from "../components/ProfileLayout";
 import { PageTitle, Status, StatusBadge, useLoad } from "../components/StoreUI";
+import ConfirmReceiptDialog from "../components/orders/ConfirmReceiptDialog";
+import OrderCancellationActions from "../components/orders/OrderCancellationActions";
+import { confirmReceipt,loadReturnRequest,RETURN_LABEL } from "../api/return-actions";
 
 export default function OrderDetail() {
   const { id = "" } = useParams();
@@ -53,6 +56,20 @@ export default function OrderDetail() {
   } | null>(null);
 
   const order = orderLoad.data;
+  const [receiptOpen,setReceiptOpen]=useState(false);
+  const [receiptBusy,setReceiptBusy]=useState(false);
+  const [receiptError,setReceiptError]=useState('');
+  const [returnError,setReturnError]=useState('');
+  useEffect(()=>{if(!order?.returnEligibleUntil)return;const remaining=Date.parse(order.returnEligibleUntil)-Date.now();
+    if(remaining<=0)return;const timer=setTimeout(()=>void orderLoad.refresh(),Math.min(remaining+250,2147483647));return()=>clearTimeout(timer);
+  },[order?.returnEligibleUntil]);
+  async function handleConfirmReceipt() {
+    if(!order?.canConfirmReceipt || order.activeReturnId || receiptBusy)return;
+    setReceiptBusy(true);setReceiptError('');
+    try {const updated=await confirmReceipt(id);orderLoad.setData(updated);setReceiptOpen(false);void historyLoad.refresh();}
+    catch(error){setReceiptError(customerError(error));void orderLoad.refresh();}
+    finally{setReceiptBusy(false);}
+  }
 
   // Clear data when navigating between orders.
   useEffect(() => {
@@ -116,12 +133,11 @@ export default function OrderDetail() {
     let active = true;
 
     if (["DELIVERED", "RETURNED", "REFUNDED"].includes(order.status)) {
-      store
-        .returnRequest(id)
+      loadReturnRequest(() => store.returnRequest(id))
         .then((r) => {
           if (active) setReturnRequest(r);
         })
-        .catch(() => {});
+        .catch(error => {if(active)setReturnError(customerError(error));});
     }
 
     return () => {
@@ -181,35 +197,6 @@ export default function OrderDetail() {
     setCopiedTracking(true);
     setTimeout(() => setCopiedTracking(false), 2000);
   };
-
-  async function handleCancelOrder() {
-    if (
-      !window.confirm(
-        "Bạn có chắc chắn muốn gửi yêu cầu hủy đơn hàng này không?",
-      )
-    )
-      return;
-    setBusyAction(true);
-    setActionNotice(null);
-    try {
-      await store.orderCancel(
-        id,
-        "Khách hàng yêu cầu hủy đơn từ trang tài khoản",
-      );
-      setActionNotice({
-        type: "success",
-        text: "Đã gửi yêu cầu hủy đơn. Shop sẽ cập nhật kết quả xử lý tại đây.",
-      });
-      await orderLoad.refresh();
-    } catch (e) {
-      setActionNotice({
-        type: "error",
-        text: customerError(e) || "Không thể hủy đơn hàng vào lúc này.",
-      });
-    } finally {
-      setBusyAction(false);
-    }
-  }
 
   async function handleOnlinePayment() {
     setBusyAction(true);
@@ -287,6 +274,7 @@ export default function OrderDetail() {
 
   return (
     <ProfileLayout>
+      <ConfirmReceiptDialog open={receiptOpen} busy={receiptBusy} blocked={!order?.canConfirmReceipt || !!order?.activeReturnId || orderLoad.loading} error={receiptError} onOpenChange={setReceiptOpen} onConfirm={()=>void handleConfirmReceipt()}/>
       <div className="w-full">
         {/* Navigation & Header */}
         <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-border">
@@ -485,22 +473,7 @@ export default function OrderDetail() {
                   Thao Tác Đơn Hàng
                 </h2>
 
-                {/* Cancel Action */}
-                {order.status === "PENDING" && (
-                  <div>
-                    <button
-                      type="button"
-                      disabled={busyAction}
-                      onClick={() => void handleCancelOrder()}
-                      className="w-full border border-destructive/20 bg-primary-light text-destructive py-3 text-xs font-semibold hover:bg-primary-light disabled:opacity-50 store-button"
-                    >
-                      {busyAction ? "Đang Xử Lý…" : "Yêu Cầu Hủy Đơn Hàng"}
-                    </button>
-                    <p className="text-xs text-muted-foreground mt-1 text-center">
-                      * Chỉ áp dụng khi đơn hàng ở trạng thái Chờ xử lý.
-                    </p>
-                  </div>
-                )}
+                <OrderCancellationActions key={order.id} order={order} onRefresh={orderLoad.refresh}/>
 
                 {/* Resume Online Payment */}
                 {order.paymentMethod === "ONLINE" &&
@@ -521,26 +494,17 @@ export default function OrderDetail() {
                     </div>
                   )}
 
-                {/* Return Request Button */}
-                {order.status === "DELIVERED" && (
-                  <div>
-                    <Link
-                      to={`/profile/orders/${id}/return`}
-                      className="w-full border border-border-strong text-foreground py-3 text-xs font-semibold hover:bg-primary-hover hover:text-white block text-center transition-colors store-action"
-                    >
-                      {returnRequest
-                        ? "Xem Yêu Cầu Trả Hàng"
-                        : "Gửi Yêu Cầu Trả Hàng (7 Ngày)"}
-                    </Link>
-                  </div>
-                )}
-
+                {order.paymentMethod === "WALLET" && order.status === "PENDING" && order.paymentId && <Link to={`/checkout/wallet-pay?paymentId=${encodeURIComponent(order.paymentId)}`} className="block rounded-xl bg-primary py-3 text-center text-sm text-primary-foreground">Thanh toán bằng ví</Link>}
+                {order.canConfirmReceipt && !order.activeReturnId && <button type="button" disabled={receiptBusy || orderLoad.loading} onClick={()=>{setReceiptError('');setReceiptOpen(true);}} className="w-full rounded-xl bg-primary py-3 text-sm text-primary-foreground disabled:opacity-50">Xác nhận nhận hàng</button>}
+                {(order.canRequestReturn || order.activeReturnId || returnRequest) && <Link to={`/profile/orders/${id}/return`} className="block rounded-xl border border-border-strong py-3 text-center text-sm">{order.activeReturnId || returnRequest ? 'Theo dõi yêu cầu trả hàng' : 'Yêu cầu trả toàn bộ đơn hàng'}</Link>}
+                {order.returnEligibleUntil && order.canRequestReturn && <p className="text-xs text-muted-foreground">Hạn yêu cầu trả: {new Date(order.returnEligibleUntil).toLocaleString('vi-VN')}</p>}
+                {returnError && <p role="alert" className="text-xs text-destructive">{returnError}</p>}
                 {returnRequest && (
                   <div className="p-3 bg-background border border-border text-xs space-y-1">
                     <p>
                       <strong>Trạng thái trả hàng:</strong>{" "}
                       <span className="font-semibold text-primary">
-                        {({ PENDING: "Đang xem xét", APPROVED: "Đã chấp nhận", REJECTED: "Chưa được chấp nhận" } as Record<string, string>)[returnRequest.status] || "Đang cập nhật"}
+                        {RETURN_LABEL[returnRequest.status] || "Đang cập nhật"}
                       </span>
                     </p>
                     <p className="text-muted-foreground">
@@ -580,7 +544,7 @@ export default function OrderDetail() {
                 <div className="flex justify-between text-muted-foreground">
                   <span>Phương thức:</span>
                   <strong className="text-foreground">
-                    {order.paymentMethod === "COD" ? "Thanh toán khi nhận hàng" : `Thanh toán trực tuyến (${({ VNPAY: "VNPay", PAYOS: "PayOS" } as Record<string, string>)[order.paymentProvider] || "Cổng thanh toán"})`}
+                    {order.paymentMethod === "WALLET" ? "Thanh toán bằng ví cửa hàng" : order.paymentMethod === "COD" ? "Thanh toán khi nhận hàng" : `Thanh toán trực tuyến (${({ VNPAY: "VNPay", PAYOS: "PayOS" } as Record<string, string>)[order.paymentProvider] || "Cổng thanh toán"})`}
                   </strong>
                 </div>
 

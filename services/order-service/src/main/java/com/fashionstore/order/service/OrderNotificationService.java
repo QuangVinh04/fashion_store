@@ -3,6 +3,7 @@ package com.fashionstore.order.service;
 import com.fashionstore.contracts.common.EventEnvelope;
 import com.fashionstore.contracts.common.EventTypes;
 import com.fashionstore.contracts.notification.EmailNotificationRequested;
+import com.fashionstore.contracts.notification.InAppNotificationRequested;
 import com.fashionstore.order.client.IdentityClient;
 import com.fashionstore.order.dto.InternalUserDto;
 import com.fashionstore.order.entity.Order;
@@ -28,6 +29,8 @@ public class OrderNotificationService {
 
     public void sendOrderConfirmedNotification(Order order) {
         if (order == null) return;
+        sendInApp(order, "ORDER_CONFIRMED", "Đơn hàng đã được xác nhận",
+                "Đơn #" + order.getOrderCode() + " đã được xác nhận và sẽ sớm được chuẩn bị.");
         String recipientEmail = resolveRecipientEmail(order);
         if (recipientEmail == null || recipientEmail.isBlank()) {
             log.warn("[OrderNotification] Cannot send order-confirmed email: No email found for userId={}", order.getUserId());
@@ -60,6 +63,8 @@ public class OrderNotificationService {
 
     public void sendOrderShippedNotification(Order order, Shipment shipment) {
         if (order == null) return;
+        sendInApp(order, "ORDER_SHIPPED", "Đơn hàng đang được giao",
+                "Đơn #" + order.getOrderCode() + " đã được bàn giao cho đơn vị vận chuyển.");
         String recipientEmail = resolveRecipientEmail(order);
         if (recipientEmail == null || recipientEmail.isBlank()) {
             log.warn("[OrderNotification] Cannot send order-shipped email: No email found for userId={}", order.getUserId());
@@ -92,6 +97,8 @@ public class OrderNotificationService {
 
     public void sendOrderDeliveredNotification(Order order) {
         if (order == null) return;
+        sendInApp(order, "ORDER_DELIVERED", "Đơn hàng đã giao thành công",
+                "Đơn #" + order.getOrderCode() + " đã được giao. Bạn có thể xem chi tiết và xác nhận đã nhận hàng.");
         String recipientEmail = resolveRecipientEmail(order);
         if (recipientEmail == null || recipientEmail.isBlank()) {
             log.warn("[OrderNotification] Cannot send order-delivered email: No email found for userId={}", order.getUserId());
@@ -126,6 +133,8 @@ public class OrderNotificationService {
      */
     public void sendOrderCancelledNotification(Order order, String reason) {
         if (order == null) return;
+        sendInApp(order, "ORDER_CANCELLED", "Đơn hàng đã bị hủy",
+                "Đơn #" + order.getOrderCode() + " đã bị hủy." + (reason != null && !reason.isBlank() ? " " + reason : ""));
         String recipientEmail = resolveRecipientEmail(order);
         if (recipientEmail == null || recipientEmail.isBlank()) {
             log.warn("[OrderNotification] Cannot send order-cancelled email: No email found for userId={}", order.getUserId());
@@ -158,6 +167,7 @@ public class OrderNotificationService {
     /** Báo khách một mốc của yêu cầu trả hàng (duyệt, từ chối, nhận hàng, hủy, hoàn tiền). */
     public void sendReturnStatusNotification(Order order, String title, String message) {
         if (order == null) return;
+        sendInApp(order, "RETURN_STATUS", title, "Đơn #" + order.getOrderCode() + ": " + message);
         String recipientEmail = resolveRecipientEmail(order);
         if (recipientEmail == null || recipientEmail.isBlank()) {
             log.warn("[OrderNotification] Cannot send return-status email: No email found for userId={}", order.getUserId());
@@ -185,6 +195,14 @@ public class OrderNotificationService {
 
         outboxEventRecorder.saveMessage(order.getId(), EventTypes.NOTIFICATION_EMAIL_REQUESTED, envelope);
         log.info("[OrderNotification] Emitted return-status email event for orderId={}", order.getId());
+    }
+
+    private void sendInApp(Order order, String type, String title, String message) {
+        String userId = order.getUserId();
+        if (userId == null || userId.isBlank() || userId.startsWith("anon:")) return;
+        var payload = new InAppNotificationRequested(userId, type, title, message, order.getId());
+        var envelope = EventEnvelope.v1(EventTypes.NOTIFICATION_IN_APP_REQUESTED, order.getId(), null, payload);
+        outboxEventRecorder.saveMessage(order.getId(), EventTypes.NOTIFICATION_IN_APP_REQUESTED, envelope);
     }
 
     private String resolveRecipientEmail(Order order) {

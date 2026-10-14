@@ -32,6 +32,12 @@ spring:
           default-filters:
             - SaveSession
           routes:
+            - id: notifications-websocket
+              uri: ${API_GATEWAY_WS_URL:ws://localhost:8080}
+              predicates:
+                - Path=/api/v1/notifications/ws
+              filters:
+                - TokenRelay=
             - id: api
               uri: ${API_GATEWAY_URL:http://localhost:8080}
               predicates:

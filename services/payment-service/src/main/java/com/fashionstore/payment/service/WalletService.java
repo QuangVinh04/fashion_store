@@ -703,7 +703,7 @@ public class WalletService {
                 || payment.getPaidAt() == null) {
             throw new AppException(WalletErrorCode.SOURCE_INVALID);
         }
-        if (payment.getMethod() == PaymentMethod.COD && payment.getCodCollectedAt() == null) {
+        if (payment.getMethod() == PaymentMethod.COD && payment.getOperationId() == null) {
             throw new AppException(WalletErrorCode.SOURCE_INVALID);
         }
         if (payment.getMethod() == PaymentMethod.ONLINE

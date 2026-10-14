@@ -48,6 +48,7 @@ services:
     environment:
       SERVER_PORT: 8083
       API_GATEWAY_URL: http://api-gateway:8080
+      API_GATEWAY_WS_URL: ws://api-gateway:8080
       STOREFRONT_UI_URL: ${STOREFRONT_UI_URL:-http://host.docker.internal:3000}
       KEYCLOAK_PUBLIC_URL: http://localhost:8180/realms/fashion-store
       KEYCLOAK_INTERNAL_URL: http://keycloak:8080/realms/fashion-store
@@ -136,6 +137,7 @@ services:
       NOTIFICATION_POSTGRES_USER: root
       NOTIFICATION_POSTGRES_PASSWORD: root
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+      NOTIFICATION_ALLOWED_ORIGINS: ${NOTIFICATION_ALLOWED_ORIGINS:-http://localhost:8083,http://127.0.0.1:8083}
       MAIL_HOST: ${MAIL_HOST:-smtp.gmail.com}
       MAIL_PORT: ${MAIL_PORT:-587}
       MAIL_USERNAME: ${MAIL_USERNAME:-}

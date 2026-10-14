@@ -19,6 +19,9 @@ import Register from '../pages/Register';
 import Contact from '../pages/Contact';
 import Policy from '../pages/Policy';
 import NotFound from '../pages/NotFound';
+import Wallet from '../pages/Wallet';
+import WalletTopUp from '../pages/WalletTopUp';
+import WalletPay from '../pages/WalletPay';
 
 const protectedPage = (element: ReactNode) => createElement(RequireAuth, null, element);
 
@@ -31,6 +34,10 @@ export const router = createBrowserRouter([
       { path: 'products', Component: Products },
       { path: 'products/:id', Component: ProductDetail },
       { path: 'cart', element: protectedPage(createElement(Cart)) },
+      { path: 'checkout/wallet-pay', element: protectedPage(createElement(WalletPay)) },
+      { path: 'profile/wallet', element: protectedPage(createElement(Wallet)) },
+      { path: 'profile/wallet/top-up', element: protectedPage(createElement(WalletTopUp)) },
+      { path: 'profile/wallet/top-ups/:id', element: protectedPage(createElement(WalletTopUp)) },
       { path: 'checkout', element: protectedPage(createElement(Checkout)) },
       { path: 'login', Component: Login },
       { path: 'register', Component: Register },
@@ -40,9 +47,9 @@ export const router = createBrowserRouter([
       { path: 'profile/orders/:id', element: protectedPage(createElement(OrderDetail)) },
       { path: 'profile/orders/:id/return', element: protectedPage(createElement(ReturnPage)) },
       { path: 'wishlist', element: protectedPage(createElement(Wishlist)) },
-      { path: 'payment/vnpay/return', Component: PaymentReturn },
-      { path: 'payment/payos/success', Component: PaymentReturn },
-      { path: 'payment/payos/cancel', Component: PaymentReturn },
+      { path: 'payment/vnpay/return', element: protectedPage(createElement(PaymentReturn)) },
+      { path: 'payment/payos/success', element: protectedPage(createElement(PaymentReturn)) },
+      { path: 'payment/payos/cancel', element: protectedPage(createElement(PaymentReturn)) },
       { path: 'contact', Component: Contact },
       { path: 'policy', Component: Policy },
       { path: '*', Component: NotFound },

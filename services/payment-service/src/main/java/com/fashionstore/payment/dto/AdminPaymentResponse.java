@@ -9,6 +9,9 @@ public record AdminPaymentResponse(String id,String orderId,String userId,String
         return new AdminPaymentResponse(p.getId(),p.getOrderId(),p.getUserId(),p.getMethod().name(),p.getProvider().name(),
                 p.getStatus().name(),p.getAmount().toPlainString(),p.getCurrency(),p.getMerchantReference(),p.getTransactionId(),
                 p.getFailureReason(),p.getPaidAt()==null?null:p.getPaidAt().atZone(ZoneId.systemDefault()).toInstant(),
-                p.getDeliveryRecordedAt(),p.getCodCollectedAt(),0);
+                p.getDeliveryRecordedAt(),
+                p.getMethod() == com.fashionstore.common.payment.PaymentMethod.COD && p.getPaidAt() != null
+                        ? p.getPaidAt().atZone(ZoneId.systemDefault()).toInstant() : null,
+                0);
     }
 }

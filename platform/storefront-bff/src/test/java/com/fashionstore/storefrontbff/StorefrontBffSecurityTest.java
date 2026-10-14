@@ -101,6 +101,16 @@ class StorefrontBffSecurityTest {
     }
 
     @Test
+    void notificationReadActionsRelayTokenAndStillRequireCsrf() {
+        client.mutateWith(login()).patch().uri("/api/v1/notifications/read-all")
+                .exchange().expectStatus().isForbidden();
+        assertThat(relayedAuthorization.get()).isNull();
+        client.mutateWith(login()).mutateWith(csrf()).patch().uri("/api/v1/notifications/read-all")
+                .exchange().expectStatus().isOk();
+        assertThat(relayedAuthorization.get()).isEqualTo("Bearer access-token");
+    }
+
+    @Test
     void unsafeRequestWithoutCsrfTokenIsRejected() {
         client.mutateWith(login())
                 .post().uri("/api/v1/orders").exchange()

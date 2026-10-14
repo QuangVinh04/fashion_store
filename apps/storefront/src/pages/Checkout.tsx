@@ -33,7 +33,7 @@ export default function CheckoutPage() {
     "STANDARD",
   );
   const [paymentProvider, setPaymentProvider] = useState<
-    "COD" | "VNPAY" | "PAYOS"
+    "COD" | "VNPAY" | "PAYOS" | "INTERNAL"
   >("COD");
   const [couponCode, setCouponCode] = useState<string>("");
   const [checkout, setCheckout] = useState<Checkout | null>(null);
@@ -84,7 +84,7 @@ export default function CheckoutPage() {
   }, [addressesLoad.data, addressId]);
 
   const selectedAddress = addressesLoad.data?.find((a) => a.id === addressId);
-  const paymentMethod = paymentProvider === "COD" ? "COD" : "ONLINE";
+  const paymentMethod = paymentProvider === "COD" ? "COD" : paymentProvider === "INTERNAL" ? "WALLET" : "ONLINE";
 
   function invalidateCheckoutSnapshot() {
     setCheckout(null);
@@ -138,6 +138,19 @@ export default function CheckoutPage() {
 
       if (paymentProvider === "COD") {
         navigate(`/profile/orders/${order.id}`);
+        return;
+      }
+
+      if (paymentProvider === "INTERNAL") {
+        setProcessingText("\u0110ang m\u1edf thanh to\u00e1n b\u1eb1ng v\u00ed...");
+        const until = Date.now() + 8000;
+        let fresh = order;
+        while (!fresh.paymentUrl && Date.now() < until && fresh.status === "PENDING") {
+          await new Promise(resolve => setTimeout(resolve, 600));
+          fresh = await store.order(order.id);
+        }
+        if (fresh.paymentUrl) window.location.assign(fresh.paymentUrl);
+        else navigate(`/profile/orders/${order.id}`);
         return;
       }
 
@@ -442,6 +455,12 @@ export default function CheckoutPage() {
               <div className="space-y-3">
                 {[
                   {
+                    id: "INTERNAL",
+                    title: "V\u00ed c\u1eeda h\u00e0ng",
+                    desc: "Thanh to\u00e1n to\u00e0n b\u1ed9 \u0111\u01a1n b\u1eb1ng s\u1ed1 d\u01b0 c\u1ee7a b\u1ea1n",
+                    icon: CreditCard,
+                  },
+                  {
                     id: "COD",
                     title: "Thanh Toán Khi Nhận Hàng (COD)",
                     desc: "Thanh toán tiền mặt cho nhân viên giao hàng khi nhận kiện hàng",
@@ -477,7 +496,7 @@ export default function CheckoutPage() {
                         checked={isSelected}
                         onChange={() => {
                           setPaymentProvider(
-                            prov.id as "COD" | "VNPAY" | "PAYOS",
+                            prov.id as "COD" | "VNPAY" | "PAYOS" | "INTERNAL",
                           );
                           invalidateCheckoutSnapshot();
                         }}

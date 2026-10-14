@@ -24,8 +24,6 @@ public class Payment extends AuditedEntity {
 
 
     @Column(name="delivery_recorded_at") java.time.Instant deliveryRecordedAt;
-    @Column(name="cod_collected_at") java.time.Instant codCollectedAt;
-    @Column(name="cod_collection_operation_id",length=160) String codCollectionOperationId;
 
     @Column(name="authorization_expires_at")
     java.time.Instant authorizationExpiresAt;

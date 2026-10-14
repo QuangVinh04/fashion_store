@@ -13,22 +13,24 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * Topology của notification-service: một queue nhận lệnh gửi email từ mọi service.
+ * Queues riêng cho email và thông báo trong website.
  */
 @Configuration
 public class RabbitMQConfig {
 
     public static final String EMAIL_QUEUE = "notification.email";
     public static final String EMAIL_DEAD_LETTER_QUEUE = "notification.email.dlq";
+    public static final String IN_APP_QUEUE = "notification.in-app";
+    public static final String IN_APP_DEAD_LETTER_QUEUE = "notification.in-app.dlq";
 
     /**
-     * Service này không có spring-web nên Spring Boot không tự tạo ObjectMapper; tự khai báo và đăng ký
-     * module (JavaTimeModule cho {@code Instant} trong EventEnvelope).
+     * Đăng ký module thời gian cho {@code Instant} trong EventEnvelope.
      */
     @Bean
     public ObjectMapper objectMapper() {
         ObjectMapper mapper = new ObjectMapper();
         mapper.findAndRegisterModules();
+        mapper.disable(com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
         return mapper;
     }
 
@@ -75,5 +77,14 @@ public class RabbitMQConfig {
     @Bean
     Binding emailBinding(Queue emailQueue, DirectExchange fashionEventsExchange) {
         return RabbitTopology.bind(emailQueue, fashionEventsExchange, EventTypes.NOTIFICATION_EMAIL_REQUESTED);
+    }
+
+    @Bean
+    Declarables inAppTopology() {
+        var queue = RabbitTopology.consumerQueue(IN_APP_QUEUE, IN_APP_DEAD_LETTER_QUEUE);
+        var dead = RabbitTopology.deadLetterQueue(IN_APP_DEAD_LETTER_QUEUE);
+        return new Declarables(queue, dead,
+                RabbitTopology.bind(queue, RabbitTopology.eventsExchange(), EventTypes.NOTIFICATION_IN_APP_REQUESTED),
+                RabbitTopology.deadLetterBinding(dead, RabbitTopology.deadLetterExchange()));
     }
 }

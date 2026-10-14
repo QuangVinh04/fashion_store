@@ -12,8 +12,13 @@ import { store } from "../api/store";
 import { money } from "../api/client";
 import type { Payment } from "../api/types";
 import { Status, useLoad } from "../components/StoreUI";
+import {resolvePaymentReturn,paymentReturnState} from "../api/payment-return";
 
 export default function PaymentReturn() {
+  const [params]=useSearchParams();const location=useLocation();
+  return <PaymentReturnContent key={`${location.pathname}:${params.toString()}`}/>;
+}
+export function PaymentReturnContent() {
   const [searchParams] = useSearchParams();
   const location = useLocation();
 
@@ -24,10 +29,11 @@ export default function PaymentReturn() {
   const isPayos =
     location.pathname.includes("payos") || searchParams.has("orderCode");
 
-  const orderId =
-    searchParams.get("orderId") ||
-    sessionStorage.getItem("lino:pendingOrder") ||
-    "";
+  const provider=isVnpay?'VNPAY':'PAYOS';
+  const reference=searchParams.get(isVnpay?'vnp_TxnRef':'orderCode')||'';
+  const resolutionLoad=useLoad(()=>resolvePaymentReturn(provider,searchParams),[provider,reference]);
+  const orderId=resolutionLoad.data?.orderId||'';
+  const orderLoad=useLoad(()=>orderId?store.order(orderId):Promise.resolve(null),[orderId]);
 
   const [verifyStatus, setVerifyStatus] = useState<string>("");
   const [verifyError, setVerifyError] = useState<string>("");
@@ -47,7 +53,7 @@ export default function PaymentReturn() {
 
   // VNPay checksum verification & return processing
   useEffect(() => {
-    if (!isVnpay || !searchParams.toString()) return;
+    if (!isVnpay || !orderId || !reference) return;
 
     let active = true;
     const vnpCode = searchParams.get("vnp_ResponseCode");
@@ -65,7 +71,7 @@ export default function PaymentReturn() {
           } else {
             setVerifyStatus("Đã nhận phản hồi thanh toán. Đang kiểm tra đơn hàng.");
           }
-          void paymentLoad.refresh();
+          void paymentLoad.refresh();void resolutionLoad.refresh();void orderLoad.refresh();
         }
       })
       .catch(() => {
@@ -73,18 +79,18 @@ export default function PaymentReturn() {
           setVerifyError(
             "Chưa kiểm tra được kết quả thanh toán. Vui lòng thử lại.",
           );
-          void paymentLoad.refresh();
+          void paymentLoad.refresh();void resolutionLoad.refresh();void orderLoad.refresh();
         }
       });
 
     return () => {
       active = false;
     };
-  }, [isVnpay]);
+  }, [isVnpay,orderId,reference]);
 
   // PayOS verification & return processing
   useEffect(() => {
-    if (!isPayos || !searchParams.toString()) return;
+    if (!isPayos || !orderId || !reference) return;
 
     let active = true;
     setVerifyStatus("Đang kiểm tra kết quả thanh toán…");
@@ -93,11 +99,11 @@ export default function PaymentReturn() {
       .then(() => {
         if (active) {
           if (isPayosCancel) {
-            setVerifyError("Đã ghi nhận yêu cầu hủy thanh toán từ cổng PayOS.");
+            setVerifyStatus("Đang tra cứu kết quả thực tế từ payOS.");
           } else {
             setVerifyStatus("Đã nhận phản hồi thanh toán. Đang kiểm tra đơn hàng.");
           }
-          void paymentLoad.refresh();
+          void paymentLoad.refresh();void resolutionLoad.refresh();void orderLoad.refresh();
         }
       })
       .catch(() => {
@@ -105,39 +111,31 @@ export default function PaymentReturn() {
           setVerifyError(
             "Chưa kiểm tra được kết quả thanh toán. Vui lòng thử lại.",
           );
-          void paymentLoad.refresh();
+          void paymentLoad.refresh();void resolutionLoad.refresh();void orderLoad.refresh();
         }
       });
 
     return () => {
       active = false;
     };
-  }, [isPayos, isPayosCancel]);
-
-  const vnpResponseCode = searchParams.get("vnp_ResponseCode");
-  const isVnpayFailed =
-    isVnpay && vnpResponseCode != null && vnpResponseCode !== "00";
+  }, [isPayos,orderId,reference]);
 
   const p = paymentLoad.data;
-  const isCompleted = p?.status === "COMPLETED";
-  const isFailed =
-    p?.status === "FAILED" ||
-    p?.status === "CANCELLED" ||
-    (!p && (isPayosCancel || isVnpayFailed));
-  const isPending = !isCompleted && !isFailed;
+  const state=paymentReturnState(p?{...p,captureStatus:resolutionLoad.data?.captureStatus}:null,orderLoad.data);
+  const isCompleted=state==='COMPLETED';
+  const isFailed=state==='FAILED';
+  const isPending=!['COMPLETED','FAILED','REFUNDED'].includes(state);
 
   // Polling for final status from backend
   useEffect(() => {
     if (!orderId || isFailed) return;
-    const status = paymentLoad.data?.status;
-    if (["COMPLETED", "FAILED", "CANCELLED", "REFUNDED"].includes(status || ""))
-      return;
+    if(['COMPLETED','FAILED','REFUNDED'].includes(state))return;
 
     let attempts = 0;
     setPollExpired(false);
     const interval = window.setInterval(() => {
       if (!document.hidden && attempts++ < 15) {
-        void paymentLoad.refresh();
+        void paymentLoad.refresh();void resolutionLoad.refresh();void orderLoad.refresh();
       }
       if (attempts >= 15) {
         window.clearInterval(interval);
@@ -146,7 +144,7 @@ export default function PaymentReturn() {
     }, 4000);
 
     return () => window.clearInterval(interval);
-  }, [orderId, paymentLoad.data?.status, isFailed]);
+  }, [orderId,state]);
 
   return (
     <div className="w-full">
@@ -164,6 +162,10 @@ export default function PaymentReturn() {
       </div>
 
       <div className="max-w-[800px] mx-auto px-4 sm:px-6 py-16 text-center">
+        {resolutionLoad.error&&<Status loading={false} error={resolutionLoad.error} retry={()=>void resolutionLoad.refresh()}/>}
+        {state==='ORDER_PENDING'&&<p className='store-alert mb-6'>Đã ghi nhận tiền thanh toán. Đơn hàng đang được xác nhận; vui lòng chờ cập nhật tại chi tiết đơn.</p>}
+        {state==='REVIEW_REQUIRED'&&<p className='store-alert mb-6'>Đã nhận thông tin tiền thanh toán cần đối soát. Cửa hàng đang kiểm tra khoản thu và kết quả xử lý đơn.</p>}
+        {state==='REFUNDED'&&<div className='mb-6'><h1 className='text-foreground font-semibold text-xl'>ĐÃ HOÀN TIỀN VÀO VÍ</h1><p className='text-sm text-muted-foreground mt-2'>Khoản hoàn đã được ghi nhận. Bạn có thể kiểm tra số dư và lịch sử giao dịch trong ví.</p><Link to='/profile/wallet' className='store-text-link'>Xem ví cửa hàng</Link></div>}
         {/* State Icon & Title */}
         {isCompleted ? (
           <div className="mb-6">
@@ -191,7 +193,7 @@ export default function PaymentReturn() {
               hàng.
             </p>
           </div>
-        ) : (
+        ) : state!=='REFUNDED' ? (
           <div className="mb-6">
             <div className="w-20 h-20 bg-amber-50 text-amber-600 rounded-full flex items-center justify-center mx-auto mb-4 border border-amber-200">
               <Clock size={44} className="animate-pulse" />
@@ -205,7 +207,7 @@ export default function PaymentReturn() {
                 : "Đang kiểm tra kết quả thanh toán của bạn. Vui lòng chờ trong giây lát."}
             </p>
           </div>
-        )}
+        ) : null}
 
         {/* Verification messages */}
         {isPending && (pollExpired || paymentLoad.error) && (

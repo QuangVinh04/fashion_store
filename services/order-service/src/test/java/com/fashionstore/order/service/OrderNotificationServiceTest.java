@@ -115,7 +115,12 @@ class OrderNotificationServiceTest {
 
         notificationService.sendOrderConfirmedNotification(order);
 
-        verify(outboxEventRecorder, never()).saveMessage(anyString(), anyString(), any());
+        verify(outboxEventRecorder, never()).saveMessage(anyString(), eq(EventTypes.NOTIFICATION_EMAIL_REQUESTED), any());
+        ArgumentCaptor<EventEnvelope<?>> captor = ArgumentCaptor.forClass(EventEnvelope.class);
+        verify(outboxEventRecorder).saveMessage(eq("order-uuid-1"), eq("notification.in-app.requested"), captor.capture());
+        var payload = new com.fasterxml.jackson.databind.ObjectMapper().valueToTree(captor.getValue().payload());
+        assertThat(payload.get("userId").asText()).isEqualTo("user-uuid-1");
+        assertThat(payload.get("orderId").asText()).isEqualTo("order-uuid-1");
     }
 
     @Test
@@ -210,5 +215,41 @@ class OrderNotificationServiceTest {
                 .containsEntry("recipientName", "Tran Thi B")
                 .containsEntry("totalAmount", "750000")
                 .containsEntry("reason", "Thanh toán thất bại");
+    }
+
+    @Test
+    void allOrderMilestonesEmitOwnedInAppNotifications() {
+        Order order = Order.builder().userId("buyer-1").orderCode("ORD-42")
+                .recipientEmail("buyer@example.com").build();
+        order.setId("order-42");
+        notificationService.sendOrderConfirmedNotification(order);
+        notificationService.sendOrderShippedNotification(order, null);
+        notificationService.sendOrderDeliveredNotification(order);
+        notificationService.sendOrderCancelledNotification(order, "Khách yêu cầu");
+        notificationService.sendReturnStatusNotification(order, "Đã hoàn tiền", "Tiền đã vào ví.");
+
+        ArgumentCaptor<EventEnvelope<?>> captor = ArgumentCaptor.forClass(EventEnvelope.class);
+        verify(outboxEventRecorder, org.mockito.Mockito.times(5))
+                .saveMessage(eq("order-42"), eq("notification.in-app.requested"), captor.capture());
+        var mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        var payloads = captor.getAllValues().stream().map(event -> mapper.<com.fasterxml.jackson.databind.JsonNode>valueToTree(event.payload())).toList();
+        assertThat(payloads).allSatisfy(payload -> {
+            assertThat(payload.get("userId").asText()).isEqualTo("buyer-1");
+            assertThat(payload.get("orderId").asText()).isEqualTo("order-42");
+            assertThat(payload.get("title").asText()).isNotBlank();
+            assertThat(payload.get("message").asText()).isNotBlank();
+        });
+        assertThat(payloads.stream().map(payload -> payload.get("type").asText()))
+                .containsExactly("ORDER_CONFIRMED", "ORDER_SHIPPED", "ORDER_DELIVERED", "ORDER_CANCELLED", "RETURN_STATUS");
+    }
+
+    @Test
+    void anonymousCheckoutDoesNotEmitInAppNotification() {
+        Order order = Order.builder().userId("anon:checkout-1").orderCode("ORD-43")
+                .recipientEmail("guest@example.com").build();
+        order.setId("order-43");
+        notificationService.sendOrderConfirmedNotification(order);
+        verify(outboxEventRecorder, never()).saveMessage(anyString(), eq("notification.in-app.requested"), any());
+        verify(outboxEventRecorder).saveMessage(eq("order-43"), eq(EventTypes.NOTIFICATION_EMAIL_REQUESTED), any());
     }
 }

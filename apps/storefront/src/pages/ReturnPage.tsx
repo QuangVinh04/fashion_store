@@ -1,5 +1,5 @@
 import { customerError } from "../api/client";
-import { useState } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { Link, useParams } from "react-router";
 import {
   Upload,
@@ -14,18 +14,26 @@ import { store } from "../api/store";
 import { ORDER_LABEL } from "../api/types";
 import ProfileLayout from "../components/ProfileLayout";
 import { PageTitle, Status, useLoad } from "../components/StoreUI";
+import { loadReturnRequest, uploadReturnEvidence } from "../api/return-actions";
+import { useFinancialLoad } from "../components/wallet/useFinancialLoad";
+import ReturnCaseDetails from "../components/orders/ReturnCaseDetails";
 
 export default function ReturnPage() {
   const { id = "" } = useParams();
+  return <ReturnForm key={id} id={id}/>;
+}
+
+function ReturnForm({id}:{id:string}) {
 
   const orderLoad = useLoad(() => store.order(id), [id]);
-  const requestLoad = useLoad(
-    () => store.returnRequest(id).catch(() => null),
-    [id],
-  );
+  const readRequest=useCallback((signal:AbortSignal)=>loadReturnRequest(()=>store.returnRequest(id,signal)),[id]);
+  const pendingRequest=useCallback((request:import('../api/types').ReturnRequest|null)=>!!request && !request.closedAt,[]);
+  const requestLoad=useFinancialLoad(readRequest,pendingRequest);
 
   const [reason, setReason] = useState("");
-  const [images, setImages] = useState<string[]>([]);
+  const [images, setImages] = useState<{id:string;url:string}[]>([]);
+  const previewUrls=useRef<string[]>([]);
+  useEffect(()=>()=>previewUrls.current.forEach(url=>URL.revokeObjectURL(url)),[]);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{
     type: "success" | "error";
@@ -34,6 +42,9 @@ export default function ReturnPage() {
 
   const order = orderLoad.data;
   const request = requestLoad.data;
+  useEffect(()=>{if(!order?.returnEligibleUntil)return;const remaining=Date.parse(order.returnEligibleUntil)-Date.now();
+    if(remaining<=0)return;const timer=setTimeout(()=>{void orderLoad.refresh();requestLoad.refresh();},Math.min(remaining+250,2147483647));return ()=>clearTimeout(timer);
+  },[order?.returnEligibleUntil]);
 
   async function handleFileUpload(files: FileList | null) {
     if (!files || files.length === 0) return;
@@ -50,10 +61,11 @@ export default function ReturnPage() {
     setNotice(null);
     try {
       const toUpload = Array.from(files).slice(0, remainingSlots);
-      const urls = await Promise.all(
-        toUpload.map((f) => store.uploadImage(f, "returns")),
-      );
-      setImages((prev) => [...prev, ...urls]);
+      for (const file of toUpload) {
+        const id=await uploadReturnEvidence(file);
+        const url=URL.createObjectURL(file);previewUrls.current.push(url);
+        setImages(previous=>[...previous,{id,url}]);
+      }
     } catch (err) {
       setNotice({
         type: "error",
@@ -65,6 +77,7 @@ export default function ReturnPage() {
   }
 
   function removeImage(index: number) {
+    const photo=images[index];if(photo) {URL.revokeObjectURL(photo.url);previewUrls.current=previewUrls.current.filter(url=>url!==photo.url);}
     setImages((prev) => prev.filter((_, i) => i !== index));
   }
 
@@ -74,13 +87,14 @@ export default function ReturnPage() {
     setBusy(true);
     setNotice(null);
     try {
-      await store.returnCreate(id, reason.trim(), images);
+      await store.returnCreate(id, reason.trim(), images.map(image=>image.id));
       setNotice({
         type: "success",
         text: "Đã gửi yêu cầu trả hàng thành công. Bộ phận hỗ trợ của LINO sẽ xem xét trong vòng 24–48 giờ.",
       });
       await requestLoad.refresh();
     } catch (err) {
+      void orderLoad.refresh();requestLoad.refresh();
       setNotice({
         type: "error",
         text: customerError(err) || "Gửi yêu cầu trả hàng thất bại.",
@@ -108,6 +122,7 @@ export default function ReturnPage() {
           retry={() => void orderLoad.refresh()}
         />
 
+        {order?.returnEligibleUntil && !request && <p className="mb-4 text-sm text-muted-foreground">Hạn gửi yêu cầu: {new Date(order.returnEligibleUntil).toLocaleString('vi-VN')}. Trả toàn bộ đơn hàng; shop chi trả phí lấy hàng.</p>}
         {notice && (
           <div
             className={`mb-6 p-4 text-xs font-medium flex items-center gap-2.5 border ${
@@ -125,73 +140,9 @@ export default function ReturnPage() {
           </div>
         )}
 
-        {/* Existing Request Display */}
-        {request ? (
-          <div className="border border-border p-4 sm:p-5 bg-white space-y-4 rounded-2xl">
-            <div className="flex items-center justify-between pb-3 border-b border-border">
-              <span className="text-xs font-semibold text-muted-foreground">
-                Tình Trạng Xử Lý
-              </span>
-              <span
-                className={`text-xs font-semibold px-3 py-1 border ${
-                  request.status === "APPROVED"
-                    ? "bg-success-light text-success border-success/20"
-                    : request.status === "REJECTED"
-                      ? "bg-primary-light text-destructive border-destructive/20"
-                      : "bg-amber-50 text-amber-800 border-amber-200"
-                }`}
-              >
-                {request.status === "APPROVED"
-                  ? "Đã Duyệt Trả Hàng"
-                  : request.status === "REJECTED"
-                    ? "Từ Chối Yêu Cầu"
-                    : "Đang Xem Xét"}
-              </span>
-            </div>
-
-            <div className="text-xs space-y-2">
-              <p>
-                <strong>Lý do của bạn:</strong> {request.reason}
-              </p>
-              {request.rejectReason && (
-                <div className="p-3 bg-primary-light border border-destructive/20 text-destructive">
-                  <strong>Lý do từ chối:</strong> {request.rejectReason}
-                </div>
-              )}
-            </div>
-
-            {request.images && request.images.length > 0 && (
-              <div>
-                <p className="text-xs font-semibold text-muted-foreground mb-2">
-                  Ảnh minh chứng đính kèm:
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {request.images.map((img, i) => (
-                    <a
-                      key={i}
-                      href={img}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="w-16 h-20 border border-border-strong bg-background overflow-hidden block store-action"
-                    >
-                      <img
-                        src={img}
-                        alt={`Minh chứng ${i + 1}`}
-                        className="w-full h-full object-cover"
-                      />
-                    </a>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <p className="text-xs text-muted-foreground pt-2 border-t border-border">
-              * Lưu ý: Việc duyệt trả hàng và hoàn tiền là hai tiến trình độc
-              lập. Sau khi kho hàng LINO nhận lại kiện hàng và kiểm tra hợp lệ,
-              khoản tiền hoàn sẽ được hoàn qua phương thức tương ứng.
-            </p>
-          </div>
-        ) : order?.status === "DELIVERED" ? (
+        <Status loading={requestLoad.loading && !requestLoad.data} error={requestLoad.error} retry={requestLoad.refresh}/>
+        {request ? <ReturnCaseDetails key={request.id} request={request} onRefresh={requestLoad.refresh}/>
+        : !requestLoad.loading && !requestLoad.error && order?.canRequestReturn && !order.activeReturnId ? (
           /* Form Submission */
           <form
             onSubmit={handleSubmit}
@@ -227,13 +178,13 @@ export default function ReturnPage() {
 
               {images.length > 0 && (
                 <div className="flex flex-wrap gap-3 mb-3">
-                  {images.map((url, idx) => (
+                  {images.map((photo, idx) => (
                     <div
                       key={idx}
                       className="relative w-20 h-24 border border-border-strong overflow-hidden bg-background"
                     >
                       <img
-                        src={url}
+                        src={photo.url}
                         alt={`Upload ${idx + 1}`}
                         className="w-full h-full object-cover"
                       />
@@ -289,7 +240,7 @@ export default function ReturnPage() {
               </p>
               <p className="text-xs text-muted-foreground max-w-md mx-auto">
                 Chính sách đổi trả của LINO chỉ áp dụng cho các đơn hàng đã được
-                giao thành công trong vòng 7 ngày. Trạng thái hiện
+                giao thành công trong vòng 3 ngày và chưa xác nhận nhận hàng. Trạng thái hiện
                 tại của đơn:{" "}
                 <strong>{ORDER_LABEL[order.status] || order.status}</strong>.
               </p>

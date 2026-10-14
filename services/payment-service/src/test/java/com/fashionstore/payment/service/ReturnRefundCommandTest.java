@@ -69,7 +69,7 @@ class ReturnRefundCommandTest {
                         .provider(PaymentProvider.COD)
                         .status(PaymentStatus.COMPLETED)
                         .paidAt(LocalDateTime.now())
-                        .codCollectedAt(Instant.now())
+                        .operationId("ghn:123:GHN-1")
                         .build();
         payment.setId("pay-1");
         when(payments.findByOrderIdForUpdate("order-1")).thenReturn(Optional.of(payment));

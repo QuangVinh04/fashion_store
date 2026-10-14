@@ -47,7 +47,7 @@ class OrderDeliveredEventListenerTest {
 
         listener.handle(EventEnvelope.v1(EventTypes.ORDER_DELIVERED, "order-1", "order-1", payload), "collection-1");
         assertThat(payment.getStatus()).isEqualTo(PaymentStatus.COMPLETED);
-        assertThat(payment.getCodCollectedAt()).isEqualTo(java.time.Instant.parse("2026-10-01T03:00:00Z"));
+        assertThat(payment.getOperationId()).isEqualTo("ghn:123:GHN-1");
         assertThat(payment.getPaidAt()).isNotNull();
     }
 

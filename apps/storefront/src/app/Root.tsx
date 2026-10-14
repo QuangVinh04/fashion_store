@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
+import { NotificationBell } from "../components/notifications/NotificationBell";
 import { Button } from "./components/ui/button";
 import { Avatar, AvatarImage, AvatarFallback } from "./components/ui/avatar";
 import {
@@ -43,7 +44,7 @@ export default function Root() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const { count } = useCart();
-  const { user, isLoggedIn, login, register, logout } = useAuth();
+  const { session, user, isLoggedIn, login, register, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   useEffect(() => {
@@ -100,6 +101,7 @@ export default function Root() {
             >
               <Search size={19} />
             </Link>
+            {isLoggedIn && <NotificationBell key={session?.userId || "session"} />}
             {isLoggedIn ? (
               <DropdownMenu open={userMenuOpen} onOpenChange={setUserMenuOpen}>
                 <DropdownMenuTrigger asChild>

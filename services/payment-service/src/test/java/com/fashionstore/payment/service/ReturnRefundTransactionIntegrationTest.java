@@ -116,7 +116,7 @@ class ReturnRefundTransactionIntegrationTest {
     @Test
     void unpaidCodPublishesBusinessRejectionWithoutCreditingMoney() {
         var payment = paidCod();
-        payment.setCodCollectedAt(null);
+        payment.setOperationId(null);
         payments.saveAndFlush(payment);
         var command = command(payment);
         service.refundOrderFunds(command, "message", command.sourceId());
@@ -152,7 +152,7 @@ class ReturnRefundTransactionIntegrationTest {
                         .provider(PaymentProvider.COD)
                         .status(PaymentStatus.COMPLETED)
                         .paidAt(LocalDateTime.now())
-                        .codCollectedAt(Instant.now())
+                        .operationId("ghn:123:GHN-1")
                         .build());
     }
 
