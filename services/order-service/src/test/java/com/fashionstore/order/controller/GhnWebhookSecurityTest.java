@@ -39,7 +39,7 @@ class GhnWebhookSecurityTest {
 
     @Test
     void carrierCanUseItsWebhookSecretWithoutAKeycloakJwt() throws Exception {
-        mvc.perform(post("/internal/shipments/ghn-callback").header("X-Webhook-Token", "test-only-ghn-secret")
+        mvc.perform(post("/api/v1/shipping/ghn/webhook").header("X-Webhook-Token", "test-only-ghn-secret")
                 .contentType("application/json").content("{\"ShopID\":123,\"OrderCode\":\"GHN-1\",\"Status\":\"delivered\"}"))
                 .andExpect(status().isOk());
         verify(shipments).handleGhnCallback(any());
@@ -47,7 +47,7 @@ class GhnWebhookSecurityTest {
 
     @Test
     void wrongSecretCannotReachShipmentBusinessLogic() throws Exception {
-        mvc.perform(post("/internal/shipments/ghn-callback").header("X-Webhook-Token", "wrong")
+        mvc.perform(post("/api/v1/shipping/ghn/webhook").header("X-Webhook-Token", "wrong")
                 .contentType("application/json").content("{\"ShopID\":123,\"OrderCode\":\"GHN-1\",\"Status\":\"delivered\"}"))
                 .andExpect(status().isUnauthorized());
         verifyNoInteractions(shipments);

@@ -54,8 +54,8 @@ public class ShipmentController {
                 .build();
     }
 
-    @Operation(summary = "Webhook nội bộ tiếp nhận trạng thái từ GHN")
-    @PostMapping("/internal/shipments/ghn-callback")
+    @Operation(summary = "Webhook tiếp nhận trạng thái từ GHN (public qua gateway, xác thực bằng webhook token)")
+    @PostMapping("/api/v1/shipping/ghn/webhook")
     public ApiResponse<Void> handleGhnCallback(
             @RequestHeader(value = "Token", required = false) String token,
             @RequestHeader(value = "X-Webhook-Token", required = false) String webhookTokenHeader,

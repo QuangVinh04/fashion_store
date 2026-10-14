@@ -241,6 +241,7 @@ class ShipmentServiceImplTest {
                                 .provinceId(1000001)
                                 .wardId(1003646)
                                 .build());
+        order.setStatus(OrderStatus.PROCESSING); // order.confirmed tự chuyển CONFIRMED -> PROCESSING trước khi tạo vận đơn
 
         when(orderRepository.findByIdForUpdate("order-1")).thenReturn(Optional.of(order));
         when(shipmentRepository.findByOrderId("order-1")).thenReturn(Optional.empty());
@@ -271,7 +272,7 @@ class ShipmentServiceImplTest {
         ArgumentCaptor<OrderStatusHistory> historyCaptor =
                 ArgumentCaptor.forClass(OrderStatusHistory.class);
         verify(orderStatusHistoryRepository, times(1)).save(historyCaptor.capture());
-        assertThat(historyCaptor.getValue().getFromStatus()).isEqualTo(OrderStatus.CONFIRMED);
+        assertThat(historyCaptor.getValue().getFromStatus()).isEqualTo(OrderStatus.PROCESSING);
         assertThat(historyCaptor.getValue().getToStatus()).isEqualTo(OrderStatus.PACKED);
         assertThat(historyCaptor.getValue().getAction()).isEqualTo("SHIPMENT_CREATED");
     }

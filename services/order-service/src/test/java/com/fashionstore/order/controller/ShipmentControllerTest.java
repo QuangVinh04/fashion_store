@@ -98,7 +98,7 @@ class ShipmentControllerTest {
                 .status("delivered")
                 .build();
 
-        mockMvc.perform(post("/internal/shipments/ghn-callback")
+        mockMvc.perform(post("/api/v1/shipping/ghn/webhook")
                         .header("Token", "fashion-store-ghn-webhook-secret")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(payload)))
@@ -115,7 +115,7 @@ class ShipmentControllerTest {
                 .status("delivering")
                 .build();
 
-        mockMvc.perform(post("/internal/shipments/ghn-callback")
+        mockMvc.perform(post("/api/v1/shipping/ghn/webhook")
                         .header("X-Webhook-Token", "fashion-store-ghn-webhook-secret")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(payload)))
@@ -132,7 +132,7 @@ class ShipmentControllerTest {
                 .status("delivered")
                 .build();
 
-        mockMvc.perform(post("/internal/shipments/ghn-callback")
+        mockMvc.perform(post("/api/v1/shipping/ghn/webhook")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(payload)))
                 .andExpect(status().isUnauthorized())
@@ -148,7 +148,7 @@ class ShipmentControllerTest {
                 .status("delivered")
                 .build();
 
-        mockMvc.perform(post("/internal/shipments/ghn-callback")
+        mockMvc.perform(post("/api/v1/shipping/ghn/webhook")
                         .header("Token", "wrong-secret-token")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(payload)))

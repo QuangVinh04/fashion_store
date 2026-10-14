@@ -29,7 +29,8 @@ public class SecurityConfig {
                                 "/payment/v3/api-docs/**",
                                 "/api/v1/payments/vnpay/return",
                                 "/api/v1/payments/vnpay/ipn",
-                                "/api/v1/payments/payos/webhook"
+                                "/api/v1/payments/payos/webhook",
+                                "/api/v1/shipping/ghn/webhook"
                         ).permitAll()
                         .pathMatchers("/internal/**").denyAll()
                         .pathMatchers("/api/v1/admin/**", "/admin/**").hasRole("ADMIN")

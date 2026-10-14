@@ -130,6 +130,16 @@ class SecurityConfigTest {
     }
 
     @Test
+    void ghnWebhookIsProxiedWithoutToken() {
+        client.post().uri("/api/v1/shipping/ghn/webhook")
+                .header(HttpHeaders.CONTENT_TYPE, "application/json")
+                .bodyValue("{}")
+                .exchange().expectStatus().isOk();
+
+        assertThat(forwardedAuthorization.get()).isNull();
+    }
+
+    @Test
     void guestCartIsRejectedBeforeProxying() {
         client.post().uri("/api/v1/cart/items").exchange().expectStatus().isUnauthorized();
 
