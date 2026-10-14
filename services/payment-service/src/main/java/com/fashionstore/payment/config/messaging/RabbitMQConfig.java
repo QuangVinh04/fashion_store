@@ -73,11 +73,6 @@ public class RabbitMQConfig {
     }
 
     @Bean
-    Binding paymentRefundRequestedBinding(Queue paymentSagaCommandQueue, DirectExchange fashionEventsExchange) {
-        return RabbitTopology.bind(paymentSagaCommandQueue, fashionEventsExchange, EventTypes.PAYMENT_REFUND_REQUESTED);
-    }
-
-    @Bean
     Binding walletSagaCompensationBinding(Queue paymentSagaCommandQueue,DirectExchange fashionEventsExchange) {
         return RabbitTopology.bind(paymentSagaCommandQueue,fashionEventsExchange,EventTypes.WALLET_SAGA_COMPENSATION_REQUESTED);
     }

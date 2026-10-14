@@ -21,9 +21,6 @@ public final class EventTypes {
     public static final String PAYMENT_CANCELLATION_REQUESTED = "payment.cancellation.requested";
     public static final String PAYMENT_CANCELLED = "payment.cancelled";
     public static final String PAYMENT_CANCELLATION_REJECTED = "payment.cancellation.rejected";
-    public static final String PAYMENT_REFUND_REQUESTED = "payment.refund.requested";
-    public static final String PAYMENT_REFUNDED = "payment.refunded";
-    public static final String PAYMENT_REFUND_REJECTED = "payment.refund.rejected";
     public static final String WALLET_SAGA_COMPENSATION_REQUESTED="wallet.saga-compensation.requested";
     public static final String WALLET_SAGA_COMPENSATION_COMPLETED="wallet.saga-compensation.completed";
     public static final String WALLET_SAGA_COMPENSATION_REJECTED="wallet.saga-compensation.rejected";

@@ -3,9 +3,7 @@ package com.fashionstore.payment.client;
 import com.fashionstore.common.payment.PaymentProvider;
 import com.fashionstore.payment.dto.PaymentCallbackResult;
 import com.fashionstore.payment.dto.PaymentInitiationResult;
-import com.fashionstore.payment.dto.PaymentRefundResult;
 import com.fashionstore.payment.entity.Payment;
-import com.fashionstore.payment.entity.PaymentRefund;
 
 import java.util.Map;
 
@@ -26,9 +24,6 @@ public interface PaymentHandler {
      * một trong hai, tham số còn lại có thể rỗng/null.
      */
     PaymentCallbackResult verifyCallback(Map<String, String> queryParams, String rawBody);
-
-    /** Yêu cầu hoàn tiền. Provider không hỗ trợ hoàn tiền qua API thì ném AppException. */
-    PaymentRefundResult refund(Payment payment, PaymentRefund refund);
 
     /** Tra cứu từ server provider; phục vụ local và phục hồi khi callback bị mất. */
     PaymentCallbackResult queryPayment(Payment payment);

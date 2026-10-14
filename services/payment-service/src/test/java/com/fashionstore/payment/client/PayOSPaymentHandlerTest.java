@@ -229,18 +229,6 @@ class PayOSPaymentHandlerTest {
     }
 
     @Test
-    void refundIsUnsupported() {
-        PayOSPaymentHandler handler = new PayOSPaymentHandler(mock(PayOS.class), objectMapper);
-
-        assertThatThrownBy(
-                        () ->
-                                handler.refund(
-                                        mock(Payment.class),
-                                        mock(com.fashionstore.payment.entity.PaymentRefund.class)))
-                .isInstanceOf(AppException.class);
-    }
-
-    @Test
     void queriedBankTransactionsKeepIndividualReferencesAndAmounts() throws Exception {
         PayOS client = mock(PayOS.class);
         PaymentRequestsService requests = mock(PaymentRequestsService.class);

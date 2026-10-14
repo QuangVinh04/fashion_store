@@ -171,8 +171,8 @@ public class OrderController {
                     `CONFIRMED → PROCESSING → PACKED → SHIPPING → DELIVERED → COMPLETED`, và
                     `DELIVERED → RETURNED → REFUNDED`. Đơn `PENDING` đang trong saga, admin không can thiệp giữa chừng.
 
-                    `REFUNDED` không set trực tiếp: nó phát lệnh hoàn tiền cho payment-service, đơn giữ
-                    `RETURNED` cho tới khi có xác nhận `payment.refunded` về.
+                    `REFUNDED` không set trực tiếp: nó phát lệnh hoàn tiền vào ví cho payment-service, đơn giữ
+                    `RETURNED` cho tới khi có xác nhận `payment.order-funds-refund.credited` về.
 
                     Mã lỗi: `4001` (404) · `4002` chuyển trạng thái không hợp lệ (400) · `4018` chuyển sang SHIPPING nhưng chưa có vận đơn (400).""")
     @PutMapping("/{id}/status")

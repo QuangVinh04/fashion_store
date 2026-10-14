@@ -8,11 +8,9 @@ import com.fashionstore.contracts.order.OrderCancelledEvent;
 import com.fashionstore.contracts.order.OrderConfirmedEvent;
 import com.fashionstore.contracts.payment.command.AuthorizePaymentCommand;
 import com.fashionstore.contracts.payment.command.CancelPaymentCommand;
-import com.fashionstore.contracts.payment.command.RefundPaymentCommand;
 import com.fashionstore.order.dto.SagaCommand;
 import com.fashionstore.order.entity.Order;
 import com.fashionstore.order.entity.OrderSaga;
-import com.fashionstore.order.event.RefundEventListener;
 
 import java.math.BigDecimal;
 
@@ -110,17 +108,6 @@ public final class SagaCommands {
                 EventTypes.PAYMENT_CANCELLATION_REQUESTED,
                 new CancelPaymentCommand(
                         saga.getOrderId(), saga.getPaymentId(), saga.getFailureReason()));
-    }
-
-    /**
-     * Hoàn tiền không thuộc saga đặt hàng — order đã ở RETURNED từ lâu, không có {@code
-     * correlationId} là sagaId vì không có saga nào đang chạy. {@link RefundEventListener} nhận
-     * reply theo orderId.
-     */
-    public static SagaCommand refundPayment(Order order, BigDecimal amount, String reason) {
-        return SagaCommand.of(
-                EventTypes.PAYMENT_REFUND_REQUESTED,
-                new RefundPaymentCommand(order.getId(), order.getPaymentId(), amount, reason));
     }
 
     public static SagaCommand restockInventory(String orderId) {

@@ -6,7 +6,6 @@ import com.fashionstore.contracts.common.EventEnvelope;
 import com.fashionstore.contracts.common.EventTypes;
 import com.fashionstore.contracts.payment.command.AuthorizePaymentCommand;
 import com.fashionstore.contracts.payment.command.CancelPaymentCommand;
-import com.fashionstore.contracts.payment.command.RefundPaymentCommand;
 import com.fashionstore.contracts.payment.command.RefundWalletSagaCommand;
 import com.fashionstore.contracts.payment.command.RefundOrderFundsCommand;
 import com.fashionstore.payment.config.messaging.RabbitMQNames;
@@ -50,11 +49,6 @@ public class PaymentRequestedEventListener {
         if (EventTypes.PAYMENT_CANCELLATION_REQUESTED.equals(envelope.eventType())) {
             CancelPaymentCommand request = objectMapper.convertValue(envelope.payload(), CancelPaymentCommand.class);
             paymentService.cancel(request, messageId, envelope.correlationId());
-            return;
-        }
-        if (EventTypes.PAYMENT_REFUND_REQUESTED.equals(envelope.eventType())) {
-            RefundPaymentCommand request = objectMapper.convertValue(envelope.payload(), RefundPaymentCommand.class);
-            paymentService.refund(request, messageId, envelope.correlationId());
             return;
         }
         log.warn("Ignored payment saga command {}", envelope.eventType());

@@ -123,16 +123,6 @@ public class RabbitMQConfig {
     }
 
     @Bean
-    Queue orderPaymentRefundedQueue() {
-        return sagaQueue(RabbitMQNames.ORDER_PAYMENT_REFUNDED_QUEUE);
-    }
-
-    @Bean
-    Queue orderPaymentRefundRejectedQueue() {
-        return sagaQueue(RabbitMQNames.ORDER_PAYMENT_REFUND_REJECTED_QUEUE);
-    }
-
-    @Bean
     Queue orderConfirmedQueue() {
         return sagaQueue(RabbitMQNames.ORDER_CONFIRMED_QUEUE);
     }
@@ -185,16 +175,6 @@ public class RabbitMQConfig {
     @Bean
     Binding orderPaymentCancellationRejectedBinding(Queue orderPaymentCancellationRejectedQueue, DirectExchange fashionEventsExchange) {
         return RabbitTopology.bind(orderPaymentCancellationRejectedQueue, fashionEventsExchange, EventTypes.PAYMENT_CANCELLATION_REJECTED);
-    }
-
-    @Bean
-    Binding orderPaymentRefundedBinding(Queue orderPaymentRefundedQueue, DirectExchange fashionEventsExchange) {
-        return RabbitTopology.bind(orderPaymentRefundedQueue, fashionEventsExchange, EventTypes.PAYMENT_REFUNDED);
-    }
-
-    @Bean
-    Binding orderPaymentRefundRejectedBinding(Queue orderPaymentRefundRejectedQueue, DirectExchange fashionEventsExchange) {
-        return RabbitTopology.bind(orderPaymentRefundRejectedQueue, fashionEventsExchange, EventTypes.PAYMENT_REFUND_REJECTED);
     }
 
     /** Payload là JSON; kiểu đích suy ra từ tham số của @RabbitListener, không cần header __TypeId__. */

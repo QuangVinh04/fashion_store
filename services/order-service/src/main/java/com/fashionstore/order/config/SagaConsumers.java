@@ -18,8 +18,6 @@ public final class SagaConsumers {
     public static final String PAYMENT_CANCELLED = "order.payment-cancelled.v2";
     public static final String PAYMENT_CANCELLATION_REJECTED =
             "order.payment-cancellation-rejected.v2";
-    public static final String PAYMENT_REFUNDED = "order.payment-refunded.v1";
-    public static final String PAYMENT_REFUND_REJECTED = "order.payment-refund-rejected.v1";
     public static final String INVENTORY_CONFIRMATION_REJECTED =
             "order.inventory-confirmation-rejected.v1";
     public static final String ORDER_FUNDS_REFUND_CREDITED = "order.online-saga-refund-credited.v1";

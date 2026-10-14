@@ -61,7 +61,7 @@ class CallbackPaymentServiceImplTest {
     void setUp() {
         var jdbcTemplate = org.mockito.Mockito.mock(org.springframework.jdbc.core.JdbcTemplate.class);
         com.fashionstore.payment.service.PaymentTransactionService paymentTransactionService = new com.fashionstore.payment.service.PaymentTransactionService(
-                paymentRepository, jdbcTemplate, null, null, null, paymentStateService,
+                paymentRepository, jdbcTemplate, null, null, paymentStateService,
                 org.mockito.Mockito.mock(com.fashionstore.payment.service.WalletService.class));
         service = new CallbackPaymentServiceImpl(paymentHandlerRegistry, paymentTransactionService);
     }

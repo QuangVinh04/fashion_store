@@ -4,7 +4,6 @@ import com.fashionstore.contracts.common.EventEnvelope;
 import com.fashionstore.contracts.common.EventTypes;
 import com.fashionstore.contracts.payment.command.AuthorizePaymentCommand;
 import com.fashionstore.contracts.payment.command.CancelPaymentCommand;
-import com.fashionstore.contracts.payment.command.RefundPaymentCommand;
 import com.fashionstore.contracts.payment.command.RefundWalletSagaCommand;
 import com.fashionstore.payment.service.PaymentService;
 import com.fashionstore.payment.service.WalletService;
@@ -89,17 +88,5 @@ class PaymentRequestedEventListenerTest {
         listener.handle(envelope, "msg-1");
 
         verify(paymentService).cancel(any(CancelPaymentCommand.class), eq("msg-1"), eq("corr-1"));
-    }
-
-    @Test
-    void handle_paymentRefundRequested_callsRefund() {
-        RefundPaymentCommand command = new RefundPaymentCommand("ord-1", "pay-1", new BigDecimal("100000"), "reason");
-        EventEnvelope<RefundPaymentCommand> envelope = EventEnvelope.v1(
-                EventTypes.PAYMENT_REFUND_REQUESTED, "ord-1", "corr-1", command
-        );
-
-        listener.handle(envelope, "msg-1");
-
-        verify(paymentService).refund(any(RefundPaymentCommand.class), eq("msg-1"), eq("corr-1"));
     }
 }

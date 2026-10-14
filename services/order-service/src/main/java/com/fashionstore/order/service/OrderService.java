@@ -31,8 +31,9 @@ public interface OrderService {
     OrderResponse cancelOrderForAdmin(String orderId, CancelOrderRequest request);
 
     /**
-     * Chuyển sang REFUNDED không đổi trạng thái ngay: nó phát {@code payment.refund.requested} và
-     * giữ đơn ở RETURNED cho tới khi payment-service xác nhận đã hoàn tiền thật.
+     * Chuyển sang REFUNDED không đổi trạng thái ngay: nó phát lệnh hoàn ví ({@code
+     * payment.order-funds-refund.requested}) và giữ đơn ở RETURNED cho tới khi payment-service xác
+     * nhận đã ghi có vào ví.
      */
     OrderResponse updateOrderStatus(String orderId, UpdateOrderStatusRequest request);
 

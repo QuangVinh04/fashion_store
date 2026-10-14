@@ -25,8 +25,6 @@ class RabbitConsumerContractTest extends RabbitListenerContract {
                 "order.payment-failed",
                 "order.payment-cancelled",
                 "order.payment-cancellation-rejected",
-                "order.payment-refunded",
-                "order.payment-refund-rejected",
                 "order.order-confirmed");
     }
 }

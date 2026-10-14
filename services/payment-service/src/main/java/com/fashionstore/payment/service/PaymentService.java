@@ -4,7 +4,6 @@ import com.fashionstore.payment.dto.PaymentInitiationResult;
 import com.fashionstore.payment.dto.PaymentResponse;
 import com.fashionstore.contracts.payment.command.AuthorizePaymentCommand;
 import com.fashionstore.contracts.payment.command.CancelPaymentCommand;
-import com.fashionstore.contracts.payment.command.RefundPaymentCommand;
 
 public interface PaymentService {
     PaymentResponse getByOrderId(String orderId);
@@ -15,5 +14,4 @@ public interface PaymentService {
     
     void authorize(AuthorizePaymentCommand request, String messageId, String correlationId);
     void cancel(CancelPaymentCommand request, String messageId, String correlationId);
-    void refund(RefundPaymentCommand request, String messageId, String correlationId);
 }

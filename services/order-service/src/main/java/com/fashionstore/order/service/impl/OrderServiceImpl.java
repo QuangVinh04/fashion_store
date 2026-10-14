@@ -345,7 +345,7 @@ public class OrderServiceImpl implements OrderService {
         }
 
         // REFUNDED không phải một cột cần set — nó là kết quả của một reply từ payment-service.
-        // Đơn giữ nguyên RETURNED cho tới khi RefundEventListener nhận payment.refunded xác nhận.
+        // Đơn giữ nguyên RETURNED cho tới khi ví xác nhận đã ghi có (order-funds-refund.credited).
         if (request.getStatus() == OrderStatus.DELIVERED) {
             orderReceiptService.markDelivered(orderId, orderReceiptService.now(), "ADMIN");
             return toResponse(order, order.getCheckoutId());

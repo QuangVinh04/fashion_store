@@ -9,21 +9,15 @@ import com.fashionstore.contracts.common.EventEnvelope;
 import com.fashionstore.contracts.common.EventTypes;
 import com.fashionstore.contracts.payment.command.AuthorizePaymentCommand;
 import com.fashionstore.contracts.payment.command.CancelPaymentCommand;
-import com.fashionstore.contracts.payment.command.RefundPaymentCommand;
 import com.fashionstore.contracts.payment.event.PaymentCancellationRejectedEvent;
 import com.fashionstore.contracts.payment.event.PaymentCancelledEvent;
 import com.fashionstore.contracts.payment.event.PaymentInitiatedEvent;
-import com.fashionstore.contracts.payment.event.PaymentRefundRejectedEvent;
-import com.fashionstore.contracts.payment.event.PaymentRefundedEvent;
 import com.fashionstore.contracts.payment.event.PaymentSuccessEvent;
 import com.fashionstore.payment.dto.*;
 import com.fashionstore.payment.entity.Payment;
-import com.fashionstore.payment.entity.PaymentRefund;
-import com.fashionstore.payment.entity.enumeration.PaymentRefundStatus;
 import com.fashionstore.payment.entity.enumeration.PaymentStatus;
 import com.fashionstore.payment.event.OutboxEventRecorder;
 import com.fashionstore.payment.exception.PaymentErrorCode;
-import com.fashionstore.payment.repository.PaymentRefundRepository;
 import com.fashionstore.payment.repository.PaymentRepository;
 
 import lombok.AccessLevel;
@@ -46,7 +40,6 @@ public class PaymentTransactionService {
 
     PaymentRepository paymentRepository;
     org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
-    PaymentRefundRepository paymentRefundRepository;
     ProcessedMessageService processedMessageService;
     OutboxEventRecorder outboxEventRecorder;
     PaymentStateService paymentStateService;
@@ -214,253 +207,6 @@ public class PaymentTransactionService {
                                             payment.getId(),
                                             payment.getFailureReason())));
                 });
-    }
-
-    public record RefundCall(
-            Payment payment,
-            PaymentRefund refund,
-            BigDecimal previouslyRefunded,
-            String correlationId) {}
-
-    @Transactional
-    public RefundCall prepareRefundOnce(
-            String messageId, RefundPaymentCommand request, String correlationId) {
-        AtomicReference<RefundCall> callRef = new AtomicReference<>();
-        processedMessageService.processOnce(
-                messageId,
-                "payment-refund-v1",
-                () -> {
-                    Payment payment =
-                            paymentRepository
-                                    .findByOrderIdForUpdate(request.orderId())
-                                    .orElse(null);
-                    if (payment == null) {
-                        outboxEventRecorder.saveMessage(
-                                request.orderId(),
-                                EventTypes.PAYMENT_REFUND_REJECTED,
-                                EventEnvelope.v1(
-                                        EventTypes.PAYMENT_REFUND_REJECTED,
-                                        request.orderId(),
-                                        correlationId,
-                                        new PaymentRefundRejectedEvent(
-                                                request.orderId(),
-                                                request.paymentId(),
-                                                "PAYMENT_NOT_FOUND",
-                                                "Không tìm thấy payment")));
-                        return;
-                    }
-
-                    PaymentRefund existingRefund =
-                            paymentRefundRepository.findByIdempotencyKey(messageId).orElse(null);
-                    if (existingRefund != null) {
-                        replayRefundResult(existingRefund, correlationId);
-                        return;
-                    }
-
-                    if (request.paymentId() != null
-                            && !request.paymentId().equals(payment.getId())) {
-                        outboxEventRecorder.saveMessage(
-                                payment.getOrderId(),
-                                EventTypes.PAYMENT_REFUND_REJECTED,
-                                EventEnvelope.v1(
-                                        EventTypes.PAYMENT_REFUND_REJECTED,
-                                        payment.getOrderId(),
-                                        correlationId,
-                                        new PaymentRefundRejectedEvent(
-                                                payment.getOrderId(),
-                                                payment.getId(),
-                                                "PAYMENT_MISMATCH",
-                                                "Refund payment id does not belong to this"
-                                                    + " order")));
-                        return;
-                    }
-
-                    if (payment.getStatus() == PaymentStatus.REFUNDED) {
-                        outboxEventRecorder.saveMessage(
-                                payment.getOrderId(),
-                                EventTypes.PAYMENT_REFUNDED,
-                                EventEnvelope.v1(
-                                        EventTypes.PAYMENT_REFUNDED,
-                                        payment.getOrderId(),
-                                        correlationId,
-                                        new PaymentRefundedEvent(
-                                                payment.getOrderId(),
-                                                payment.getId(),
-                                                request.reason())));
-                        return;
-                    }
-                    if (payment.getStatus() != PaymentStatus.COMPLETED
-                            && payment.getStatus() != PaymentStatus.REFUND_FAILED) {
-                        outboxEventRecorder.saveMessage(
-                                payment.getOrderId(),
-                                EventTypes.PAYMENT_REFUND_REJECTED,
-                                EventEnvelope.v1(
-                                        EventTypes.PAYMENT_REFUND_REJECTED,
-                                        payment.getOrderId(),
-                                        correlationId,
-                                        new PaymentRefundRejectedEvent(
-                                                payment.getOrderId(),
-                                                payment.getId(),
-                                                "PAYMENT_NOT_CAPTURED",
-                                                "Payment đang ở trạng thái "
-                                                        + payment.getStatus())));
-                        return;
-                    }
-
-                    if (payment.getMethod() == PaymentMethod.COD) {
-                        outboxEventRecorder.saveMessage(
-                                payment.getOrderId(),
-                                EventTypes.PAYMENT_REFUND_REJECTED,
-                                EventEnvelope.v1(
-                                        EventTypes.PAYMENT_REFUND_REJECTED,
-                                        payment.getOrderId(),
-                                        correlationId,
-                                        new PaymentRefundRejectedEvent(
-                                                payment.getOrderId(),
-                                                payment.getId(),
-                                                "COD_REFUND_REQUIRES_MANUAL_PAYOUT",
-                                                "COD refunds require a separate customer payout"
-                                                    + " method")));
-                        return;
-                    }
-
-                    BigDecimal amount = request.amount();
-                    BigDecimal refundedAmount =
-                            paymentRefundRepository.sumCompletedAmountByPaymentId(payment.getId());
-                    BigDecimal reservedAmount =
-                            paymentRefundRepository.sumReservedAmountByPaymentId(payment.getId());
-                    BigDecimal remainingAmount = payment.getAmount().subtract(reservedAmount);
-                    if (amount == null
-                            || amount.signum() <= 0
-                            || amount.compareTo(remainingAmount) > 0) {
-                        outboxEventRecorder.saveMessage(
-                                payment.getOrderId(),
-                                EventTypes.PAYMENT_REFUND_REJECTED,
-                                EventEnvelope.v1(
-                                        EventTypes.PAYMENT_REFUND_REJECTED,
-                                        payment.getOrderId(),
-                                        correlationId,
-                                        new PaymentRefundRejectedEvent(
-                                                payment.getOrderId(),
-                                                payment.getId(),
-                                                "REFUND_AMOUNT_INVALID",
-                                                "Refund amount must be positive and not exceed the"
-                                                    + " remaining captured amount")));
-                        return;
-                    }
-
-                    PaymentRefund refund =
-                            PaymentRefund.builder()
-                                    .payment(payment)
-                                    .orderId(payment.getOrderId())
-                                    .amount(amount)
-                                    .provider(payment.getProvider())
-                                    .currency(payment.getCurrency())
-                                    .status(PaymentRefundStatus.PENDING)
-                                    .idempotencyKey(messageId)
-                                    .reason(request.reason())
-                                    .build();
-                    PaymentRefund savedRefund = paymentRefundRepository.save(refund);
-                    payment.setStatus(PaymentStatus.REFUND_PENDING);
-                    payment.setFailureReason(null);
-                    paymentRepository.save(payment);
-                    callRef.set(
-                            new RefundCall(payment, savedRefund, refundedAmount, correlationId));
-                });
-        return callRef.get();
-    }
-
-    @Transactional
-    public void applyRefund(RefundCall call, PaymentRefundResult result, String error) {
-        Payment payment =
-                paymentRepository
-                        .findByIdForUpdate(call.payment().getId())
-                        .orElseThrow(
-                                () ->
-                                        new IllegalStateException(
-                                                "Payment "
-                                                        + call.payment().getId()
-                                                        + " biến mất giữa hai pha"));
-        PaymentRefund refund =
-                paymentRefundRepository
-                        .findById(call.refund().getId())
-                        .orElseThrow(
-                                () ->
-                                        new IllegalStateException(
-                                                "Refund "
-                                                        + call.refund().getId()
-                                                        + " biến mất giữa hai pha"));
-
-        if (error != null) {
-            refund.setStatus(PaymentRefundStatus.FAILED);
-            refund.setFailureReason(error);
-            paymentRefundRepository.save(refund);
-            payment.setStatus(PaymentStatus.REFUND_FAILED);
-            payment.setFailureReason(error);
-            paymentRepository.save(payment);
-            outboxEventRecorder.saveMessage(
-                    payment.getOrderId(),
-                    EventTypes.PAYMENT_REFUND_REJECTED,
-                    EventEnvelope.v1(
-                            EventTypes.PAYMENT_REFUND_REJECTED,
-                            payment.getOrderId(),
-                            call.correlationId(),
-                            new PaymentRefundRejectedEvent(
-                                    payment.getOrderId(),
-                                    payment.getId(),
-                                    "PROVIDER_REFUND_FAILED",
-                                    error)));
-            return;
-        }
-
-        refund.setProviderRefundId(result.providerRefundId());
-        refund.setStatus(result.status());
-        refund.setFailureReason(result.failureReason());
-
-        if (result.status() == PaymentRefundStatus.COMPLETED) {
-            refund.setCompletedAt(LocalDateTime.now());
-            BigDecimal totalRefunded = call.previouslyRefunded().add(refund.getAmount());
-            payment.setStatus(
-                    totalRefunded.compareTo(payment.getAmount()) >= 0
-                            ? PaymentStatus.REFUNDED
-                            : PaymentStatus.COMPLETED);
-            payment.setFailureReason(null);
-            paymentRefundRepository.save(refund);
-            paymentRepository.save(payment);
-            outboxEventRecorder.saveMessage(
-                    payment.getOrderId(),
-                    EventTypes.PAYMENT_REFUNDED,
-                    EventEnvelope.v1(
-                            EventTypes.PAYMENT_REFUNDED,
-                            payment.getOrderId(),
-                            call.correlationId(),
-                            new PaymentRefundedEvent(
-                                    payment.getOrderId(), payment.getId(), refund.getReason())));
-            return;
-        }
-
-        if (result.status() == PaymentRefundStatus.FAILED) {
-            payment.setStatus(PaymentStatus.REFUND_FAILED);
-            payment.setFailureReason(result.failureReason());
-            paymentRefundRepository.save(refund);
-            paymentRepository.save(payment);
-            outboxEventRecorder.saveMessage(
-                    payment.getOrderId(),
-                    EventTypes.PAYMENT_REFUND_REJECTED,
-                    EventEnvelope.v1(
-                            EventTypes.PAYMENT_REFUND_REJECTED,
-                            payment.getOrderId(),
-                            call.correlationId(),
-                            new PaymentRefundRejectedEvent(
-                                    payment.getOrderId(),
-                                    payment.getId(),
-                                    "PROVIDER_REFUND_FAILED",
-                                    result.failureReason())));
-            return;
-        }
-
-        paymentRefundRepository.save(refund);
-        paymentRepository.save(payment);
     }
 
     @Transactional
@@ -704,34 +450,5 @@ public class PaymentTransactionService {
                                     0)));
         }
         paymentRepository.save(current);
-    }
-
-    private void replayRefundResult(PaymentRefund refund, String correlationId) {
-        if (refund.getStatus() == PaymentRefundStatus.COMPLETED) {
-            outboxEventRecorder.saveMessage(
-                    refund.getPayment().getOrderId(),
-                    EventTypes.PAYMENT_REFUNDED,
-                    EventEnvelope.v1(
-                            EventTypes.PAYMENT_REFUNDED,
-                            refund.getPayment().getOrderId(),
-                            correlationId,
-                            new PaymentRefundedEvent(
-                                    refund.getPayment().getOrderId(),
-                                    refund.getPayment().getId(),
-                                    refund.getReason())));
-        } else if (refund.getStatus() == PaymentRefundStatus.FAILED) {
-            outboxEventRecorder.saveMessage(
-                    refund.getOrderId(),
-                    EventTypes.PAYMENT_REFUND_REJECTED,
-                    EventEnvelope.v1(
-                            EventTypes.PAYMENT_REFUND_REJECTED,
-                            refund.getOrderId(),
-                            correlationId,
-                            new PaymentRefundRejectedEvent(
-                                    refund.getOrderId(),
-                                    refund.getPayment().getId(),
-                                    "PROVIDER_REFUND_FAILED",
-                                    refund.getFailureReason())));
-        }
     }
 }

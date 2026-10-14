@@ -6,10 +6,8 @@ import com.fashionstore.common.payment.PaymentProvider;
 import com.fashionstore.common.security.CurrentUserProvider;
 import com.fashionstore.contracts.payment.command.AuthorizePaymentCommand;
 import com.fashionstore.contracts.payment.command.CancelPaymentCommand;
-import com.fashionstore.contracts.payment.command.RefundPaymentCommand;
 import com.fashionstore.payment.client.PaymentHandlerRegistry;
 import com.fashionstore.payment.dto.PaymentInitiationResult;
-import com.fashionstore.payment.dto.PaymentRefundResult;
 import com.fashionstore.payment.dto.PaymentResponse;
 import com.fashionstore.payment.entity.Payment;
 import com.fashionstore.payment.entity.enumeration.PaymentStatus;
@@ -238,45 +236,5 @@ public class PaymentServiceImpl implements PaymentService {
             }
             throw ex;
         }
-    }
-
-    @Override
-    public void refund(RefundPaymentCommand request, String messageId, String correlationId) {
-        PaymentTransactionService.RefundCall call =
-                paymentTransactionService.prepareRefundOnce(messageId, request, correlationId);
-
-        if (call == null) {
-            return;
-        }
-
-        RefundOutcome outcome = refundAtGateway(call);
-        paymentTransactionService.applyRefund(call, outcome.result(), outcome.error());
-    }
-
-    private record RefundOutcome(PaymentRefundResult result, String error) {}
-
-    private RefundOutcome refundAtGateway(PaymentTransactionService.RefundCall call) {
-        try {
-            return new RefundOutcome(
-                    paymentHandlerRegistry
-                            .get(call.payment().getProvider())
-                            .refund(call.payment(), call.refund()),
-                    null);
-        } catch (RuntimeException exception) {
-            log.error(
-                    "Hoàn tiền với cổng thất bại cho order {}: {}",
-                    call.payment().getOrderId(),
-                    exception.getMessage(),
-                    exception);
-            return new RefundOutcome(null, safeFailureReason(exception));
-        }
-    }
-
-    private String safeFailureReason(RuntimeException exception) {
-        String message = exception.getMessage();
-        if (message == null || message.isBlank()) {
-            return "Payment provider rejected the refund";
-        }
-        return message.substring(0, Math.min(message.length(), 500));
     }
 }

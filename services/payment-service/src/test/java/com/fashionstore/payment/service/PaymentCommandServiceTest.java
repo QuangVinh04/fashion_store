@@ -8,15 +8,10 @@ import com.fashionstore.contracts.common.EventEnvelope;
 import com.fashionstore.contracts.common.EventTypes;
 import com.fashionstore.contracts.payment.command.AuthorizePaymentCommand;
 import com.fashionstore.contracts.payment.command.CancelPaymentCommand;
-import com.fashionstore.contracts.payment.command.RefundPaymentCommand;
 import com.fashionstore.payment.dto.PaymentInitiationResult;
-import com.fashionstore.payment.dto.PaymentRefundResult;
 import com.fashionstore.payment.entity.Payment;
-import com.fashionstore.payment.entity.PaymentRefund;
-import com.fashionstore.payment.entity.enumeration.PaymentRefundStatus;
 import com.fashionstore.payment.entity.enumeration.PaymentStatus;
 import com.fashionstore.payment.event.OutboxEventRecorder;
-import com.fashionstore.payment.repository.PaymentRefundRepository;
 import com.fashionstore.payment.repository.PaymentRepository;
 import com.fashionstore.payment.client.PaymentHandler;
 import com.fashionstore.payment.client.PaymentHandlerRegistry;
@@ -51,8 +46,6 @@ class PaymentCommandServiceTest {
     @Mock
     PaymentRepository paymentRepository;
     @Mock
-    PaymentRefundRepository paymentRefundRepository;
-    @Mock
     ProcessedMessageService processedMessageService;
     @Mock
     OutboxEventRecorder outboxEventRecorder;
@@ -66,10 +59,6 @@ class PaymentCommandServiceTest {
 
     @BeforeEach
     void setUp() {
-        org.mockito.Mockito.lenient().when(paymentRefundRepository.sumReservedAmountByPaymentId(anyString())).thenAnswer(call -> {
-            BigDecimal completed=paymentRefundRepository.sumCompletedAmountByPaymentId(call.getArgument(0));
-            return completed==null?BigDecimal.ZERO:completed;
-        });
         org.mockito.Mockito.lenient().when(paymentRepository.findByOrderId("order-1"))
                 .thenAnswer(call -> Optional.ofNullable(storedPayment));
         org.mockito.Mockito.lenient().when(paymentRepository.findByIdForUpdate(anyString()))
@@ -80,7 +69,7 @@ class PaymentCommandServiceTest {
         });
         var jdbcTemplate = org.mockito.Mockito.mock(org.springframework.jdbc.core.JdbcTemplate.class);
         org.mockito.Mockito.lenient().when(jdbcTemplate.queryForObject(anyString(), eq(Long.class))).thenReturn(5000000000000000L);
-        PaymentTransactionService database = new PaymentTransactionService(paymentRepository, jdbcTemplate, paymentRefundRepository,
+        PaymentTransactionService database = new PaymentTransactionService(paymentRepository, jdbcTemplate,
                 processedMessageService, outboxEventRecorder, org.mockito.Mockito.mock(PaymentStateService.class), org.mockito.Mockito.mock(WalletService.class));
         service = new com.fashionstore.payment.service.impl.PaymentServiceImpl(paymentRepository, paymentHandlerRegistry,
                 org.mockito.Mockito.mock(com.fashionstore.payment.mapper.PaymentResponseMapper.class),
@@ -157,35 +146,6 @@ class PaymentCommandServiceTest {
     }
 
     @Test
-    void completedProviderRefundIsAuditedAndMarksPaymentRefunded() {
-        Payment payment = onlineCompletedPayment();
-        RefundPaymentCommand command = new RefundPaymentCommand(
-                "order-1", "payment-1", new BigDecimal("450000"), "Customer return"
-        );
-        EventEnvelope<RefundPaymentCommand> envelope = EventEnvelope.v1(
-                EventTypes.PAYMENT_REFUND_REQUESTED, "order-1", "order-1", command
-        );
-        when(paymentRepository.findByOrderIdForUpdate("order-1")).thenReturn(Optional.of(payment));
-        when(paymentRefundRepository.findByIdempotencyKey("message-refund-1")).thenReturn(Optional.empty());
-        when(paymentRefundRepository.sumCompletedAmountByPaymentId("payment-1")).thenReturn(BigDecimal.ZERO);
-        stubRefundPersistence(payment);
-        when(paymentHandlerRegistry.get(PaymentProvider.VNPAY)).thenReturn(paymentHandler);
-        when(paymentHandler.refund(any(Payment.class), any(PaymentRefund.class))).thenAnswer(invocation -> {
-            assertThat(TransactionSynchronizationManager.isActualTransactionActive()).isFalse();
-            return PaymentRefundResult.completed("vnpay-refund-1");
-        });
-
-        service.refund((RefundPaymentCommand) envelope.payload(), "message-refund-1", envelope.correlationId());
-
-        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.REFUNDED);
-        ArgumentCaptor<PaymentRefund> captor = ArgumentCaptor.forClass(PaymentRefund.class);
-        verify(paymentRefundRepository, org.mockito.Mockito.atLeastOnce()).save(captor.capture());
-        assertThat(captor.getValue().getStatus()).isEqualTo(PaymentRefundStatus.COMPLETED);
-        assertThat(captor.getValue().getProviderRefundId()).isEqualTo("vnpay-refund-1");
-        verify(outboxEventRecorder).saveMessage(eq("order-1"), eq(EventTypes.PAYMENT_REFUNDED), any(EventEnvelope.class));
-    }
-
-    @Test
     void gatewayTimeoutDoesNotPublishPaymentFailed() {
         EventEnvelope<AuthorizePaymentCommand> envelope = onlineRequest();
         when(paymentRepository.findByOrderIdForUpdate("order-1")).thenReturn(Optional.empty());
@@ -218,31 +178,6 @@ class PaymentCommandServiceTest {
 
         assertThat(storedPayment.getStatus()).isEqualTo(PaymentStatus.CANCELLED);
         verify(outboxEventRecorder, never()).saveMessage(anyString(), eq(EventTypes.PAYMENT_INITIATED), any(EventEnvelope.class));
-    }
-
-    @Test
-    void providerRefundFailureMarksRefundFailedAndRepliesRejected() {
-        Payment payment = onlineCompletedPayment();
-        EventEnvelope<RefundPaymentCommand> envelope = EventEnvelope.v1(
-                EventTypes.PAYMENT_REFUND_REQUESTED, "order-1", "order-1",
-                new RefundPaymentCommand("order-1", "payment-1", new BigDecimal("450000"), "Customer return"));
-        when(paymentRepository.findByOrderIdForUpdate("order-1")).thenReturn(Optional.of(payment));
-        when(paymentRefundRepository.findByIdempotencyKey("message-refund-2")).thenReturn(Optional.empty());
-        when(paymentRefundRepository.sumCompletedAmountByPaymentId("payment-1")).thenReturn(BigDecimal.ZERO);
-        PaymentRefund[] saved = stubRefundPersistence(payment);
-        when(paymentHandlerRegistry.get(PaymentProvider.VNPAY)).thenReturn(paymentHandler);
-        when(paymentHandler.refund(any(Payment.class), any(PaymentRefund.class))).thenThrow(new IllegalStateException("VNPay 94"));
-
-        service.refund((RefundPaymentCommand) envelope.payload(), "message-refund-2", envelope.correlationId());;
-
-        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.REFUND_FAILED);
-        assertThat(saved[0].getStatus()).isEqualTo(PaymentRefundStatus.FAILED);
-        verify(outboxEventRecorder).saveMessage(eq("order-1"), eq(EventTypes.PAYMENT_REFUND_REJECTED), any(EventEnvelope.class));
-    }
-
-    private EventEnvelope<AuthorizePaymentCommand> onlineRequest() {
-        return EventEnvelope.v1(EventTypes.PAYMENT_REQUESTED, "order-1", "saga-1", new AuthorizePaymentCommand(
-                "order-1", "user-1", "ONLINE", "VNPAY", new BigDecimal("450000"), "VND", "203.0.113.9"));
     }
 
     @Test
@@ -283,6 +218,11 @@ class PaymentCommandServiceTest {
         verify(outboxEventRecorder, never()).saveMessage(anyString(), eq(EventTypes.PAYMENT_CANCELLED), any());
     }
 
+    private EventEnvelope<AuthorizePaymentCommand> onlineRequest() {
+        return EventEnvelope.v1(EventTypes.PAYMENT_REQUESTED, "order-1", "saga-1", new AuthorizePaymentCommand(
+                "order-1", "user-1", "ONLINE", "VNPAY", new BigDecimal("450000"), "VND", "203.0.113.9"));
+    }
+
     private void stubPaymentSave() {
         when(paymentRepository.save(any(Payment.class))).thenAnswer(invocation -> {
             Payment saved = invocation.getArgument(0);
@@ -303,21 +243,6 @@ class PaymentCommandServiceTest {
         ArgumentCaptor<Payment> captor = ArgumentCaptor.forClass(Payment.class);
         verify(paymentRepository, org.mockito.Mockito.atLeastOnce()).save(captor.capture());
         return captor.getValue();
-    }
-
-    private PaymentRefund[] stubRefundPersistence(Payment payment) {
-        PaymentRefund[] saved = new PaymentRefund[1];
-        when(paymentRefundRepository.save(any(PaymentRefund.class))).thenAnswer(invocation -> {
-            PaymentRefund refund = invocation.getArgument(0);
-            if (refund.getId() == null) {
-                ReflectionTestUtils.setField(refund, "id", "refund-1");
-            }
-            saved[0] = refund;
-            return refund;
-        });
-        when(paymentRefundRepository.findById("refund-1")).thenAnswer(invocation -> Optional.ofNullable(saved[0]));
-        when(paymentRepository.findByIdForUpdate("payment-1")).thenReturn(Optional.of(payment));
-        return saved;
     }
 
     /**

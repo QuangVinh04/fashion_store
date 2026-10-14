@@ -5,9 +5,7 @@ import com.fashionstore.common.payment.PaymentProvider;
 import com.fashionstore.payment.config.payment.VnPayConfig;
 import com.fashionstore.payment.dto.PaymentCallbackResult;
 import com.fashionstore.payment.dto.PaymentInitiationResult;
-import com.fashionstore.payment.dto.PaymentRefundResult;
 import com.fashionstore.payment.entity.Payment;
-import com.fashionstore.payment.entity.PaymentRefund;
 import com.fashionstore.payment.entity.enumeration.PaymentStatus;
 import com.fashionstore.payment.exception.PaymentErrorCode;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -224,72 +222,6 @@ public class VnPayPaymentHandler implements PaymentHandler {
                                 ? "VNPay transaction status: " + status
                                 : null)
                 .build();
-    }
-
-    @Override
-    public PaymentRefundResult refund(Payment payment, PaymentRefund refund) {
-        if (!StringUtils.hasText(payment.getTransactionId())
-                || !StringUtils.hasText(payment.getProviderTransactionDate())) {
-            throw new AppException(PaymentErrorCode.PAYMENT_STATUS_INVALID);
-        }
-
-        String createDate = LocalDateTime.now(VN_TIME_ZONE).format(DATE_FORMATTER);
-        String requestId = vnPayRequestId(refund.getIdempotencyKey());
-        String transactionType =
-                refund.getAmount().compareTo(payment.getAmount()) == 0 ? "02" : "03";
-        String orderInfo = "Hoan tien don hang " + payment.getOrderId();
-        String amount = toVnPayAmount(refund.getAmount());
-        String hashData =
-                String.join(
-                        "|",
-                        requestId,
-                        properties.getVersion(),
-                        "refund",
-                        properties.getTmnCode(),
-                        transactionType,
-                        payment.getMerchantReference(),
-                        amount,
-                        payment.getTransactionId(),
-                        payment.getProviderTransactionDate(),
-                        properties.getCreateBy(),
-                        createDate,
-                        properties.getServerIp(),
-                        orderInfo);
-
-        Map<String, String> request = new LinkedHashMap<>();
-        request.put("vnp_RequestId", requestId);
-        request.put("vnp_Version", properties.getVersion());
-        request.put("vnp_Command", "refund");
-        request.put("vnp_TmnCode", properties.getTmnCode());
-        request.put("vnp_TransactionType", transactionType);
-        request.put("vnp_TxnRef", payment.getMerchantReference());
-        request.put("vnp_Amount", amount);
-        request.put("vnp_TransactionNo", payment.getTransactionId());
-        request.put("vnp_TransactionDate", payment.getProviderTransactionDate());
-        request.put("vnp_CreateBy", properties.getCreateBy());
-        request.put("vnp_CreateDate", createDate);
-        request.put("vnp_IpAddr", properties.getServerIp());
-        request.put("vnp_OrderInfo", orderInfo);
-        request.put("vnp_SecureHash", hmacSha512(hashData));
-
-        try {
-            JsonNode response = vnPayFeignClient.refund(request);
-            String responseCode = response.path("vnp_ResponseCode").asText();
-            String transactionStatus = response.path("vnp_TransactionStatus").asText();
-            String providerRefundId = response.path("vnp_TransactionNo").asText(null);
-            if ("00".equals(responseCode) && "00".equals(transactionStatus)) {
-                return PaymentRefundResult.completed(providerRefundId);
-            }
-            if ("00".equals(responseCode)
-                    && ("05".equals(transactionStatus) || "06".equals(transactionStatus))) {
-                return PaymentRefundResult.pending(providerRefundId);
-            }
-            return PaymentRefundResult.failed(
-                    providerRefundId,
-                    "VNPay refund response/status: " + responseCode + "/" + transactionStatus);
-        } catch (FeignException exception) {
-            throw new AppException(PaymentErrorCode.PAYMENT_PROVIDER_ERROR, exception);
-        }
     }
 
     private String toVnPayAmount(BigDecimal amount) {

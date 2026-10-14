@@ -9,15 +9,9 @@ import org.springframework.web.bind.annotation.RequestBody;
 
 import java.util.Map;
 
-/** HTTP client for VNPay query and refund operations. */
+/** HTTP client for VNPay query operations. */
 @FeignClient(name = "vnpay-api", url = "${payment.vnpay.api-url}")
 public interface VnPayFeignClient {
-
-    /** Sends a signed refund request to VNPay. */
-    @PostMapping(
-            value = "/merchant_webapi/api/transaction",
-            consumes = MediaType.APPLICATION_JSON_VALUE)
-    JsonNode refund(@RequestBody Map<String, String> request);
 
     @PostMapping(
             value = "/merchant_webapi/api/transaction",

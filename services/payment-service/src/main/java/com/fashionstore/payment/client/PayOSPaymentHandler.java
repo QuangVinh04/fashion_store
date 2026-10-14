@@ -4,9 +4,7 @@ import com.fashionstore.common.exception.AppException;
 import com.fashionstore.common.payment.PaymentProvider;
 import com.fashionstore.payment.dto.PaymentCallbackResult;
 import com.fashionstore.payment.dto.PaymentInitiationResult;
-import com.fashionstore.payment.dto.PaymentRefundResult;
 import com.fashionstore.payment.entity.Payment;
-import com.fashionstore.payment.entity.PaymentRefund;
 import com.fashionstore.payment.entity.enumeration.PaymentStatus;
 import com.fashionstore.payment.exception.PaymentErrorCode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -33,9 +31,7 @@ import java.util.Map;
 
 /**
  * PayOS là chuyển khoản QR thời gian thực — không có bước "capture" (giống PayPal), xác nhận hoàn
- * toàn qua webhook (giống VNPay), và không có API hoàn tiền (giao dịch đã hoàn tất thì phải chuyển
- * khoản hoàn tiền thủ công — {@link #refund} luôn ném lỗi, {@code PaymentRequestedEventListener} đã
- * có sẵn catch chung để chuyển thành REFUND_FAILED thay vì phải xử lý riêng ở đây).
+ * toàn qua webhook (giống VNPay), và không có API hoàn tiền (hoàn tiền đi vào ví nội bộ).
  *
  * <p>Payment mới lưu orderCode dạng số ở merchantReference trước HTTP, nên webhook luôn tra được
  * payment kể cả khi response khởi tạo chưa về. Reference hex của payment cũ vẫn được hỗ trợ.
@@ -249,14 +245,6 @@ public class PayOSPaymentHandler implements PaymentHandler {
                 .providerAmount(BigDecimal.valueOf(link.getAmount()))
                 .providerCurrency("VND")
                 .build();
-    }
-
-    @Override
-    public PaymentRefundResult refund(Payment payment, PaymentRefund refund) {
-        throw new AppException(
-                PaymentErrorCode.PAYMENT_PROVIDER_UNSUPPORTED,
-                "PayOS không có API hoàn tiền — giao dịch chuyển khoản đã hoàn tất phải hoàn thủ"
-                    + " công");
     }
 
     private long toOrderCode(String merchantReference) {
