@@ -107,6 +107,21 @@ class PaymentCommandServiceTest {
     }
 
     @Test
+    void cancellingAnAlreadyCapturedPaymentRejectsWithItsPaymentId() {
+        storedPayment = onlineCompletedPayment();
+        when(paymentRepository.findByOrderIdForUpdate("order-1")).thenReturn(Optional.of(storedPayment));
+
+        service.cancel(new CancelPaymentCommand("order-1", "payment-1", "Quá hạn"), "message-cancel", "saga-1");
+
+        ArgumentCaptor<EventEnvelope> captor = ArgumentCaptor.forClass(EventEnvelope.class);
+        verify(outboxEventRecorder).saveMessage(
+                eq("order-1"), eq(EventTypes.PAYMENT_CANCELLATION_REJECTED), captor.capture());
+        var event = (com.fashionstore.contracts.payment.event.PaymentCancellationRejectedEvent) captor.getValue().payload();
+        assertThat(event.paymentId()).isEqualTo("payment-1");
+        assertThat(event.failureCode()).isEqualTo("PAYMENT_ALREADY_CAPTURED");
+    }
+
+    @Test
     void onlinePaymentRequestInitiatesGatewayImmediatelyAndPublishesUrl() {
         AuthorizePaymentCommand command = new AuthorizePaymentCommand(
                 "order-1", "user-1", "ONLINE", "VNPAY", new BigDecimal("450000"), "VND", "203.0.113.9"

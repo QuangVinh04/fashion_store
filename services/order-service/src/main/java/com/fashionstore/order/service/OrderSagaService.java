@@ -183,6 +183,15 @@ public class OrderSagaService {
                         recoverLatePayment(locked.order(), saga, event);
                         return;
                     }
+                    // Reply "không huỷ được" đã đẩy saga tới CONFIRM_INVENTORY trước khi event này đến
+                    // (hai queue riêng, không đảm bảo thứ tự): chỉ ghi nhận paymentId, không đổi bước.
+                    if (saga.getCurrentStep() == OrderSagaStep.CONFIRM_INVENTORY
+                            && !saga.isTerminal()
+                            && saga.getPaymentId() == null
+                            && event.paymentId() != null) {
+                        saga.setPaymentId(event.paymentId());
+                        return;
+                    }
                     if (!atStep(saga, OrderSagaStep.AUTHORIZE_PAYMENT, messageId)) {
                         return;
                     }
@@ -328,6 +337,10 @@ public class OrderSagaService {
                     OrderSaga saga = locked.saga();
 
                     saga.resumeAfterCancellationRejected();
+                    // Tiền đã thu: payment.completed có thể đến sau, không được để đơn mất paymentId.
+                    if (saga.getPaymentId() == null) {
+                        saga.setPaymentId(event.paymentId());
+                    }
                     emit(
                             saga,
                             EventTypes.INVENTORY_CONFIRMATION_REQUESTED,
@@ -595,8 +608,16 @@ public class OrderSagaService {
     private void recoverLatePayment(Order order, OrderSaga saga, PaymentSuccessEvent event) {
         boolean stockReleased = saga.getStatus() == OrderSagaStatus.COMPENSATED;
 
-        if (order.getPaymentMethod() != PaymentMethod.ONLINE
-                || saga.getStatus() == OrderSagaStatus.COMPLETED) {
+        if (order.getPaymentMethod() != PaymentMethod.ONLINE) {
+            return;
+        }
+        if (saga.getStatus() == OrderSagaStatus.COMPLETED) {
+            // Đơn đã xác nhận trước khi payment.completed đến: chỉ bù paymentId còn thiếu.
+            if (order.getPaymentId() == null && event.paymentId() != null) {
+                saga.setPaymentId(event.paymentId());
+                order.setPaymentId(event.paymentId());
+                orderRepository.save(order);
+            }
             return;
         }
         if (event.paymentId() == null

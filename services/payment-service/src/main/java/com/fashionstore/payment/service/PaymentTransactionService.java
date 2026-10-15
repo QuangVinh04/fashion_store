@@ -190,6 +190,7 @@ public class PaymentTransactionService {
                                         correlationId,
                                         new PaymentCancellationRejectedEvent(
                                                 payment.getOrderId(),
+                                                payment.getId(),
                                                 "PAYMENT_ALREADY_CAPTURED",
                                                 "Payment was already completed")));
                         return;

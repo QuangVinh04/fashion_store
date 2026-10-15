@@ -413,7 +413,7 @@ class OrderSagaServiceTest {
                         saga,
                         EventTypes.PAYMENT_CANCELLATION_REJECTED,
                         new PaymentCancellationRejectedEvent(
-                                "order-1", "ALREADY_CAPTURED", "Tiền đã thu")),
+                                "order-1", null, "ALREADY_CAPTURED", "Tiền đã thu")),
                 "message-7");
 
         assertEquals(OrderSagaStatus.RUNNING, saga.getStatus());
@@ -422,6 +422,85 @@ class OrderSagaServiceTest {
         assertEquals(
                 EventTypes.INVENTORY_CONFIRMATION_REQUESTED,
                 emittedCommands().getFirst().eventType());
+    }
+
+    /**
+     * Tiền đã thu đúng lúc hết hạn: reply "không huỷ được" đến trước payment.completed. Saga phải
+     * lấy paymentId từ chính reply đó, nếu không đơn được xác nhận với paymentId = null và sau này
+     * không hoàn được tiền.
+     */
+    @Test
+    void rejectedCancellationRecordsThePaymentSoTheConfirmedOrderCanBeRefunded() {
+        OrderSaga saga = runningSaga();
+        saga.inventoryReserved("res-1");
+        saga.startCompensation(
+                OrderSagaStep.CANCEL_PAYMENT, "PAYMENT_TIMEOUT", "Quá hạn chờ thanh toán");
+        Order order = order();
+        registerSaga(saga, order);
+
+        listener.paymentCancellationRejected(
+                envelope(
+                        saga,
+                        EventTypes.PAYMENT_CANCELLATION_REJECTED,
+                        new PaymentCancellationRejectedEvent(
+                                "order-1", "pay-1", "PAYMENT_ALREADY_CAPTURED", "Tiền đã thu")),
+                "message-7a");
+        listener.inventoryConfirmed(
+                envelope(
+                        saga,
+                        EventTypes.INVENTORY_CONFIRMED,
+                        new InventoryConfirmedEvent("order-1", "res-1")),
+                "message-7b");
+
+        assertEquals("pay-1", saga.getPaymentId());
+        assertEquals(OrderStatus.CONFIRMED, order.getStatus());
+        assertEquals("pay-1", order.getPaymentId());
+    }
+
+    @Test
+    void paymentSuccessArrivingWhileInventoryIsBeingConfirmedRecordsThePaymentId() {
+        OrderSaga saga = runningSaga();
+        saga.inventoryReserved("res-1");
+        saga.startCompensation(
+                OrderSagaStep.CANCEL_PAYMENT, "PAYMENT_TIMEOUT", "Quá hạn chờ thanh toán");
+        saga.resumeAfterCancellationRejected();
+        registerSaga(saga, order());
+
+        listener.paymentCompleted(
+                envelope(
+                        saga,
+                        EventTypes.PAYMENT_COMPLETED,
+                        new PaymentSuccessEvent("order-1", "pay-1")),
+                "message-8a");
+
+        assertEquals("pay-1", saga.getPaymentId());
+        assertEquals(OrderSagaStep.CONFIRM_INVENTORY, saga.getCurrentStep());
+        verify(sagaOutbox, org.mockito.Mockito.never()).emit(any(OrderSaga.class), any());
+    }
+
+    @Test
+    void paymentSuccessArrivingAfterTheOrderWasConfirmedBackfillsItsPaymentId() {
+        OrderSaga saga = runningSaga();
+        saga.inventoryReserved("res-1");
+        saga.startCompensation(
+                OrderSagaStep.CANCEL_PAYMENT, "PAYMENT_TIMEOUT", "Quá hạn chờ thanh toán");
+        saga.resumeAfterCancellationRejected();
+        saga.complete();
+        Order order = order();
+        order.confirm(null);
+        registerSaga(saga, order);
+
+        listener.paymentCompleted(
+                envelope(
+                        saga,
+                        EventTypes.PAYMENT_COMPLETED,
+                        new PaymentSuccessEvent("order-1", "pay-1")),
+                "message-8b");
+
+        assertEquals("pay-1", order.getPaymentId());
+        assertEquals("pay-1", saga.getPaymentId());
+        assertEquals(OrderStatus.CONFIRMED, order.getStatus());
+        verify(sagaOutbox, org.mockito.Mockito.never()).emit(any(OrderSaga.class), any());
     }
 
     @Test
