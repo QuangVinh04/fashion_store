@@ -52,7 +52,9 @@ class InternalWalletControllerTest {
                         Jwt.withTokenValue("service")
                                 .header("alg", "RS256")
                                 .subject("service")
-                                .claim("realm_access", Map.of("roles", List.of("INTERNAL_CALLER")))
+                                .claim(
+                                        "resource_access",
+                                        Map.of("fashion-api", Map.of("roles", List.of("internal-caller"))))
                                 .build());
         when(decoder.decode("buyer"))
                 .thenReturn(

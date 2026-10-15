@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fashionstore.common.security.ApiAccessDeniedHandler;
 import com.fashionstore.common.security.ApiAuthenticationEntryPoint;
 import com.fashionstore.common.security.CurrentUserProvider;
+import com.fashionstore.common.security.KeycloakJwtAuthoritiesConverter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.Customizer;
@@ -48,7 +49,7 @@ public class SecurityConfig {
                                 "/api/v1/payments/payos/return",
                                 "/api/v1/payments/payos/webhook"
                         ).permitAll()
-                        .requestMatchers("/internal/**").hasRole("INTERNAL_CALLER")
+                        .requestMatchers("/internal/**").hasAuthority(KeycloakJwtAuthoritiesConverter.INTERNAL_CALLER)
                         .requestMatchers("/api/v1/admin/payments/**", "/api/v1/admin/wallets/**").hasRole("ADMIN")
                         .anyRequest().authenticated())
                 // JWT Keycloak do gateway chuyển tiếp; role qua KeycloakJwtAuthoritiesConverter (common-library)

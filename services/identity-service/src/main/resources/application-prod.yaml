@@ -1,0 +1,21 @@
+# Profile `prod` (SPRING_PROFILES_ACTIVE=prod): mọi bí mật/định danh bắt buộc lấy từ biến môi trường,
+# KHÔNG có giá trị mặc định. Thiếu biến nào thì service từ chối khởi động ("Could not resolve
+# placeholder") thay vì chạy thầm lặng với secret dev trong application.yaml.
+# Biến cố ý để rỗng (vd REDIS_PASSWORD khi Redis không đặt mật khẩu) vẫn phải được khai báo rỗng.
+# Quy tắc này được kiểm bởi packages/test-utils ProdProfileSecretsTest.
+spring:
+  security:
+    oauth2:
+      client:
+        registration:
+          keycloak:
+            client-secret: ${IDENTITY_SERVICE_CLIENT_SECRET}
+  datasource:
+    username: ${IDENTITY_POSTGRES_USER}
+    password: ${IDENTITY_POSTGRES_PASSWORD}
+  rabbitmq:
+    username: ${RABBITMQ_USERNAME}
+    password: ${RABBITMQ_PASSWORD}
+  data:
+    redis:
+      password: ${REDIS_PASSWORD}

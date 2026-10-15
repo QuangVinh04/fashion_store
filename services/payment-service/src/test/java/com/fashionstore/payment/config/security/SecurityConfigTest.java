@@ -41,7 +41,10 @@ class SecurityConfigTest {
         when(jwtDecoder.decode(anyString())).thenAnswer(invocation -> switch (invocation.<String>getArgument(0)) {
             case "user-token" -> jwt("USER");
             case "admin-token" -> jwt("ADMIN", "USER");
-            case "service-token" -> jwt("INTERNAL_CALLER");
+            // Service account thật: client_credentials mang client role `internal-caller` của fashion-api
+            case "service-token" -> serviceAccountJwt();
+            // Realm role trùng tên KHÔNG phải service account
+            case "realm-role-token" -> jwt("INTERNAL_CALLER");
             default -> throw new BadJwtException("invalid");
         });
     }
@@ -56,6 +59,12 @@ class SecurityConfigTest {
     void serviceAccountCanCallInternalWalletRefund() throws Exception {
         mockMvc.perform(get("/internal/wallets/u-1/refund").header("Authorization", "Bearer service-token"))
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    void aRealmRoleWithTheSameNameDoesNotGrantInternalAccess() throws Exception {
+        mockMvc.perform(get("/internal/wallets/u-1/refund").header("Authorization", "Bearer realm-role-token"))
+                .andExpect(status().isForbidden());
     }
 
     @Test
@@ -86,6 +95,14 @@ class SecurityConfigTest {
     void userTokenReachesPayment() throws Exception {
         mockMvc.perform(get("/api/v1/payments/p-1").header("Authorization", "Bearer user-token"))
                 .andExpect(status().isOk());
+    }
+
+    private static Jwt serviceAccountJwt() {
+        return Jwt.withTokenValue("token").header("alg", "none")
+                .subject("service-account-order-service")
+                .claim("aud", List.of("fashion-api"))
+                .claim("resource_access", Map.of("fashion-api", Map.of("roles", List.of("internal-caller"))))
+                .build();
     }
 
     private static Jwt jwt(String... realmRoles) {
