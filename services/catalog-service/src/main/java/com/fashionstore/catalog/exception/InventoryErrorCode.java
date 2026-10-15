@@ -10,7 +10,6 @@ public enum InventoryErrorCode implements BaseErrorCode {
     INVENTORY_NOT_FOUND   (4050, "Inventory not found for variant",      HttpStatus.NOT_FOUND),
     STOCK_INSUFFICIENT    (4051, "Insufficient stock",                    HttpStatus.BAD_REQUEST),
     ALREADY_RESERVED      (4052, "Stock already reserved for this order", HttpStatus.CONFLICT),
-    RESERVATION_NOT_FOUND (4053, "Reservation not found for this order",  HttpStatus.NOT_FOUND),
     INVALID_STOCK_QUANTITY(4054, "Stock quantity cannot be negative",      HttpStatus.BAD_REQUEST),
     STOCK_BELOW_RESERVED  (4055, "Stock quantity cannot be below reserved quantity", HttpStatus.CONFLICT),
     OPERATION_ID_CONFLICT (4056, "Operation ID already used for another stock change", HttpStatus.CONFLICT),

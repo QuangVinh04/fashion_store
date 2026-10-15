@@ -17,7 +17,6 @@ import com.fashionstore.contracts.payment.event.WalletSagaCompensatedEvent;
 import com.fashionstore.contracts.payment.event.WalletSagaCompensationRejectedEvent;
 import com.fashionstore.payment.dto.CreateWalletTopUpRequest;
 import com.fashionstore.payment.dto.PaymentInitiationResult;
-import com.fashionstore.payment.dto.RefundWalletRequest;
 import com.fashionstore.payment.dto.RefundWalletResponse;
 import com.fashionstore.payment.dto.WalletPaymentSession;
 import com.fashionstore.payment.dto.WalletTopUpResponse;
@@ -226,10 +225,6 @@ public class WalletService {
                 .build();
     }
 
-    public PaymentInitiationResult preparePayment(Payment snapshot) {
-        return prepare(snapshot);
-    }
-
     @Transactional(readOnly = true)
     public WalletPaymentSession getSession(String id) {
         Payment payment =
@@ -268,10 +263,6 @@ public class WalletService {
         return session(payment);
     }
 
-    public WalletPaymentSession confirmPayment(String id, int generation) {
-        return confirm(id, generation);
-    }
-
     /** Internal saga cancellation; the command handler emits its reply in the same transaction. */
     @Transactional
     public boolean cancelPending(String id) {
@@ -282,10 +273,6 @@ public class WalletService {
         if (payment.getStatus() != PaymentStatus.PENDING) return false;
         payment.setStatus(PaymentStatus.CANCELLED);
         return true;
-    }
-
-    public boolean cancelPendingPayment(String id) {
-        return cancelPending(id);
     }
 
     private WalletPaymentSession session(Payment payment) {
@@ -508,24 +495,6 @@ public class WalletService {
     // ==========================================
 
     @Transactional
-    public RefundWalletResponse refundReturn(String userId, RefundWalletRequest request) {
-        String reasonType = request.reasonType() == null ? "RETURN_REFUND" : request.reasonType();
-        if (!Set.of("RETURN_REFUND", "VERIFIED_LOSS", "CARRIER_RETURN").contains(reasonType)) {
-            throw new AppException(WalletErrorCode.SOURCE_INVALID);
-        }
-        return creditOrderRefund(
-                userId,
-                request.orderId(),
-                null,
-                request.amount(),
-                "VND",
-                reasonType,
-                request.returnId(),
-                "return:" + request.returnId(),
-                request.reason());
-    }
-
-    @Transactional
     public void refundOrderFunds(
             RefundOrderFundsCommand command, String messageId, String correlationId) {
         RefundWalletResponse result;
@@ -698,9 +667,7 @@ public class WalletService {
         if (refunds.findByBusinessRefundId(businessRefundId).isPresent()) {
             throw new AppException(WalletErrorCode.OPERATION_CONFLICT);
         }
-        if (payment.getStatus() != PaymentStatus.COMPLETED
-                        && payment.getStatus() != PaymentStatus.REFUND_FAILED
-                || payment.getPaidAt() == null) {
+        if (payment.getStatus() != PaymentStatus.COMPLETED || payment.getPaidAt() == null) {
             throw new AppException(WalletErrorCode.SOURCE_INVALID);
         }
         if (payment.getMethod() == PaymentMethod.COD && payment.getOperationId() == null) {

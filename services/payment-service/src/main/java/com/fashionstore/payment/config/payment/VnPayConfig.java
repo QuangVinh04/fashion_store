@@ -15,7 +15,6 @@ public class VnPayConfig {
     private String tmnCode;
     private String hashSecret;
     private String returnUrl;
-    private String createBy;
     private String serverIp;
     private String version = "2.1.0";
     private String command = "pay";

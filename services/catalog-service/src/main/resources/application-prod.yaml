@@ -16,6 +16,9 @@ spring:
   rabbitmq:
     username: ${RABBITMQ_USERNAME}
     password: ${RABBITMQ_PASSWORD}
+  data:
+    redis:
+      password: ${REDIS_PASSWORD}
 app:
   minio:
     access-key: ${MINIO_ACCESS_KEY}

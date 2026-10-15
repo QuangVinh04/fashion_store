@@ -57,6 +57,14 @@ spring:
           initial-interval: 1000
           max-attempts: 3
           multiplier: 2
+  data:
+    # RedisService là cách duy nhất dùng Redis và luôn fail-open: timeout thấp để Redis chết không làm chậm xử lý.
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 500ms
+      connect-timeout: 500ms
   jpa:
     open-in-view: false
     database: postgresql
@@ -78,7 +86,6 @@ payment:
     min-top-up-amount: ${WALLET_MIN_TOP_UP_AMOUNT:10000}
     max-top-up-amount: ${WALLET_MAX_TOP_UP_AMOUNT:5000000}
     top-up-ttl-minutes: ${WALLET_TOP_UP_TTL_MINUTES:15}
-    reconciliation-delay-ms: ${WALLET_RECONCILIATION_DELAY_MS:60000}
     top-up-return-url: ${WALLET_TOP_UP_RETURN_URL:http://localhost:3000/profile/wallet/top-up}
     top-up-cancel-url: ${WALLET_TOP_UP_CANCEL_URL:http://localhost:3000/profile/wallet/top-up}
   reconciliation:
@@ -90,7 +97,6 @@ payment:
     hash-secret: ${VNPAY_HASH_SECRET:}
     return-url: ${VNPAY_RETURN_URL:http://localhost:8083/payment/vnpay/return}
     api-url: ${VNPAY_API_URL:https://sandbox.vnpayment.vn}
-    create-by: ${VNPAY_REFUND_CREATE_BY:fashion-store}
     server-ip: ${VNPAY_SERVER_IP:127.0.0.1}
     expiration-minutes: ${VNPAY_EXPIRATION_MINUTES:15}
   payos:

@@ -14,7 +14,6 @@ import com.fashionstore.catalog.entity.enumeration.InventoryReservationStatus;
 @Repository
 public interface InventoryReservationItemRepository extends JpaRepository<InventoryReservationItem, String> {
     List<InventoryReservationItem> findByReservationId(String reservationId);
-    void deleteByReservationId(String reservationId);
 
     @Query("""
             select item from InventoryReservationItem item, InventoryReservation reservation

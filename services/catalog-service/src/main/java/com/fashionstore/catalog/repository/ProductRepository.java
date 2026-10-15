@@ -35,9 +35,6 @@ public interface ProductRepository extends JpaRepository<Product, String>, JpaSp
     @EntityGraph(attributePaths = {"brand", "productCategories.category"})
     Optional<Product> findDetailProductById(String id);
 
-    @EntityGraph(attributePaths = {"variants", "variants.colorOption", "variants.sizeOption"})
-    Optional<Product> findProductWithVariantsById(String id);
-
     @EntityGraph(attributePaths = {"brand", "productCategories.category"})
     Optional<Product> findBySlug(String slug);
 
@@ -47,28 +44,11 @@ public interface ProductRepository extends JpaRepository<Product, String>, JpaSp
     boolean existsBySlug(String slug);
 
     @EntityGraph(attributePaths = {"brand", "productCategories.category"})
-    Page<Product> findAllByNameContaining(String keyword, Pageable pageable);
-
-    @EntityGraph(attributePaths = {"brand", "productCategories.category"})
     Page<Product> findAllByNameContainingAndStatus(String keyword, ProductStatus status, Pageable pageable);
-
-    @EntityGraph(attributePaths = {"brand", "productCategories.category"})
-    @Query("select distinct p from Product p join p.productCategories pc where pc.category = :category")
-    Page<Product> findAllByCategory(Category category, Pageable pageable);
-
-    @EntityGraph(attributePaths = {"brand", "productCategories.category"})
-    @Query("select distinct p from Product p join p.productCategories pc where pc.category.slug = :categorySlug")
-    Page<Product> findAllByCategorySlug(String categorySlug, Pageable pageable);
 
     @EntityGraph(attributePaths = {"brand", "productCategories.category"})
     @Query("select distinct p from Product p join p.productCategories pc where pc.category.slug = :categorySlug and p.status = :status")
     Page<Product> findAllByCategorySlugAndStatus(String categorySlug, ProductStatus status, Pageable pageable);
-
-    @EntityGraph(attributePaths = {"brand", "productCategories.category"})
-    Page<Product> findAllByBrandId(String brandId, Pageable pageable);
-
-    @EntityGraph(attributePaths = {"brand", "productCategories.category"})
-    Page<Product> findAllByBrandSlug(String brandSlug, Pageable pageable);
 
     @EntityGraph(attributePaths = {"brand", "productCategories.category"})
     Page<Product> findAllByBrandSlugAndStatus(String brandSlug, ProductStatus status, Pageable pageable);

@@ -16,5 +16,4 @@ public interface InventoryReservationRepository extends JpaRepository<InventoryR
     @org.springframework.data.jpa.repository.Query("select r from InventoryReservation r where r.orderId = :orderId")
     Optional<InventoryReservation> findByOrderIdForUpdate(@org.springframework.data.repository.query.Param("orderId") String orderId);
 
-    Optional<InventoryReservation> findByOrderIdAndStatus(String orderId, InventoryReservationStatus status);
 }

@@ -105,7 +105,6 @@ class VnPayPaymentHandlerTest {
         properties.setTmnCode("tmn-code");
         properties.setHashSecret("secret");
         properties.setReturnUrl("https://shop.test/return");
-        properties.setCreateBy("fashion-store");
         properties.setServerIp("127.0.0.1");
         return properties;
     }

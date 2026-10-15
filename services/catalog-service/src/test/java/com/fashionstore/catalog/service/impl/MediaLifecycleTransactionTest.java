@@ -235,7 +235,7 @@ class MediaLifecycleTransactionTest {
                     return super.update(sql.replace("on conflict (message_id, consumer_name)", "on conflict"), args);
                 }
             };
-            return new ProcessedMessageService(null, jdbc);
+            return new ProcessedMessageService(com.fashionstore.common.redis.RedisService.disabled(), jdbc);
         }
         @Bean ProfileAvatarChangedListener listener(MediaFileService service, ProcessedMessageService processed) { return new ProfileAvatarChangedListener(service, processed, new ObjectMapper()); }
     }

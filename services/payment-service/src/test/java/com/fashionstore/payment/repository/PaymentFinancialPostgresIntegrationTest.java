@@ -13,11 +13,9 @@ import com.fashionstore.common.payment.PaymentType;
 import com.fashionstore.common.security.CurrentUserProvider;
 import com.fashionstore.payment.client.PaymentHandler;
 import com.fashionstore.payment.client.PaymentHandlerRegistry;
-import com.fashionstore.payment.controller.InternalWalletController;
 import com.fashionstore.payment.dto.CallbackOutcome;
 import com.fashionstore.payment.dto.CreateWalletTopUpRequest;
 import com.fashionstore.payment.dto.PaymentCallbackResult;
-import com.fashionstore.payment.dto.RefundWalletRequest;
 import com.fashionstore.payment.entity.Payment;
 import com.fashionstore.payment.entity.enumeration.PaymentStatus;
 import com.fashionstore.payment.event.OutboxEventRecorder;
@@ -53,7 +51,6 @@ import java.util.concurrent.TimeUnit;
     PaymentTransactionService.class,
     CallbackPaymentServiceImpl.class,
     WalletService.class,
-    InternalWalletController.class,
     com.fashionstore.payment.event.OrderDeliveredEventListener.class,
     com.fashionstore.payment.service.impl.PaymentStateServiceImpl.class,
     PaymentFinancialPostgresIntegrationTest.Configuration.class
@@ -79,7 +76,6 @@ class PaymentFinancialPostgresIntegrationTest {
     @Autowired CallbackPaymentServiceImpl callbacks;
     @Autowired WalletService walletService;
     @Autowired PaymentTransactionService database;
-    @Autowired InternalWalletController walletController;
     @Autowired org.springframework.transaction.PlatformTransactionManager transactionManager;
     @MockitoBean CurrentUserProvider currentUser;
     @MockitoBean vn.payos.PayOS payos;
@@ -87,6 +83,56 @@ class PaymentFinancialPostgresIntegrationTest {
     @MockitoBean com.fashionstore.payment.mapper.PaymentResponseMapper paymentMapper;
     @Autowired com.fashionstore.payment.event.OrderDeliveredEventListener deliveryEvents;
     @MockitoBean OutboxEventRecorder outbox;
+
+    private static final String REFUND_CREDITED =
+            com.fashionstore.contracts.common.EventTypes.ORDER_FUNDS_REFUND_CREDITED;
+    private static final String REFUND_REJECTED =
+            com.fashionstore.contracts.common.EventTypes.ORDER_FUNDS_REFUND_REJECTED;
+
+    /** Đường hoàn ví thật: RefundOrderFundsCommand -> WalletService; từ chối nghiệp vụ ra event rejected. */
+    private void refund(String orderId, BigDecimal amount, String returnId) {
+        String paymentId =
+                payments.findByOrderId(orderId).map(Payment::getId).orElse("missing-payment");
+        var command =
+                new com.fashionstore.contracts.payment.command.RefundOrderFundsCommand(
+                        "return:" + returnId,
+                        orderId,
+                        paymentId,
+                        amount,
+                        "VND",
+                        "RETURN_REFUND",
+                        returnId);
+        walletService.refundOrderFunds(command, UUID.randomUUID().toString(), returnId);
+    }
+
+    private java.util.List<org.mockito.invocation.Invocation> refundInvocations() {
+        return org.mockito.Mockito.mockingDetails(outbox).getInvocations().stream()
+                .filter(call -> call.getMethod().getName().equals("saveMessage"))
+                .filter(
+                        call ->
+                                REFUND_CREDITED.equals(call.getArgument(1))
+                                        || REFUND_REJECTED.equals(call.getArgument(1)))
+                .toList();
+    }
+
+    private java.util.List<String> refundEvents() {
+        return refundInvocations().stream().map(call -> (String) call.getArgument(1)).toList();
+    }
+
+    private String lastRefundEvent() {
+        var events = refundEvents();
+        return events.get(events.size() - 1);
+    }
+
+    private String lastCreditedLedgerEntry() {
+        var invocations = refundInvocations();
+        var last = invocations.get(invocations.size() - 1);
+        assertThat((String) last.getArgument(1)).isEqualTo(REFUND_CREDITED);
+        var envelope = (com.fashionstore.contracts.common.EventEnvelope<?>) last.getArgument(2);
+        return ((com.fashionstore.contracts.payment.event.OrderFundsRefundCreditedEvent)
+                        envelope.payload())
+                .ledgerEntryId();
+    }
 
     @DynamicPropertySource
     static void database(DynamicPropertyRegistry registry) {
@@ -188,16 +234,8 @@ class PaymentFinancialPostgresIntegrationTest {
         assertThat(balance(payment)).isEqualTo(100000);
         assertThat(payments.findById(payment.getId()).orElseThrow().getStatus())
                 .isEqualTo(PaymentStatus.REFUNDED);
-        assertThatThrownBy(
-                        () ->
-                                walletController.refundToWallet(
-                                        payment.getUserId(),
-                                        new RefundWalletRequest(
-                                                payment.getAmount(),
-                                                UUID.randomUUID().toString(),
-                                                payment.getOrderId(),
-                                                "Return")))
-                .isInstanceOf(com.fashionstore.common.exception.AppException.class);
+        refund(payment.getOrderId(), payment.getAmount(), UUID.randomUUID().toString());
+        assertThat(lastRefundEvent()).isEqualTo(REFUND_REJECTED);
         assertThat(balance(payment)).isEqualTo(100000);
     }
 
@@ -227,13 +265,7 @@ class PaymentFinancialPostgresIntegrationTest {
         assertThat(collected.getStatus()).isEqualTo(PaymentStatus.COMPLETED);
         assertThat(collected.getOperationId()).isEqualTo("ghn:123:GHN-1");
         assertThat(collected.getPaidAt()).isNotNull();
-        walletController.refundToWallet(
-                payment.getUserId(),
-                new RefundWalletRequest(
-                        payment.getAmount(),
-                        UUID.randomUUID().toString(),
-                        payment.getOrderId(),
-                        "COD return accepted"));
+        refund(payment.getOrderId(), payment.getAmount(), UUID.randomUUID().toString());
         deliveryEvents.handle(envelope, UUID.randomUUID().toString());
         assertThat(payments.findById(payment.getId()).orElseThrow().getStatus())
                 .isEqualTo(PaymentStatus.REFUNDED);
@@ -314,28 +346,16 @@ class PaymentFinancialPostgresIntegrationTest {
         java.util.concurrent.Callable<Boolean> attempt =
                 () -> {
                     start.await();
-                    try {
-                        walletController.refundToWallet(
-                                payment.getUserId(),
-                                new RefundWalletRequest(
-                                        payment.getAmount(),
-                                        UUID.randomUUID().toString(),
-                                        payment.getOrderId(),
-                                        "Return"));
-                        return true;
-                    } catch (com.fashionstore.common.exception.AppException rejected) {
-                        return false;
-                    }
+                    refund(payment.getOrderId(), payment.getAmount(), UUID.randomUUID().toString());
+                    return true;
                 };
         try {
             var first = executor.submit(attempt);
             var second = executor.submit(attempt);
             start.countDown();
-            assertThat(
-                            java.util.List.of(
-                                    first.get(15, TimeUnit.SECONDS),
-                                    second.get(15, TimeUnit.SECONDS)))
-                    .containsExactlyInAnyOrder(true, false);
+            first.get(15, TimeUnit.SECONDS);
+            second.get(15, TimeUnit.SECONDS);
+            assertThat(refundEvents()).containsExactlyInAnyOrder(REFUND_CREDITED, REFUND_REJECTED);
             assertThat(balance(payment)).isEqualTo(100000);
             assertThat(
                             jdbc.queryForObject(
@@ -357,13 +377,7 @@ class PaymentFinancialPostgresIntegrationTest {
                         () ->
                                 transaction.executeWithoutResult(
                                         status -> {
-                                            walletController.refundToWallet(
-                                                    payment.getUserId(),
-                                                    new RefundWalletRequest(
-                                                            payment.getAmount(),
-                                                            UUID.randomUUID().toString(),
-                                                            payment.getOrderId(),
-                                                            "Return"));
+                                            refund(payment.getOrderId(), payment.getAmount(), UUID.randomUUID().toString());
                                             throw new IllegalStateException(
                                                     "later order transaction failed");
                                         }))
@@ -414,12 +428,10 @@ class PaymentFinancialPostgresIntegrationTest {
     void wholeOrderRefundHasOneAuditAndOneCreditEvenWhenRetried() {
         Payment payment = capturedOrder(PaymentMethod.ONLINE);
         String returnId = UUID.randomUUID().toString();
-        var input =
-                new RefundWalletRequest(
-                        payment.getAmount(), returnId, payment.getOrderId(), "Return accepted");
-        var first = walletController.refundToWallet(payment.getUserId(), input).getData();
-        var replay = walletController.refundToWallet(payment.getUserId(), input).getData();
-        assertThat(replay.ledgerEntryId()).isEqualTo(first.ledgerEntryId());
+        refund(payment.getOrderId(), payment.getAmount(), returnId);
+        String firstLedgerEntry = lastCreditedLedgerEntry();
+        refund(payment.getOrderId(), payment.getAmount(), returnId);
+        assertThat(lastCreditedLedgerEntry()).isEqualTo(firstLedgerEntry);
         assertThat(balance(payment)).isEqualTo(100000);
         assertThat(
                         jdbc.queryForObject(
@@ -429,40 +441,9 @@ class PaymentFinancialPostgresIntegrationTest {
                 .isEqualTo(1);
         assertThat(payments.findById(payment.getId()).orElseThrow().getStatus())
                 .isEqualTo(PaymentStatus.REFUNDED);
-        assertThatThrownBy(
-                        () ->
-                                walletController.refundToWallet(
-                                        payment.getUserId(),
-                                        new RefundWalletRequest(
-                                                payment.getAmount(),
-                                                UUID.randomUUID().toString(),
-                                                payment.getOrderId(),
-                                                "Different return")))
-                .isInstanceOf(com.fashionstore.common.exception.AppException.class);
+        refund(payment.getOrderId(), payment.getAmount(), UUID.randomUUID().toString());
+        assertThat(lastRefundEvent()).isEqualTo(REFUND_REJECTED);
         assertThat(balance(payment)).isEqualTo(100000);
-    }
-
-    @Test
-    void wrongCustomerCannotReceiveAnotherOrdersRefund() {
-        Payment payment = capturedOrder(PaymentMethod.ONLINE);
-        String wrongUser = UUID.randomUUID().toString();
-        assertThatThrownBy(
-                        () ->
-                                walletController.refundToWallet(
-                                        wrongUser,
-                                        new RefundWalletRequest(
-                                                payment.getAmount(),
-                                                UUID.randomUUID().toString(),
-                                                payment.getOrderId(),
-                                                "Return")))
-                .isInstanceOf(com.fashionstore.common.exception.AppException.class);
-        assertThat(balance(payment)).isZero();
-        assertThat(
-                        jdbc.queryForObject(
-                                "select count(*) from wallet_ledger_entry where user_id = ?",
-                                Long.class,
-                                wrongUser))
-                .isZero();
     }
 
     @Test
@@ -479,32 +460,16 @@ class PaymentFinancialPostgresIntegrationTest {
                 "PAYOS",
                 "PENDING",
                 UUID.randomUUID().toString());
-        assertThatThrownBy(
-                        () ->
-                                walletController.refundToWallet(
-                                        payment.getUserId(),
-                                        new RefundWalletRequest(
-                                                payment.getAmount(),
-                                                UUID.randomUUID().toString(),
-                                                payment.getOrderId(),
-                                                "Return")))
-                .isInstanceOf(com.fashionstore.common.exception.AppException.class);
+        refund(payment.getOrderId(), payment.getAmount(), UUID.randomUUID().toString());
+        assertThat(lastRefundEvent()).isEqualTo(REFUND_REJECTED);
         assertThat(balance(payment)).isZero();
     }
 
     @Test
     void nonexistentOrderCannotCreateMoneyThroughReturnRefund() {
         String userId = UUID.randomUUID().toString();
-        assertThatThrownBy(
-                        () ->
-                                walletController.refundToWallet(
-                                        userId,
-                                        new RefundWalletRequest(
-                                                new BigDecimal("100000"),
-                                                UUID.randomUUID().toString(),
-                                                "missing-order",
-                                                "Return")))
-                .isInstanceOf(com.fashionstore.common.exception.AppException.class);
+        refund("missing-order", new BigDecimal("100000"), UUID.randomUUID().toString());
+        assertThat(lastRefundEvent()).isEqualTo(REFUND_REJECTED);
         assertThat(
                         jdbc.queryForObject(
                                 "select count(*) from wallet_ledger_entry where user_id = ?",
@@ -516,16 +481,8 @@ class PaymentFinancialPostgresIntegrationTest {
     @Test
     void refundCannotExceedCapturedAmount() {
         Payment payment = capturedOrder(PaymentMethod.ONLINE);
-        assertThatThrownBy(
-                        () ->
-                                walletController.refundToWallet(
-                                        payment.getUserId(),
-                                        new RefundWalletRequest(
-                                                new BigDecimal("900000"),
-                                                UUID.randomUUID().toString(),
-                                                payment.getOrderId(),
-                                                "Return")))
-                .isInstanceOf(com.fashionstore.common.exception.AppException.class);
+        refund(payment.getOrderId(), new BigDecimal("900000"), UUID.randomUUID().toString());
+        assertThat(lastRefundEvent()).isEqualTo(REFUND_REJECTED);
         assertThat(balance(payment)).isZero();
     }
 
@@ -535,16 +492,8 @@ class PaymentFinancialPostgresIntegrationTest {
         payment.setStatus(PaymentStatus.COD_PENDING);
         payment.setPaidAt(null);
         payments.saveAndFlush(payment);
-        assertThatThrownBy(
-                        () ->
-                                walletController.refundToWallet(
-                                        payment.getUserId(),
-                                        new RefundWalletRequest(
-                                                payment.getAmount(),
-                                                UUID.randomUUID().toString(),
-                                                payment.getOrderId(),
-                                                "Return")))
-                .isInstanceOf(com.fashionstore.common.exception.AppException.class);
+        refund(payment.getOrderId(), payment.getAmount(), UUID.randomUUID().toString());
+        assertThat(lastRefundEvent()).isEqualTo(REFUND_REJECTED);
         assertThat(balance(payment)).isZero();
     }
 
@@ -720,7 +669,7 @@ class PaymentFinancialPostgresIntegrationTest {
     static class Configuration {
         @org.springframework.context.annotation.Bean
         ProcessedMessageService processedMessages(JdbcTemplate jdbc) {
-            return new ProcessedMessageService(null, jdbc);
+            return new ProcessedMessageService(com.fashionstore.common.redis.RedisService.disabled(), jdbc);
         }
 
         @org.springframework.context.annotation.Bean

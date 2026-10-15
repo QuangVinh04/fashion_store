@@ -14,7 +14,7 @@ spring:
   application:
     name: storefront-bff
   autoconfigure:
-    # BFF chỉ dùng Redis cho session, không cần RedisService của common-library
+    # BFF chỉ dùng Redis cho session
     exclude: com.fashionstore.common.autoconfigure.CommonRedisAutoConfiguration
   data:
     redis:

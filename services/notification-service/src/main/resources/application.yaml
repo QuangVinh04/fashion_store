@@ -35,11 +35,13 @@ spring:
           max-attempts: 3
           multiplier: 2
   data:
-    # Bộ lọc nhanh của ProcessedMessageService; Redis chết thì vẫn đúng nhờ unique index trong Postgres.
+    # RedisService là cách duy nhất dùng Redis và luôn fail-open: timeout thấp để Redis chết không làm chậm xử lý.
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
-      timeout: 2000ms
+      password: ${REDIS_PASSWORD:}
+      timeout: 500ms
+      connect-timeout: 500ms
   mail:
     host: ${MAIL_HOST:smtp.gmail.com}
     port: ${MAIL_PORT:587}
@@ -52,7 +54,6 @@ spring:
           starttls.enable: true
 
 app:
-  frontend-url: ${FRONTEND_URL:http://localhost:3000}
   websocket:
     allowed-origins: ${NOTIFICATION_ALLOWED_ORIGINS:http://localhost:8083,http://127.0.0.1:8083}
 

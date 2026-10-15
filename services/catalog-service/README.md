@@ -185,7 +185,7 @@ Consume (queue → command):
 Idempotent qua `ProcessedMessageService` (header `outboxEventId` làm messageId).
 
 Publish qua outbox (`OutboxService.saveMessage` → `OutboxPublisher`, relay theo
-`app.outbox.relay-delay-ms`, có dọn event cũ): `INVENTORY_RESERVED`,
+`app.outbox.publisher-delay-ms`, có dọn event cũ): `INVENTORY_RESERVED`,
 `INVENTORY_REJECTED`, `INVENTORY_CONFIRMED`, `INVENTORY_RELEASED`.
 
 ## Cấu hình (env)
@@ -200,4 +200,4 @@ Publish qua outbox (`OutboxService.saveMessage` → `OutboxPublisher`, relay the
 | `MINIO_ENDPOINT` / `MINIO_PUBLIC_ENDPOINT` | `http://localhost:9000` / `http://localhost:9000` |
 | `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY`, `MINIO_BUCKET` | `minioadmin` / `minioadmin` / `fashion-media` |
 | `MINIO_PRESIGN_EXPIRY_SECONDS`, `MINIO_MAX_UPLOAD_BYTES` | `900`, `20971520` |
-| `OUTBOX_RELAY_DELAY_MS` | `3000` |
+| `OUTBOX_PUBLISHER_DELAY_MS` | `15000` |

@@ -178,9 +178,7 @@ public class PaymentTransactionService {
                     }
 
                     if (payment.getStatus() == PaymentStatus.COMPLETED
-                            || payment.getStatus() == PaymentStatus.REFUND_PENDING
-                            || payment.getStatus() == PaymentStatus.REFUNDED
-                            || payment.getStatus() == PaymentStatus.REFUND_FAILED) {
+                            || payment.getStatus() == PaymentStatus.REFUNDED) {
                         outboxEventRecorder.saveMessage(
                                 payment.getOrderId(),
                                 EventTypes.PAYMENT_CANCELLATION_REJECTED,

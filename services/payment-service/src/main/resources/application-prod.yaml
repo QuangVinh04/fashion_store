@@ -16,6 +16,9 @@ spring:
   rabbitmq:
     username: ${RABBITMQ_USERNAME}
     password: ${RABBITMQ_PASSWORD}
+  data:
+    redis:
+      password: ${REDIS_PASSWORD}
 payment:
   vnpay:
     tmn-code: ${VNPAY_TMN_CODE}

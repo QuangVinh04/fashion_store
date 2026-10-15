@@ -9,22 +9,9 @@ import org.springframework.http.HttpStatusCode;
 public enum IdentityErrorCode implements BaseErrorCode {
     AVATAR_MEDIA_INVALID(2022, "Avatar media is invalid or expired", HttpStatus.BAD_REQUEST),
     USER_NOT_FOUND(2001, "User not found", HttpStatus.NOT_FOUND),
-    EMAIL_ALREADY_EXISTS(2002, "Email already exists", HttpStatus.CONFLICT),
-    INVALID_CREDENTIALS(2003, "Invalid email or password", HttpStatus.UNAUTHORIZED),
     ACCOUNT_DISABLED(2004, "Account is disabled", HttpStatus.FORBIDDEN),
     UNAUTHENTICATED(2005, "Unauthenticated", HttpStatus.UNAUTHORIZED),
-    VERIFICATION_TOKEN_EXPIRED(2008, "Verification link has expired", HttpStatus.BAD_REQUEST),
-    VERIFICATION_TOKEN_INVALID(2009, "Verification link is invalid", HttpStatus.BAD_REQUEST),
-    EMAIL_ALREADY_VERIFIED(2010, "Email is already verified", HttpStatus.CONFLICT),
-    OTP_INVALID_OR_EXPIRED(2011, "Mã xác thực không hợp lệ hoặc đã hết hạn", HttpStatus.BAD_REQUEST),
-    OTP_MAX_ATTEMPTS_EXCEEDED(2012, "Bạn đã nhập sai quá 5 lần. Vui lòng yêu cầu mã xác thực mới", HttpStatus.TOO_MANY_REQUESTS),
-    RESEND_COOLDOWN_ACTIVE(2013, "Vui lòng đợi 60 giây trước khi yêu cầu gửi lại mã", HttpStatus.TOO_MANY_REQUESTS),
-    REFRESH_TOKEN_INVALID(2014, "Refresh token không hợp lệ hoặc đã hết hạn", HttpStatus.UNAUTHORIZED),
-    LOGIN_RATE_LIMITED(2015, "Quá nhiều lần đăng nhập thất bại. Vui lòng thử lại sau 5 phút", HttpStatus.TOO_MANY_REQUESTS),
     ADDRESS_NOT_FOUND(2016, "Địa chỉ không tồn tại", HttpStatus.NOT_FOUND),
-    CANNOT_DELETE_DEFAULT_ADDRESS(2017, "Không thể xóa địa chỉ mặc định khi vẫn còn địa chỉ khác", HttpStatus.BAD_REQUEST),
-    ROLE_NOT_FOUND(2018, "Role not found", HttpStatus.NOT_FOUND),
-    EMAIL_NOT_VERIFIED(2019, "Email not verified", HttpStatus.FORBIDDEN),
     ACCOUNT_LINK_CONFLICT(2020, "Email đã thuộc về một tài khoản cũ chưa được chuyển sang Keycloak", HttpStatus.CONFLICT),
     CANNOT_CHANGE_OWN_STATUS(2021, "Không thể tự khoá / mở khoá tài khoản của chính mình", HttpStatus.CONFLICT);
 

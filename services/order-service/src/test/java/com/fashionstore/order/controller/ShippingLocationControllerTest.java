@@ -1,6 +1,7 @@
 package com.fashionstore.order.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fashionstore.common.redis.RedisService;
 import com.fashionstore.order.client.GhnFeignClient;
 import com.fashionstore.order.config.GhnProperties;
 import org.junit.jupiter.api.BeforeEach;
@@ -14,6 +15,7 @@ import org.springframework.data.redis.core.ValueOperations;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -25,12 +27,14 @@ class ShippingLocationControllerTest {
     GhnProperties properties;
     ShippingLocationController controller;
     ObjectMapper mapper = new ObjectMapper();
+    RedisService cache;
 
     @BeforeEach void setUp() {
         properties = new GhnProperties();
         properties.setToken("token");
         properties.setShopId("42");
-        controller = new ShippingLocationController(ghn, properties, redis, mapper);
+        cache = new RedisService(redis, mapper, "order-service");
+        controller = new ShippingLocationController(ghn, properties, cache);
     }
 
     @Test void mapsNewProvinceAndWardIds() throws Exception {
@@ -55,9 +59,43 @@ class ShippingLocationControllerTest {
 
     @Test void cachedCatalogueAvoidsGhnCall() {
         when(redis.opsForValue()).thenReturn(values);
-        when(values.get("ghn:staging:locations:v2:provinces"))
+        when(values.get("fashion-store:order-service:ghn:staging:locations:v2:provinces"))
                 .thenReturn("[{\"code\":\"1000001\",\"name\":\"Hồ Chí Minh\"}]");
         assertThat(controller.provinces().getData().getFirst().code()).isEqualTo("1000001");
         verifyNoInteractions(ghn);
+    }
+
+    @Test void loadedCataloguesAreCachedForADayUnderTheStandardKey() throws Exception {
+        when(redis.opsForValue()).thenReturn(values);
+        when(ghn.newProvinces("token", "42", 0, 200)).thenReturn(mapper.readTree("""
+                {"data":[{"_id":1000001,"name":"Hồ Chí Minh","status":1}]}
+                """));
+
+        controller.provinces();
+
+        org.mockito.Mockito.verify(values).set(
+                "fashion-store:order-service:ghn:staging:locations:v2:provinces",
+                "[{\"code\":\"1000001\",\"name\":\"Hồ Chí Minh\"}]",
+                java.time.Duration.ofHours(24));
+    }
+
+    @Test void aGhnFailureIsAnUpstreamErrorAndNothingIsCached() {
+        when(redis.opsForValue()).thenReturn(values);
+        when(ghn.newProvinces("token", "42", 0, 200)).thenThrow(mock(feign.FeignException.class));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> controller.provinces())
+                .isInstanceOfSatisfying(com.fashionstore.common.exception.AppException.class,
+                        e -> assertThat(e.getErrorCode()).isEqualTo(com.fashionstore.common.exception.ErrorCode.UPSTREAM_SERVICE_ERROR));
+        org.mockito.Mockito.verify(values, org.mockito.Mockito.never())
+                .set(anyString(), anyString(), any(java.time.Duration.class));
+    }
+
+    @Test void aRedisOutageStillServesTheCatalogueFromGhn() throws Exception {
+        when(redis.opsForValue()).thenThrow(new org.springframework.data.redis.RedisConnectionFailureException("down"));
+        when(ghn.newProvinces("token", "42", 0, 200)).thenReturn(mapper.readTree("""
+                {"data":[{"_id":1000001,"name":"Hồ Chí Minh","status":1}]}
+                """));
+
+        assertThat(controller.provinces().getData().getFirst().code()).isEqualTo("1000001");
     }
 }

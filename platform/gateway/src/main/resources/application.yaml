@@ -5,7 +5,7 @@ spring:
   application:
     name: api-gateway
   autoconfigure:
-    # Gateway không dùng Redis; RedisService của common-library không cần ở đây
+    # Gateway không dùng Redis
     exclude: com.fashionstore.common.autoconfigure.CommonRedisAutoConfiguration
   security:
     oauth2:

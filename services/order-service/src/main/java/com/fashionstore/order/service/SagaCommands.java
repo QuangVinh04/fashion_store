@@ -3,16 +3,11 @@ package com.fashionstore.order.service;
 import com.fashionstore.contracts.common.EventTypes;
 import com.fashionstore.contracts.inventory.command.ConfirmInventoryCommand;
 import com.fashionstore.contracts.inventory.command.ReleaseInventoryCommand;
-import com.fashionstore.contracts.inventory.command.RestockInventoryCommand;
 import com.fashionstore.contracts.order.OrderCancelledEvent;
-import com.fashionstore.contracts.order.OrderConfirmedEvent;
-import com.fashionstore.contracts.payment.command.AuthorizePaymentCommand;
 import com.fashionstore.contracts.payment.command.CancelPaymentCommand;
 import com.fashionstore.order.dto.SagaCommand;
 import com.fashionstore.order.entity.Order;
 import com.fashionstore.order.entity.OrderSaga;
-
-import java.math.BigDecimal;
 
 /**
  * Dựng payload cho timeout/retry, hủy đơn và hoàn tiền sau trả hàng. OrderSagaService dựng payload
@@ -41,24 +36,6 @@ public final class SagaCommands {
                         order.getCurrency(),
                         "PAID_CANCELLATION",
                         saga.getId()));
-    }
-
-    public static SagaCommand authorizePayment(Order order) {
-        return authorizePayment(order, null);
-    }
-
-    public static SagaCommand authorizePayment(Order order, java.time.Instant expiresAt) {
-        return SagaCommand.of(
-                EventTypes.PAYMENT_REQUESTED,
-                new AuthorizePaymentCommand(
-                        order.getId(),
-                        order.getUserId(),
-                        order.getPaymentMethod().name(),
-                        order.getPaymentProvider().name(),
-                        order.getTotalAmount(),
-                        order.getCurrency(),
-                        order.getClientIp(),
-                        expiresAt));
     }
 
     public static SagaCommand compensateWallet(OrderSaga saga, Order order) {
@@ -108,19 +85,6 @@ public final class SagaCommands {
                 EventTypes.PAYMENT_CANCELLATION_REQUESTED,
                 new CancelPaymentCommand(
                         saga.getOrderId(), saga.getPaymentId(), saga.getFailureReason()));
-    }
-
-    public static SagaCommand restockInventory(String orderId) {
-        return SagaCommand.of(
-                EventTypes.INVENTORY_RESTOCK_REQUESTED, new RestockInventoryCommand(orderId));
-    }
-
-    // ----- việc phụ, phát sau khi saga đã đóng: pub/sub, không phải bước saga -----
-
-    public static SagaCommand orderConfirmed(Order order) {
-        return SagaCommand.of(
-                EventTypes.ORDER_CONFIRMED,
-                new OrderConfirmedEvent(order.getId(), order.getUserId(), order.getCheckoutId()));
     }
 
     public static SagaCommand orderCancelled(Order order, String reason) {

@@ -135,7 +135,7 @@ class InventoryMessageTransactionTest {
         @Bean DataSourceTransactionManager transactionManager(DataSource dataSource) {
             return new DataSourceTransactionManager(dataSource);
         }
-        @Bean ProcessedMessageService processedMessages(JdbcTemplate jdbc) { return new ProcessedMessageService(null, jdbc); }
+        @Bean ProcessedMessageService processedMessages(JdbcTemplate jdbc) { return new ProcessedMessageService(com.fashionstore.common.redis.RedisService.disabled(), jdbc); }
         @Bean ObjectMapper objectMapper() { return new ObjectMapper(); }
         @Bean com.fashionstore.catalog.service.LegacyReturnRestockGuard legacyRestockGuard() { return mock(com.fashionstore.catalog.service.LegacyReturnRestockGuard.class); }
         @Bean AtomicInteger remainingFailures() { return new AtomicInteger(); }

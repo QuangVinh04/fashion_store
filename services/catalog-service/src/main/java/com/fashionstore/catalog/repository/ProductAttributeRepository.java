@@ -11,7 +11,6 @@ import java.util.Optional;
 
 @Repository
 public interface ProductAttributeRepository extends JpaRepository<ProductAttribute, String> {
-    Optional<ProductAttribute> findByCode(String code);
     boolean existsByCode(String code);
     boolean existsByCodeAndIdNot(String code, String id);
     Page<ProductAttribute> findByNameContainingIgnoreCaseOrCodeContainingIgnoreCase(String name, String code, Pageable pageable);

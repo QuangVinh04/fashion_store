@@ -426,13 +426,6 @@ public class OrderServiceImpl implements OrderService {
         return "ORD-" + LocalDateTime.now().getYear() + "-" + suffix;
     }
 
-    private String reasonOrDefault(CancelOrderRequest request) {
-        if (request == null || request.getReason() == null || request.getReason().isBlank()) {
-            return "Khách hàng yêu cầu hủy đơn";
-        }
-        return request.getReason().trim();
-    }
-
     private PageResponse<List<OrderSummaryResponse>> toPageResponse(
             Page<Order> orders, Pageable pageable) {
         List<OrderSummaryResponse> items = orders.stream().map(this::toSummary).toList();

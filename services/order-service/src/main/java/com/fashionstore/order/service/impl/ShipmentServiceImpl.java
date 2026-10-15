@@ -542,15 +542,4 @@ public class ShipmentServiceImpl implements ShipmentService {
                         .build();
         orderStatusHistoryRepository.save(history);
     }
-
-    private String resolveUserIdSafely() {
-        try {
-            return (currentUserProvider != null && currentUserProvider.getCurrentUserId() != null)
-                    ? currentUserProvider.getCurrentUserId()
-                    : "SYSTEM";
-        } catch (Exception e) {
-            log.debug("[Shipment] User context not found: {}", e.getMessage());
-            return "SYSTEM";
-        }
-    }
 }

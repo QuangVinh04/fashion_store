@@ -15,7 +15,6 @@ import com.fashionstore.common.payment.PaymentMethod;
 import com.fashionstore.common.payment.PaymentProvider;
 import com.fashionstore.common.security.CurrentUserProvider;
 import com.fashionstore.order.client.CatalogFeignClient;
-import com.fashionstore.order.client.PaymentFeignClient;
 import com.fashionstore.order.dto.ReceiveReturnRequest;
 import com.fashionstore.order.dto.RejectReturnRequest;
 import com.fashionstore.order.dto.ReturnEvidenceMetadata;
@@ -102,7 +101,6 @@ class ReturnWorkflowPostgresIntegrationTest {
     @MockitoBean com.fashionstore.order.service.OrderCancellationSagaService cancellations;
     @MockitoBean com.fashionstore.order.service.ShipmentCreationTransactionService shipmentCreation;
     @MockitoBean CurrentUserProvider currentUser;
-    @MockitoBean PaymentFeignClient paymentClient;
     @MockitoBean CatalogFeignClient catalog;
     @MockitoBean OutboxEventRecorder outbox;
     @MockitoBean OrderNotificationService notifications;
@@ -294,7 +292,6 @@ class ReturnWorkflowPostgresIntegrationTest {
         receipts.completeExpired(NOW);
         assertThat(orders.findById(returned.getOrder().getId()).orElseThrow().getStatus())
                 .isEqualTo(OrderStatus.COMPLETED);
-        verify(paymentClient, never()).refundToWallet(any(), any());
     }
 
     @Test
@@ -327,7 +324,6 @@ class ReturnWorkflowPostgresIntegrationTest {
                 .isEqualTo(ledgerId);
         assertThat(returns.findById(returned.getId()).orElseThrow().getStatus())
                 .isEqualTo(ReturnRequestStatus.REFUNDED);
-        verify(paymentClient, never()).refundToWallet(any(), any());
     }
 
     @Test
@@ -625,7 +621,6 @@ class ReturnWorkflowPostgresIntegrationTest {
                                 "Customer did not send goods"));
         assertThat(cancelled.getStatus()).isEqualTo(ReturnRequestStatus.CANCELLED);
         assertThat(cancelled.getClosedAt()).isEqualTo(NOW);
-        verify(paymentClient, never()).refundToWallet(any(), any());
 
         ReturnRequest received = approvedReturn(NOW.minusSeconds(24 * 3600));
         service.receiveReturn(

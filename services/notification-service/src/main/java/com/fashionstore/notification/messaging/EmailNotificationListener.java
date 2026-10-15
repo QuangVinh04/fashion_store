@@ -12,7 +12,6 @@ import jakarta.mail.internet.AddressException;
 import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.messaging.handler.annotation.Header;
@@ -40,9 +39,6 @@ public class EmailNotificationListener {
     private final SpringTemplateEngine templateEngine;
     private final ProcessedMessageService processedMessageService;
 
-    @Value("${app.frontend-url:http://localhost:3000}")
-    private String frontendUrl;
-
     @Transactional
     @RabbitListener(queues = RabbitMQConfig.EMAIL_QUEUE)
     public void handle(EventEnvelope<?> envelope, @Header(RabbitTopology.OUTBOX_EVENT_ID_HEADER) String messageId) {
@@ -61,8 +57,6 @@ public class EmailNotificationListener {
         if (request.variables() != null) {
             request.variables().forEach(context::setVariable);
         }
-        String token = request.variables() != null ? request.variables().getOrDefault("verifyCode", "") : "";
-        context.setVariable("verifyLink", frontendUrl + "/verify-email?token=" + token);
 
         String html = templateEngine.process(request.template(), context);
         try {
@@ -92,7 +86,6 @@ public class EmailNotificationListener {
             case "order-shipped" -> "Đơn hàng #" + orderCode + " đang được giao - Fashion Store";
             case "order-delivered" -> "Đơn hàng #" + orderCode + " đã giao thành công - Fashion Store";
             case "return-status" -> "Cập nhật yêu cầu trả hàng đơn #" + orderCode + " - Fashion Store";
-            case "verify-email" -> "Xác nhận email - Fashion Store";
             default -> "Thông báo từ Fashion Store";
         };
     }

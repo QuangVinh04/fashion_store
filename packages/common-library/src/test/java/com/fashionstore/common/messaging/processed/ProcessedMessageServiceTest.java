@@ -1,5 +1,6 @@
 package com.fashionstore.common.messaging.processed;
 
+import com.fashionstore.common.redis.RedisService;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
@@ -27,7 +28,7 @@ class ProcessedMessageServiceTest {
         insertReturns(1);
         AtomicInteger runs = new AtomicInteger();
 
-        new ProcessedMessageService(null, jdbcOperations)
+        new ProcessedMessageService(RedisService.disabled(), jdbcOperations)
                 .processOnce("message-1", "consumer-1", runs::incrementAndGet);
 
         assertEquals(1, runs.get());
@@ -38,7 +39,7 @@ class ProcessedMessageServiceTest {
         insertReturns(0);   // on conflict do nothing
         AtomicInteger runs = new AtomicInteger();
 
-        new ProcessedMessageService(null, jdbcOperations)
+        new ProcessedMessageService(RedisService.disabled(), jdbcOperations)
                 .processOnce("message-1", "consumer-1", runs::incrementAndGet);
 
         assertEquals(0, runs.get());
@@ -50,7 +51,7 @@ class ProcessedMessageServiceTest {
         when(redisTemplate.hasKey(anyString())).thenReturn(true);
         AtomicInteger runs = new AtomicInteger();
 
-        new ProcessedMessageService(redisTemplate, jdbcOperations)
+        new ProcessedMessageService(redis(redisTemplate), jdbcOperations)
                 .processOnce("message-1", "consumer-1", runs::incrementAndGet);
 
         assertEquals(0, runs.get());
@@ -71,13 +72,17 @@ class ProcessedMessageServiceTest {
         insertReturns(1);
         AtomicInteger runs = new AtomicInteger();
 
-        new ProcessedMessageService(redisTemplate, jdbcOperations)
+        new ProcessedMessageService(redis(redisTemplate), jdbcOperations)
                 .processOnce("message-1", "consumer-1", runs::incrementAndGet);
 
         assertEquals(1, runs.get());
         inOrder(redisTemplate, valueOperations)
                 .verify(valueOperations)
-                .set(eq("msg_processed:consumer-1:message-1"), eq("1"), any(Duration.class));
+                .set(eq("fashion-store:payment-service:msg:consumer-1:message-1"), eq("1"), any(Duration.class));
+    }
+
+    private RedisService redis(StringRedisTemplate template) {
+        return new RedisService(template, new com.fasterxml.jackson.databind.ObjectMapper(), "payment-service");
     }
 
     private void insertReturns(int rows) {

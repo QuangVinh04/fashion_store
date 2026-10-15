@@ -24,13 +24,6 @@ public class RabbitMQConfig {
         return new Declarables(queue,RabbitTopology.bind(queue,exchange,EventTypes.ORDER_FUNDS_REFUND_CREDITED),
                 RabbitTopology.bind(queue,exchange,EventTypes.ORDER_FUNDS_REFUND_REJECTED));
     }
-    @Bean Queue orderWalletFinancialQueue() { return sagaQueue(RabbitMQNames.ORDER_WALLET_FINANCIAL_QUEUE); }
-    @Bean Binding walletRefundCreditedBinding(Queue orderWalletFinancialQueue,DirectExchange fashionEventsExchange) {
-        return RabbitTopology.bind(orderWalletFinancialQueue,fashionEventsExchange,EventTypes.WALLET_REFUND_CREDITED);
-    }
-    @Bean Binding walletRefundRejectedBinding(Queue orderWalletFinancialQueue,DirectExchange fashionEventsExchange) {
-        return RabbitTopology.bind(orderWalletFinancialQueue,fashionEventsExchange,EventTypes.WALLET_REFUND_REJECTED);
-    }
 
     @Bean
     Declarables inventoryConfirmationRejectionTopology() {

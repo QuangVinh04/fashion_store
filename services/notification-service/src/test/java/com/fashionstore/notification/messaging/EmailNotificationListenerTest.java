@@ -12,7 +12,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mail.javamail.JavaMailSender;
-import org.springframework.test.util.ReflectionTestUtils;
 import org.thymeleaf.context.IContext;
 import org.thymeleaf.spring6.SpringTemplateEngine;
 
@@ -43,7 +42,6 @@ class EmailNotificationListenerTest {
     @BeforeEach
     void setUp() {
         listener = new EmailNotificationListener(new ObjectMapper(), mailSender, templateEngine, processedMessageService);
-        ReflectionTestUtils.setField(listener, "frontendUrl", "http://localhost:3000");
     }
 
     @Test

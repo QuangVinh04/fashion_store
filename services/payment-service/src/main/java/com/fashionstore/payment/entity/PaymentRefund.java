@@ -60,17 +60,11 @@ public class PaymentRefund extends AuditedEntity {
     @Builder.Default
     PaymentRefundStatus status = PaymentRefundStatus.PENDING;
 
-    @Column(name = "provider_refund_id", length = 120)
-    String providerRefundId;
-
     @Column(name = "idempotency_key", nullable = false, unique = true, length = 120)
     String idempotencyKey;
 
     @Column(name = "reason", length = 500)
     String reason;
-
-    @Column(name = "failure_reason", length = 500)
-    String failureReason;
 
     @Column(name = "completed_at")
     LocalDateTime completedAt;

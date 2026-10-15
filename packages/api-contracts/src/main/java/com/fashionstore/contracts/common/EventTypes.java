@@ -24,12 +24,9 @@ public final class EventTypes {
     public static final String WALLET_SAGA_COMPENSATION_REQUESTED="wallet.saga-compensation.requested";
     public static final String WALLET_SAGA_COMPENSATION_COMPLETED="wallet.saga-compensation.completed";
     public static final String WALLET_SAGA_COMPENSATION_REJECTED="wallet.saga-compensation.rejected";
-    public static final String WALLET_REFUND_REQUESTED="wallet.refund.requested";
     public static final String ORDER_FUNDS_REFUND_REQUESTED="payment.order-funds-refund.requested";
     public static final String ORDER_FUNDS_REFUND_CREDITED="payment.order-funds-refund.credited";
     public static final String ORDER_FUNDS_REFUND_REJECTED="payment.order-funds-refund.rejected";
-    public static final String WALLET_REFUND_CREDITED="wallet.refund.credited";
-    public static final String WALLET_REFUND_REJECTED="wallet.refund.rejected";
     public static final String ORDER_CONFIRMED = "order.confirmed";
     public static final String ORDER_CANCELLED = "order.cancelled";
     public static final String ORDER_DELIVERED = "order.delivered";

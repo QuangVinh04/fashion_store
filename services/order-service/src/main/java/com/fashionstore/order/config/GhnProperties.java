@@ -16,8 +16,6 @@ public class GhnProperties {
     String apiUrl = "https://dev-online-gateway.ghn.vn/shiip/public-api";
     String token = "";
     String shopId = "";
-    Integer fromDistrictId = 1442;
-    String fromWardCode = "20101";
     Boolean enabled = true;
     Boolean allowMock = false;
     String webhookToken = "fashion-store-ghn-webhook-secret";

@@ -136,7 +136,6 @@ services:
       NOTIFICATION_POSTGRES_DB: notification_database
       NOTIFICATION_POSTGRES_USER: root
       NOTIFICATION_POSTGRES_PASSWORD: root
-      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
       NOTIFICATION_ALLOWED_ORIGINS: ${NOTIFICATION_ALLOWED_ORIGINS:-http://localhost:8083,http://127.0.0.1:8083}
       MAIL_HOST: ${MAIL_HOST:-smtp.gmail.com}
       MAIL_PORT: ${MAIL_PORT:-587}
@@ -207,8 +206,6 @@ services:
       GHN_API_URL: ${GHN_API_URL:-https://dev-online-gateway.ghn.vn/shiip/public-api}
       GHN_TOKEN: ${GHN_TOKEN:-}
       GHN_SHOP_ID: ${GHN_SHOP_ID:-0}
-      GHN_FROM_DISTRICT_ID: ${GHN_FROM_DISTRICT_ID:-0}
-      GHN_FROM_WARD_CODE: ${GHN_FROM_WARD_CODE:-0}
       GHN_WEBHOOK_TOKEN: ${GHN_WEBHOOK_TOKEN:-dev-ghn-webhook-secret}
       GHN_RETURN_WAREHOUSE_NAME: ${GHN_RETURN_WAREHOUSE_NAME:-}
       GHN_RETURN_WAREHOUSE_PHONE: ${GHN_RETURN_WAREHOUSE_PHONE:-}

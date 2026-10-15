@@ -601,12 +601,6 @@ public class InventoryServiceImpl implements InventoryService {
     }
 
     @Override
-    @Transactional
-    public void deleteStock(String variantId) {
-        inventoryRepository.findByVariantId(variantId).ifPresent(inventoryRepository::delete);
-    }
-
-    @Override
     @Transactional(readOnly = true)
     public PageResponse<List<InventoryLedgerResponse>> getLedger(String variantId, InventoryLedgerType type,
             LocalDateTime fromTime, LocalDateTime toTime, Pageable pageable) {

@@ -1,10 +1,8 @@
 package com.fashionstore.common.messaging.processed;
 
+import com.fashionstore.common.redis.RedisService;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.jdbc.core.JdbcOperations;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.sql.Timestamp;
 import java.time.Duration;
@@ -23,7 +21,6 @@ import java.util.UUID;
  */
 @Slf4j
 public class ProcessedMessageService {
-    private static final String REDIS_KEY_PREFIX = "msg_processed:";
     private static final Duration REDIS_TTL = Duration.ofDays(7);
     private static final String INSERT_SQL = """
             insert into processed_message (
@@ -37,19 +34,19 @@ public class ProcessedMessageService {
             on conflict (message_id, consumer_name) do nothing
             """;
 
-    private final StringRedisTemplate redisTemplate;
+    private final RedisService redis;
     private final JdbcOperations jdbcOperations;
 
-    public ProcessedMessageService(StringRedisTemplate redisTemplate, JdbcOperations jdbcOperations) {
-        this.redisTemplate = redisTemplate;
+    public ProcessedMessageService(RedisService redis, JdbcOperations jdbcOperations) {
+        this.redis = redis;
         this.jdbcOperations = jdbcOperations;
     }
 
     public void processOnce(String messageId, String consumerName, Runnable action) {
-        String redisKey = REDIS_KEY_PREFIX + consumerName + ":" + messageId;
+        String redisKey = redis.key("msg", consumerName, messageId);
 
         // 1. BỘ LỌC NHANH: đã có key nghĩa là một transaction trước đã commit thành công
-        if (seenInRedis(redisKey)) {
+        if (redis.exists(redisKey)) {
             log.debug("Message [ID: {}, Consumer: {}] duplicate detected by REDIS, skipping.", messageId, consumerName);
             return;
         }
@@ -70,53 +67,15 @@ public class ProcessedMessageService {
 
         if (inserted == 0) {
             log.info("Message [ID: {}, Consumer: {}] duplicate detected by DB, skipping.", messageId, consumerName);
-            markSeen(redisKey);
+            // Mất key chỉ làm chậm lần trùng kế tiếp, không ảnh hưởng tính đúng đắn.
+            redis.set(redisKey, "1", REDIS_TTL);
             return;
         }
 
         // 3. Logic nghiệp vụ. Ném exception ở đây thì transaction rollback, kể cả bản ghi vừa insert ở trên.
         action.run();
 
-        markSeenAfterCommit(redisKey);
-    }
-
-    private boolean seenInRedis(String redisKey) {
-        if (redisTemplate == null) {
-            return false;
-        }
-        try {
-            return Boolean.TRUE.equals(redisTemplate.hasKey(redisKey));
-        } catch (Exception ex) {
-            log.warn("Redis unavailable while checking {}, falling back to DB guard: {}", redisKey, ex.getMessage());
-            return false;
-        }
-    }
-
-    private void markSeenAfterCommit(String redisKey) {
-        if (redisTemplate == null) {
-            return;
-        }
-        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-            markSeen(redisKey);
-            return;
-        }
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override
-            public void afterCommit() {
-                markSeen(redisKey);
-            }
-        });
-    }
-
-    private void markSeen(String redisKey) {
-        if (redisTemplate == null) {
-            return;
-        }
-        try {
-            redisTemplate.opsForValue().set(redisKey, "1", REDIS_TTL);
-        } catch (Exception ex) {
-            // Mất key chỉ làm chậm lần trùng kế tiếp, không ảnh hưởng tính đúng đắn.
-            log.warn("Failed to write Redis marker {}: {}", redisKey, ex.getMessage());
-        }
+        // Chỉ ghi sau commit: ghi trước thì một lần crash giữa chừng khiến message bị bỏ qua vĩnh viễn.
+        redis.setAfterCommit(redisKey, "1", REDIS_TTL);
     }
 }

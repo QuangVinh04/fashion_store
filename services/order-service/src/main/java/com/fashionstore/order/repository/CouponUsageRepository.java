@@ -15,5 +15,4 @@ public interface CouponUsageRepository extends JpaRepository<CouponUsage, String
 
     Optional<CouponUsage> findByOrderId(String orderId);
 
-    Optional<CouponUsage> findByPromotionIdAndOrderId(String promotionId, String orderId);
 }

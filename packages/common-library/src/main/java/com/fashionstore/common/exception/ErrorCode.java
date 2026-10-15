@@ -6,7 +6,6 @@ import org.springframework.http.HttpStatusCode;
 public enum ErrorCode implements BaseErrorCode {
     UNAUTHENTICATED(2005, "Unauthenticated", HttpStatus.UNAUTHORIZED),
     UNAUTHORIZED(2006, "Unauthorized", HttpStatus.FORBIDDEN),
-    FORBIDDEN(2007, "Forbidden", HttpStatus.FORBIDDEN),
     VALIDATION_FAILED(9001, "Validation failed", HttpStatus.BAD_REQUEST),
     MALFORMED_REQUEST(9002, "Malformed request", HttpStatus.BAD_REQUEST),
     ACCESS_DENIED(9003, "Access denied", HttpStatus.FORBIDDEN),

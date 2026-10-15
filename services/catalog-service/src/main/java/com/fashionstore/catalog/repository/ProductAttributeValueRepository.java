@@ -17,7 +17,6 @@ public interface ProductAttributeValueRepository extends JpaRepository<ProductAt
     Optional<ProductAttributeValue> findByIdAndAttributeId(String id, String attributeId);
     boolean existsByAttributeIdAndNormalizedValue(String attributeId, String normalizedValue);
     boolean existsByAttributeIdAndNormalizedValueAndIdNot(String attributeId, String normalizedValue, String id);
-    void deleteByAttributeId(String attributeId);
 
     boolean existsByAttributeId(String attributeId);
 

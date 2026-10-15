@@ -29,7 +29,6 @@ class ReturnRefundMessagingTest {
     final OrderRepository orders = mock(OrderRepository.class);
     final ReturnRequestRepository returns = mock(ReturnRequestRepository.class);
     final OrderStatusHistoryRepository history = mock(OrderStatusHistoryRepository.class);
-    final PaymentFeignClient payment = mock(PaymentFeignClient.class);
     final OutboxEventRecorder outbox = mock(OutboxEventRecorder.class);
     final com.fashionstore.order.service.OrderNotificationService notifications =
             mock(com.fashionstore.order.service.OrderNotificationService.class);
@@ -101,7 +100,7 @@ class ReturnRefundMessagingTest {
         assertThat(response.getRefundStartedAt()).isNotNull();
         assertThat(returned.getClosedAt()).isNull();
         assertThat(order.getStatus()).isEqualTo(OrderStatus.DELIVERED);
-        verifyNoInteractions(payment, history);
+        verifyNoInteractions(history);
     }
 
     @Test
@@ -129,7 +128,6 @@ class ReturnRefundMessagingTest {
                 .isEqualTo(envelopes.getAllValues().get(1).payload());
         assertThat(returned.getRefundStartedAt()).isEqualTo(started);
         assertThat(returned.getStatus()).isEqualTo(ReturnRequestStatus.RECEIVED);
-        verifyNoInteractions(payment);
     }
 
     @Test

@@ -22,7 +22,7 @@ public class OpenApiConfig {
                 .info(new Info()
                         .title("Identity Service API")
                         .version("v1")
-                        .description("Xác thực, quản lý hồ sơ người dùng, địa chỉ giao hàng và JWKS."))
+                        .description("Quản lý hồ sơ người dùng và địa chỉ giao hàng. Đăng nhập/cấp token do Keycloak đảm nhiệm."))
                 .servers(List.of(
                         new Server().url("/").description("Current request origin (API Gateway)"),
                         new Server().url("http://localhost:8080").description("API Gateway"),
@@ -32,7 +32,7 @@ public class OpenApiConfig {
                         .type(SecurityScheme.Type.HTTP)
                         .scheme("bearer")
                         .bearerFormat("JWT")
-                        .description("Access token do Identity Service phát hành")))
+                        .description("Access token do Keycloak phát hành")))
                 .addSecurityItem(new SecurityRequirement().addList(BEARER_AUTH));
     }
 }

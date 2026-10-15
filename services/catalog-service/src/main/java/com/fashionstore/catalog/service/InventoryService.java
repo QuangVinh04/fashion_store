@@ -30,7 +30,6 @@ public interface InventoryService {
     PageResponse<List<InventoryReservationResponse>> getReservations(String variantId,
                                                                        InventoryReservationStatus status, Pageable pageable);
     void ensureStock(String variantId, String productId);
-    void deleteStock(String variantId);
 
     // Saga (RabbitMQ) — all-or-nothing, idempotent theo orderId
     void reserveSaga(ReservationInventoryCommand command, String correlationId);

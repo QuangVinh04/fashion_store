@@ -90,6 +90,4 @@ public interface OrderRepository extends JpaRepository<Order, String> {
     @Query("SELECT COALESCE(SUM(o.totalAmount), 0) FROM Order o WHERE o.status IN :validStatuses")
     java.math.BigDecimal calculateTotalRevenue(@Param("validStatuses") java.util.Collection<OrderStatus> validStatuses);
 
-    @Query("SELECT COUNT(o) FROM Order o WHERE o.status IN :validStatuses")
-    long countOrdersByStatuses(@Param("validStatuses") java.util.Collection<OrderStatus> validStatuses);
 }

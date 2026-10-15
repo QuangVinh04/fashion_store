@@ -12,7 +12,6 @@ import static org.mockito.Mockito.when;
 
 import com.fashionstore.common.exception.AppException;
 import com.fashionstore.common.security.CurrentUserProvider;
-import com.fashionstore.order.client.PaymentFeignClient;
 import com.fashionstore.order.dto.RejectReturnRequest;
 import com.fashionstore.order.dto.ReturnOrderRequest;
 import com.fashionstore.order.dto.ReturnRequestResponse;
@@ -50,7 +49,6 @@ class ReturnServiceImplTest {
 
     @Mock private CurrentUserProvider currentUserProvider;
 
-    @Mock private PaymentFeignClient paymentFeignClient;
 
     @Mock private com.fashionstore.order.client.CatalogFeignClient catalogFeignClient;
     @Mock private org.springframework.transaction.PlatformTransactionManager transactionManager;
@@ -166,7 +164,6 @@ class ReturnServiceImplTest {
                 .thenAnswer(inv -> inv.getArgument(0));
         assertThatThrownBy(() -> service.refundReturn("ret-1", new BigDecimal("900000")))
                 .isInstanceOf(AppException.class);
-        verify(paymentFeignClient, never()).refundToWallet(any(), any());
     }
 
     @Test

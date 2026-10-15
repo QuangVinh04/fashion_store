@@ -67,7 +67,7 @@ class NotificationServiceTest {
 
     @Test void replayedInAppMessageUsesProcessedMessageGuardAndCreatesOneNotification() {
         var jdbc = org.mockito.Mockito.mock(org.springframework.jdbc.core.JdbcOperations.class);
-        var processed = new com.fashionstore.common.messaging.processed.ProcessedMessageService(null, jdbc);
+        var processed = new com.fashionstore.common.messaging.processed.ProcessedMessageService(com.fashionstore.common.redis.RedisService.disabled(), jdbc);
         var mapper = new com.fasterxml.jackson.databind.ObjectMapper();
         org.mockito.Mockito.when(jdbc.update(org.mockito.ArgumentMatchers.anyString(),
                 org.mockito.ArgumentMatchers.any(Object[].class))).thenReturn(1, 0);

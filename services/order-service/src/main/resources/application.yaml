@@ -59,10 +59,13 @@ spring:
           max-attempts: 3
           multiplier: 2
   data:
+    # RedisService là cách duy nhất dùng Redis và luôn fail-open: timeout thấp để Redis chết không làm chậm xử lý.
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
-      timeout: 2000ms
+      password: ${REDIS_PASSWORD:}
+      timeout: 500ms
+      connect-timeout: 500ms
 
   jpa:
     open-in-view: false
@@ -86,7 +89,6 @@ app:
     auto-completion-enabled: ${ORDER_AUTO_COMPLETION_ENABLED:true}
     auto-completion-delay-ms: ${ORDER_AUTO_COMPLETION_DELAY_MS:60000}
   clients:
-    payment-base-url: ${PAYMENT_BASE_URL:http://localhost:8085}
     # product + inventory đã gộp thành catalog-service, chung một base URL.
     catalog-base-url: ${CATALOG_BASE_URL:http://localhost:8087}
     identity-base-url: ${IDENTITY_BASE_URL:http://localhost:8082}
@@ -94,8 +96,6 @@ app:
     api-url: ${GHN_API_URL:https://dev-online-gateway.ghn.vn/shiip/public-api}
     token: ${GHN_TOKEN}
     shop-id: ${GHN_SHOP_ID}
-    from-district-id: ${GHN_FROM_DISTRICT_ID:1442}
-    from-ward-code: ${GHN_FROM_WARD_CODE:20101}
     enabled: ${GHN_ENABLED:true}
     allow-mock: ${GHN_ALLOW_MOCK:false}
     webhook-token: ${GHN_WEBHOOK_TOKEN:fashion-store-ghn-webhook-secret}

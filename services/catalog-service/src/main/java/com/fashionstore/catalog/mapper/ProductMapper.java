@@ -23,19 +23,6 @@ import java.util.stream.Collectors;
 @Mapper(componentModel = "spring")
 public interface ProductMapper {
 
-
-    @Mapping(target = "thumbnailMediaId", ignore = true)
-    @Mapping(target = "brand", ignore = true)
-    @Mapping(target = "sizeChartId", ignore = true)
-    @Mapping(target = "slug", ignore = true)
-    @Mapping(target = "variants", ignore = true)
-    @Mapping(target = "images", ignore = true)
-    @Mapping(target = "productCategories", ignore = true)
-    @Mapping(target = "attributeValues", ignore = true)
-    Product toProduct(ProductRequest productRequest);
-
-
-
     default ProductSummaryResponse toProductSummaryResponse(Product product) {
         Category firstCategory = firstCategory(product);
         return ProductSummaryResponse.builder()

@@ -3,7 +3,6 @@ package com.fashionstore.common.autoconfigure;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fashionstore.common.security.ApiAccessDeniedHandler;
 import com.fashionstore.common.security.ApiAuthenticationEntryPoint;
-import com.fashionstore.common.security.CurrentAccessTokenProvider;
 import com.fashionstore.common.security.CurrentUserProvider;
 import com.fashionstore.common.security.KeycloakJwtAuthoritiesConverter;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -31,12 +30,6 @@ public class CommonSecurityAutoConfiguration {
     @ConditionalOnMissingBean(CurrentUserProvider.class)
     CurrentUserProvider commonCurrentUserProvider() {
         return new CurrentUserProvider();
-    }
-
-    @Bean
-    @ConditionalOnMissingBean
-    CurrentAccessTokenProvider currentAccessTokenProvider() {
-        return new CurrentAccessTokenProvider();
     }
 
     @Bean

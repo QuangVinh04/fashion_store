@@ -1,7 +1,8 @@
 package com.fashionstore.order.controller;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fashionstore.common.redis.RedisService;
 import com.fashionstore.common.dto.ApiResponse;
 import com.fashionstore.common.exception.AppException;
 import com.fashionstore.common.exception.ErrorCode;
@@ -12,7 +13,6 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -30,12 +30,12 @@ import java.util.List;
 public class ShippingLocationController {
     private final GhnFeignClient ghn;
     private final GhnProperties properties;
-    private final StringRedisTemplate redis;
-    private final ObjectMapper mapper;
+    private final RedisService redis;
 
     private static final int DEMO_PROVINCE_ID = 999;
     private static final int DEMO_WARD_ID = 99901;
     private static final Duration CACHE_TTL = Duration.ofHours(24);
+    private static final TypeReference<List<Location>> LOCATIONS = new TypeReference<>() {};
 
     public record Location(String code, String name) {}
 
@@ -65,30 +65,18 @@ public class ShippingLocationController {
 
     private String key(String suffix) {
         String environment = properties.getApiUrl().contains("dev-online") ? "staging" : "production";
-        return "ghn:" + environment + ":locations:v2:" + suffix;
+        return redis.key("ghn", environment, "locations", "v2", suffix);
     }
 
     private List<Location> cached(String suffix, UpstreamCall call) {
-        String key = key(suffix);
-        try {
-            String value = redis.opsForValue().get(key);
-            if (value != null) return mapper.readerForListOf(Location.class).readValue(value);
-        } catch (Exception exception) {
-            log.warn("GHN location cache read failed: {}", exception.getMessage());
-        }
-        List<Location> rows;
-        try {
-            rows = call.get();
-        } catch (FeignException exception) {
-            log.warn("GHN location lookup failed with status {}", exception.status());
-            throw new AppException(ErrorCode.UPSTREAM_SERVICE_ERROR);
-        }
-        try {
-            redis.opsForValue().set(key, mapper.writeValueAsString(rows), CACHE_TTL);
-        } catch (Exception exception) {
-            log.warn("GHN location cache write failed: {}", exception.getMessage());
-        }
-        return rows;
+        return redis.getOrLoad(key(suffix), CACHE_TTL, LOCATIONS, () -> {
+            try {
+                return call.get();
+            } catch (FeignException exception) {
+                log.warn("GHN location lookup failed with status {}", exception.status());
+                throw new AppException(ErrorCode.UPSTREAM_SERVICE_ERROR);
+            }
+        });
     }
 
     private ApiResponse<List<Location>> locations(List<Location> rows) {

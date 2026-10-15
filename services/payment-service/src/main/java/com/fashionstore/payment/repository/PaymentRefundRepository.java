@@ -20,12 +20,4 @@ public interface PaymentRefundRepository extends JpaRepository<PaymentRefund, St
     /** Until a failed/unknown provider refund is verified unpaid it keeps its refund budget. */
     @Query("select coalesce(sum(r.amount),0) from PaymentRefund r where r.payment.id=:paymentId and r.budgetReserved=true")
     BigDecimal sumReservedAmountByPaymentId(@Param("paymentId") String paymentId);
-
-    @Query("""
-            select coalesce(sum(refund.amount), 0)
-            from PaymentRefund refund
-            where refund.payment.id = :paymentId
-              and refund.status = com.fashionstore.payment.entity.enumeration.PaymentRefundStatus.COMPLETED
-            """)
-    BigDecimal sumCompletedAmountByPaymentId(@Param("paymentId") String paymentId);
 }
