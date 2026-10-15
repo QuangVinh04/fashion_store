@@ -51,6 +51,7 @@ public class OrderController {
 
     com.fashionstore.order.service.OrderReceiptService orderReceiptService;
     com.fashionstore.order.service.OrderCancellationService orderCancellationService;
+    com.fashionstore.order.service.ReturnPickupService returnPickupService;
 
     @PostMapping("/{id}/confirm-receipt")
     public ApiResponse<OrderResponse> confirmReceipt(@PathVariable String id) {
@@ -151,6 +152,25 @@ public class OrderController {
         return ApiResponse.<ReturnRequestResponse>builder()
                 .message("Return request submitted successfully")
                 .data(returnService.createReturnRequest(id, request))
+                .build();
+    }
+
+    @Operation(
+            summary = "Khách hủy yêu cầu trả hàng",
+            description =
+                    """
+Hủy được khi yêu cầu còn `REQUESTED`, hoặc đã duyệt nhưng GHN chưa lấy hàng (`APPROVED`): khi đó hệ thống
+hủy đơn trả bên GHN và chỉ đóng yêu cầu sau khi GHN xác nhận. Đóng xong đơn chuyển `COMPLETED` ngay và
+không tạo được yêu cầu mới. Từ lúc GHN đã lấy hàng (`IN_TRANSIT`) thì không hủy được.
+
+Mã lỗi: `4019` không có yêu cầu của bạn (404) · `4025` đã lấy hàng/đã xử lý nên không hủy được (409) ·
+502 GHN chưa xác nhận hủy (thử lại).""")
+    @PostMapping("/{id}/return-request/cancel")
+    public ApiResponse<ReturnRequestResponse> cancelReturnRequest(@PathVariable("id") String id) {
+        returnPickupService.cancelByCustomer(id);
+        return ApiResponse.<ReturnRequestResponse>builder()
+                .message("Return request cancelled successfully")
+                .data(returnService.getReturnRequestByOrderId(id))
                 .build();
     }
 

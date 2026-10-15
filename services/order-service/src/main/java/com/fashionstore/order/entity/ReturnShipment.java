@@ -12,6 +12,8 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
 
+import java.time.Instant;
+
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -41,4 +43,23 @@ public class ReturnShipment extends BaseEntity {
     @Column(nullable = false, length = 30)
     @Builder.Default
     ReturnShipmentStatus status = ReturnShipmentStatus.READY_TO_PICK;
+
+    @Column(name = "picked_at")
+    Instant pickedAt;
+
+    @Column(name = "arrived_at")
+    Instant arrivedAt;
+
+    @Column(name = "cancelled_at")
+    Instant cancelledAt;
+
+    @Column(name = "last_ghn_status", length = 40)
+    String lastGhnStatus;
+
+    @Column(name = "cancel_attempts", nullable = false)
+    @Builder.Default
+    int cancelAttempts = 0;
+
+    @Column(name = "last_reconciled_at")
+    Instant lastReconciledAt;
 }

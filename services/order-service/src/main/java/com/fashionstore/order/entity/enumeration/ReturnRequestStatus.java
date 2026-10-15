@@ -3,6 +3,8 @@ package com.fashionstore.order.entity.enumeration;
 public enum ReturnRequestStatus {
     REQUESTED,
     APPROVED,
+    /** GHN đã lấy hàng tại khách: khóa hủy, chờ kho nhận. */
+    IN_TRANSIT,
     RECEIVED,
     REFUNDED,
     REJECTED,

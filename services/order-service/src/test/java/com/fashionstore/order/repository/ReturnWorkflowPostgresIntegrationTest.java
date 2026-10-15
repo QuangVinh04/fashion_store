@@ -94,7 +94,9 @@ class ReturnWorkflowPostgresIntegrationTest {
     @Autowired JdbcTemplate jdbc;
     @Autowired com.fashionstore.order.service.ShipmentService shipmentService;
     @Autowired ShipmentRepository shipments;
+    @Autowired com.fashionstore.order.repository.ReturnShipmentRepository returnShipments;
     @MockitoBean com.fashionstore.order.client.GhnClient ghn;
+    @MockitoBean com.fashionstore.order.service.ReturnPickupService returnPickupService;
     @MockitoBean com.fashionstore.order.client.CatalogClient productCatalog;
     @MockitoBean com.fashionstore.order.config.GhnProperties ghnProperties;
     @MockitoBean com.fashionstore.order.service.OrderCancellationSagaService cancellations;
@@ -191,6 +193,52 @@ class ReturnWorkflowPostgresIntegrationTest {
                                 Long.class,
                                 requested.getId()))
                 .isEqualTo(1);
+    }
+
+    @Test
+    void pickupReconcileAndLegacyExpiryQueriesTargetTheRightReturns() {
+        Instant cutoff = NOW.minusSeconds(7 * 24 * 3600);
+        var overdue = approvedReturn(NOW.minusSeconds(2 * 24 * 3600));
+        overdue.setApprovedAt(NOW.minusSeconds(8 * 24 * 3600));
+        returns.saveAndFlush(overdue);
+        var fresh = approvedReturn(NOW.minusSeconds(2 * 24 * 3600));
+        var legacy = approvedReturn(NOW.minusSeconds(2 * 24 * 3600));
+        legacy.setApprovedAt(NOW.minusSeconds(8 * 24 * 3600));
+        returns.saveAndFlush(legacy);
+        var overdueShipment =
+                returnShipments.saveAndFlush(
+                        com.fashionstore.order.entity.ReturnShipment.builder()
+                                .returnRequest(overdue)
+                                .ghnOrderCode("GHN-OVERDUE-" + overdue.getId())
+                                .build());
+        returnShipments.saveAndFlush(
+                com.fashionstore.order.entity.ReturnShipment.builder()
+                        .returnRequest(fresh)
+                        .ghnOrderCode("GHN-FRESH-" + fresh.getId())
+                        .build());
+        var page = org.springframework.data.domain.PageRequest.of(0, 100);
+
+        assertThat(returnShipments.findPickupOverdueReturnIds(cutoff, 5, page))
+                .contains(overdue.getId())
+                .doesNotContain(fresh.getId(), legacy.getId());
+        assertThat(returnShipments.findOpenForReconcile(NOW, page))
+                .contains(overdue.getId(), fresh.getId())
+                .doesNotContain(legacy.getId());
+        // Phiếu duyệt từ trước khi có đơn trả GHN vẫn hết hạn theo cách cũ; phiếu có đơn GHN thì không.
+        assertThat(returns.findUnsentCustomerReturnIds(cutoff))
+                .contains(legacy.getId())
+                .doesNotContain(overdue.getId(), fresh.getId());
+
+        overdueShipment.setLastReconciledAt(NOW);
+        overdueShipment.setCancelAttempts(5);
+        returnShipments.saveAndFlush(overdueShipment);
+        assertThat(returnShipments.findOpenForReconcile(NOW, page)).doesNotContain(overdue.getId());
+        assertThat(returnShipments.findPickupOverdueReturnIds(cutoff, 5, page)).doesNotContain(overdue.getId());
+        assertThat(returnShipments.countPickupCancelExhausted(5, cutoff)).isGreaterThanOrEqualTo(1);
+        assertThat(returnShipments.countNeedingAttention()).isGreaterThanOrEqualTo(0);
+        assertThat(returns.countAwaitingReviewSince(java.time.LocalDateTime.now().plusDays(1))).isGreaterThanOrEqualTo(0);
+        assertThat(returnShipments.countInTransitSince(NOW)).isGreaterThanOrEqualTo(0);
+        assertThat(returnShipments.countArrivedUnreceivedSince(NOW)).isGreaterThanOrEqualTo(0);
     }
 
     @Test

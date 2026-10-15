@@ -57,7 +57,8 @@ class ReturnRefundMessagingTest {
                         mock(ShipmentRepository.class),
                         outbox,
                         notifications,
-                        mock(com.fashionstore.order.repository.ReturnShipmentRepository.class));
+                        mock(com.fashionstore.order.repository.ReturnShipmentRepository.class),
+                        mock(com.fashionstore.order.service.ReturnPickupService.class));
         order =
                 Order.builder()
                         .userId("buyer")

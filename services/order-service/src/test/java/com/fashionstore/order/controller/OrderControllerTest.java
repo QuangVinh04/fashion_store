@@ -31,13 +31,33 @@ class OrderControllerTest {
     @Mock
     private com.fashionstore.order.service.ReturnService returnService;
 
+    @Mock
+    private com.fashionstore.order.service.ReturnPickupService returnPickupService;
+
     @BeforeEach
     void setUp() {
         mockMvc = MockMvcBuilders.standaloneSetup(new OrderController(orderService, returnService,
                 org.mockito.Mockito.mock(com.fashionstore.order.service.OrderReceiptService.class),
-                org.mockito.Mockito.mock(com.fashionstore.order.service.OrderCancellationService.class)))
+                org.mockito.Mockito.mock(com.fashionstore.order.service.OrderCancellationService.class),
+                returnPickupService))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
+    }
+
+    @Test
+    void cancelReturnRequest_cancelsThroughThePickupServiceAndReturnsTheClosedRequest() throws Exception {
+        when(returnService.getReturnRequestByOrderId("ord-1"))
+                .thenReturn(com.fashionstore.order.dto.ReturnRequestResponse.builder()
+                        .orderId("ord-1")
+                        .status(com.fashionstore.order.entity.enumeration.ReturnRequestStatus.CANCELLED)
+                        .build());
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .post("/api/v1/orders/ord-1/return-request/cancel"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("CANCELLED"));
+
+        org.mockito.Mockito.verify(returnPickupService).cancelByCustomer("ord-1");
     }
 
     @Test

@@ -35,8 +35,18 @@ public interface ReturnRequestRepository extends JpaRepository<ReturnRequest, St
                     + " where r.kind = com.fashionstore.order.entity.enumeration.ReturnRequestKind.CUSTOMER_RETURN"
                     + " and r.status in (com.fashionstore.order.entity.enumeration.ReturnRequestStatus.APPROVED,"
                     + " com.fashionstore.order.entity.enumeration.ReturnRequestStatus.RETURN_APPROVED)"
-                    + " and r.receivedAt is null and r.closedAt is null and r.approvedAt <= :cutoff")
+                    + " and r.receivedAt is null and r.closedAt is null and r.approvedAt <= :cutoff"
+                    + " and not exists (select 1 from ReturnShipment s where s.returnRequest.id = r.id)")
     java.util.List<String> findUnsentCustomerReturnIds(@Param("cutoff") java.time.Instant cutoff);
+
+    /** Yêu cầu chờ admin duyệt/từ chối quá hạn SLA (tạo trước {@code cutoff}). */
+    @Query(
+            "select count(r) from ReturnRequest r"
+                    + " where r.kind = com.fashionstore.order.entity.enumeration.ReturnRequestKind.CUSTOMER_RETURN"
+                    + " and r.status in (com.fashionstore.order.entity.enumeration.ReturnRequestStatus.REQUESTED,"
+                    + " com.fashionstore.order.entity.enumeration.ReturnRequestStatus.PENDING)"
+                    + " and r.createdAt < :cutoff")
+    long countAwaitingReviewSince(@Param("cutoff") java.time.LocalDateTime cutoff);
 
     Page<ReturnRequest> findByStatus(ReturnRequestStatus status, Pageable pageable);
 

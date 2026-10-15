@@ -59,6 +59,7 @@ class ReturnServiceImplTest {
     @Mock private com.fashionstore.order.event.OutboxEventRecorder outboxEventRecorder;
     @Mock private com.fashionstore.order.service.OrderNotificationService notifications;
     @Mock private com.fashionstore.order.repository.ReturnShipmentRepository returnShipmentRepository;
+    @Mock private com.fashionstore.order.service.ReturnPickupService returnPickupService;
 
     private ObjectMapper objectMapper;
     private ReturnServiceImpl service;
@@ -80,7 +81,8 @@ class ReturnServiceImplTest {
                         shipmentRepository,
                         outboxEventRecorder,
                         notifications,
-                        returnShipmentRepository);
+                        returnShipmentRepository,
+                        returnPickupService);
         org.mockito.Mockito.lenient()
                 .when(transactionManager.getTransaction(any()))
                 .thenReturn(new org.springframework.transaction.support.SimpleTransactionStatus());
@@ -896,6 +898,21 @@ class ReturnServiceImplTest {
                         org.mockito.ArgumentMatchers.contains("CSKH sẽ liên hệ"));
     }
 
+    @Test
+    void receiveReturn_acceptsAReturnThatGhnAlreadyPickedUp() {
+        Order order = deliveredOrder();
+        ReturnRequest request = returnRequest(order, ReturnRequestStatus.IN_TRANSIT);
+        stubLocks(order, request);
+
+        var response =
+                service.receiveReturn(
+                        "ret-1",
+                        new com.fashionstore.order.dto.ReceiveReturnRequest(true, "Nguyên tem", List.of()));
+
+        assertThat(response.getStatus()).isEqualTo(ReturnRequestStatus.RECEIVED);
+        assertThat(request.getReceivedAt()).isNotNull();
+    }
+
     // ----- lịch sử ghi đúng trạng thái order -----
 
     @Test
@@ -932,6 +949,20 @@ class ReturnServiceImplTest {
         verify(orderStatusHistoryRepository).save(history.capture());
         assertThat(history.getValue().getFromStatus()).isEqualTo(OrderStatus.RETURNED);
         assertThat(history.getValue().getToStatus()).isEqualTo(OrderStatus.RETURNED);
+    }
+
+    @Test
+    void cancelReturn_whenTheReturnHasAGhnShipment_goesThroughThePickupServiceSoGhnIsCancelledToo() {
+        Order order = deliveredOrder();
+        ReturnRequest request = returnRequest(order, ReturnRequestStatus.APPROVED);
+        when(returnRequestRepository.findById("ret-1")).thenReturn(Optional.of(request));
+        when(returnShipmentRepository.findByReturnRequestId("ret-1"))
+                .thenReturn(Optional.of(com.fashionstore.order.entity.ReturnShipment.builder().ghnOrderCode("GHN-RET-1").build()));
+
+        service.cancelReturn("ret-1", new com.fashionstore.order.dto.CancelReturnRequest("Khách đổi ý"));
+
+        verify(returnPickupService).cancelByAdmin("ret-1", "Khách đổi ý");
+        verify(orderStatusHistoryRepository, never()).save(any());
     }
 
     private Order deliveredOrder() {

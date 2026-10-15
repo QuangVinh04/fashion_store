@@ -36,6 +36,7 @@ import com.fashionstore.order.repository.OrderRepository;
 import com.fashionstore.order.repository.OrderStatusHistoryRepository;
 import com.fashionstore.order.repository.ReturnRequestRepository;
 import com.fashionstore.order.repository.ReturnShipmentRepository;
+import com.fashionstore.order.service.ReturnPickupService;
 import com.fashionstore.order.repository.ShipmentRepository;
 import com.fashionstore.order.service.OrderNotificationService;
 import com.fashionstore.order.service.OrderReceiptService;
@@ -85,6 +86,7 @@ public class ReturnServiceImpl implements ReturnService {
     OutboxEventRecorder outboxEventRecorder;
     OrderNotificationService notifications;
     ReturnShipmentRepository returnShipmentRepository;
+    ReturnPickupService returnPickupService;
 
     @Override
     @Transactional(propagation = Propagation.NEVER)
@@ -425,6 +427,7 @@ public class ReturnServiceImpl implements ReturnService {
                                 return toResponse(returned);
                             }
                             if (returned.getStatus() != ReturnRequestStatus.APPROVED
+                                            && returned.getStatus() != ReturnRequestStatus.IN_TRANSIT
                                             && returned.getStatus()
                                                     != ReturnRequestStatus.RETURN_APPROVED
                                     || returned.getKind() == ReturnRequestKind.VERIFIED_LOSS
@@ -468,7 +471,7 @@ public class ReturnServiceImpl implements ReturnService {
     }
 
     @Override
-    @Transactional
+    @Transactional(propagation = Propagation.NEVER)
     @PreAuthorize("hasRole('ADMIN')")
     public ReturnRequestResponse cancelReturn(String returnRequestId, CancelReturnRequest request) {
         String adminId = currentUserProvider.getCurrentUserId();
@@ -478,6 +481,22 @@ public class ReturnServiceImpl implements ReturnService {
                 || request.reason().length() > 500) {
             throw new AppException(OrderErrorCode.RETURN_REJECT_REASON_REQUIRED);
         }
+        String reason = request.reason().trim();
+        if (returnShipmentRepository.findByReturnRequestId(returnRequestId).isPresent()) {
+            // Có đơn trả bên GHN: phải hủy cả bên GHN (ngoài transaction) trước khi đóng phiếu.
+            returnPickupService.cancelByAdmin(returnRequestId, reason);
+            return toResponse(
+                    returnRequestRepository
+                            .findById(returnRequestId)
+                            .orElseThrow(
+                                    () -> new AppException(OrderErrorCode.RETURN_REQUEST_NOT_FOUND)));
+        }
+        return new TransactionTemplate(transactionManager)
+                .execute(status -> cancelWithoutGhnShipment(returnRequestId, adminId, reason));
+    }
+
+    private ReturnRequestResponse cancelWithoutGhnShipment(
+            String returnRequestId, String adminId, String reason) {
         String orderId =
                 returnRequestRepository
                         .findOrderIdByReturnId(returnRequestId)
@@ -505,7 +524,7 @@ public class ReturnServiceImpl implements ReturnService {
                         && returned.getStatus() != ReturnRequestStatus.RETURN_APPROVED) {
             throw new AppException(OrderErrorCode.RETURN_WORKFLOW_CONFLICT);
         }
-        closeAsCancelled(returned, adminId, "RETURN_CANCELLED", request.reason().trim());
+        closeAsCancelled(returned, adminId, "RETURN_CANCELLED", reason);
         return toResponse(returned);
     }
 

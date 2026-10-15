@@ -39,13 +39,16 @@ class ShipmentControllerTest {
     @Mock
     ShipmentService shipmentService;
 
+    @Mock
+    com.fashionstore.order.service.ReturnPickupService returnPickupService;
+
     GhnProperties ghnProperties;
 
     @BeforeEach
     void setUp() {
         ghnProperties = new GhnProperties();
         ghnProperties.setWebhookToken("fashion-store-ghn-webhook-secret");
-        mockMvc = MockMvcBuilders.standaloneSetup(new ShipmentController(shipmentService, ghnProperties))
+        mockMvc = MockMvcBuilders.standaloneSetup(new ShipmentController(shipmentService, ghnProperties, returnPickupService))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
     }
@@ -106,6 +109,21 @@ class ShipmentControllerTest {
                 .andExpect(jsonPath("$.message").value("Processed GHN callback successfully"));
 
         verify(shipmentService).handleGhnCallback(any(GhnWebhookPayload.class));
+    }
+
+    @Test
+    void handleGhnCallback_forAReturnShipment_isHandledByTheReturnLegAndNeverTheOutboundOne() throws Exception {
+        when(returnPickupService.handleGhnCallback(any(GhnWebhookPayload.class))).thenReturn(true);
+        GhnWebhookPayload payload = GhnWebhookPayload.builder().orderCode("GHN-RET-1").status("picked").build();
+
+        mockMvc.perform(post("/api/v1/shipping/ghn/webhook")
+                        .header("Token", "fashion-store-ghn-webhook-secret")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(payload)))
+                .andExpect(status().isOk());
+
+        verify(returnPickupService).handleGhnCallback(any(GhnWebhookPayload.class));
+        verify(shipmentService, never()).handleGhnCallback(any(GhnWebhookPayload.class));
     }
 
     @Test

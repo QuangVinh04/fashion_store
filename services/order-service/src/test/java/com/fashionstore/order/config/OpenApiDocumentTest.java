@@ -63,6 +63,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class OpenApiDocumentTest {
     @MockitoBean private com.fashionstore.order.service.OrderCancellationService orderCancellationService;
     @MockitoBean private com.fashionstore.order.service.OrderSagaTimeoutService orderSagaTimeoutService;
+    @MockitoBean private com.fashionstore.order.service.ReturnPickupService returnPickupService;
     @MockitoBean private com.fashionstore.order.service.OrderReceiptService orderReceiptService;
     @MockitoBean
     private com.fashionstore.order.service.ShipmentService shipmentService;
@@ -116,6 +117,7 @@ class OpenApiDocumentTest {
                 .andExpect(jsonPath("$.paths['/api/v1/orders/{id}/history'].get.summary").exists())
                 .andExpect(jsonPath("$.paths['/api/v1/orders/{id}/return-request'].post.summary").exists())
                 .andExpect(jsonPath("$.paths['/api/v1/orders/{id}/return-request'].get.summary").exists())
+                .andExpect(jsonPath("$.paths['/api/v1/orders/{id}/return-request/cancel'].post.summary").exists())
                 .andExpect(jsonPath("$.paths['/api/v1/admin/orders/returns'].get.summary").exists())
                 .andExpect(jsonPath("$.paths['/api/v1/admin/orders/returns/{id}/approve'].post.summary").exists())
                 .andExpect(jsonPath("$.paths['/api/v1/admin/orders/returns/{id}/reject'].post.summary").exists())

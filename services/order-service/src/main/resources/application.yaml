@@ -74,8 +74,14 @@ spring:
         dialect: org.hibernate.dialect.PostgreSQLDialect
 app:
   returns:
-    pickup-automation-enabled: ${RETURN_PICKUP_AUTOMATION_ENABLED:false}
-    pickup-scan-delay-ms: ${RETURN_PICKUP_SCAN_DELAY_MS:60000}
+    # Các hạn của vòng đời trả hàng, quét theo nhịp của auto-completion-delay-ms bên dưới.
+    admin-review-sla-days: ${RETURN_ADMIN_REVIEW_SLA_DAYS:3}
+    pickup-timeout-days: ${RETURN_PICKUP_TIMEOUT_DAYS:7}
+    in-transit-alert-days: ${RETURN_IN_TRANSIT_ALERT_DAYS:14}
+    arrival-receive-sla-days: ${RETURN_ARRIVAL_RECEIVE_SLA_DAYS:3}
+    reconcile-interval-minutes: ${RETURN_RECONCILE_INTERVAL_MINUTES:30}
+    pickup-cancel-max-attempts: ${RETURN_PICKUP_CANCEL_MAX_ATTEMPTS:5}
+    batch-size: ${RETURN_SCAN_BATCH_SIZE:20}
   order:
     auto-completion-enabled: ${ORDER_AUTO_COMPLETION_ENABLED:true}
     auto-completion-delay-ms: ${ORDER_AUTO_COMPLETION_DELAY_MS:60000}

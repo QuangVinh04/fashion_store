@@ -59,6 +59,7 @@ class ReturnRefundTransactionIntegrationTest {
     @MockitoBean CurrentUserProvider actor;
     @MockitoBean CatalogFeignClient catalog;
     @MockitoBean GhnClient carrier;
+    @MockitoBean com.fashionstore.order.service.ReturnPickupService returnPickupService;
     @MockitoBean com.fashionstore.order.service.OrderNotificationService notifications;
     @MockitoSpyBean OutboxEventRecorder outbox;
 

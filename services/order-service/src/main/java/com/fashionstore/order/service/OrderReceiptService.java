@@ -195,6 +195,26 @@ public class OrderReceiptService {
                 .isPresent();
     }
 
+    /**
+     * Phiếu trả hàng đã đóng mà không hoàn tiền (hủy, GHN hủy, quá hạn lấy hàng): đơn quay lại luồng
+     * bình thường và hoàn tất ngay, không chờ hết hạn đổi trả. Đơn không còn DELIVERED thì bỏ qua.
+     */
+    public void completeAfterReturnClosed(Order order, Instant now, String actor, String reason) {
+        if (order.getStatus() != OrderStatus.DELIVERED) {
+            return;
+        }
+        order.setStatus(OrderStatus.COMPLETED);
+        order.setCompletedAt(now);
+        order.setCompletionSource("RETURN_CLOSED");
+        record(
+                order,
+                OrderStatus.DELIVERED,
+                OrderStatus.COMPLETED,
+                "RETURN_CLOSED_ORDER_COMPLETED",
+                actor,
+                reason);
+    }
+
     private void complete(Order order, Instant now, String source, String actor) {
         order.setStatus(OrderStatus.COMPLETED);
         order.setCompletedAt(now);

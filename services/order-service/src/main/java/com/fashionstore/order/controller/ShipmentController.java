@@ -31,6 +31,7 @@ public class ShipmentController {
 
     ShipmentService shipmentService;
     GhnProperties ghnProperties;
+    com.fashionstore.order.service.ReturnPickupService returnPickupService;
 
     @Operation(summary = "Admin tạo vận đơn GHN cho đơn hàng")
     @PreAuthorize("hasRole('ADMIN')")
@@ -68,7 +69,10 @@ public class ShipmentController {
             throw new AppException(ErrorCode.UNAUTHENTICATED);
         }
 
-        shipmentService.handleGhnCallback(payload);
+        // Mã GHN của đơn trả hàng (khách -> kho) đi nhánh riêng: cùng chữ "returned" nhưng nghĩa ngược.
+        if (!returnPickupService.handleGhnCallback(payload)) {
+            shipmentService.handleGhnCallback(payload);
+        }
         return ApiResponse.<Void>builder()
                 .message("Processed GHN callback successfully")
                 .build();

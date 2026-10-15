@@ -52,6 +52,12 @@ public class GhnWebhookPayload {
     @JsonAlias({"CODTransferDate", "cod_transfer_date", "codTransferDate"})
     String codTransferDate;
 
+    @JsonAlias({"Reason", "reason"})
+    String reason;
+
+    @JsonAlias({"ReasonCode", "reason_code", "reasonCode"})
+    String reasonCode;
+
     @JsonAlias({"PodURL", "pod_url", "podUrl"})
     String podUrl;
 }
