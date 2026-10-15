@@ -46,6 +46,91 @@ class GhnClientTest {
                 .provinceId(1000001).wardId(1003646).build();
     }
 
+    private com.fashionstore.order.dto.ReturnPickup pickup() {
+        return new com.fashionstore.order.dto.ReturnPickup(
+                "ret-1", "ORD-1", "Nguyen Van A", "0987654321", "123 Le Loi, Phường Sài Gòn, Hồ Chí Minh",
+                "Phường Sài Gòn", "Hồ Chí Minh", 600,
+                List.of(new com.fashionstore.order.dto.ReturnPickup.Item("Áo khoác", "var-1", 1, BigDecimal.valueOf(300000))));
+    }
+
+    private void configureWarehouse() {
+        properties.setToken("token");
+        properties.setShopId("42");
+        var warehouse = properties.getReturnWarehouse();
+        warehouse.setName("Kho hoàn hàng");
+        warehouse.setPhone("0900000001");
+        warehouse.setAddress("1 Nguyen Hue");
+        warehouse.setWardName("Phường Bến Nghé");
+        warehouse.setProvinceName("Hồ Chí Minh");
+    }
+
+    @Test void createReturnOrder_picksUpAtTheCustomerAndDeliversToTheWarehouseAtTheShopsCost() {
+        configureWarehouse();
+        when(ghnFeignClient.createOrder(eq("token"), eq("42"), any())).thenReturn(
+                GhnCreateOrderResponse.builder().data(GhnCreateOrderResponse.CreateOrderData.builder()
+                        .orderCode("GHN-RET-1").build()).build());
+
+        assertThat(client.createReturnOrder(pickup())).isEqualTo("GHN-RET-1");
+
+        ArgumentCaptor<GhnCreateOrderRequest> captor = ArgumentCaptor.forClass(GhnCreateOrderRequest.class);
+        verify(ghnFeignClient).createOrder(eq("token"), eq("42"), captor.capture());
+        var request = captor.getValue();
+        assertThat(request.getFromName()).isEqualTo("Nguyen Van A");
+        assertThat(request.getFromPhone()).isEqualTo("0987654321");
+        assertThat(request.getFromAddress()).isEqualTo("123 Le Loi, Phường Sài Gòn, Hồ Chí Minh");
+        assertThat(request.getFromWardName()).isEqualTo("Phường Sài Gòn");
+        assertThat(request.getFromProvinceName()).isEqualTo("Hồ Chí Minh");
+        assertThat(request.getIsNewFromAddress()).isTrue();
+        assertThat(request.getToName()).isEqualTo("Kho hoàn hàng");
+        assertThat(request.getToPhone()).isEqualTo("0900000001");
+        assertThat(request.getToAddress()).isEqualTo("1 Nguyen Hue");
+        assertThat(request.getToWardName()).isEqualTo("Phường Bến Nghé");
+        assertThat(request.getToProvinceName()).isEqualTo("Hồ Chí Minh");
+        assertThat(request.getIsNewToAddress()).isTrue();
+        assertThat(request.getPaymentTypeId()).isEqualTo(1);
+        assertThat(request.getCodAmount()).isEqualByComparingTo("0");
+        assertThat(request.getClientOrderCode()).isEqualTo("RET-ret-1");
+        assertThat(request.getWeight()).isEqualTo(600);
+        assertThat(request.getItems()).hasSize(1);
+    }
+
+    @Test void createReturnOrder_withoutAWarehouseConfiguredFailsBeforeCallingGhn() {
+        properties.setToken("token");
+        properties.setShopId("42");
+
+        assertThatThrownBy(() -> client.createReturnOrder(pickup()))
+                .isInstanceOfSatisfying(AppException.class,
+                        e -> assertThat(e.getErrorCode()).isEqualTo(OrderErrorCode.RETURN_WAREHOUSE_NOT_CONFIGURED));
+        org.mockito.Mockito.verifyNoInteractions(ghnFeignClient);
+    }
+
+    @Test void createReturnOrder_withAnIncompletePickupAddressIsRejected() {
+        configureWarehouse();
+        var noWard = new com.fashionstore.order.dto.ReturnPickup(
+                "ret-1", "ORD-1", "A", "0987654321", "123 Le Loi", " ", "Hồ Chí Minh", 600, List.of());
+
+        assertThatThrownBy(() -> client.createReturnOrder(noWard))
+                .isInstanceOfSatisfying(AppException.class,
+                        e -> assertThat(e.getErrorCode()).isEqualTo(OrderErrorCode.SHIPPING_ADDRESS_INVALID));
+    }
+
+    @Test void createReturnOrder_ghnReplyWithoutAnOrderCodeIsAnUpstreamError() {
+        configureWarehouse();
+        when(ghnFeignClient.createOrder(eq("token"), eq("42"), any())).thenReturn(GhnCreateOrderResponse.builder().build());
+
+        assertThatThrownBy(() -> client.createReturnOrder(pickup()))
+                .isInstanceOfSatisfying(AppException.class,
+                        e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.UPSTREAM_SERVICE_ERROR));
+    }
+
+    @Test void createReturnOrder_inMockModeReturnsAStableMockCode() {
+        properties.setEnabled(false);
+        properties.setAllowMock(true);
+
+        assertThat(client.createReturnOrder(pickup())).isEqualTo("GHN_MOCK_RET_ORD-1");
+        org.mockito.Mockito.verifyNoInteractions(ghnFeignClient);
+    }
+
     @Test
     void orderDetailVerifiesShopAndKeepsSeparateCollectionAndTransferDates() throws Exception {
         properties.setToken("test-token");

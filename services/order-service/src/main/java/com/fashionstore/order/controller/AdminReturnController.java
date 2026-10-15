@@ -111,7 +111,19 @@ public class AdminReturnController {
                 .build();
     }
 
-    @Operation(summary = "Duyệt yêu cầu hoàn trả (Khách gửi hàng)")
+    @Operation(
+            summary = "Duyệt yêu cầu hoàn trả và đặt đơn trả hàng qua GHN",
+            description =
+                    """
+Duyệt = tạo đơn trả bên GHN (shipper lấy hàng tại địa chỉ giao của đơn, giao về kho nhận hàng trả,
+shop trả cước, không COD). Phản hồi có `returnTrackingCode` là mã vận đơn GHN chiều về.
+
+GHN lỗi thì yêu cầu giữ nguyên `REQUESTED` và có thể bấm lại an toàn: `client_order_code` duy nhất
+theo shop nên GHN không tạo đơn trùng. Gọi lại trên yêu cầu đã duyệt trả lại chính yêu cầu đó.
+
+Mã lỗi: `4019` không có yêu cầu (404) · `4002` đơn không còn `DELIVERED` (400) · `4021` yêu cầu đã xử lý
+(đã từ chối/hủy) (400) · `4017` địa chỉ lấy hàng thiếu phường/tỉnh (400) · `4035` chưa cấu hình kho nhận
+hàng trả (503) · `4025` yêu cầu đổi trạng thái trong lúc gọi GHN (409) · 502 GHN lỗi.""")
     @PostMapping("/{id}/approve")
     public ApiResponse<ReturnRequestResponse> approve(@PathVariable String id) {
         return ApiResponse.<ReturnRequestResponse>builder()

@@ -32,13 +32,32 @@ class AdminOrderControllerTest {
     private com.fashionstore.order.service.ReturnService returnService;
     @Mock
     private com.fashionstore.order.service.ShipmentService shipmentService;
+    @Mock
+    private com.fashionstore.order.service.OrderSagaTimeoutService sagaRecovery;
 
     @BeforeEach
     void setUp() {
         mockMvc = MockMvcBuilders.standaloneSetup(new AdminOrderController(orderService, returnService, shipmentService,
-                org.mockito.Mockito.mock(com.fashionstore.order.service.OrderCancellationService.class)))
+                org.mockito.Mockito.mock(com.fashionstore.order.service.OrderCancellationService.class),
+                sagaRecovery))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
+    }
+
+    @Test
+    void retryCheckoutSaga_restartsTheStuckStepAndReturnsTheSaga() throws Exception {
+        when(orderService.getOrderSaga("ord-1", com.fashionstore.order.entity.enumeration.OrderSagaType.CHECKOUT))
+                .thenReturn(com.fashionstore.order.dto.OrderSagaResponse.builder()
+                        .orderId("ord-1")
+                        .status(com.fashionstore.order.entity.enumeration.OrderSagaStatus.COMPENSATING)
+                        .build());
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .post("/api/v1/admin/orders/ord-1/saga/retry"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("COMPENSATING"));
+
+        org.mockito.Mockito.verify(sagaRecovery).retryFailedCheckout("ord-1");
     }
 
     @Test

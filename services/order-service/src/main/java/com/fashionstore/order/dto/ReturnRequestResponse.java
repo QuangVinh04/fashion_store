@@ -2,6 +2,7 @@ package com.fashionstore.order.dto;
 
 import com.fashionstore.order.entity.enumeration.ReturnRequestStatus;
 import com.fashionstore.order.entity.enumeration.ReturnRequestKind;
+import com.fashionstore.order.entity.enumeration.ReturnShipmentStatus;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -48,6 +49,9 @@ public class ReturnRequestResponse {
     Instant refundStartedAt;
     String refundFailureReason;
     Instant sendBackBy;
+    /** Mã vận đơn GHN chiều về (khách -> kho); null khi chưa duyệt hoặc không đi qua GHN. */
+    String returnTrackingCode;
+    ReturnShipmentStatus returnShipmentStatus;
     LocalDateTime createdAt;
     LocalDateTime updatedAt;
 }

@@ -4,6 +4,7 @@ package com.fashionstore.order.service.impl;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -57,6 +58,7 @@ class ReturnServiceImplTest {
     @Mock private com.fashionstore.order.repository.ShipmentRepository shipmentRepository;
     @Mock private com.fashionstore.order.event.OutboxEventRecorder outboxEventRecorder;
     @Mock private com.fashionstore.order.service.OrderNotificationService notifications;
+    @Mock private com.fashionstore.order.repository.ReturnShipmentRepository returnShipmentRepository;
 
     private ObjectMapper objectMapper;
     private ReturnServiceImpl service;
@@ -77,7 +79,8 @@ class ReturnServiceImplTest {
                         ghnClient,
                         shipmentRepository,
                         outboxEventRecorder,
-                        notifications);
+                        notifications,
+                        returnShipmentRepository);
         org.mockito.Mockito.lenient()
                 .when(transactionManager.getTransaction(any()))
                 .thenReturn(new org.springframework.transaction.support.SimpleTransactionStatus());
@@ -388,17 +391,37 @@ class ReturnServiceImplTest {
                                                 OrderErrorCode.RETURN_REQUEST_ALREADY_PROCESSED));
     }
 
-    @Test
-    void approveReturn_whenPending_authorizesReturnShippingWithoutMoneyOrStock() {
+    private Order deliveredOrderWithPickupAddress() {
         Order order =
                 Order.builder()
                         .userId("user-1")
                         .status(OrderStatus.DELIVERED)
+                        .orderCode("ORD-1")
                         .totalAmount(new BigDecimal("500000"))
                         .paymentId("pay-1")
+                        .address(
+                                com.fashionstore.order.entity.ShippingAddress.builder()
+                                        .recipientName("Nguyen Van A")
+                                        .recipientPhone("0987654321")
+                                        .province("Hồ Chí Minh")
+                                        .ward("Phường Sài Gòn")
+                                        .build())
+                        .shippingAddress("123 Le Loi, Phường Sài Gòn, Hồ Chí Minh")
+                        .items(
+                                new java.util.ArrayList<>(
+                                        java.util.List.of(
+                                                com.fashionstore.order.entity.OrderItem.builder()
+                                                        .productName("Áo khoác")
+                                                        .variantId("var-1")
+                                                        .quantity(1)
+                                                        .unitPrice(new BigDecimal("300000"))
+                                                        .build())))
                         .build();
         order.setId("ord-1");
+        return order;
+    }
 
+    private ReturnRequest requestedReturn(Order order) {
         ReturnRequest returnRequest =
                 ReturnRequest.builder()
                         .order(order)
@@ -407,31 +430,136 @@ class ReturnServiceImplTest {
                         .status(ReturnRequestStatus.PENDING)
                         .build();
         returnRequest.setId("ret-1");
-
         when(returnRequestRepository.findByIdForUpdate("ret-1"))
                 .thenReturn(Optional.of(returnRequest));
-        if (returnRequest.getOrder().getId() == null) returnRequest.getOrder().setId("ord-1");
         org.mockito.Mockito.lenient()
                 .when(returnRequestRepository.findOrderIdByReturnId("ret-1"))
-                .thenReturn(Optional.of(returnRequest.getOrder().getId()));
+                .thenReturn(Optional.of("ord-1"));
         org.mockito.Mockito.lenient()
-                .when(orderRepository.findByIdForUpdate(returnRequest.getOrder().getId()))
-                .thenReturn(Optional.of(returnRequest.getOrder()));
-        when(returnRequestRepository.save(any(ReturnRequest.class)))
+                .when(orderRepository.findByIdForUpdate("ord-1"))
+                .thenReturn(Optional.of(order));
+        org.mockito.Mockito.lenient()
+                .when(returnRequestRepository.save(any(ReturnRequest.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
-        when(orderRepository.findByIdForUpdate("ord-1")).thenReturn(Optional.of(order));
+        return returnRequest;
+    }
+
+    @Test
+    void approveReturn_whenPending_createsTheGhnReturnOrderAndApproves() {
+        Order order = deliveredOrderWithPickupAddress();
+        ReturnRequest returnRequest = requestedReturn(order);
+        when(shipmentRepository.findByOrderId("ord-1"))
+                .thenReturn(
+                        Optional.of(
+                                com.fashionstore.order.entity.Shipment.builder()
+                                        .weightGram(600)
+                                        .build()));
+        when(ghnClient.createReturnOrder(any())).thenReturn("GHN-RET-1");
+        java.util.concurrent.atomic.AtomicReference<com.fashionstore.order.entity.ReturnShipment>
+                saved = new java.util.concurrent.atomic.AtomicReference<>();
+        when(returnShipmentRepository.save(any(com.fashionstore.order.entity.ReturnShipment.class)))
+                .thenAnswer(
+                        inv -> {
+                            saved.set(inv.getArgument(0));
+                            return inv.getArgument(0);
+                        });
+        when(returnShipmentRepository.findByReturnRequestId("ret-1"))
+                .thenAnswer(inv -> Optional.ofNullable(saved.get()));
 
         ReturnRequestResponse response = service.approveReturn("ret-1");
 
         assertThat(response.getStatus()).isEqualTo(ReturnRequestStatus.APPROVED);
         assertThat(response.getReviewedBy()).isEqualTo("user-1");
+        assertThat(response.getReturnTrackingCode()).isEqualTo("GHN-RET-1");
         assertThat(order.getStatus()).isEqualTo(OrderStatus.DELIVERED);
+
+        ArgumentCaptor<com.fashionstore.order.dto.ReturnPickup> pickup =
+                ArgumentCaptor.forClass(com.fashionstore.order.dto.ReturnPickup.class);
+        verify(ghnClient).createReturnOrder(pickup.capture());
+        assertThat(pickup.getValue().returnId()).isEqualTo("ret-1");
+        assertThat(pickup.getValue().orderCode()).isEqualTo("ORD-1");
+        assertThat(pickup.getValue().senderName()).isEqualTo("Nguyen Van A");
+        assertThat(pickup.getValue().senderPhone()).isEqualTo("0987654321");
+        assertThat(pickup.getValue().senderAddress()).isEqualTo("123 Le Loi, Phường Sài Gòn, Hồ Chí Minh");
+        assertThat(pickup.getValue().senderWard()).isEqualTo("Phường Sài Gòn");
+        assertThat(pickup.getValue().senderProvince()).isEqualTo("Hồ Chí Minh");
+        assertThat(pickup.getValue().weightGram()).isEqualTo(600);
+        assertThat(pickup.getValue().items()).hasSize(1);
+
+        assertThat(saved.get().getGhnOrderCode()).isEqualTo("GHN-RET-1");
+        assertThat(saved.get().getReturnRequest()).isSameAs(returnRequest);
+        assertThat(saved.get().getStatus())
+                .isEqualTo(com.fashionstore.order.entity.enumeration.ReturnShipmentStatus.READY_TO_PICK);
+
         ArgumentCaptor<OrderStatusHistory> historyCaptor =
                 ArgumentCaptor.forClass(OrderStatusHistory.class);
         verify(orderStatusHistoryRepository).save(historyCaptor.capture());
         assertThat(historyCaptor.getValue().getAction()).isEqualTo("RETURN_APPROVED");
         assertThat(historyCaptor.getValue().getFromStatus()).isEqualTo(OrderStatus.DELIVERED);
         assertThat(historyCaptor.getValue().getToStatus()).isEqualTo(OrderStatus.DELIVERED);
+        verify(notifications)
+                .sendReturnStatusNotification(
+                        eq(order),
+                        eq("Yêu cầu trả hàng đã được duyệt"),
+                        org.mockito.ArgumentMatchers.contains("GHN-RET-1"));
+    }
+
+    @Test
+    void approveReturn_whenGhnFails_keepsTheRequestOpenForARetry() {
+        Order order = deliveredOrderWithPickupAddress();
+        ReturnRequest returnRequest = requestedReturn(order);
+        when(ghnClient.createReturnOrder(any()))
+                .thenThrow(new AppException(com.fashionstore.common.exception.ErrorCode.UPSTREAM_SERVICE_ERROR));
+
+        assertThatThrownBy(() -> service.approveReturn("ret-1")).isInstanceOf(AppException.class);
+
+        assertThat(returnRequest.getStatus()).isEqualTo(ReturnRequestStatus.PENDING);
+        assertThat(returnRequest.getApprovedAt()).isNull();
+        verify(returnShipmentRepository, never()).save(any());
+        verify(orderStatusHistoryRepository, never()).save(any());
+        verify(notifications, never()).sendReturnStatusNotification(any(), any(), any());
+    }
+
+    @Test
+    void approveReturn_whenRejectedWhileGhnWasBeingCalled_cancelsTheOrphanGhnOrder() {
+        Order order = deliveredOrderWithPickupAddress();
+        ReturnRequest returnRequest = requestedReturn(order);
+        when(ghnClient.createReturnOrder(any()))
+                .thenAnswer(
+                        inv -> {
+                            returnRequest.setStatus(ReturnRequestStatus.REJECTED);
+                            return "GHN-RET-1";
+                        });
+
+        assertThatThrownBy(() -> service.approveReturn("ret-1"))
+                .isInstanceOfSatisfying(
+                        AppException.class,
+                        ex ->
+                                assertThat(ex.getErrorCode())
+                                        .isEqualTo(OrderErrorCode.RETURN_WORKFLOW_CONFLICT));
+
+        verify(ghnClient).cancelPendingShipment("GHN-RET-1");
+        verify(returnShipmentRepository, never()).save(any());
+        assertThat(returnRequest.getStatus()).isEqualTo(ReturnRequestStatus.REJECTED);
+    }
+
+    @Test
+    void approveReturn_whenAnotherAdminApprovedMeanwhile_returnsItWithoutTouchingTheSharedGhnOrder() {
+        Order order = deliveredOrderWithPickupAddress();
+        ReturnRequest returnRequest = requestedReturn(order);
+        when(ghnClient.createReturnOrder(any()))
+                .thenAnswer(
+                        inv -> {
+                            returnRequest.setStatus(ReturnRequestStatus.APPROVED);
+                            return "GHN-RET-1";
+                        });
+
+        ReturnRequestResponse response = service.approveReturn("ret-1");
+
+        assertThat(response.getStatus()).isEqualTo(ReturnRequestStatus.APPROVED);
+        verify(ghnClient, never()).cancelPendingShipment(any());
+        verify(returnShipmentRepository, never()).save(any());
+        verify(orderStatusHistoryRepository, never()).save(any());
     }
 
     @Test

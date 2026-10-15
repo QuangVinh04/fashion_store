@@ -168,6 +168,32 @@ class ReturnWorkflowPostgresIntegrationTest {
     }
 
     @Test
+    void approvalStoresTheGhnReturnShipmentOnceEvenWhenRepeated() {
+        Order delivered = order(NOW.minusSeconds(2 * 24 * 3600));
+        var requested =
+                service.createReturnRequest(
+                        delivered.getId(),
+                        ReturnOrderRequest.builder().reason("Wrong size").build());
+        when(ghn.createReturnOrder(org.mockito.ArgumentMatchers.any())).thenReturn("GHN-RET-1");
+
+        var first = service.approveReturn(requested.getId());
+        var again = service.approveReturn(requested.getId());
+
+        assertThat(first.getStatus()).isEqualTo(ReturnRequestStatus.APPROVED);
+        assertThat(first.getReturnTrackingCode()).isEqualTo("GHN-RET-1");
+        assertThat(again.getReturnTrackingCode()).isEqualTo("GHN-RET-1");
+        verify(ghn, org.mockito.Mockito.times(1))
+                .createReturnOrder(org.mockito.ArgumentMatchers.any());
+        assertThat(
+                        jdbc.queryForObject(
+                                "select count(*) from return_shipment where return_request_id = ?"
+                                        + " and ghn_order_code = 'GHN-RET-1' and status = 'READY_TO_PICK'",
+                                Long.class,
+                                requested.getId()))
+                .isEqualTo(1);
+    }
+
+    @Test
     void activeReturnFreezesCompletionUntilRejectedAfterFailedQualityCheck() {
         ReturnRequest returned = approvedReturn(NOW.minusSeconds(8 * 24 * 3600));
         String evidenceId = UUID.randomUUID().toString();

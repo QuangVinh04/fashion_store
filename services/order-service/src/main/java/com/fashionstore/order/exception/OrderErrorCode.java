@@ -52,7 +52,9 @@ public enum OrderErrorCode implements BaseErrorCode {
     SHIPMENT_EVIDENCE_INVALID(4033, "Carrier shipment or financial evidence does not match this order", HttpStatus.BAD_REQUEST),
     RETURN_REFUND_AMOUNT_INVALID(4031, "Return refunds must equal the whole order paid amount", HttpStatus.BAD_REQUEST),
     RETURN_REFUND_UNCONFIRMED(4032, "Wallet refund is not confirmed; retry the same return request", HttpStatus.BAD_GATEWAY),
-    SHIPMENT_INITIATION_CONFLICT(4030,"Shipment creation needs reconciliation before retrying",HttpStatus.CONFLICT);
+    SHIPMENT_INITIATION_CONFLICT(4030,"Shipment creation needs reconciliation before retrying",HttpStatus.CONFLICT),
+    RETURN_WAREHOUSE_NOT_CONFIGURED(4035, "Return warehouse address is not configured", HttpStatus.SERVICE_UNAVAILABLE),
+    ORDER_SAGA_NOT_RETRYABLE(4034, "Only a FAILED checkout saga stopped at a replayable step can be retried", HttpStatus.CONFLICT);
 
 
     private final int code;

@@ -6,6 +6,7 @@ import com.fashionstore.common.payment.PaymentMethod;
 import com.fashionstore.order.config.GhnProperties;
 import com.fashionstore.order.dto.UserAddressDto;
 import com.fashionstore.order.dto.GhnCreateOrderRequest;
+import com.fashionstore.order.dto.ReturnPickup;
 import com.fashionstore.order.dto.GhnCreateOrderResponse;
 import com.fashionstore.order.dto.VerifiedGhnShipment;
 import java.time.Instant;
@@ -232,6 +233,90 @@ public class GhnClient {
             throw e;
         } catch (Exception e) {
             log.error("[GHN] Unexpected error while creating order: {}", e.getMessage(), e);
+            throw new AppException(ErrorCode.UPSTREAM_SERVICE_ERROR);
+        }
+    }
+
+    /**
+     * Tạo đơn trả hàng bên GHN: lấy tại địa chỉ khách ({@code from_*}), giao về kho nhận hàng trả
+     * ({@code to_*}), shop trả cước, không thu COD. {@code client_order_code} duy nhất theo shop và
+     * GHN trả lại mã cũ khi gửi lại cùng mã, nên gọi lại sau lỗi/timeout không tạo đơn trùng.
+     */
+    public String createReturnOrder(ReturnPickup pickup) {
+        if (pickup.senderProvince() == null || pickup.senderProvince().isBlank()
+                || pickup.senderWard() == null || pickup.senderWard().isBlank()) {
+            throw new AppException(OrderErrorCode.SHIPPING_ADDRESS_INVALID);
+        }
+
+        String token = ghnProperties.getToken();
+        boolean isMockAllowed = Boolean.TRUE.equals(ghnProperties.getAllowMock());
+        boolean isGhnConfigured = Boolean.TRUE.equals(ghnProperties.getEnabled()) && token != null && !token.isBlank();
+        if (!isGhnConfigured) {
+            if (isMockAllowed) {
+                String mockTracking = "GHN_MOCK_RET_" + pickup.orderCode();
+                log.info("[GHN] Not configured; returning mock return tracking code: {} (mock allowed)", mockTracking);
+                return mockTracking;
+            }
+            log.error("[GHN] GHN integration is not configured/disabled and mock is not allowed");
+            throw new AppException(ErrorCode.UPSTREAM_SERVICE_ERROR);
+        }
+
+        var warehouse = ghnProperties.getReturnWarehouse();
+        if (!warehouse.isComplete()) {
+            log.error("[GHN] app.ghn.return-warehouse.* is not fully configured");
+            throw new AppException(OrderErrorCode.RETURN_WAREHOUSE_NOT_CONFIGURED);
+        }
+
+        int effectiveWeight = pickup.weightGram() <= 0 ? 200 : pickup.weightGram();
+        List<GhnCreateOrderRequest.GhnItem> items = pickup.items().stream()
+                .map(item -> GhnCreateOrderRequest.GhnItem.builder()
+                        .name(item.name())
+                        .code(item.code())
+                        .quantity(item.quantity())
+                        .price(item.price())
+                        .weight(effectiveWeight / Math.max(1, pickup.items().size()))
+                        .build())
+                .toList();
+
+        GhnCreateOrderRequest request = GhnCreateOrderRequest.builder()
+                .paymentTypeId(1) // Shop trả cước chiều về
+                .clientOrderCode("RET-" + pickup.returnId())
+                .fromName(pickup.senderName())
+                .fromPhone(pickup.senderPhone())
+                .fromAddress(pickup.senderAddress())
+                .fromWardName(pickup.senderWard())
+                .fromProvinceName(pickup.senderProvince())
+                .isNewFromAddress(true)
+                .toName(warehouse.getName())
+                .toPhone(warehouse.getPhone())
+                .toAddress(warehouse.getAddress())
+                .toWardName(warehouse.getWardName())
+                .toProvinceName(warehouse.getProvinceName())
+                .isNewToAddress(true)
+                .content("Return order " + pickup.orderCode())
+                .codAmount(BigDecimal.ZERO)
+                .weight(effectiveWeight)
+                .length(20)
+                .width(20)
+                .height(10)
+                .serviceTypeId(effectiveWeight >= 20_000 ? 5 : 2)
+                .items(items)
+                .build();
+
+        try {
+            GhnCreateOrderResponse response = ghnFeignClient.createOrder(token, ghnProperties.getShopId(), request);
+            if (response != null && response.getData() != null && response.getData().getOrderCode() != null) {
+                return response.getData().getOrderCode();
+            }
+            log.warn("[GHN] Create return order response empty: {}", response);
+            throw new AppException(ErrorCode.UPSTREAM_SERVICE_ERROR);
+        } catch (FeignException e) {
+            log.error("[GHN] Feign error while creating return order: status={}, message={}", e.status(), e.getMessage());
+            throw new AppException(ErrorCode.UPSTREAM_SERVICE_ERROR);
+        } catch (AppException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("[GHN] Unexpected error while creating return order: {}", e.getMessage(), e);
             throw new AppException(ErrorCode.UPSTREAM_SERVICE_ERROR);
         }
     }

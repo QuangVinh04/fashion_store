@@ -22,6 +22,8 @@ abstract class OrderSagaTestFixture {
     OrderSagaRepository sagas = mock(OrderSagaRepository.class);
     OrderRepository orders = mock(OrderRepository.class);
     SagaOutbox outbox = mock(SagaOutbox.class);
+    io.micrometer.core.instrument.simple.SimpleMeterRegistry meters =
+            new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
     OrderSagaService listener;
     OrderSaga saga;
     Order order;
@@ -46,7 +48,8 @@ abstract class OrderSagaTestFixture {
                         mock(CartRepository.class),
                         mock(com.fashionstore.order.service.PromotionService.class),
                         mock(OrderStatusHistoryRepository.class),
-                        mock(com.fashionstore.order.service.OrderNotificationService.class));
+                        mock(com.fashionstore.order.service.OrderNotificationService.class),
+                        meters);
         saga = OrderSaga.start("order-1");
         saga.inventoryReserved("reservation-1");
         order =

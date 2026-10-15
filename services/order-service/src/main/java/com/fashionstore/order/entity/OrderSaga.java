@@ -192,6 +192,20 @@ public class OrderSaga {
 
     // ----- timeout / retry -----
 
+    /**
+     * Admin thử lại saga đã FAILED: trở về trạng thái của bước đang kẹt (CONFIRM_INVENTORY chạy
+     * tiến, các bước còn lại là bù trừ), bộ đếm và deadline làm mới. {@code reason} thay thông điệp
+     * lỗi kỹ thuật vì nó trở thành lý do huỷ đơn hiển thị cho khách nếu bù trừ chạy xong.
+     */
+    public void reopenAfterFailure(String reason) {
+        this.status =
+                currentStep == OrderSagaStep.CONFIRM_INVENTORY
+                        ? OrderSagaStatus.RUNNING
+                        : OrderSagaStatus.COMPENSATING;
+        this.failureReason = reason;
+        enterStep(currentStep);
+    }
+
     /** Phát lại command của bước hiện tại: lùi deadline và đếm thêm một lần thử. */
     public void retryCurrentStep() {
         int attempts = retryCount + 1;

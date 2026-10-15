@@ -36,6 +36,18 @@ public class GhnCreateOrderRequest {
     @Builder.Default
     String requiredNote = "CHOXEMHANGKHONGTHU";
 
+    @JsonProperty("from_name")
+    String fromName;
+    @JsonProperty("from_phone")
+    String fromPhone;
+    @JsonProperty("from_address")
+    String fromAddress;
+    @JsonProperty("from_ward_name")
+    String fromWardName;
+    @JsonProperty("from_province_name")
+    String fromProvinceName;
+    @JsonProperty("is_new_from_address")
+    Boolean isNewFromAddress;
     @JsonProperty("to_name")
     String toName;
 

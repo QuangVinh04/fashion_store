@@ -18,6 +18,10 @@ import com.fashionstore.order.dto.ReceiveReturnRequest;
 import com.fashionstore.order.dto.RejectReturnRequest;
 import com.fashionstore.order.dto.ReturnOrderRequest;
 import com.fashionstore.order.dto.ReturnRequestResponse;
+import com.fashionstore.order.dto.ReturnPickup;
+import com.fashionstore.order.entity.ReturnShipment;
+import com.fashionstore.order.entity.Shipment;
+import com.fashionstore.order.entity.ShippingAddress;
 import com.fashionstore.order.entity.Order;
 import com.fashionstore.order.entity.OrderStatusHistory;
 import com.fashionstore.order.entity.ReturnRequest;
@@ -31,6 +35,7 @@ import com.fashionstore.order.mapper.ReturnRequestMapper;
 import com.fashionstore.order.repository.OrderRepository;
 import com.fashionstore.order.repository.OrderStatusHistoryRepository;
 import com.fashionstore.order.repository.ReturnRequestRepository;
+import com.fashionstore.order.repository.ReturnShipmentRepository;
 import com.fashionstore.order.repository.ShipmentRepository;
 import com.fashionstore.order.service.OrderNotificationService;
 import com.fashionstore.order.service.OrderReceiptService;
@@ -79,6 +84,7 @@ public class ReturnServiceImpl implements ReturnService {
     ShipmentRepository shipmentRepository;
     OutboxEventRecorder outboxEventRecorder;
     OrderNotificationService notifications;
+    ReturnShipmentRepository returnShipmentRepository;
 
     @Override
     @Transactional(propagation = Propagation.NEVER)
@@ -157,34 +163,60 @@ public class ReturnServiceImpl implements ReturnService {
         return toResponse(returnRequest);
     }
 
+    /**
+     * Duyệt = đặt đơn trả hàng bên GHN (lấy tại khách, giao về kho). Gọi GHN nằm ngoài transaction
+     * như các lời gọi ra ngoài khác: pha 1 kiểm tra và chụp địa chỉ, pha 2 ghi kết quả. GHN lỗi thì
+     * yêu cầu giữ nguyên REQUESTED để admin bấm lại; {@code client_order_code} duy nhất theo shop
+     * nên gọi lại không tạo đơn trùng.
+     */
     @Override
-    @Transactional
+    @Transactional(propagation = Propagation.NEVER)
     @PreAuthorize("hasRole('ADMIN')")
     public ReturnRequestResponse approveReturn(String returnRequestId) {
         String adminId = currentUserProvider.getCurrentUserId();
-        String orderId =
-                returnRequestRepository.findOrderIdByReturnId(returnRequestId).orElse(null);
-        if (orderId != null) {
-            orderRepository.findByIdForUpdate(orderId);
-        }
-        ReturnRequest returnRequest =
-                returnRequestRepository
-                        .findByIdForUpdate(returnRequestId)
-                        .orElseThrow(
-                                () -> new AppException(OrderErrorCode.RETURN_REQUEST_NOT_FOUND));
+        TransactionTemplate transaction = new TransactionTemplate(transactionManager);
 
+        Approval approval = transaction.execute(status -> prepareApproval(returnRequestId));
+        if (approval.alreadyApproved() != null) {
+            return approval.alreadyApproved();
+        }
+
+        String ghnOrderCode = ghnClient.createReturnOrder(approval.pickup());
+
+        return transaction.execute(
+                status -> finishApproval(returnRequestId, adminId, ghnOrderCode));
+    }
+
+    /** Hoặc yêu cầu đã duyệt từ trước, hoặc bản chụp để tạo đơn GHN. */
+    private record Approval(ReturnRequestResponse alreadyApproved, ReturnPickup pickup) {}
+
+    private Approval prepareApproval(String returnRequestId) {
+        ReturnRequest returnRequest = lockOrderThenReturn(returnRequestId);
         if (returnRequest.getOrder() != null
                 && returnRequest.getOrder().getStatus() != OrderStatus.DELIVERED) {
             throw new AppException(OrderErrorCode.ORDER_STATUS_INVALID);
         }
-
-        if (returnRequest.getStatus() == ReturnRequestStatus.APPROVED
-                || returnRequest.getStatus() == ReturnRequestStatus.RETURN_APPROVED) {
-            return toResponse(returnRequest);
+        if (isApproved(returnRequest)) {
+            return new Approval(toResponse(returnRequest), null);
         }
         if (returnRequest.getStatus() != ReturnRequestStatus.REQUESTED
                 && returnRequest.getStatus() != ReturnRequestStatus.PENDING) {
             throw new AppException(OrderErrorCode.RETURN_REQUEST_ALREADY_PROCESSED);
+        }
+        return new Approval(null, pickupOf(returnRequest));
+    }
+
+    private ReturnRequestResponse finishApproval(
+            String returnRequestId, String adminId, String ghnOrderCode) {
+        ReturnRequest returnRequest = lockOrderThenReturn(returnRequestId);
+        if (isApproved(returnRequest)) {
+            // Admin khác duyệt trong lúc ta gọi GHN: cùng client_order_code nên cùng một đơn GHN.
+            return toResponse(returnRequest);
+        }
+        if (returnRequest.getStatus() != ReturnRequestStatus.REQUESTED
+                && returnRequest.getStatus() != ReturnRequestStatus.PENDING) {
+            cancelOrphanGhnOrder(ghnOrderCode);
+            throw new AppException(OrderErrorCode.RETURN_WORKFLOW_CONFLICT);
         }
 
         returnRequest.setStatus(ReturnRequestStatus.APPROVED);
@@ -192,31 +224,93 @@ public class ReturnServiceImpl implements ReturnService {
         returnRequest.setReviewedAt(LocalDateTime.now(clock));
         returnRequest.setApprovedAt(clock.instant());
         returnRequest = returnRequestRepository.save(returnRequest);
+        returnShipmentRepository.save(
+                ReturnShipment.builder()
+                        .returnRequest(returnRequest)
+                        .ghnOrderCode(ghnOrderCode)
+                        .build());
 
         if (returnRequest.getOrder() != null) {
-            OrderStatusHistory history =
+            orderStatusHistoryRepository.save(
                     OrderStatusHistory.builder()
                             .order(returnRequest.getOrder())
                             .fromStatus(OrderStatus.DELIVERED)
                             .toStatus(OrderStatus.DELIVERED)
                             .action("RETURN_APPROVED")
                             .changedBy(adminId)
-                            .reason("Admin phê duyệt yêu cầu trả hàng")
-                            .build();
-            orderStatusHistoryRepository.save(history);
+                            .reason("Admin phê duyệt yêu cầu trả hàng, mã vận đơn trả " + ghnOrderCode)
+                            .build());
             notifyCustomer(
                     returnRequest,
                     "Yêu cầu trả hàng đã được duyệt",
-                    "Vui lòng gửi hàng trả về trước ngày "
-                            + formatDate(returnRequest.getApprovedAt().plus(OrderReceiptService.RETURN_WINDOW))
-                            + ". Quá hạn, yêu cầu trả hàng sẽ tự động bị hủy.");
+                    "Shipper GHN sẽ liên hệ lấy hàng tại địa chỉ giao hàng của bạn (mã vận đơn "
+                            + ghnOrderCode
+                            + "). Nếu không lấy được hàng trước ngày "
+                            + formatDate(
+                                    returnRequest
+                                            .getApprovedAt()
+                                            .plus(OrderReceiptService.RETURN_WINDOW))
+                            + ", yêu cầu trả hàng sẽ tự động bị hủy.");
         }
 
         log.info(
-                "[Return] Approved return request {} for order {}",
+                "[Return] Approved return request {} for order {} with GHN return order {}",
                 returnRequestId,
-                returnRequest.getOrder() != null ? returnRequest.getOrder().getId() : null);
+                returnRequest.getOrder() != null ? returnRequest.getOrder().getId() : null,
+                ghnOrderCode);
         return toResponse(returnRequest);
+    }
+
+    /** Khóa Order trước Return như mọi chỗ khác. */
+    private ReturnRequest lockOrderThenReturn(String returnRequestId) {
+        String orderId = returnRequestRepository.findOrderIdByReturnId(returnRequestId).orElse(null);
+        if (orderId != null) {
+            orderRepository.findByIdForUpdate(orderId);
+        }
+        return returnRequestRepository
+                .findByIdForUpdate(returnRequestId)
+                .orElseThrow(() -> new AppException(OrderErrorCode.RETURN_REQUEST_NOT_FOUND));
+    }
+
+    private static boolean isApproved(ReturnRequest returnRequest) {
+        return returnRequest.getStatus() == ReturnRequestStatus.APPROVED
+                || returnRequest.getStatus() == ReturnRequestStatus.RETURN_APPROVED;
+    }
+
+    private ReturnPickup pickupOf(ReturnRequest returnRequest) {
+        Order order = returnRequest.getOrder();
+        ShippingAddress address = order.getAddress();
+        int weight =
+                shipmentRepository
+                        .findByOrderId(order.getId())
+                        .map(Shipment::getWeightGram)
+                        .orElse(0);
+        return new ReturnPickup(
+                returnRequest.getId(),
+                order.getOrderCode(),
+                address == null ? null : address.getRecipientName(),
+                address == null ? null : address.getRecipientPhone(),
+                order.getShippingAddress(),
+                address == null ? null : address.getWard(),
+                address == null ? null : address.getProvince(),
+                weight,
+                order.getItems().stream()
+                        .map(
+                                item ->
+                                        new ReturnPickup.Item(
+                                                item.getProductName(),
+                                                item.getVariantId(),
+                                                item.getQuantity(),
+                                                item.getUnitPrice()))
+                        .toList());
+    }
+
+    private void cancelOrphanGhnOrder(String ghnOrderCode) {
+        try {
+            ghnClient.cancelPendingShipment(ghnOrderCode);
+        } catch (RuntimeException failure) {
+            log.error("[Return] Could not cancel orphan GHN return order {}", ghnOrderCode, failure);
+        }
     }
 
     @Override
@@ -1135,6 +1229,15 @@ public class ReturnServiceImpl implements ReturnService {
                                 || request.getApprovedAt() == null
                         ? null
                         : request.getApprovedAt().plus(OrderReceiptService.RETURN_WINDOW);
-        return ReturnRequestMapper.toResponse(request, objectMapper, sendBackBy);
+        ReturnRequestResponse response =
+                ReturnRequestMapper.toResponse(request, objectMapper, sendBackBy);
+        returnShipmentRepository
+                .findByReturnRequestId(request.getId())
+                .ifPresent(
+                        shipment -> {
+                            response.setReturnTrackingCode(shipment.getGhnOrderCode());
+                            response.setReturnShipmentStatus(shipment.getStatus());
+                        });
+        return response;
     }
 }

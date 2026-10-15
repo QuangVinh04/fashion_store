@@ -1,5 +1,6 @@
 package com.fashionstore.order.service;
 
+import com.fashionstore.common.exception.AppException;
 import com.fashionstore.order.dto.SagaCommand;
 import com.fashionstore.order.entity.Order;
 import com.fashionstore.order.entity.OrderSaga;
@@ -9,6 +10,7 @@ import com.fashionstore.order.entity.enumeration.OrderSagaStep;
 import com.fashionstore.order.entity.enumeration.OrderSagaType;
 import com.fashionstore.order.entity.enumeration.OrderStatus;
 import com.fashionstore.order.event.SagaOutbox;
+import com.fashionstore.order.exception.OrderErrorCode;
 import com.fashionstore.order.repository.OrderRepository;
 import com.fashionstore.order.repository.OrderSagaRepository;
 import com.fashionstore.order.repository.OrderStatusHistoryRepository;
@@ -18,6 +20,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
@@ -40,6 +43,63 @@ public class OrderSagaTimeoutService {
     private final MeterRegistry meterRegistry;
     private final OrderStatusHistoryRepository orderStatusHistoryRepository;
     private final OrderNotificationService orderNotificationService;
+
+    /** Lý do hiển thị cho khách nếu đơn bị huỷ sau khi admin thử lại, thay cho thông điệp kỹ thuật. */
+    public static final String ADMIN_RETRY_REASON = "Đơn hàng bị huỷ do sự cố xử lý đơn";
+
+    /**
+     * Admin thử lại saga checkout FAILED: phát lại command của đúng bước đang kẹt để luồng (bù
+     * trừ) chạy tiếp. Khoá Order trước Saga như mọi nơi khác.
+     */
+    @Transactional
+    @PreAuthorize("hasRole('ADMIN')")
+    public void retryFailedCheckout(String orderId) {
+        Order order =
+                orderRepository
+                        .findByIdForUpdate(orderId)
+                        .orElseThrow(() -> new AppException(OrderErrorCode.ORDER_NOT_FOUND));
+        OrderSaga saga =
+                sagaRepository
+                        .findByOrderIdAndTypeForUpdate(orderId, OrderSagaType.CHECKOUT)
+                        .orElseThrow(() -> new AppException(OrderErrorCode.ORDER_SAGA_NOT_FOUND));
+        SagaCommand command = saga.getStatus() == OrderSagaStatus.FAILED ? commandFor(saga) : null;
+        if (command == null) {
+            throw new AppException(OrderErrorCode.ORDER_SAGA_NOT_RETRYABLE);
+        }
+
+        String reason =
+                "Retry checkout saga ở bước %s sau lỗi %s"
+                        .formatted(saga.getCurrentStep(), saga.getFailureCode());
+        log.warn("Admin retry saga {} (order {}): {}", saga.getId(), orderId, reason);
+        saga.reopenAfterFailure(ADMIN_RETRY_REASON);
+        sagaOutbox.emit(saga, command);
+        sagaRepository.save(saga);
+        orderStatusHistoryRepository.save(
+                OrderStatusHistory.builder()
+                        .order(order)
+                        .fromStatus(order.getStatus())
+                        .toStatus(order.getStatus())
+                        .action("SAGA_RETRY")
+                        .changedBy("ADMIN")
+                        .reason(reason)
+                        .build());
+    }
+
+    /** Command phát lại của bước hiện tại; null nếu bước đó không có command để phát lại. */
+    private SagaCommand commandFor(OrderSaga saga) {
+        return switch (saga.getCurrentStep()) {
+            case CONFIRM_INVENTORY -> SagaCommands.confirmInventory(saga);
+            case CANCEL_PAYMENT -> SagaCommands.cancelPayment(saga);
+            case RELEASE_INVENTORY -> SagaCommands.releaseInventory(saga);
+            case REFUND_WALLET -> SagaCommands.compensateWallet(saga, lockedOrder(saga));
+            case REFUND_ORDER_FUNDS -> SagaCommands.compensateOnline(saga, lockedOrder(saga));
+            default -> null;
+        };
+    }
+
+    private Order lockedOrder(OrderSaga saga) {
+        return orderRepository.findByIdForUpdate(saga.getOrderId()).orElseThrow();
+    }
 
     @Transactional
     public void expireCheckout(String orderId, String sagaId, LocalDateTime now) {
@@ -71,25 +131,12 @@ public class OrderSagaTimeoutService {
                         OrderSagaStep.CANCEL_PAYMENT, "PAYMENT_TIMEOUT", "Quá hạn chờ thanh toán");
                 sagaOutbox.emit(saga, SagaCommands.cancelPayment(saga));
             }
-            case CONFIRM_INVENTORY -> retryOrFail(saga, SagaCommands.confirmInventory(saga));
-            case CANCEL_PAYMENT -> retryOrFail(saga, SagaCommands.cancelPayment(saga));
-            case RELEASE_INVENTORY -> retryOrFail(saga, SagaCommands.releaseInventory(saga));
-            case REFUND_WALLET ->
-                    retryOrFail(
-                            saga,
-                            SagaCommands.compensateWallet(
-                                    saga,
-                                    orderRepository
-                                            .findByIdForUpdate(saga.getOrderId())
-                                            .orElseThrow()));
-            case REFUND_ORDER_FUNDS ->
-                    retryOrFail(
-                            saga,
-                            SagaCommands.compensateOnline(
-                                    saga,
-                                    orderRepository
-                                            .findByIdForUpdate(saga.getOrderId())
-                                            .orElseThrow()));
+            case CONFIRM_INVENTORY,
+                    CANCEL_PAYMENT,
+                    RELEASE_INVENTORY,
+                    REFUND_WALLET,
+                    REFUND_ORDER_FUNDS ->
+                    retryOrFail(saga, commandFor(saga));
             case DONE -> {
                 log.error("Saga {} ở bước DONE mà vẫn còn deadline — xóa deadline", saga.getId());
                 saga.setStepDeadline(null);

@@ -101,7 +101,8 @@ class OrderSagaServiceTest {
                         cartRepository,
                         promotionService,
                         orderStatusHistoryRepository,
-                        orderNotificationService);
+                        orderNotificationService,
+                        new io.micrometer.core.instrument.simple.SimpleMeterRegistry());
         when(cartRepository.findByUserIdAndStatus(anyString(), any())).thenReturn(Optional.empty());
     }
 

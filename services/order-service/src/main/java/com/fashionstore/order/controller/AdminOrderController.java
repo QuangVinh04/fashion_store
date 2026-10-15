@@ -55,6 +55,7 @@ public class AdminOrderController {
     ReturnService returnService;
     com.fashionstore.order.service.ShipmentService shipmentService;
     com.fashionstore.order.service.OrderCancellationService orderCancellationService;
+    com.fashionstore.order.service.OrderSagaTimeoutService orderSagaTimeoutService;
 
     @PostMapping("/{orderId}/cancel")
     public ApiResponse<OrderResponse> cancelOrder(
@@ -71,6 +72,26 @@ public class AdminOrderController {
             @Valid @RequestBody com.fashionstore.order.dto.CancelOrderRequest request) {
         return ApiResponse.<OrderResponse>builder()
                 .data(orderCancellationService.retryAdmin(orderId, request))
+                .build();
+    }
+
+    @Operation(
+            summary = "Thử lại saga checkout đã FAILED (ADMIN)",
+            description =
+                    """
+Saga checkout FAILED nghĩa là một bước bù trừ hoặc chốt kho đã cạn lần thử hoặc bị từ chối, đơn vẫn
+`PENDING` và tiền/kho có thể đang treo. Endpoint đặt lại bộ đếm, đưa saga về đúng bước đang kẹt và
+phát lại command của bước đó để luồng bù trừ chạy tiếp. Admin cần kiểm tra nguyên nhân
+(`GET /{orderId}/saga`) trước: nếu lỗi do dữ liệu thì retry sẽ lại FAILED.
+
+Mã lỗi: `4001` (404) · `4007` đơn không có saga checkout (404) · `4034` saga không ở trạng thái FAILED
+hoặc bước hiện tại không có command để phát lại (409).""")
+    @PostMapping("/{orderId}/saga/retry")
+    public ApiResponse<OrderSagaResponse> retryCheckoutSaga(@PathVariable String orderId) {
+        orderSagaTimeoutService.retryFailedCheckout(orderId);
+        return ApiResponse.<OrderSagaResponse>builder()
+                .message("Retry order saga successfully")
+                .data(orderService.getOrderSaga(orderId, OrderSagaType.CHECKOUT))
                 .build();
     }
 

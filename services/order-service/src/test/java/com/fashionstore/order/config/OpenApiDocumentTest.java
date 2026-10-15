@@ -62,6 +62,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 })
 class OpenApiDocumentTest {
     @MockitoBean private com.fashionstore.order.service.OrderCancellationService orderCancellationService;
+    @MockitoBean private com.fashionstore.order.service.OrderSagaTimeoutService orderSagaTimeoutService;
     @MockitoBean private com.fashionstore.order.service.OrderReceiptService orderReceiptService;
     @MockitoBean
     private com.fashionstore.order.service.ShipmentService shipmentService;
@@ -119,7 +120,8 @@ class OpenApiDocumentTest {
                 .andExpect(jsonPath("$.paths['/api/v1/admin/orders/returns/{id}/approve'].post.summary").exists())
                 .andExpect(jsonPath("$.paths['/api/v1/admin/orders/returns/{id}/reject'].post.summary").exists())
                 .andExpect(jsonPath("$.paths['/api/v1/admin/orders/{orderId}/history'].get.summary").exists())
-                .andExpect(jsonPath("$.paths['/api/v1/admin/orders/{orderId}/saga'].get.summary").exists());
+                .andExpect(jsonPath("$.paths['/api/v1/admin/orders/{orderId}/saga'].get.summary").exists())
+                .andExpect(jsonPath("$.paths['/api/v1/admin/orders/{orderId}/saga/retry'].post.summary").exists());
     }
 
     /** Idempotency-Key là header dễ bị bỏ quên nhất trong tài liệu, mà thiếu nó là tạo trùng đơn. */

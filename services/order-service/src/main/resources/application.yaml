@@ -93,6 +93,13 @@ app:
     enabled: ${GHN_ENABLED:true}
     allow-mock: ${GHN_ALLOW_MOCK:false}
     webhook-token: ${GHN_WEBHOOK_TOKEN:fashion-store-ghn-webhook-secret}
+    # Kho nhận hàng trả (đầu "to" của đơn trả hàng qua GHN, địa chỉ kiểu mới: phường + tỉnh).
+    return-warehouse:
+      name: ${GHN_RETURN_WAREHOUSE_NAME:}
+      phone: ${GHN_RETURN_WAREHOUSE_PHONE:}
+      address: ${GHN_RETURN_WAREHOUSE_ADDRESS:}
+      ward-name: ${GHN_RETURN_WAREHOUSE_WARD_NAME:}
+      province-name: ${GHN_RETURN_WAREHOUSE_PROVINCE_NAME:}
 
 
   outbox:

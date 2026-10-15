@@ -37,6 +37,47 @@ class WalletOrderSagaTest extends OrderSagaTestFixture {
     }
 
     @Test
+    void rejectedWalletRefundFailsTheSagaAndRaisesTheFailedMetric() {
+        saga.paymentAuthorized("payment-1");
+        saga.startCompensation(OrderSagaStep.REFUND_WALLET, "STOCK_REJECTED", "Stock rejected");
+
+        listener.walletCompensationRejected(
+                envelope(
+                        EventTypes.WALLET_SAGA_COMPENSATION_REJECTED,
+                        new WalletSagaCompensationRejectedEvent(
+                                "saga:payment-1", "order-1", "payment-1", "SOURCE_INVALID", "No")),
+                "wallet-rejected");
+
+        assertThat(saga.getStatus()).isEqualTo(OrderSagaStatus.FAILED);
+        assertThat(meters.counter("order.saga.failed", "step", "REFUND_WALLET").count())
+                .isEqualTo(1.0);
+    }
+
+    @Test
+    void rejectedOnlineRefundFailsTheSagaAndRaisesTheFailedMetric() {
+        saga.paymentAuthorized("payment-1");
+        saga.startCompensation(
+                OrderSagaStep.REFUND_ORDER_FUNDS, "STOCK_REJECTED", "Stock rejected");
+
+        listener.orderFundsRefundRejected(
+                envelope(
+                        EventTypes.ORDER_FUNDS_REFUND_REJECTED,
+                        new OrderFundsRefundRejectedEvent(
+                                "saga-online:payment-1",
+                                "order-1",
+                                "payment-1",
+                                "SAGA_COMPENSATION",
+                                saga.getId(),
+                                "SOURCE_INVALID",
+                                "No")),
+                "online-rejected");
+
+        assertThat(saga.getStatus()).isEqualTo(OrderSagaStatus.FAILED);
+        assertThat(meters.counter("order.saga.failed", "step", "REFUND_ORDER_FUNDS").count())
+                .isEqualTo(1.0);
+    }
+
+    @Test
     void walletRefundAcknowledgementWithWrongPaymentDoesNotAdvanceSaga() {
         saga.paymentAuthorized("payment-1");
         saga.startCompensation(OrderSagaStep.REFUND_WALLET, "STOCK_REJECTED", "Stock rejected");

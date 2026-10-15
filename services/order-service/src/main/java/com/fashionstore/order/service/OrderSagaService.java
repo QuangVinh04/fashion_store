@@ -84,6 +84,7 @@ public class OrderSagaService {
     private final PromotionService promotionService;
     private final OrderStatusHistoryRepository orderStatusHistoryRepository;
     private final OrderNotificationService orderNotificationService;
+    private final io.micrometer.core.instrument.MeterRegistry meterRegistry;
 
     // =========================================================================
     // PHẦN 1: LUỒNG THÀNH CÔNG (GIỮ KHO → THANH TOÁN → CHỐT KHO → XÁC NHẬN ĐƠN)
@@ -414,7 +415,7 @@ public class OrderSagaService {
                     }
 
                     // Không rõ hình thức thu tiền → dừng để đối soát
-                    saga.fail("CAPTURED_PAYMENT_NEEDS_RECONCILIATION", event.reason());
+                    failSaga(saga, "CAPTURED_PAYMENT_NEEDS_RECONCILIATION", event.reason());
                     sagaRepository.save(saga);
                 });
     }
@@ -496,7 +497,7 @@ public class OrderSagaService {
                         return;
                     }
 
-                    saga.fail(event.code(), event.reason());
+                    failSaga(saga, event.code(), event.reason());
                     sagaRepository.save(saga);
                 });
     }
@@ -592,7 +593,7 @@ public class OrderSagaService {
                         return;
                     }
 
-                    saga.fail(event.code(), event.reason());
+                    failSaga(saga, event.code(), event.reason());
                     sagaRepository.save(saga);
                 });
     }
@@ -807,6 +808,22 @@ public class OrderSagaService {
     }
 
     // ----- payload command -----
+
+    /**
+     * Saga FAILED nghĩa là tiền hoặc tồn kho đang treo và không còn bước tự động nào — phải kêu lên
+     * (metric + log), không chỉ đổi trạng thái.
+     */
+    private void failSaga(OrderSaga saga, String code, String reason) {
+        saga.fail(code, reason);
+        meterRegistry.counter("order.saga.failed", "step", saga.getCurrentStep().name()).increment();
+        log.error(
+                "Saga {} (order {}) FAILED ở bước {} [{}]: {} — cần can thiệp thủ công",
+                saga.getId(),
+                saga.getOrderId(),
+                saga.getCurrentStep(),
+                code,
+                reason);
+    }
 
     private static String refundId(OrderSaga saga) {
         return "saga-online:" + saga.getPaymentId();
