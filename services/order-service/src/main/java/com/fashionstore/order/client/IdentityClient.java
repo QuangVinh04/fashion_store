@@ -2,7 +2,7 @@ package com.fashionstore.order.client;
 
 import com.fashionstore.common.dto.ApiResponse;
 import com.fashionstore.common.exception.AppException;
-import com.fashionstore.common.exception.ErrorCode;
+import com.fashionstore.common.resilience.UpstreamFailure;
 import com.fashionstore.order.dto.*;
 import com.fashionstore.order.exception.OrderErrorCode;
 import feign.FeignException;
@@ -22,7 +22,12 @@ import java.util.List;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class IdentityClient {
     IdentityFeignClient identityFeignClient;
-    /** Địa chỉ không thuộc {@code userId} cũng là 404 → ADDRESS_NOT_FOUND. */
+    /**
+     * Địa chỉ không thuộc {@code userId} cũng là 404 → ADDRESS_NOT_FOUND. Sự cố hạ tầng không bị nuốt ở đây để
+     * circuit breaker thấy, fallback mới đổi thành 502 (không để rơi xuống 500).
+     */
+    @CircuitBreaker(name = "identityService")
+    @Retry(name = "identityService", fallbackMethod = "getAddressFallback")
     public UserAddressDto getAddress(String userId, String addressId) {
         try {
             ApiResponse<UserAddressDto> response = identityFeignClient.getAddressOfUser(userId, addressId);
@@ -30,13 +35,17 @@ public class IdentityClient {
         } catch (FeignException.NotFound e) {
             log.warn("Address not found in identity-service: {}", addressId);
             throw new AppException(OrderErrorCode.ADDRESS_NOT_FOUND);
-        } catch (Exception e) {
-            // Sự cố hạ tầng, không phải lỗi của khách — 502 như catalog, không để rơi xuống 500
-            log.error("Failed to fetch address from identity-service: {}", addressId, e);
-            throw new AppException(ErrorCode.UPSTREAM_SERVICE_ERROR);
         }
     }
 
+    private UserAddressDto getAddressFallback(String userId, String addressId, Exception ex) {
+        log.error("Failed to fetch address from identity-service: {}", addressId, ex);
+        throw UpstreamFailure.translate(ex);
+    }
+
+    /** Thông tin phụ (thông báo): identity không trả lời được thì coi như không có. */
+    @CircuitBreaker(name = "identityService")
+    @Retry(name = "identityService", fallbackMethod = "getUserFallback")
     public InternalUserDto getUser(String userId) {
         try {
             ApiResponse<InternalUserDto> response = identityFeignClient.getUserById(userId);
@@ -44,9 +53,11 @@ public class IdentityClient {
         } catch (FeignException.NotFound e) {
             log.warn("[IdentityClient] User not found: {}", userId);
             return null;
-        } catch (Exception e) {
-            log.warn("[IdentityClient] Failed to fetch user from identity-service: {}", e.getMessage());
-            return null;
         }
+    }
+
+    private InternalUserDto getUserFallback(String userId, Exception ex) {
+        log.warn("[IdentityClient] Failed to fetch user from identity-service: {}", ex.getMessage());
+        return null;
     }
 }

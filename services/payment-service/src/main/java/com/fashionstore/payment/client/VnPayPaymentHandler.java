@@ -10,7 +10,6 @@ import com.fashionstore.payment.entity.enumeration.PaymentStatus;
 import com.fashionstore.payment.exception.PaymentErrorCode;
 import com.fasterxml.jackson.databind.JsonNode;
 
-import feign.FeignException;
 
 import lombok.RequiredArgsConstructor;
 
@@ -42,7 +41,7 @@ public class VnPayPaymentHandler implements PaymentHandler {
     private static final ZoneId VN_TIME_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
 
     private final VnPayConfig properties;
-    private final VnPayFeignClient vnPayFeignClient;
+    private final VnPayApi vnPayApi;
 
     @Override
     public PaymentProvider provider() {
@@ -164,12 +163,7 @@ public class VnPayPaymentHandler implements PaymentHandler {
                                 properties.getServerIp(),
                                 orderInfo)));
 
-        JsonNode response;
-        try {
-            response = vnPayFeignClient.query(request);
-        } catch (FeignException exception) {
-            throw new AppException(PaymentErrorCode.PAYMENT_PROVIDER_ERROR, exception);
-        }
+        JsonNode response = vnPayApi.query(request);
         // QueryDr dùng checksum chuỗi có dấu |, khác checksum query-string của IPN/return.
         String signedData =
                 java.util.List.of(

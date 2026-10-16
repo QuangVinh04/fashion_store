@@ -14,7 +14,6 @@ import com.fashionstore.common.exception.AppException;
 import com.fashionstore.common.payment.PaymentMethod;
 import com.fashionstore.common.payment.PaymentProvider;
 import com.fashionstore.common.security.CurrentUserProvider;
-import com.fashionstore.order.client.CatalogFeignClient;
 import com.fashionstore.order.dto.ReceiveReturnRequest;
 import com.fashionstore.order.dto.RejectReturnRequest;
 import com.fashionstore.order.dto.ReturnEvidenceMetadata;
@@ -101,7 +100,6 @@ class ReturnWorkflowPostgresIntegrationTest {
     @MockitoBean com.fashionstore.order.service.OrderCancellationSagaService cancellations;
     @MockitoBean com.fashionstore.order.service.ShipmentCreationTransactionService shipmentCreation;
     @MockitoBean CurrentUserProvider currentUser;
-    @MockitoBean CatalogFeignClient catalog;
     @MockitoBean OutboxEventRecorder outbox;
     @MockitoBean OrderNotificationService notifications;
 
@@ -132,7 +130,7 @@ class ReturnWorkflowPostgresIntegrationTest {
 
     @AfterEach
     void returnsNeverRestockInventoryAutomatically() {
-        verify(catalog, never()).restock(anyString());
+        verify(productCatalog, never()).restock(anyString());
     }
 
     @AfterAll
@@ -243,7 +241,7 @@ class ReturnWorkflowPostgresIntegrationTest {
     void activeReturnFreezesCompletionUntilRejectedAfterFailedQualityCheck() {
         ReturnRequest returned = approvedReturn(NOW.minusSeconds(8 * 24 * 3600));
         String evidenceId = UUID.randomUUID().toString();
-        when(catalog.getReturnEvidence(evidenceId, "customer-1"))
+        when(productCatalog.getReturnEvidence(evidenceId, "customer-1"))
                 .thenAnswer(
                         invocation -> {
                             assertThat(
@@ -274,7 +272,7 @@ class ReturnWorkflowPostgresIntegrationTest {
         assertThat(rejected.getStatus()).isEqualTo(ReturnRequestStatus.REJECTED);
         assertThat(rejected.getClosedAt()).isEqualTo(NOW);
         assertThat(rejected.getQcEvidenceIds()).containsExactly(evidenceId);
-        when(catalog.getEvidenceReadUrl(evidenceId, "customer-1"))
+        when(productCatalog.getEvidenceReadUrl(evidenceId, "customer-1"))
                 .thenAnswer(
                         invocation -> {
                             assertThat(
@@ -638,7 +636,7 @@ class ReturnWorkflowPostgresIntegrationTest {
     void evidenceOwnedByAnotherAccountCannotBeRecordedAsWarehouseProof() {
         ReturnRequest returned = approvedReturn(NOW.minusSeconds(24 * 3600));
         String evidenceId = UUID.randomUUID().toString();
-        when(catalog.getReturnEvidence(evidenceId, "customer-1"))
+        when(productCatalog.getReturnEvidence(evidenceId, "customer-1"))
                 .thenReturn(
                         ApiResponse.<ReturnEvidenceMetadata>builder()
                                 .data(

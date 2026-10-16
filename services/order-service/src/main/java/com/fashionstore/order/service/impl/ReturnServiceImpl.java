@@ -10,7 +10,7 @@ import com.fashionstore.contracts.order.OrderDeliveredEvent;
 import com.fashionstore.contracts.payment.command.RefundOrderFundsCommand;
 import com.fashionstore.contracts.payment.event.OrderFundsRefundCreditedEvent;
 import com.fashionstore.contracts.payment.event.OrderFundsRefundRejectedEvent;
-import com.fashionstore.order.client.CatalogFeignClient;
+import com.fashionstore.order.client.CatalogClient;
 import com.fashionstore.order.client.GhnClient;
 import com.fashionstore.order.dto.CancelReturnRequest;
 import com.fashionstore.order.dto.CreateFulfillmentReturnRequest;
@@ -78,7 +78,7 @@ public class ReturnServiceImpl implements ReturnService {
     OrderStatusHistoryRepository orderStatusHistoryRepository;
     CurrentUserProvider currentUserProvider;
     ObjectMapper objectMapper;
-    CatalogFeignClient catalogFeignClient;
+    CatalogClient catalogClient;
     PlatformTransactionManager transactionManager;
     Clock clock;
     GhnClient ghnClient;
@@ -1106,7 +1106,7 @@ public class ReturnServiceImpl implements ReturnService {
                         .contains(mediaId)) {
             throw new AppException(OrderErrorCode.RETURN_EVIDENCE_INVALID);
         }
-        var response = catalogFeignClient.getEvidenceReadUrl(mediaId, returned.getVerificationBy());
+        var response = catalogClient.getEvidenceReadUrl(mediaId, returned.getVerificationBy());
         if (response == null
                 || response.getCode() != 1000
                 || response.getData() == null
@@ -1129,7 +1129,7 @@ public class ReturnServiceImpl implements ReturnService {
                 .contains(mediaId)) {
             throw new AppException(OrderErrorCode.RETURN_EVIDENCE_INVALID);
         }
-        var response = catalogFeignClient.getEvidenceReadUrl(mediaId, returned.getUserId());
+        var response = catalogClient.getEvidenceReadUrl(mediaId, returned.getUserId());
         if (response == null
                 || response.getCode() != 1000
                 || response.getData() == null
@@ -1153,7 +1153,7 @@ public class ReturnServiceImpl implements ReturnService {
                         .contains(mediaId)) {
             throw new AppException(OrderErrorCode.RETURN_EVIDENCE_INVALID);
         }
-        var response = catalogFeignClient.getEvidenceReadUrl(mediaId, returned.getReceivedBy());
+        var response = catalogClient.getEvidenceReadUrl(mediaId, returned.getReceivedBy());
         if (response == null
                 || response.getCode() != 1000
                 || response.getData() == null
@@ -1224,7 +1224,7 @@ public class ReturnServiceImpl implements ReturnService {
             if (id == null || id.isBlank() || id.length() > 36) {
                 throw new AppException(OrderErrorCode.RETURN_EVIDENCE_INVALID);
             }
-            var response = catalogFeignClient.getReturnEvidence(id, actorId);
+            var response = catalogClient.getReturnEvidence(id, actorId);
             var metadata = response == null ? null : response.getData();
             if (response == null
                     || response.getCode() != 1000

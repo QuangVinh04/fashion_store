@@ -1,7 +1,10 @@
 package com.fashionstore.order.client;
 
+import com.fashionstore.common.dto.ApiResponse;
 import com.fashionstore.common.exception.AppException;
 import com.fashionstore.common.exception.ErrorCode;
+import com.fashionstore.common.resilience.UpstreamFailure;
+import com.fashionstore.order.dto.ReturnEvidenceMetadata;
 import com.fashionstore.order.dto.ProductVariantDto;
 import com.fashionstore.order.dto.StockCheckItem;
 import com.fashionstore.order.dto.StockCheckRequest;
@@ -30,8 +33,8 @@ public class CatalogClient {
      * Đường ghi (thêm/sửa giỏ, mở checkout): variant không có thật thì phải là 404 nghiệp vụ, catalog chết
      * thì phải là 502 — không có fallback trả DTO rỗng giá 0, vì giá trị đó sẽ được ghi vào {@code cart_item}.
      */
-    @CircuitBreaker(name = "catalogService", fallbackMethod = "getVariantFallback")
-    @Retry(name = "catalogService")
+    @CircuitBreaker(name = "catalogService")
+    @Retry(name = "catalogService", fallbackMethod = "getVariantFallback")
     public ProductVariantDto getVariant(String variantId) {
         try {
             return catalogFeignClient.getVariant(variantId).getData();
@@ -41,8 +44,8 @@ public class CatalogClient {
     }
 
     /** Đường đọc: hiển thị giỏ hàng phải sống được khi catalog chết, tên/size/color rơi về snapshot trong DB. */
-    @CircuitBreaker(name = "catalogService", fallbackMethod = "getVariantsBatchFallback")
-    @Retry(name = "catalogService")
+    @CircuitBreaker(name = "catalogService")
+    @Retry(name = "catalogService", fallbackMethod = "getVariantsBatchFallback")
     public List<ProductVariantDto> getVariantsBatch(List<String> variantIds) {
         return catalogFeignClient.getVariantsBatch(variantIds).getData();
     }
@@ -52,20 +55,43 @@ public class CatalogClient {
      * Spring AOP, tự gọi lại chính mình trong cùng class sẽ bỏ qua @CircuitBreaker/@Retry — nên không có
      * overload tiện lợi nào gọi vòng lại method này, gọi thẳng {@code checkStock(List.of(...))} ở call site.
      */
-    @CircuitBreaker(name = "catalogService", fallbackMethod = "checkStockFallback")
-    @Retry(name = "catalogService")
+    @CircuitBreaker(name = "catalogService")
+    @Retry(name = "catalogService", fallbackMethod = "checkStockFallback")
     public StockCheckResult checkStock(List<StockCheckItem> items) {
         return catalogFeignClient.checkStock(StockCheckRequest.builder().items(items).build()).getData();
     }
 
+    /** Xác minh ảnh chứng cứ đổi trả: không hỏi được catalog thì 502, không được coi là hợp lệ. */
+    @CircuitBreaker(name = "catalogService")
+    @Retry(name = "catalogService", fallbackMethod = "getReturnEvidenceFallback")
+    public ApiResponse<ReturnEvidenceMetadata> getReturnEvidence(String mediaId, String ownerId) {
+        return catalogFeignClient.getReturnEvidence(mediaId, ownerId);
+    }
+
+    @CircuitBreaker(name = "catalogService")
+    @Retry(name = "catalogService", fallbackMethod = "getEvidenceReadUrlFallback")
+    public ApiResponse<String> getEvidenceReadUrl(String mediaId, String ownerId) {
+        return catalogFeignClient.getEvidenceReadUrl(mediaId, ownerId);
+    }
+
+    private ApiResponse<ReturnEvidenceMetadata> getReturnEvidenceFallback(String mediaId, String ownerId, Exception ex) {
+        log.warn("[CircuitBreaker] catalog-service unavailable for evidence {}: {}", mediaId, ex.getMessage());
+        throw UpstreamFailure.translate(ex);
+    }
+
+    private ApiResponse<String> getEvidenceReadUrlFallback(String mediaId, String ownerId, Exception ex) {
+        log.warn("[CircuitBreaker] catalog-service unavailable for evidence url {}: {}", mediaId, ex.getMessage());
+        throw UpstreamFailure.translate(ex);
+    }
+
+    // Ghi, không @Retry: gọi lại có thể hoàn kho hai lần.
     @CircuitBreaker(name = "catalogService", fallbackMethod = "restockFallback")
-    @Retry(name = "catalogService")
     public void restock(String orderId) {
         catalogFeignClient.restock(orderId);
     }
 
-    @CircuitBreaker(name = "catalogService", fallbackMethod = "countLowStockFallback")
-    @Retry(name = "catalogService")
+    @CircuitBreaker(name = "catalogService")
+    @Retry(name = "catalogService", fallbackMethod = "countLowStockFallback")
     public long getLowStockCount(int threshold) {
         var response = catalogFeignClient.countLowStock(threshold);
         return response != null && response.getData() != null ? response.getData() : 0L;

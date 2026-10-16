@@ -1,13 +1,17 @@
 package com.fashionstore.common.security;
 
+import com.fashionstore.common.exception.AppException;
+import com.fashionstore.common.exception.ErrorCode;
 import feign.RequestTemplate;
 import org.junit.jupiter.api.Test;
+import org.springframework.security.oauth2.client.ClientAuthorizationException;
 import org.springframework.security.oauth2.client.OAuth2AuthorizeRequest;
 import org.springframework.security.oauth2.client.OAuth2AuthorizedClient;
 import org.springframework.security.oauth2.client.OAuth2AuthorizedClientManager;
 import org.springframework.security.oauth2.client.registration.ClientRegistration;
 import org.springframework.security.oauth2.core.AuthorizationGrantType;
 import org.springframework.security.oauth2.core.OAuth2AccessToken;
+import org.springframework.security.oauth2.core.OAuth2Error;
 
 import java.time.Instant;
 import java.util.concurrent.atomic.AtomicReference;
@@ -40,11 +44,26 @@ class InternalServiceTokenInterceptorTest {
         assertThat(seen.get().getClientRegistrationId()).isEqualTo("keycloak");
     }
 
+    /** Không lấy được token dịch vụ là sự cố hạ tầng (502), không phải lỗi 500 của chính service gọi. */
     @Test
-    void failsClosedWhenNoTokenCanBeObtained() {
+    void failsClosedAsAnUpstreamErrorWhenNoTokenCanBeObtained() {
         OAuth2AuthorizedClientManager manager = request -> null;
 
         assertThatThrownBy(() -> new InternalServiceTokenInterceptor(manager).apply(new RequestTemplate()))
-                .isInstanceOf(IllegalStateException.class);
+                .isInstanceOfSatisfying(
+                        AppException.class,
+                        e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.UPSTREAM_SERVICE_ERROR));
+    }
+
+    @Test
+    void keycloakRefusingOrBeingDownIsAnUpstreamErrorToo() {
+        OAuth2AuthorizedClientManager manager = request -> {
+            throw new ClientAuthorizationException(new OAuth2Error("invalid_client"), "keycloak");
+        };
+
+        assertThatThrownBy(() -> new InternalServiceTokenInterceptor(manager).apply(new RequestTemplate()))
+                .isInstanceOfSatisfying(
+                        AppException.class,
+                        e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.UPSTREAM_SERVICE_ERROR));
     }
 }

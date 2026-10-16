@@ -57,7 +57,7 @@ class ReturnRefundTransactionIntegrationTest {
     @Autowired ReturnRequestRepository returns;
     @Autowired JdbcTemplate jdbc;
     @MockitoBean CurrentUserProvider actor;
-    @MockitoBean CatalogFeignClient catalog;
+    @MockitoBean CatalogClient catalog;
     @MockitoBean GhnClient carrier;
     @MockitoBean com.fashionstore.order.service.ReturnPickupService returnPickupService;
     @MockitoBean com.fashionstore.order.service.OrderNotificationService notifications;

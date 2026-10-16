@@ -1,23 +1,31 @@
 package com.fashionstore.catalog.client;
 
-import com.fashionstore.common.config.feign.FeignGlobalConfig;
 import com.fashionstore.common.dto.ApiResponse;
-import org.springframework.cloud.openfeign.FeignClient;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
+import com.fashionstore.common.resilience.UpstreamFailure;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.retry.annotation.Retry;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Component;
 
-@FeignClient(
-        name = "identity-avatar-client",
-        url = "${app.clients.identity-base-url}",
-        configuration = {FeignGlobalConfig.class, IdentityAvatarClientConfig.class}
-)
-public interface IdentityAvatarClient {
+/** Đọc avatar hiện hành từ identity: lời gọi đọc nên retry; identity chết thì 502 thay vì rơi xuống 500. */
+@Slf4j
+@Component
+@RequiredArgsConstructor
+public class IdentityAvatarClient {
 
-    @GetMapping("/internal/v1/users/{userId}/avatar-reference")
-    ApiResponse<AvatarReferenceResponse> getAvatarReference(@PathVariable("userId") String userId);
+    private final IdentityAvatarFeignClient identityAvatarFeignClient;
 
-    record AvatarReferenceResponse(
-            String avatarMediaId,
-            Long avatarRevision
-    ) {}
+    @CircuitBreaker(name = "identityService")
+    @Retry(name = "identityService", fallbackMethod = "getAvatarReferenceFallback")
+    public ApiResponse<AvatarReferenceResponse> getAvatarReference(String userId) {
+        return identityAvatarFeignClient.getAvatarReference(userId);
+    }
+
+    private ApiResponse<AvatarReferenceResponse> getAvatarReferenceFallback(String userId, Exception ex) {
+        log.warn("[IdentityAvatarClient] identity-service unavailable for userId={}: {}", userId, ex.getMessage());
+        throw UpstreamFailure.translate(ex);
+    }
+
+    public record AvatarReferenceResponse(String avatarMediaId, Long avatarRevision) {}
 }

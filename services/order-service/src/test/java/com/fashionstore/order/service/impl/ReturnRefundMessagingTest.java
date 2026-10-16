@@ -49,7 +49,7 @@ class ReturnRefundMessagingTest {
                         history,
                         actor,
                         new ObjectMapper().findAndRegisterModules(),
-                        mock(CatalogFeignClient.class),
+                        mock(CatalogClient.class),
                         transactions,
                         Clock.fixed(Instant.parse("2026-10-12T01:00:00Z"), ZoneOffset.UTC),
                         mock(GhnClient.class),

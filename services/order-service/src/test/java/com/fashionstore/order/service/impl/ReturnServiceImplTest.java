@@ -50,7 +50,7 @@ class ReturnServiceImplTest {
     @Mock private CurrentUserProvider currentUserProvider;
 
 
-    @Mock private com.fashionstore.order.client.CatalogFeignClient catalogFeignClient;
+    @Mock private com.fashionstore.order.client.CatalogClient catalogClient;
     @Mock private org.springframework.transaction.PlatformTransactionManager transactionManager;
     @Mock private com.fashionstore.order.client.GhnClient ghnClient;
     @Mock private com.fashionstore.order.repository.ShipmentRepository shipmentRepository;
@@ -72,7 +72,7 @@ class ReturnServiceImplTest {
                         orderStatusHistoryRepository,
                         currentUserProvider,
                         objectMapper,
-                        catalogFeignClient,
+                        catalogClient,
                         transactionManager,
                         java.time.Clock.systemUTC(),
                         ghnClient,
@@ -786,7 +786,7 @@ class ReturnServiceImplTest {
         ReturnRequest request = returnRequest(order, ReturnRequestStatus.REQUESTED);
         request.setImages("[\"media-1\"]");
         when(returnRequestRepository.findById("ret-1")).thenReturn(Optional.of(request));
-        when(catalogFeignClient.getEvidenceReadUrl("media-1", "user-1"))
+        when(catalogClient.getEvidenceReadUrl("media-1", "user-1"))
                 .thenReturn(
                         com.fashionstore.common.dto.ApiResponse.<String>builder()
                                 .data("https://signed")
@@ -1004,7 +1004,7 @@ class ReturnServiceImplTest {
     }
 
     private void stubEvidence(String mediaId, String ownerId) {
-        when(catalogFeignClient.getReturnEvidence(
+        when(catalogClient.getReturnEvidence(
                         org.mockito.ArgumentMatchers.eq(mediaId),
                         org.mockito.ArgumentMatchers.anyString()))
                 .thenReturn(

@@ -56,14 +56,13 @@ class IdentityClientTest {
     }
 
     @Test
-    void getAddress_whenIdentityIsDown_throwsUpstreamServiceError() {
+    void getAddress_whenIdentityIsDown_propagatesToCircuitBreakerWhichMapsItTo502() {
         when(identityFeignClient.getAddressOfUser("user-1", "addr-1"))
                 .thenThrow(new FeignException.ServiceUnavailable("Service Unavailable", request(), null, null));
 
+        // Không nuốt ở đây để Resilience4j thấy lỗi; việc đổi sang 502 do fallback (ResilienceWiringTest).
         assertThatThrownBy(() -> identityClient.getAddress("user-1", "addr-1"))
-                .isInstanceOf(AppException.class)
-                .extracting("errorCode")
-                .isEqualTo(ErrorCode.UPSTREAM_SERVICE_ERROR);
+                .isInstanceOf(FeignException.ServiceUnavailable.class);
     }
 
     private static Request request() {

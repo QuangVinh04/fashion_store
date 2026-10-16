@@ -31,13 +31,13 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class GhnClientTest {
-    @Mock GhnFeignClient ghnFeignClient;
+    @Mock GhnApi ghnApi;
     GhnProperties properties;
     GhnClient client;
 
     @BeforeEach void setUp() {
         properties = new GhnProperties();
-        client = new GhnClient(ghnFeignClient, properties);
+        client = new GhnClient(ghnApi, properties);
     }
 
     private ShippingAddress address() {
@@ -66,14 +66,14 @@ class GhnClientTest {
 
     @Test void createReturnOrder_picksUpAtTheCustomerAndDeliversToTheWarehouseAtTheShopsCost() {
         configureWarehouse();
-        when(ghnFeignClient.createOrder(eq("token"), eq("42"), any())).thenReturn(
+        when(ghnApi.createOrder(eq("token"), eq("42"), any())).thenReturn(
                 GhnCreateOrderResponse.builder().data(GhnCreateOrderResponse.CreateOrderData.builder()
                         .orderCode("GHN-RET-1").build()).build());
 
         assertThat(client.createReturnOrder(pickup())).isEqualTo("GHN-RET-1");
 
         ArgumentCaptor<GhnCreateOrderRequest> captor = ArgumentCaptor.forClass(GhnCreateOrderRequest.class);
-        verify(ghnFeignClient).createOrder(eq("token"), eq("42"), captor.capture());
+        verify(ghnApi).createOrder(eq("token"), eq("42"), captor.capture());
         var request = captor.getValue();
         assertThat(request.getFromName()).isEqualTo("Nguyen Van A");
         assertThat(request.getFromPhone()).isEqualTo("0987654321");
@@ -101,7 +101,7 @@ class GhnClientTest {
         assertThatThrownBy(() -> client.createReturnOrder(pickup()))
                 .isInstanceOfSatisfying(AppException.class,
                         e -> assertThat(e.getErrorCode()).isEqualTo(OrderErrorCode.RETURN_WAREHOUSE_NOT_CONFIGURED));
-        org.mockito.Mockito.verifyNoInteractions(ghnFeignClient);
+        org.mockito.Mockito.verifyNoInteractions(ghnApi);
     }
 
     @Test void createReturnOrder_withAnIncompletePickupAddressIsRejected() {
@@ -116,7 +116,7 @@ class GhnClientTest {
 
     @Test void createReturnOrder_ghnReplyWithoutAnOrderCodeIsAnUpstreamError() {
         configureWarehouse();
-        when(ghnFeignClient.createOrder(eq("token"), eq("42"), any())).thenReturn(GhnCreateOrderResponse.builder().build());
+        when(ghnApi.createOrder(eq("token"), eq("42"), any())).thenReturn(GhnCreateOrderResponse.builder().build());
 
         assertThatThrownBy(() -> client.createReturnOrder(pickup()))
                 .isInstanceOfSatisfying(AppException.class,
@@ -128,7 +128,7 @@ class GhnClientTest {
         properties.setAllowMock(true);
 
         assertThat(client.createReturnOrder(pickup())).isEqualTo("GHN_MOCK_RET_ORD-1");
-        org.mockito.Mockito.verifyNoInteractions(ghnFeignClient);
+        org.mockito.Mockito.verifyNoInteractions(ghnApi);
     }
 
     @Test
@@ -141,7 +141,7 @@ class GhnClientTest {
                 "cod_collect_date":"2026-10-01T03:00:00Z","is_cod_transferred":true,
                 "cod_transfer_date":"2026-10-02T03:00:00Z"}}
                 """);
-        when(ghnFeignClient.getOrderDetail("test-token", "42", "GHN-1")).thenReturn(response);
+        when(ghnApi.getOrderDetail("test-token", "42", "GHN-1")).thenReturn(response);
         var verified = client.getVerifiedShipment("GHN-1");
         assertThat(verified.codCollected()).isTrue();
         assertThat(verified.codTransferred()).isTrue();
@@ -154,13 +154,13 @@ class GhnClientTest {
     @Test void previewFee_usesNewAddressNamesAndReturnsTotalFee() {
         properties.setToken("token");
         properties.setShopId("42");
-        when(ghnFeignClient.previewOrder(eq("token"), eq("42"), any())).thenReturn(
+        when(ghnApi.previewOrder(eq("token"), eq("42"), any())).thenReturn(
                 GhnCreateOrderResponse.builder().data(GhnCreateOrderResponse.CreateOrderData.builder()
                         .totalFee(BigDecimal.valueOf(32000)).build()).build());
 
         assertThat(client.calculateFee(address(), 600, ShippingMethod.STANDARD)).isEqualByComparingTo("32000");
         ArgumentCaptor<GhnCreateOrderRequest> captor = ArgumentCaptor.forClass(GhnCreateOrderRequest.class);
-        verify(ghnFeignClient).previewOrder(eq("token"), eq("42"), captor.capture());
+        verify(ghnApi).previewOrder(eq("token"), eq("42"), captor.capture());
         assertThat(captor.getValue().getIsNewToAddress()).isTrue();
         assertThat(captor.getValue().getToProvinceName()).isEqualTo("Hồ Chí Minh");
         assertThat(captor.getValue().getToWardName()).isEqualTo("Phường Sài Gòn");
@@ -191,13 +191,13 @@ class GhnClientTest {
                         .quantity(1).unitPrice(BigDecimal.valueOf(200000)).build())).build();
         UserAddressDto destination = UserAddressDto.builder().provinceId(1000001).wardId(1003646)
                 .province("Hồ Chí Minh").ward("Phường Sài Gòn").build();
-        when(ghnFeignClient.createOrder(eq("token"), eq("42"), any())).thenReturn(
+        when(ghnApi.createOrder(eq("token"), eq("42"), any())).thenReturn(
                 GhnCreateOrderResponse.builder().data(GhnCreateOrderResponse.CreateOrderData.builder()
                         .orderCode("GHN1").build()).build());
 
         assertThat(client.createOrder(order, destination, 600)).isEqualTo("GHN1");
         ArgumentCaptor<GhnCreateOrderRequest> captor = ArgumentCaptor.forClass(GhnCreateOrderRequest.class);
-        verify(ghnFeignClient).createOrder(eq("token"), eq("42"), captor.capture());
+        verify(ghnApi).createOrder(eq("token"), eq("42"), captor.capture());
         assertThat(captor.getValue().getIsNewToAddress()).isTrue();
         assertThat(captor.getValue().getToWardName()).isEqualTo("Phường Sài Gòn");
         assertThat(captor.getValue().getToDistrictId()).isNull();

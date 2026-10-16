@@ -45,10 +45,14 @@ instead of relying on `issuer-uri` discovery.
 
 Client secrets and SMTP come from env (placeholders `${VAR:default}` in the realm file),
 defaults are dev-only: `STOREFRONT_BFF_CLIENT_SECRET`, `BACKOFFICE_BFF_CLIENT_SECRET`, `ORDER_SERVICE_CLIENT_SECRET`,
-`CATALOG_SERVICE_CLIENT_SECRET`, `IDENTITY_SERVICE_CLIENT_SECRET`, `MAIL_*`.
+`CATALOG_SERVICE_CLIENT_SECRET`, `IDENTITY_SERVICE_CLIENT_SECRET`, `PAYMENT_SERVICE_CLIENT_SECRET`, `MAIL_*`.
 Without SMTP credentials, self-registered users cannot receive the verification email.
 
 ## Dev users (dev only)
+
+**Production:** set `DEV_USERS_ENABLED=false` (the two users are imported disabled) and override every
+`*_CLIENT_SECRET`; passwords can be changed with `DEV_ADMIN_PASSWORD` / `DEV_CUSTOMER_PASSWORD`.
+Create real admins in Keycloak afterwards. A realm is imported only once, so change an existing realm in the admin console.
 
 | email | password | roles |
 |---|---|---|

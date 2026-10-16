@@ -36,7 +36,7 @@ import java.util.List;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class GhnClient {
 
-    GhnFeignClient ghnFeignClient;
+    GhnApi ghnApi;
     GhnProperties ghnProperties;
 
     @Transactional(propagation = Propagation.NEVER)
@@ -48,7 +48,7 @@ public class GhnClient {
             throw new AppException(ErrorCode.UPSTREAM_SERVICE_ERROR);
         }
         try {
-            var response = ghnFeignClient.getOrderDetail(ghnProperties.getToken(), ghnProperties.getShopId(), orderCode);
+            var response = ghnApi.getOrderDetail(ghnProperties.getToken(), ghnProperties.getShopId(), orderCode);
             var data = response == null ? null : response.path("data");
             if (response == null || response.path("code").asInt() != 200 || data == null || !data.isObject()
                     || !orderCode.equals(data.path("order_code").asText())
@@ -79,7 +79,7 @@ public class GhnClient {
                 || ghnProperties.getShopId()==null || ghnProperties.getShopId().isBlank())
             return com.fashionstore.order.dto.ShipmentCancellationResult.unknown(trackingCode,"Carrier verification is not configured");
         try {
-            var detail=ghnFeignClient.getOrderDetail(ghnProperties.getToken(),ghnProperties.getShopId(),trackingCode);
+            var detail=ghnApi.getOrderDetail(ghnProperties.getToken(),ghnProperties.getShopId(),trackingCode);
             if(detail==null || detail.path("code").asInt()!=200 || !detail.path("data").isObject()
                     || !trackingCode.equals(detail.path("data").path("order_code").asText())
                     || !ghnProperties.getShopId().equals(detail.path("data").path("shop_id").asText()))
@@ -89,7 +89,7 @@ public class GhnClient {
                 return new com.fashionstore.order.dto.ShipmentCancellationResult(trackingCode,"HANDED_OFF","Carrier status: "+status);
             if("cancel".equals(status)) return new com.fashionstore.order.dto.ShipmentCancellationResult(trackingCode,"CANCELLED","Carrier confirmed cancellation");
             if(!"ready_to_pick".equals(status)) return com.fashionstore.order.dto.ShipmentCancellationResult.unknown(trackingCode,"Carrier status requires verification: "+status);
-            var response=ghnFeignClient.cancelOrder(ghnProperties.getToken(),ghnProperties.getShopId(),java.util.Map.of("order_codes",java.util.List.of(trackingCode)));
+            var response=ghnApi.cancelOrder(ghnProperties.getToken(),ghnProperties.getShopId(),java.util.Map.of("order_codes",java.util.List.of(trackingCode)));
             if(response!=null && response.path("code").asInt()==200 && response.path("data").isArray()) {
                 for(var row:response.path("data")) if(trackingCode.equals(row.path("order_code").asText())
                         && row.path("result").isBoolean() && row.path("result").booleanValue())
@@ -147,7 +147,7 @@ public class GhnClient {
                 .build();
 
         try {
-            GhnCreateOrderResponse response = ghnFeignClient.previewOrder(token, ghnProperties.getShopId(), request);
+            GhnCreateOrderResponse response = ghnApi.previewOrder(token, ghnProperties.getShopId(), request);
             if (response != null && response.getData() != null && response.getData().getTotalFee() != null) {
                 return response.getData().getTotalFee();
             }
@@ -220,7 +220,7 @@ public class GhnClient {
                 .build();
 
         try {
-            GhnCreateOrderResponse response = ghnFeignClient.createOrder(token, ghnProperties.getShopId(), request);
+            GhnCreateOrderResponse response = ghnApi.createOrder(token, ghnProperties.getShopId(), request);
             if (response != null && response.getData() != null && response.getData().getOrderCode() != null) {
                 return response.getData().getOrderCode();
             }
@@ -304,7 +304,7 @@ public class GhnClient {
                 .build();
 
         try {
-            GhnCreateOrderResponse response = ghnFeignClient.createOrder(token, ghnProperties.getShopId(), request);
+            GhnCreateOrderResponse response = ghnApi.createOrder(token, ghnProperties.getShopId(), request);
             if (response != null && response.getData() != null && response.getData().getOrderCode() != null) {
                 return response.getData().getOrderCode();
             }

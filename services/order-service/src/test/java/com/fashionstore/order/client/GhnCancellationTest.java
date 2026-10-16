@@ -17,7 +17,7 @@ class GhnCancellationTest {
             throws Exception {
         properties.setToken("test-only");
         properties.setShopId("123");
-        var remote = mock(GhnFeignClient.class);
+        var remote = mock(GhnApi.class);
         when(remote.getOrderDetail("test-only", "123", "tracking"))
                 .thenReturn(
                         mapper.readTree(
@@ -79,7 +79,7 @@ class GhnCancellationTest {
     void mockConfigurationCannotProveFinancialCancellation() throws Exception {
         properties.setEnabled(false);
         properties.setAllowMock(true);
-        var remote = mock(GhnFeignClient.class);
+        var remote = mock(GhnApi.class);
         var client = new GhnClient(remote, properties);
         var result = client.cancelPendingShipment("tracking");
         assertThat(result.outcome()).isEqualTo("UNKNOWN");

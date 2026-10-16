@@ -2,7 +2,7 @@ package com.fashionstore.order.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fashionstore.common.redis.RedisService;
-import com.fashionstore.order.client.GhnFeignClient;
+import com.fashionstore.order.client.GhnApi;
 import com.fashionstore.order.config.GhnProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -21,7 +21,7 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class ShippingLocationControllerTest {
-    @Mock GhnFeignClient ghn;
+    @Mock GhnApi ghn;
     @Mock StringRedisTemplate redis;
     @Mock ValueOperations<String, String> values;
     GhnProperties properties;

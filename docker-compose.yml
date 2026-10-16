@@ -238,6 +238,7 @@ services:
       PAYMENT_POSTGRES_DB: payment_database
       PAYMENT_POSTGRES_USER: root
       PAYMENT_POSTGRES_PASSWORD: root
+      PAYMENT_SERVICE_CLIENT_SECRET: ${PAYMENT_SERVICE_CLIENT_SECRET:-dev-payment-service-secret}
       VNPAY_RETURN_URL: ${VNPAY_RETURN_URL:-http://localhost:8080/api/v1/payments/vnpay/return}
       VNPAY_TMN_CODE: ${VNPAY_TMN_CODE:-}
       VNPAY_HASH_SECRET: ${VNPAY_HASH_SECRET:-}
@@ -274,6 +275,10 @@ services:
       ORDER_SERVICE_CLIENT_SECRET: ${ORDER_SERVICE_CLIENT_SECRET:-dev-order-service-secret}
       CATALOG_SERVICE_CLIENT_SECRET: ${CATALOG_SERVICE_CLIENT_SECRET:-dev-catalog-service-secret}
       IDENTITY_SERVICE_CLIENT_SECRET: ${IDENTITY_SERVICE_CLIENT_SECRET:-dev-identity-service-secret}
+      PAYMENT_SERVICE_CLIENT_SECRET: ${PAYMENT_SERVICE_CLIENT_SECRET:-dev-payment-service-secret}
+      DEV_USERS_ENABLED: ${DEV_USERS_ENABLED:-true}
+      DEV_ADMIN_PASSWORD: ${DEV_ADMIN_PASSWORD:-Admin@12345}
+      DEV_CUSTOMER_PASSWORD: ${DEV_CUSTOMER_PASSWORD:-Customer@12345}
       MAIL_HOST: ${MAIL_HOST:-smtp.gmail.com}
       MAIL_PORT: ${MAIL_PORT:-587}
       MAIL_FROM: ${MAIL_FROM:-no-reply@fashion.local}

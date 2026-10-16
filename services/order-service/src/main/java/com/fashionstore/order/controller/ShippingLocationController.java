@@ -6,7 +6,7 @@ import com.fashionstore.common.redis.RedisService;
 import com.fashionstore.common.dto.ApiResponse;
 import com.fashionstore.common.exception.AppException;
 import com.fashionstore.common.exception.ErrorCode;
-import com.fashionstore.order.client.GhnFeignClient;
+import com.fashionstore.order.client.GhnApi;
 import com.fashionstore.order.config.GhnProperties;
 import feign.FeignException;
 import io.swagger.v3.oas.annotations.Operation;
@@ -28,7 +28,7 @@ import java.util.List;
 @RequestMapping("/api/v1/shipping/locations")
 @Tag(name = "Shipping locations", description = "GHN two-level address catalogue")
 public class ShippingLocationController {
-    private final GhnFeignClient ghn;
+    private final GhnApi ghn;
     private final GhnProperties properties;
     private final RedisService redis;
 

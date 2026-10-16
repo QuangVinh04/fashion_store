@@ -86,6 +86,35 @@ app:
     presign-expiry-seconds: ${MINIO_PRESIGN_EXPIRY_SECONDS:900}
     max-upload-bytes: ${MINIO_MAX_UPLOAD_BYTES:20971520}
 
+resilience4j:
+  # Mỗi downstream một breaker riêng. UpstreamFailure (common-library): chỉ 5xx / mất kết nối / timeout mới
+  # tính là lỗi và được retry; 4xx, AppException và circuit đang mở thì không.
+  retry:
+    configs:
+      default:
+        max-attempts: 3
+        wait-duration: 500ms
+        retry-exception-predicate: com.fashionstore.common.resilience.UpstreamFailure
+    instances:
+      orderService:
+        base-config: default
+      identityService:
+        base-config: default
+  circuitbreaker:
+    configs:
+      default:
+        sliding-window-size: 20
+        minimum-number-of-calls: 10
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+        permitted-number-of-calls-in-half-open-state: 5
+        record-failure-predicate: com.fashionstore.common.resilience.UpstreamFailure
+    instances:
+      orderService:
+        base-config: default
+      identityService:
+        base-config: default
+
 management:
   endpoints:
     web:

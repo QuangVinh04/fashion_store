@@ -7,7 +7,6 @@ import com.fashionstore.payment.config.payment.VnPayConfig;
 import com.fashionstore.payment.dto.PaymentCallbackResult;
 import com.fashionstore.payment.entity.Payment;
 import com.fashionstore.payment.entity.enumeration.PaymentStatus;
-import com.fashionstore.payment.client.VnPayFeignClient;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
@@ -25,7 +24,7 @@ class VnPayPaymentHandlerTest {
 
     @Test
     void queryVerifiesProviderSignatureAndNormalizesAmount() throws Exception {
-        VnPayFeignClient client = mock(VnPayFeignClient.class);
+        VnPayApi client = mock(VnPayApi.class);
         com.fasterxml.jackson.databind.node.ObjectNode response = queryResponse("00", "00");
         when(client.query(any())).thenReturn(response);
         Payment payment = Payment.builder().orderId("order-1").merchantReference("merchant-1")
@@ -43,7 +42,7 @@ class VnPayPaymentHandlerTest {
 
     @Test
     void queryApiErrorIsNotInterpretedAsPaymentFailure() throws Exception {
-        VnPayFeignClient client = mock(VnPayFeignClient.class);
+        VnPayApi client = mock(VnPayApi.class);
         when(client.query(any())).thenReturn(queryResponse("91", ""));
         Payment payment = Payment.builder().orderId("order-1").merchantReference("merchant-1")
                 .providerTransactionDate("20261008110000").build();
@@ -54,7 +53,7 @@ class VnPayPaymentHandlerTest {
 
     @Test
     void queryRejectsTamperedProviderResponse() throws Exception {
-        VnPayFeignClient client = mock(VnPayFeignClient.class);
+        VnPayApi client = mock(VnPayApi.class);
         com.fasterxml.jackson.databind.node.ObjectNode response = queryResponse("00", "00");
         response.put("vnp_SecureHash", "forged");
         when(client.query(any())).thenReturn(response);
@@ -83,7 +82,7 @@ class VnPayPaymentHandlerTest {
 
     @Test
     void verifyCallbackRejectsTamperedSignature() {
-        VnPayFeignClient client = mock(VnPayFeignClient.class);
+        VnPayApi client = mock(VnPayApi.class);
         VnPayPaymentHandler handler = new VnPayPaymentHandler(properties(), client);
         Map<String, String> payload = new LinkedHashMap<>();
         payload.put("vnp_TxnRef", "merchant-1");

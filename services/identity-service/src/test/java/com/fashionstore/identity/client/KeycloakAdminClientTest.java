@@ -1,7 +1,6 @@
 package com.fashionstore.identity.client;
 
 import com.fashionstore.common.exception.AppException;
-import com.fashionstore.common.exception.ErrorCode;
 import com.fashionstore.identity.dto.user.KeycloakUserRepresentation;
 import com.fashionstore.identity.exception.IdentityErrorCode;
 import feign.FeignException;
@@ -65,14 +64,13 @@ class KeycloakAdminClientTest {
     }
 
     @Test
-    void whenKeycloakFails_throwsUpstreamServiceError() {
+    void whenKeycloakFails_propagatesToCircuitBreakerWhichMapsItTo502() {
         doThrow(new FeignException.ServiceUnavailable("Service Unavailable", request(), null, null))
                 .when(keycloakAdminFeignClient).logout("kc-1");
 
+        // Không nuốt ở đây để Resilience4j thấy lỗi; việc đổi sang 502 do fallback (ResilienceWiringTest).
         assertThatThrownBy(() -> keycloakAdminClient.logout("kc-1"))
-                .isInstanceOf(AppException.class)
-                .extracting("errorCode")
-                .isEqualTo(ErrorCode.UPSTREAM_SERVICE_ERROR);
+                .isInstanceOf(FeignException.ServiceUnavailable.class);
     }
 
     private static Request request() {

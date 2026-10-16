@@ -350,7 +350,7 @@
       "enabled": true,
       "publicClient": false,
       "clientAuthenticatorType": "client-secret",
-      "secret": "dev-payment-service-secret",
+      "secret": "${PAYMENT_SERVICE_CLIENT_SECRET:dev-payment-service-secret}",
       "standardFlowEnabled": false,
       "implicitFlowEnabled": false,
       "directAccessGrantsEnabled": false,
@@ -409,12 +409,12 @@
       "email": "admin@fashion.local",
       "firstName": "Admin",
       "lastName": "Dev",
-      "enabled": true,
+      "enabled": "${DEV_USERS_ENABLED:true}",
       "emailVerified": true,
       "credentials": [
         {
           "type": "password",
-          "value": "Admin@12345",
+          "value": "${DEV_ADMIN_PASSWORD:Admin@12345}",
           "temporary": false
         }
       ],
@@ -433,12 +433,12 @@
       "email": "customer@fashion.local",
       "firstName": "Customer",
       "lastName": "Dev",
-      "enabled": true,
+      "enabled": "${DEV_USERS_ENABLED:true}",
       "emailVerified": true,
       "credentials": [
         {
           "type": "password",
-          "value": "Customer@12345",
+          "value": "${DEV_CUSTOMER_PASSWORD:Customer@12345}",
           "temporary": false
         }
       ],
