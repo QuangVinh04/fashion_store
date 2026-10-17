@@ -1,5 +1,6 @@
 package com.fashionstore.catalog.service.impl;
 
+import com.fashionstore.catalog.client.IdentityUserClient;
 import com.fashionstore.catalog.client.OrderClient;
 import com.fashionstore.catalog.dto.review.CreateReviewRequest;
 import com.fashionstore.catalog.dto.review.ProductReviewSummaryResponse;
@@ -7,6 +8,8 @@ import com.fashionstore.catalog.dto.review.ReviewResponse;
 import com.fashionstore.catalog.entity.Product;
 import com.fashionstore.catalog.entity.ProductVariant;
 import com.fashionstore.catalog.entity.Review;
+import com.fashionstore.catalog.entity.enumeration.FitRating;
+import com.fashionstore.catalog.entity.enumeration.ReviewStatus;
 import com.fashionstore.catalog.exception.ProductErrorCode;
 import com.fashionstore.catalog.repository.ProductRepository;
 import com.fashionstore.catalog.repository.ProductVariantRepository;
@@ -22,6 +25,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -57,6 +61,9 @@ class ReviewServiceImplTest {
     @Mock
     private CurrentUserProvider currentUserProvider;
 
+    @Mock
+    private IdentityUserClient identityUserClient;
+
     private ReviewServiceImpl service;
 
     @BeforeEach
@@ -66,7 +73,8 @@ class ReviewServiceImplTest {
                 productRepository,
                 productVariantRepository,
                 orderClient,
-                currentUserProvider
+                currentUserProvider,
+                identityUserClient
         );
         when(currentUserProvider.getCurrentUserId()).thenReturn("user-1");
     }
@@ -92,6 +100,10 @@ class ReviewServiceImplTest {
         CreateReviewRequest request = CreateReviewRequest.builder()
                 .rating(5)
                 .comment("Chất vải thoáng mát, đường may kỹ càng")
+                .fitRating(FitRating.TRUE_TO_SIZE)
+                .customerHeight(170)
+                .customerWeight(65)
+                .mediaUrls(List.of("http://example.com/photo1.jpg"))
                 .build();
 
         ReviewResponse response = service.createReview("prod-1", request);
@@ -104,11 +116,17 @@ class ReviewServiceImplTest {
         assertThat(response.getRating()).isEqualTo(5);
         assertThat(response.getComment()).isEqualTo("Chất vải thoáng mát, đường may kỹ càng");
         assertThat(response.getVerifiedPurchase()).isTrue();
+        assertThat(response.getStatus()).isEqualTo(ReviewStatus.VISIBLE);
+        assertThat(response.getFitRating()).isEqualTo(FitRating.TRUE_TO_SIZE);
+        assertThat(response.getCustomerHeight()).isEqualTo(170);
+        assertThat(response.getCustomerWeight()).isEqualTo(65);
+        assertThat(response.getMediaUrls()).containsExactly("http://example.com/photo1.jpg");
 
         ArgumentCaptor<Review> captor = ArgumentCaptor.forClass(Review.class);
         verify(reviewRepository, times(1)).saveAndFlush(captor.capture());
         assertThat(captor.getValue().getRating()).isEqualTo(5);
         assertThat(captor.getValue().getVerifiedPurchase()).isTrue();
+        assertThat(captor.getValue().getMediaList()).hasSize(1);
     }
 
     @Test
@@ -193,16 +211,16 @@ class ReviewServiceImplTest {
         Product product = Product.builder().name("Váy Nữ").build();
         product.setId("prod-1");
 
-        Review r1 = Review.builder().product(product).userId("user-1").rating(5).comment("Đẹp").build();
+        Review r1 = Review.builder().product(product).userId("user-1").rating(5).comment("Đẹp").status(ReviewStatus.VISIBLE).build();
         r1.setId("rev-1");
-        Review r2 = Review.builder().product(product).userId("user-2").rating(4).comment("Khá ổn").build();
+        Review r2 = Review.builder().product(product).userId("user-2").rating(4).comment("Khá ổn").status(ReviewStatus.VISIBLE).build();
         r2.setId("rev-2");
 
         when(productRepository.existsById("prod-1")).thenReturn(true);
-        when(reviewRepository.findByProductId(eq("prod-1"), any(Pageable.class)))
+        when(reviewRepository.findByProductIdAndStatus(eq("prod-1"), eq(ReviewStatus.VISIBLE), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(r1, r2), PageRequest.of(0, 10), 2));
         when(reviewRepository.getAverageRatingByProductId("prod-1")).thenReturn(4.5);
-        when(reviewRepository.countByProductId("prod-1")).thenReturn(2L);
+        when(reviewRepository.countByProductIdAndStatus("prod-1", ReviewStatus.VISIBLE)).thenReturn(2L);
         when(reviewRepository.countReviewsGroupByRating("prod-1")).thenReturn(List.of(
                 new Object[]{5, 1L},
                 new Object[]{4, 1L}
@@ -217,9 +235,55 @@ class ReviewServiceImplTest {
         assertThat(response.getRatingCounts()).containsEntry(4, 1L);
         assertThat(response.getRatingCounts()).containsEntry(3, 0L);
         assertThat(response.getReviews().getItems()).hasSize(2);
-        // Kiểm tra privacy: userId bị che mờ, orderId là null trong public response
         assertThat(response.getReviews().getItems().get(0).getUserId()).isEqualTo("u***1");
         assertThat(response.getReviews().getItems().get(0).getOrderId()).isNull();
+    }
+
+    @Test
+    void updateReviewStatus_updatesAndReturnsAdminResponse() {
+        Review review = Review.builder().userId("user-123").status(ReviewStatus.VISIBLE).build();
+        review.setId("rev-1");
+
+        when(reviewRepository.findById("rev-1")).thenReturn(Optional.of(review));
+        when(reviewRepository.save(any(Review.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        ReviewResponse response = service.updateReviewStatus("rev-1", ReviewStatus.HIDDEN);
+
+        assertThat(response).isNotNull();
+        assertThat(response.getStatus()).isEqualTo(ReviewStatus.HIDDEN);
+        verify(reviewRepository).save(review);
+    }
+
+    @Test
+    void replyReview_setsReplyCommentAndStaffId() {
+        Review review = Review.builder().userId("user-123").build();
+        review.setId("rev-1");
+
+        when(reviewRepository.findById("rev-1")).thenReturn(Optional.of(review));
+        when(reviewRepository.save(any(Review.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        ReviewResponse response = service.replyReview("rev-1", "Cảm ơn bạn đã phản hồi");
+
+        assertThat(response).isNotNull();
+        assertThat(response.getReplyComment()).isEqualTo("Cảm ơn bạn đã phản hồi");
+        assertThat(response.getRepliedBy()).isEqualTo("user-1");
+        assertThat(response.getRepliedAt()).isNotNull();
+    }
+
+    @Test
+    void deleteReply_clearsReplyFields() {
+        Review review = Review.builder().userId("user-123").replyComment("Cũ").build();
+        review.setId("rev-1");
+
+        when(reviewRepository.findById("rev-1")).thenReturn(Optional.of(review));
+        when(reviewRepository.save(any(Review.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        ReviewResponse response = service.deleteReply("rev-1");
+
+        assertThat(response).isNotNull();
+        assertThat(response.getReplyComment()).isNull();
+        assertThat(response.getRepliedAt()).isNull();
+        assertThat(response.getRepliedBy()).isNull();
     }
 
     @Test
@@ -242,7 +306,7 @@ class ReviewServiceImplTest {
         Product product = Product.builder().name("Áo Khoác").build();
         product.setId("prod-1");
 
-        Review review = Review.builder().product(product).userId("user-2").rating(5).build(); // khác user-1
+        Review review = Review.builder().product(product).userId("user-2").rating(5).build();
         review.setId("rev-1");
 
         when(reviewRepository.findById("rev-1")).thenReturn(Optional.of(review));
@@ -253,5 +317,46 @@ class ReviewServiceImplTest {
                         .isEqualTo(ProductErrorCode.REVIEW_ACTION_FORBIDDEN));
 
         verify(reviewRepository, never()).delete(any());
+    }
+
+    @Test
+    void getAdminReviews_returnsEnrichedUserDetailsAndProductName() {
+        Product product = Product.builder().name("Áo Sơ Mi Nam").build();
+        product.setId("prod-10");
+
+        Review review = Review.builder()
+                .product(product)
+                .userId("customer-uuid-123")
+                .orderId("order-uuid-456")
+                .rating(5)
+                .comment("Hàng chuẩn đẹp")
+                .verifiedPurchase(true)
+                .status(ReviewStatus.VISIBLE)
+                .build();
+        review.setId("rev-10");
+
+        Page<Review> page = new PageImpl<>(List.of(review), PageRequest.of(0, 20), 1);
+        when(reviewRepository.findAllForAdmin(eq("Sơ Mi"), eq(5), eq(ReviewStatus.VISIBLE), any(Pageable.class))).thenReturn(page);
+        when(identityUserClient.getUserById("customer-uuid-123")).thenReturn(Optional.of(
+                new IdentityUserClient.UserInfoResponse("customer-uuid-123", "nguyen@example.com", "Nguyễn Văn A", "0901234567")
+        ));
+
+        com.fashionstore.common.dto.PageResponse<List<ReviewResponse>> result =
+                service.getAdminReviews("Sơ Mi", 5, ReviewStatus.VISIBLE, PageRequest.of(0, 20));
+
+        assertThat(result).isNotNull();
+        assertThat(result.getTotalElements()).isEqualTo(1L);
+        assertThat(result.getItems()).hasSize(1);
+
+        ReviewResponse response = result.getItems().get(0);
+        assertThat(response.getId()).isEqualTo("rev-10");
+        assertThat(response.getProductId()).isEqualTo("prod-10");
+        assertThat(response.getProductName()).isEqualTo("Áo Sơ Mi Nam");
+        assertThat(response.getUserId()).isEqualTo("customer-uuid-123");
+        assertThat(response.getCustomerName()).isEqualTo("Nguyễn Văn A");
+        assertThat(response.getCustomerEmail()).isEqualTo("nguyen@example.com");
+        assertThat(response.getCustomerPhone()).isEqualTo("0901234567");
+        assertThat(response.getRating()).isEqualTo(5);
+        assertThat(response.getStatus()).isEqualTo(ReviewStatus.VISIBLE);
     }
 }

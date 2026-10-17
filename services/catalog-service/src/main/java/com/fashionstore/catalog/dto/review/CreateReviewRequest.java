@@ -1,5 +1,6 @@
 package com.fashionstore.catalog.dto.review;
 
+import com.fashionstore.catalog.entity.enumeration.FitRating;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
@@ -11,6 +12,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.FieldDefaults;
+
+import java.util.List;
 
 @Getter
 @Setter
@@ -29,4 +32,12 @@ public class CreateReviewRequest {
 
     @Size(max = 1000, message = "Nội dung đánh giá tối đa 1000 ký tự")
     String comment;
+
+    List<String> mediaUrls;
+
+    FitRating fitRating;
+
+    Integer customerHeight;
+
+    Integer customerWeight;
 }

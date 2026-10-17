@@ -227,12 +227,20 @@ public class ProductServiceImpl implements ProductService {
     }
 
     private void assignCategories(Product product, List<Category> categories) {
-        product.getProductCategories().clear();
+        Set<String> targetCategoryIds = categories.stream()
+                .map(Category::getId)
+                .collect(Collectors.toSet());
+        product.getProductCategories().removeIf(pc -> !targetCategoryIds.contains(pc.getCategory().getId()));
+        Set<String> existingCategoryIds = product.getProductCategories().stream()
+                .map(pc -> pc.getCategory().getId())
+                .collect(Collectors.toSet());
         for (Category category : categories) {
-            product.getProductCategories().add(ProductCategory.builder()
-                    .product(product)
-                    .category(category)
-                    .build());
+            if (!existingCategoryIds.contains(category.getId())) {
+                product.getProductCategories().add(ProductCategory.builder()
+                        .product(product)
+                        .category(category)
+                        .build());
+            }
         }
     }
 

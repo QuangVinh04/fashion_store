@@ -1,5 +1,6 @@
 package com.fashionstore.catalog.service.impl;
 
+import com.fashionstore.catalog.client.IdentityUserClient;
 import com.fashionstore.catalog.client.OrderClient;
 import com.fashionstore.catalog.dto.review.CreateReviewRequest;
 import com.fashionstore.catalog.dto.review.ProductReviewSummaryResponse;
@@ -7,6 +8,8 @@ import com.fashionstore.catalog.dto.review.ReviewResponse;
 import com.fashionstore.catalog.entity.Product;
 import com.fashionstore.catalog.entity.ProductVariant;
 import com.fashionstore.catalog.entity.Review;
+import com.fashionstore.catalog.entity.ReviewMedia;
+import com.fashionstore.catalog.entity.enumeration.ReviewStatus;
 import com.fashionstore.catalog.exception.ProductErrorCode;
 import com.fashionstore.catalog.repository.ProductRepository;
 import com.fashionstore.catalog.repository.ProductVariantRepository;
@@ -30,6 +33,8 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -45,6 +50,7 @@ public class ReviewServiceImpl implements ReviewService {
     ProductVariantRepository productVariantRepository;
     OrderClient orderClient;
     CurrentUserProvider currentUserProvider;
+    IdentityUserClient identityUserClient;
 
     @Override
     @Transactional
@@ -83,7 +89,27 @@ public class ReviewServiceImpl implements ReviewService {
                 .rating(request.getRating())
                 .comment(request.getComment() != null ? request.getComment().trim() : null)
                 .verifiedPurchase(true)
+                .status(ReviewStatus.VISIBLE)
+                .fitRating(request.getFitRating())
+                .customerHeight(request.getCustomerHeight())
+                .customerWeight(request.getCustomerWeight())
+                .mediaList(new ArrayList<>())
                 .build();
+
+        if (request.getMediaUrls() != null && !request.getMediaUrls().isEmpty()) {
+            int order = 0;
+            for (String url : request.getMediaUrls()) {
+                if (url != null && !url.isBlank()) {
+                    ReviewMedia media = ReviewMedia.builder()
+                            .review(review)
+                            .url(url.trim())
+                            .mediaType("IMAGE")
+                            .displayOrder(order++)
+                            .build();
+                    review.getMediaList().add(media);
+                }
+            }
+        }
 
         try {
             review = reviewRepository.saveAndFlush(review);
@@ -107,12 +133,12 @@ public class ReviewServiceImpl implements ReviewService {
         }
 
         Page<Review> page = (ratingFilter != null && ratingFilter >= 1 && ratingFilter <= 5)
-                ? reviewRepository.findByProductIdAndRating(productId, ratingFilter, pageable)
-                : reviewRepository.findByProductId(productId, pageable);
+                ? reviewRepository.findByProductIdAndRatingAndStatus(productId, ratingFilter, ReviewStatus.VISIBLE, pageable)
+                : reviewRepository.findByProductIdAndStatus(productId, ReviewStatus.VISIBLE, pageable);
 
         Double avg = reviewRepository.getAverageRatingByProductId(productId);
         double averageRating = avg != null ? Math.round(avg * 10.0) / 10.0 : 0.0;
-        long totalReviews = reviewRepository.countByProductId(productId);
+        long totalReviews = reviewRepository.countByProductIdAndStatus(productId, ReviewStatus.VISIBLE);
 
         Map<Integer, Long> ratingCounts = new HashMap<>();
         for (int i = 1; i <= 5; i++) {
@@ -147,6 +173,74 @@ public class ReviewServiceImpl implements ReviewService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public PageResponse<List<ReviewResponse>> getAdminReviews(String keyword, Integer rating, ReviewStatus status, Pageable pageable) {
+        Page<Review> page = reviewRepository.findAllForAdmin(keyword, rating, status, pageable);
+
+        List<ReviewResponse> items = page.getContent().stream()
+                .map(this::toAdminResponse)
+                .toList();
+
+        return PageResponse.<List<ReviewResponse>>builder()
+                .pageNo(pageable.getPageNumber())
+                .pageSize(pageable.getPageSize())
+                .totalPage(page.getTotalPages())
+                .totalElements(page.getTotalElements())
+                .items(items)
+                .build();
+    }
+
+    @Override
+    @Transactional
+    public ReviewResponse updateReviewStatus(String reviewId, ReviewStatus status) {
+        Review review = reviewRepository.findById(reviewId)
+                .orElseThrow(() -> new AppException(ProductErrorCode.REVIEW_NOT_FOUND));
+
+        review.setStatus(status);
+        review = reviewRepository.save(review);
+        log.info("[Review] Updated review {} status to {}", reviewId, status);
+        return toAdminResponse(review);
+    }
+
+    @Override
+    @Transactional
+    public ReviewResponse replyReview(String reviewId, String replyComment) {
+        Review review = reviewRepository.findById(reviewId)
+                .orElseThrow(() -> new AppException(ProductErrorCode.REVIEW_NOT_FOUND));
+
+        String staffId = currentUserProvider.getCurrentUserId();
+        review.setReplyComment(replyComment);
+        review.setRepliedAt(LocalDateTime.now());
+        review.setRepliedBy(staffId);
+        review = reviewRepository.save(review);
+        log.info("[Review] Staff {} replied to review {}", staffId, reviewId);
+        return toAdminResponse(review);
+    }
+
+    @Override
+    @Transactional
+    public ReviewResponse deleteReply(String reviewId) {
+        Review review = reviewRepository.findById(reviewId)
+                .orElseThrow(() -> new AppException(ProductErrorCode.REVIEW_NOT_FOUND));
+
+        review.setReplyComment(null);
+        review.setRepliedAt(null);
+        review.setRepliedBy(null);
+        review = reviewRepository.save(review);
+        log.info("[Review] Deleted reply for review {}", reviewId);
+        return toAdminResponse(review);
+    }
+
+    @Override
+    @Transactional
+    public void adminDeleteReview(String reviewId) {
+        Review review = reviewRepository.findById(reviewId)
+                .orElseThrow(() -> new AppException(ProductErrorCode.REVIEW_NOT_FOUND));
+        reviewRepository.delete(review);
+        log.info("[Review] Admin deleted review {}", reviewId);
+    }
+
+    @Override
     @Transactional
     public void deleteReview(String productId, String reviewId) {
         Review review = reviewRepository.findById(reviewId)
@@ -177,19 +271,48 @@ public class ReviewServiceImpl implements ReviewService {
     }
 
     private ReviewResponse toResponse(Review review) {
+        List<String> mediaUrls = review.getMediaList() != null
+                ? review.getMediaList().stream().map(ReviewMedia::getUrl).toList()
+                : List.of();
+
         return ReviewResponse.builder()
                 .id(review.getId())
                 .productId(review.getProduct() != null ? review.getProduct().getId() : null)
+                .productName(review.getProduct() != null ? review.getProduct().getName() : null)
                 .userId(review.getUserId())
                 .orderId(review.getOrderId())
                 .rating(review.getRating())
                 .comment(review.getComment())
                 .verifiedPurchase(review.getVerifiedPurchase())
+                .status(review.getStatus())
+                .replyComment(review.getReplyComment())
+                .repliedAt(review.getRepliedAt())
+                .repliedBy(review.getRepliedBy())
+                .fitRating(review.getFitRating())
+                .customerHeight(review.getCustomerHeight())
+                .customerWeight(review.getCustomerWeight())
+                .mediaUrls(mediaUrls)
                 .createdAt(review.getCreatedAt())
                 .build();
     }
 
+    private ReviewResponse toAdminResponse(Review review) {
+        ReviewResponse res = toResponse(review);
+        if (review.getUserId() != null) {
+            identityUserClient.getUserById(review.getUserId()).ifPresent(user -> {
+                res.setCustomerName(user.fullName());
+                res.setCustomerEmail(user.email());
+                res.setCustomerPhone(user.phone());
+            });
+        }
+        return res;
+    }
+
     private ReviewResponse toPublicResponse(Review review) {
+        List<String> mediaUrls = review.getMediaList() != null
+                ? review.getMediaList().stream().map(ReviewMedia::getUrl).toList()
+                : List.of();
+
         return ReviewResponse.builder()
                 .id(review.getId())
                 .productId(review.getProduct() != null ? review.getProduct().getId() : null)
@@ -198,6 +321,13 @@ public class ReviewServiceImpl implements ReviewService {
                 .rating(review.getRating())
                 .comment(review.getComment())
                 .verifiedPurchase(review.getVerifiedPurchase())
+                .status(review.getStatus())
+                .replyComment(review.getReplyComment())
+                .repliedAt(review.getRepliedAt())
+                .fitRating(review.getFitRating())
+                .customerHeight(review.getCustomerHeight())
+                .customerWeight(review.getCustomerWeight())
+                .mediaUrls(mediaUrls)
                 .createdAt(review.getCreatedAt())
                 .build();
     }
