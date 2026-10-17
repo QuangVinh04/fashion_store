@@ -1,11 +1,17 @@
 package com.fashionstore.catalog.entity;
 
+import com.fashionstore.catalog.entity.enumeration.FitRating;
+import com.fashionstore.catalog.entity.enumeration.ReviewStatus;
 import com.fashionstore.common.persistence.BaseEntity;
+import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
@@ -14,6 +20,10 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.FieldDefaults;
+
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Getter
 @Setter
@@ -44,4 +54,32 @@ public class Review extends BaseEntity {
     @Column(name = "verified_purchase", nullable = false)
     @Builder.Default
     Boolean verifiedPurchase = true;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    @Builder.Default
+    ReviewStatus status = ReviewStatus.VISIBLE;
+
+    @Column(name = "reply_comment", columnDefinition = "TEXT")
+    String replyComment;
+
+    @Column(name = "replied_at")
+    LocalDateTime repliedAt;
+
+    @Column(name = "replied_by", length = 36)
+    String repliedBy;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "fit_rating", length = 20)
+    FitRating fitRating;
+
+    @Column(name = "customer_height")
+    Integer customerHeight;
+
+    @Column(name = "customer_weight")
+    Integer customerWeight;
+
+    @OneToMany(mappedBy = "review", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    List<ReviewMedia> mediaList = new ArrayList<>();
 }
