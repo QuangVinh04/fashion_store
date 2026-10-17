@@ -33,11 +33,16 @@ public class CreateReviewRequest {
     @Size(max = 1000, message = "Nội dung đánh giá tối đa 1000 ký tự")
     String comment;
 
-    List<String> mediaUrls;
+    @Size(max = 10, message = "Tối đa 10 hình ảnh đánh giá")
+    List<@Size(max = 1000, message = "URL ảnh không được vượt quá 1000 ký tự") String> mediaUrls;
 
     FitRating fitRating;
 
+    @Min(value = 50, message = "Chiều cao tối thiểu là 50cm")
+    @Max(value = 250, message = "Chiều cao tối đa là 250cm")
     Integer customerHeight;
 
+    @Min(value = 20, message = "Cân nặng tối thiểu là 20kg")
+    @Max(value = 300, message = "Cân nặng tối đa là 300kg")
     Integer customerWeight;
 }

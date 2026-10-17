@@ -38,6 +38,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 @Slf4j
 @Service
@@ -177,8 +178,9 @@ public class ReviewServiceImpl implements ReviewService {
     public PageResponse<List<ReviewResponse>> getAdminReviews(String keyword, Integer rating, ReviewStatus status, Pageable pageable) {
         Page<Review> page = reviewRepository.findAllForAdmin(keyword, rating, status, pageable);
 
+        Map<String, Optional<IdentityUserClient.UserInfoResponse>> userCache = new HashMap<>();
         List<ReviewResponse> items = page.getContent().stream()
-                .map(this::toAdminResponse)
+                .map(r -> toAdminResponse(r, userCache))
                 .toList();
 
         return PageResponse.<List<ReviewResponse>>builder()
@@ -297,9 +299,19 @@ public class ReviewServiceImpl implements ReviewService {
     }
 
     private ReviewResponse toAdminResponse(Review review) {
+        return toAdminResponse(review, null);
+    }
+
+    private ReviewResponse toAdminResponse(Review review, Map<String, Optional<IdentityUserClient.UserInfoResponse>> userCache) {
         ReviewResponse res = toResponse(review);
         if (review.getUserId() != null) {
-            identityUserClient.getUserById(review.getUserId()).ifPresent(user -> {
+            Optional<IdentityUserClient.UserInfoResponse> userOpt;
+            if (userCache != null) {
+                userOpt = userCache.computeIfAbsent(review.getUserId(), identityUserClient::getUserById);
+            } else {
+                userOpt = identityUserClient.getUserById(review.getUserId());
+            }
+            userOpt.ifPresent(user -> {
                 res.setCustomerName(user.fullName());
                 res.setCustomerEmail(user.email());
                 res.setCustomerPhone(user.phone());

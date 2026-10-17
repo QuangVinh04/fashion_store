@@ -79,6 +79,7 @@ public class Review extends BaseEntity {
     @Column(name = "customer_weight")
     Integer customerWeight;
 
+    @org.hibernate.annotations.BatchSize(size = 30)
     @OneToMany(mappedBy = "review", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     List<ReviewMedia> mediaList = new ArrayList<>();

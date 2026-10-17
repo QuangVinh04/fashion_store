@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 
 import {
+  Alert,
   Box,
   Button,
   Dialog,
@@ -57,6 +58,7 @@ export default function ReplyReviewDialog({ open, review, onClose }: ReplyReview
   })
 
   const isPending = replyMutation.isPending || deleteReplyMutation.isPending
+  const error = replyMutation.error || deleteReplyMutation.error
 
   if (!review) return null
 
@@ -66,6 +68,12 @@ export default function ReplyReviewDialog({ open, review, onClose }: ReplyReview
         Phản hồi đánh giá của khách hàng
       </DialogTitle>
       <DialogContent dividers>
+        {error && (
+          <Alert severity='error' sx={{ mb: 2 }}>
+            {error instanceof Error ? error.message : 'Có lỗi xảy ra khi xử lý phản hồi.'}
+          </Alert>
+        )}
+
         <Box sx={{ mb: 3, p: 2, bgcolor: 'action.hover', borderRadius: 1 }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
             <Typography variant='subtitle2' fontWeight={600}>

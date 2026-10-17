@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import Link from 'next/link'
 
@@ -14,8 +14,6 @@ import {
   Chip,
   Dialog,
   DialogContent,
-  IconButton,
-  InputAdornment,
   MenuItem,
   Rating,
   Table,
@@ -25,7 +23,6 @@ import {
   TableHead,
   TableRow,
   TextField,
-  Tooltip,
   Typography
 } from '@mui/material'
 
@@ -53,6 +50,7 @@ function formatDate(isoString?: string | null): string {
 
 function renderFitChip(fit?: FitRating | null) {
   if (!fit) return null
+
   switch (fit) {
     case 'TRUE_TO_SIZE':
       return <Chip label='Chuẩn size' size='small' color='success' variant='outlined' sx={{ height: 20, fontSize: '0.75rem' }} />
@@ -69,9 +67,24 @@ export default function ReviewList() {
   const queryClient = useQueryClient()
   const { page, size, filters, setPage, setSize, setFilters } = useListQueryState()
 
+  const [searchTerm, setSearchTerm] = useState(filters.keyword || '')
   const [deleteTarget, setDeleteTarget] = useState<Review | null>(null)
   const [replyTarget, setReplyTarget] = useState<Review | null>(null)
   const [previewImage, setPreviewImage] = useState<string | null>(null)
+
+  useEffect(() => {
+    setSearchTerm(filters.keyword || '')
+  }, [filters.keyword])
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if ((filters.keyword || '') !== searchTerm) {
+        setFilters({ keyword: searchTerm })
+      }
+    }, 400)
+
+    return () => clearTimeout(timer)
+  }, [searchTerm, filters.keyword, setFilters])
 
   const ratingParam = filters.rating ? Number(filters.rating) : undefined
   const statusParam = (filters.status as ReviewStatus) || undefined
@@ -118,8 +131,8 @@ export default function ReviewList() {
             size='small'
             label='Tìm kiếm'
             placeholder='Tên sản phẩm, khách hàng, nội dung...'
-            value={filters.keyword || ''}
-            onChange={e => setFilters({ keyword: e.target.value })}
+            value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value)}
             sx={{ minWidth: 280 }}
           />
 

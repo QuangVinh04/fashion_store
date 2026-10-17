@@ -18,3 +18,4 @@ CREATE TABLE IF NOT EXISTS review_media (
 
 CREATE INDEX IF NOT EXISTS idx_review_media_review_id ON review_media(review_id);
 CREATE INDEX IF NOT EXISTS idx_review_status ON review(status);
+CREATE INDEX IF NOT EXISTS idx_review_product_status ON review(product_id, status);

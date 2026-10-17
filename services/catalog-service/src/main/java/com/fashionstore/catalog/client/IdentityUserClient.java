@@ -20,19 +20,14 @@ public class IdentityUserClient {
         if (userId == null || userId.isBlank()) {
             return Optional.empty();
         }
-        try {
-            ApiResponse<UserInfoResponse> res = identityUserFeignClient.getUserById(userId);
-            if (res != null && res.getData() != null) {
-                return Optional.of(res.getData());
-            }
-        } catch (Exception e) {
-            log.warn("[IdentityUserClient] Error fetching user {}: {}", userId, e.getMessage());
-            return Optional.empty();
+        ApiResponse<UserInfoResponse> res = identityUserFeignClient.getUserById(userId);
+        if (res != null && res.getData() != null) {
+            return Optional.of(res.getData());
         }
         return Optional.empty();
     }
 
-    public Optional<UserInfoResponse> getUserByIdFallback(String userId, Exception ex) {
+    public Optional<UserInfoResponse> getUserByIdFallback(String userId, Throwable ex) {
         log.warn("[IdentityUserClient] CircuitBreaker fallback for user {}: {}", userId, ex.getMessage());
         return Optional.empty();
     }
