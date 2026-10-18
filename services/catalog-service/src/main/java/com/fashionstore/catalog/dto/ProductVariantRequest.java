@@ -2,6 +2,7 @@ package com.fashionstore.catalog.dto;
 
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotBlank;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
@@ -42,15 +43,19 @@ public class ProductVariantRequest {
     BigDecimal salePrice;
 
     @Min(value = 0, message = "Weight cannot be negative")
+    @Max(50000)
     Integer weightGram;
 
     @Min(value = 0, message = "Length cannot be negative")
+    @Max(2000)
     Integer lengthMm;
 
     @Min(value = 0, message = "Width cannot be negative")
+    @Max(2000)
     Integer widthMm;
 
     @Min(value = 0, message = "Height cannot be negative")
+    @Max(2000)
     Integer heightMm;
 
     Boolean active;

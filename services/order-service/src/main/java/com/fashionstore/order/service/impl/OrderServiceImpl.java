@@ -207,12 +207,45 @@ public class OrderServiceImpl implements OrderService {
     @Transactional(readOnly = true)
     public PageResponse<List<OrderSummaryResponse>> getMyOrders(
             OrderStatus status, Pageable pageable) {
+        return getMyOrders(status, null, null, pageable);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<List<OrderSummaryResponse>> getMyOrders(
+            OrderStatus status, OrderPurchaseTab tab, String keyword, Pageable pageable) {
         String userId = currentUserProvider.getCurrentUserId();
         Page<Order> orders =
-                status == null
+                tab != null || keyword != null && !keyword.isBlank()
+                        ? orderRepository.findAll(com.fashionstore.order.service.OrderPurchaseSpecifications
+                                .owned(userId, status, tab, keyword), pageable)
+                        : status == null
                         ? orderRepository.findByUserId(userId, pageable)
                         : orderRepository.findByUserIdAndStatus(userId, status, pageable);
-        return toPageResponse(orders, pageable);
+        var response = toPageResponse(orders, pageable);
+        if (orders.isEmpty()) return response;
+        List<String> ids = orders.map(Order::getId).getContent();
+        var snapshots = orderRepository.findWithItemsByIdIn(ids).stream()
+                .collect(java.util.stream.Collectors.toMap(Order::getId,
+                        order -> com.fashionstore.order.mapper.OrderResponseMapper.create(order, order.getCheckoutId()).getItems()));
+        var returns = orderRepository.findReturnReferences(ids).stream()
+                .collect(java.util.stream.Collectors.toMap(OrderReturnReference::orderId, reference -> reference));
+        var entities = orders.stream().collect(java.util.stream.Collectors.toMap(Order::getId, order -> order));
+        response.getItems().forEach(order -> {
+            order.setItems(snapshots.getOrDefault(order.getId(), List.of()));
+            var returned = returns.get(order.getId());
+            if (returned != null) {
+                order.setReturnRequestId(returned.returnRequestId());
+                order.setReturnStatus(returned.returnStatus());
+                order.setReturnKind(returned.kind());
+                order.setReturnRefundStatus(returned.refundStatus());
+                order.setExpectedRefundAmount(returned.approvedRefundAmount() != null
+                        ? returned.approvedRefundAmount() : order.getTotalAmount());
+                order.setActualRefundAmount(returned.actualRefundAmount());
+            }
+            order.setCanRequestReturn(orderReceiptService.canRequestReturn(entities.get(order.getId()), returns.containsKey(order.getId())));
+        });
+        return response;
     }
 
     @Override

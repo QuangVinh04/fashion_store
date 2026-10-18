@@ -39,6 +39,9 @@ public interface ReturnService {
 
     String getCustomerEvidenceReadUrl(String returnRequestId, String mediaId);
 
+    /** Read submitted evidence belonging to the current customer's return, including closed returns. */
+    String getMyReturnEvidenceReadUrl(String orderId, String mediaId);
+
     /** Hủy yêu cầu trả hàng đã duyệt mà khách không gửi hàng trong hạn. */
     void expireUnsentReturns(java.time.Instant now);
 

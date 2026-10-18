@@ -7,7 +7,7 @@ import lombok.Getter;
 import java.math.BigDecimal;
 
 @Getter
-@Builder
+@Builder(toBuilder = true)
 public class PaymentCallbackResult {
     public record ProviderReceipt(String providerTransactionId,BigDecimal amount,String currency) {}
     java.util.List<ProviderReceipt> transactionReceipts;
@@ -18,4 +18,6 @@ public class PaymentCallbackResult {
     BigDecimal amount;
     String currency;
     boolean signatureValid;
+    String orderId;
+    String paymentId;
 }

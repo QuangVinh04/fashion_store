@@ -21,6 +21,9 @@ public interface OrderService {
 
     PageResponse<List<OrderSummaryResponse>> getMyOrders(OrderStatus status, Pageable pageable);
 
+    PageResponse<List<OrderSummaryResponse>> getMyOrders(OrderStatus status,
+            com.fashionstore.order.dto.OrderPurchaseTab tab, String keyword, Pageable pageable);
+
     /**
      * Khách tự hủy đơn. Đơn còn nằm trong saga thì đây là yêu cầu bù trừ, không phải lệnh đổi trạng
      * thái: đơn có thể vẫn ở PENDING khi trả về và chỉ CANCELLED sau khi participant nhả kho / hủy

@@ -51,7 +51,6 @@ public class OrderController {
 
     com.fashionstore.order.service.OrderReceiptService orderReceiptService;
     com.fashionstore.order.service.OrderCancellationService orderCancellationService;
-    com.fashionstore.order.service.ReturnPickupService returnPickupService;
 
     @PostMapping("/{id}/confirm-receipt")
     public ApiResponse<OrderResponse> confirmReceipt(@PathVariable String id) {
@@ -93,12 +92,16 @@ public class OrderController {
     public ApiResponse<PageResponse<List<OrderSummaryResponse>>> getMyOrders(
             @Parameter(description = "Lọc theo trạng thái đơn; bỏ trống là lấy tất cả")
             @RequestParam(required = false) OrderStatus status,
+            @Parameter(description = "Nhóm đơn mua: PENDING, PREPARING, SHIPPING, COMPLETED, CANCELLED, RETURNS")
+            @RequestParam(required = false) com.fashionstore.order.dto.OrderPurchaseTab tab,
+            @Parameter(description = "Tìm theo mã đơn hoặc tên sản phẩm đã đặt")
+            @RequestParam(required = false) @jakarta.validation.constraints.Size(max = 120) String q,
             @ParameterObject
             @PageableDefault(page = 0, size = 10, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
     ) {
         return ApiResponse.<PageResponse<List<OrderSummaryResponse>>>builder()
                 .message("Get my orders successfully")
-                .data(orderService.getMyOrders(status, pageable))
+                .data(orderService.getMyOrders(status, tab, q, pageable))
                 .build();
     }
 
@@ -155,31 +158,25 @@ public class OrderController {
                 .build();
     }
 
-    @Operation(
-            summary = "Khách hủy yêu cầu trả hàng",
-            description =
-                    """
-Hủy được khi yêu cầu còn `REQUESTED`, hoặc đã duyệt nhưng GHN chưa lấy hàng (`APPROVED`): khi đó hệ thống
-hủy đơn trả bên GHN và chỉ đóng yêu cầu sau khi GHN xác nhận. Đóng xong đơn chuyển `COMPLETED` ngay và
-không tạo được yêu cầu mới. Từ lúc GHN đã lấy hàng (`IN_TRANSIT`) thì không hủy được.
-
-Mã lỗi: `4019` không có yêu cầu của bạn (404) · `4025` đã lấy hàng/đã xử lý nên không hủy được (409) ·
-502 GHN chưa xác nhận hủy (thử lại).""")
-    @PostMapping("/{id}/return-request/cancel")
-    public ApiResponse<ReturnRequestResponse> cancelReturnRequest(@PathVariable("id") String id) {
-        returnPickupService.cancelByCustomer(id);
-        return ApiResponse.<ReturnRequestResponse>builder()
-                .message("Return request cancelled successfully")
-                .data(returnService.getReturnRequestByOrderId(id))
-                .build();
-    }
-
     @Operation(summary = "Xem yêu cầu trả hàng của đơn")
     @GetMapping("/{id}/return-request")
     public ApiResponse<ReturnRequestResponse> getReturnRequest(@PathVariable("id") String id) {
         return ApiResponse.<ReturnRequestResponse>builder()
                 .message("Get return request successfully")
                 .data(returnService.getReturnRequestByOrderId(id))
+                .build();
+    }
+
+    @Operation(
+            summary = "Xem ảnh bằng chứng đã gửi trong yêu cầu trả hàng của mình",
+            description = "Trả URL đọc có thời hạn. Chỉ chủ yêu cầu được xem ảnh thuộc yêu cầu đó, "
+                    + "kể cả sau khi đã hoàn tiền. Yêu cầu không tồn tại hoặc thuộc người khác trả 4019 (404).")
+    @GetMapping("/{id}/return-request/evidence/{mediaId}")
+    public ApiResponse<String> getReturnEvidence(
+            @PathVariable("id") String id, @PathVariable("mediaId") String mediaId) {
+        return ApiResponse.<String>builder()
+                .message("Get return evidence URL successfully")
+                .data(returnService.getMyReturnEvidenceReadUrl(id, mediaId))
                 .build();
     }
 

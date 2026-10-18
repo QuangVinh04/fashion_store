@@ -62,10 +62,6 @@ public class Product extends BaseEntity {
     @Builder.Default
     ProductStatus status = ProductStatus.DRAFT;
 
-    @Column(nullable = false)
-    @Builder.Default
-    Boolean published = false;
-
     @Column(name = "published_at")
     LocalDateTime publishedAt;
 
@@ -90,17 +86,17 @@ public class Product extends BaseEntity {
     @Column(name = "sale_price", precision = 12, scale = 2)
     BigDecimal salePrice;
 
-    @Column(name = "weight_gram")
-    Integer weightGram;
+    @Column(name = "weight")
+    Integer weight;
 
-    @Column(name = "length_mm")
-    Integer lengthMm;
+    @Column(name = "length")
+    Integer length;
 
-    @Column(name = "width_mm")
-    Integer widthMm;
+    @Column(name = "width")
+    Integer width;
 
-    @Column(name = "height_mm")
-    Integer heightMm;
+    @Column(name = "height")
+    Integer height;
 
     @Column(name = "thumbnail_media_id", length = 36)
     String thumbnailMediaId;
@@ -142,5 +138,36 @@ public class Product extends BaseEntity {
 
     public void setPrice(BigDecimal price) {
         this.basePrice = price;
+    }
+
+    public Boolean getPublished() { return status == ProductStatus.PUBLISHED; }
+
+    public void setPublished(Boolean published) {
+        if (Boolean.TRUE.equals(published)) status = ProductStatus.PUBLISHED;
+        else if (status == ProductStatus.PUBLISHED) status = ProductStatus.DRAFT;
+    }
+
+    public Integer getWeightGram() { return weight; }
+    public void setWeightGram(Integer value) { weight = value; }
+    public Integer getLengthMm() { return length == null ? null : length * 10; }
+    public void setLengthMm(Integer value) { length = centimeters(value); }
+    public Integer getWidthMm() { return width == null ? null : width * 10; }
+    public void setWidthMm(Integer value) { width = centimeters(value); }
+    public Integer getHeightMm() { return height == null ? null : height * 10; }
+    public void setHeightMm(Integer value) { height = centimeters(value); }
+
+    private static Integer centimeters(Integer value) {
+        return value == null ? null : (int) Math.ceil(value / 10.0);
+    }
+
+    public static class ProductBuilder {
+        public ProductBuilder weightGram(Integer value) { this.weight = value; return this; }
+        public ProductBuilder lengthMm(Integer value) { this.length = centimeters(value); return this; }
+        public ProductBuilder widthMm(Integer value) { this.width = centimeters(value); return this; }
+        public ProductBuilder heightMm(Integer value) { this.height = centimeters(value); return this; }
+        public ProductBuilder published(Boolean value) {
+            if (Boolean.TRUE.equals(value)) this.status(ProductStatus.PUBLISHED);
+            return this;
+        }
     }
 }

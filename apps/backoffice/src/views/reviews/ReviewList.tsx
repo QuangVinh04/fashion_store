@@ -14,6 +14,7 @@ import {
   Chip,
   Dialog,
   DialogContent,
+  IconButton,
   MenuItem,
   Rating,
   Table,
@@ -23,6 +24,7 @@ import {
   TableHead,
   TableRow,
   TextField,
+  Tooltip,
   Typography
 } from '@mui/material'
 
@@ -53,11 +55,11 @@ function renderFitChip(fit?: FitRating | null) {
 
   switch (fit) {
     case 'TRUE_TO_SIZE':
-      return <Chip label='Chuẩn size' size='small' color='success' variant='outlined' sx={{ height: 20, fontSize: '0.75rem' }} />
+      return <Chip label='Chuẩn size' size='small' color='success' variant='tonal' sx={{ height: 20, fontSize: '0.75rem' }} />
     case 'RUNS_SMALL':
-      return <Chip label='Form nhỏ / chật' size='small' color='warning' variant='outlined' sx={{ height: 20, fontSize: '0.75rem' }} />
+      return <Chip label='Form nhỏ / chật' size='small' color='warning' variant='tonal' sx={{ height: 20, fontSize: '0.75rem' }} />
     case 'RUNS_LARGE':
-      return <Chip label='Form rộng' size='small' color='info' variant='outlined' sx={{ height: 20, fontSize: '0.75rem' }} />
+      return <Chip label='Form rộng' size='small' color='info' variant='tonal' sx={{ height: 20, fontSize: '0.75rem' }} />
     default:
       return null
   }
@@ -171,11 +173,12 @@ export default function ReviewList() {
             <Table sx={{ minWidth: 1100 }}>
               <TableHead>
                 <TableRow>
-                  {['Khách hàng', 'Sản phẩm', 'Đánh giá & Form', 'Ảnh feedback', 'Phản hồi từ Shop', 'Trạng thái', 'Thao tác'].map(
+                  {['Khách hàng', 'Sản phẩm', 'Đánh giá & Form', 'Ảnh feedback', 'Phản hồi từ Shop', 'Trạng thái'].map(
                     header => (
                       <TableCell key={header}>{header}</TableCell>
                     )
                   )}
+                  <TableCell align='right'>Thao tác</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -198,9 +201,9 @@ export default function ReviewList() {
                           )}
                           <Box sx={{ mt: 0.5 }}>
                             {row.verifiedPurchase ? (
-                              <Chip label='Đã mua' color='success' size='small' variant='outlined' sx={{ height: 18, fontSize: '0.7rem' }} />
+                              <Chip label='Đã mua' color='success' size='small' variant='tonal' sx={{ height: 18, fontSize: '0.7rem' }} />
                             ) : (
-                              <Chip label='Chưa xác thực' size='small' variant='outlined' sx={{ height: 18, fontSize: '0.7rem' }} />
+                              <Chip label='Chưa xác thực' color='secondary' size='small' variant='tonal' sx={{ height: 18, fontSize: '0.7rem' }} />
                             )}
                           </Box>
                         </Box>
@@ -336,33 +339,42 @@ export default function ReviewList() {
                     {/* Trạng thái */}
                     <TableCell>
                       {row.status === 'HIDDEN' ? (
-                        <Chip label='Đã ẩn' color='default' size='small' />
+                        <Chip label='Đã ẩn' color='secondary' size='small' variant='tonal' />
                       ) : (
-                        <Chip label='Hiển thị' color='success' size='small' />
+                        <Chip label='Hiển thị' color='success' size='small' variant='tonal' />
                       )}
                     </TableCell>
 
                     {/* Thao tác */}
-                    <TableCell>
-                      <Box sx={{ display: 'flex', gap: 1 }}>
-                        <Button
-                          size='small'
-                          variant='text'
-                          color={row.status === 'HIDDEN' ? 'success' : 'warning'}
-                          disabled={toggleStatusMutation.isPending}
-                          onClick={() =>
-                            toggleStatusMutation.mutate({
-                              reviewId: row.id,
-                              nextStatus: row.status === 'HIDDEN' ? 'VISIBLE' : 'HIDDEN'
-                            })
-                          }
-                        >
-                          {row.status === 'HIDDEN' ? 'Hiện' : 'Ẩn'}
-                        </Button>
+                    <TableCell align='right' sx={{ whiteSpace: 'nowrap' }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 0.5 }}>
+                        <Tooltip title={row.status === 'HIDDEN' ? 'Hiển thị đánh giá' : 'Ẩn đánh giá'}>
+                          <IconButton
+                            size='small'
+                            color={row.status === 'HIDDEN' ? 'success' : 'warning'}
+                            disabled={toggleStatusMutation.isPending}
+                            onClick={() =>
+                              toggleStatusMutation.mutate({
+                                reviewId: row.id,
+                                nextStatus: row.status === 'HIDDEN' ? 'VISIBLE' : 'HIDDEN'
+                              })
+                            }
+                            aria-label={row.status === 'HIDDEN' ? 'Hiện đánh giá' : 'Ẩn đánh giá'}
+                          >
+                            <i className={row.status === 'HIDDEN' ? 'ri-eye-line text-lg' : 'ri-eye-off-line text-lg'} />
+                          </IconButton>
+                        </Tooltip>
 
-                        <Button size='small' color='error' onClick={() => setDeleteTarget(row)}>
-                          Xóa
-                        </Button>
+                        <Tooltip title='Xóa đánh giá'>
+                          <IconButton
+                            size='small'
+                            color='error'
+                            onClick={() => setDeleteTarget(row)}
+                            aria-label={'Xóa đánh giá của ' + (row.customerName || 'khách')}
+                          >
+                            <i className='ri-delete-bin-line text-lg' />
+                          </IconButton>
+                        </Tooltip>
                       </Box>
                     </TableCell>
                   </TableRow>

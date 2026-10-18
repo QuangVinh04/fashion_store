@@ -44,6 +44,12 @@ public class CallbackPaymentServiceImpl implements CallbackPaymentService {
         if (applied.outcome() == CallbackOutcome.PAYMENT_NOT_FOUND) {
             throw new AppException(PaymentErrorCode.PAYMENT_NOT_FOUND);
         }
+        if (applied.payment() != null) {
+            return result.toBuilder()
+                    .orderId(applied.payment().getOrderId())
+                    .paymentId(applied.payment().getId())
+                    .build();
+        }
         return result;
     }
 

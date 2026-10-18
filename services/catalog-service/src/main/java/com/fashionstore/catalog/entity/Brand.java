@@ -34,6 +34,9 @@ public class Brand extends BaseEntity {
     @Column(name = "logo_media_id", length = 36)
     String logoMediaId;
 
+    @Column(name = "logo_url", length = 1000)
+    String logoUrl;
+
     @Column(nullable = false)
     @Builder.Default
     Boolean active = true;

@@ -17,10 +17,11 @@ import org.springframework.test.context.*;
 import org.springframework.transaction.annotation.*;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.wait.strategy.Wait;
+import com.fashionstore.catalog.service.impl.InventoryServiceImpl;
 import java.util.UUID;
 import static org.assertj.core.api.Assertions.*;
 
-@DataJpaTest(includeFilters=@ComponentScan.Filter(type=FilterType.ASSIGNABLE_TYPE,classes=InventoryCancellationService.class))
+@DataJpaTest(includeFilters=@ComponentScan.Filter(type=FilterType.ASSIGNABLE_TYPE,classes=InventoryServiceImpl.class))
 @ContextConfiguration(classes=CatalogServiceApplication.class)
 @Import({CancelOrderInventoryPostgresIntegrationTest.Fixtures.class,OutboxService.class})
 @AutoConfigureTestDatabase(replace=AutoConfigureTestDatabase.Replace.NONE)
@@ -37,14 +38,18 @@ class CancelOrderInventoryPostgresIntegrationTest {
         registry.add("spring.jpa.database-platform",() -> "org.hibernate.dialect.PostgreSQLDialect");
         registry.add("spring.jpa.properties.hibernate.dialect",() -> "org.hibernate.dialect.PostgreSQLDialect");
         registry.add("spring.flyway.enabled",() -> "true");registry.add("spring.jpa.hibernate.ddl-auto",() -> "validate");
+        registry.add("spring.flyway.locations",() -> "filesystem:src/main/resources/db/migration");
     }
-    @TestConfiguration static class Fixtures { @Bean ObjectMapper objectMapper() {return new ObjectMapper().findAndRegisterModules();} }
-    @Autowired InventoryCancellationService service;
+    @TestConfiguration static class Fixtures {
+        @Bean ObjectMapper objectMapper() {return new ObjectMapper().findAndRegisterModules();}
+        @Bean com.fashionstore.common.security.CurrentUserProvider currentUserProvider() { return org.mockito.Mockito.mock(com.fashionstore.common.security.CurrentUserProvider.class); }
+        @Bean com.fashionstore.catalog.mapper.InventoryMapper inventoryMapper() { return org.mockito.Mockito.mock(com.fashionstore.catalog.mapper.InventoryMapper.class); }
+    }
+    @Autowired InventoryService service;
     @Autowired InventoryRepository inventory;
     @Autowired InventoryReservationRepository reservations;
     @Autowired InventoryReservationItemRepository items;
     @Autowired InventoryLedgerRepository ledger;
-    @Autowired OrderInventoryCancellationRepository audit;
     @AfterAll static void stopDatabase() {POSTGRES.stop();}
 
     private CancelOrderInventoryCommand fixture(InventoryReservationStatus status) {
@@ -66,7 +71,7 @@ class CancelOrderInventoryPostgresIntegrationTest {
         var variant=items.findByReservationId(command.reservationId()).getFirst().getVariantId();
         assertThat(inventory.findByVariantId(variant).orElseThrow().getQuantity()).isEqualTo(10);
         assertThat(inventory.findByVariantId(variant).orElseThrow().getReservedQuantity()).isZero();
-        assertThat(audit.findByOrderId(command.orderId())).isPresent();
+        assertThat(reservations.findByOrderId(command.orderId()).orElseThrow().getCancellationId()).isEqualTo(command.cancellationId());
         assertThat(ledger.findAll().stream().filter(row->command.orderId().equals(row.getRefOrderId())).toList()).singleElement()
                 .satisfies(row->assertThat(row.getType()).isEqualTo(InventoryLedgerType.CANCEL_UNSHIPPED));
     }

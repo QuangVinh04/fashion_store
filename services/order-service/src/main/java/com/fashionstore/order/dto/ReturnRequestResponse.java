@@ -40,6 +40,16 @@ public class ReturnRequestResponse {
     Instant approvedAt;
     Instant receivedAt;
     Instant closedAt;
+    ReturnRefundStatus refundStatus;
+    /** Destination of refunds under the current wallet-only policy. */
+    String refundDestination;
+    /** Estimate under the whole-order refund policy; not a promise of payment. */
+    String expectedRefundAmount;
+    /** Confirmed amount only; null until a refund ledger receipt is recorded. */
+    String actualRefundAmount;
+    String currency;
+    /** Order-service confirmation time, not the wallet's exact posting time. */
+    Instant refundedAt;
     String approvedRefundAmount;
     String refundLedgerEntryId;
     String receivedBy;
@@ -51,6 +61,8 @@ public class ReturnRequestResponse {
     Instant sendBackBy;
     /** Mã vận đơn GHN chiều về (khách -> kho); null khi chưa duyệt hoặc không đi qua GHN. */
     String returnTrackingCode;
+    /** Carrier of the return shipment, independent of the outbound shipment. */
+    String returnShippingProvider;
     ReturnShipmentStatus returnShipmentStatus;
     LocalDateTime createdAt;
     LocalDateTime updatedAt;

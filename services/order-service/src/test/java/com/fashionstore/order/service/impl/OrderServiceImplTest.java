@@ -413,6 +413,33 @@ class OrderServiceImplTest {
     // ----- GET /orders -----
 
     @Test
+    void customerListIncludesProductSnapshotsAndReturnLinkWithoutLoadingEachOrder() {
+        Pageable pageable = PageRequest.of(0, 10);
+        Order order = order(OrderStatus.DELIVERED);
+        order.getItems().add(com.fashionstore.order.entity.OrderItem.builder().productName("Áo polo")
+                .variantId("variant-1").quantity(2).unitPrice(new BigDecimal("100000"))
+                .lineTotal(new BigDecimal("200000")).build());
+        when(orderRepository.findByUserId("user-1", pageable))
+                .thenReturn(new PageImpl<>(List.of(order), pageable, 1));
+        when(orderRepository.findWithItemsByIdIn(List.of(order.getId()))).thenReturn(List.of(order));
+        when(orderRepository.findReturnReferences(List.of(order.getId())))
+                .thenReturn(List.of(new com.fashionstore.order.dto.OrderReturnReference(order.getId(), "return-1",
+                        com.fashionstore.order.entity.enumeration.ReturnRequestStatus.REFUNDED,
+                        com.fashionstore.order.entity.enumeration.ReturnRequestKind.CUSTOMER_RETURN,
+                        new BigDecimal("180000"), "ledger-1", null, null, null)));
+
+        var result = service.getMyOrders(null, pageable).getItems().getFirst();
+
+        assertEquals("Áo polo", result.getItems().getFirst().getProductName());
+        assertEquals(2, result.getItems().getFirst().getQuantity());
+        assertEquals("return-1", result.getReturnRequestId());
+        assertEquals(com.fashionstore.order.dto.ReturnRefundStatus.COMPLETED, result.getReturnRefundStatus());
+        assertEquals(new BigDecimal("180000"), result.getActualRefundAmount());
+        assertEquals(new BigDecimal("180000"), result.getExpectedRefundAmount());
+        verify(orderRepository, never()).findWithItemsById(any());
+    }
+
+    @Test
     void listsMyOrdersAsSummariesWithPageMetadata() {
         Pageable pageable = PageRequest.of(0, 10);
         when(orderRepository.findByUserId("user-1", pageable))

@@ -20,8 +20,10 @@ const NAV = [
 
 export default function ProfileLayout({
   children,
+  flush = false,
 }: {
   children: React.ReactNode;
+  flush?: boolean;
 }) {
   const { user, logout } = useAuth();
   const location = useLocation();
@@ -31,7 +33,7 @@ export default function ProfileLayout({
   };
 
   return (
-    <div style={{ fontFamily: "var(--app-font)" }}>
+    <div className={flush ? 'bg-background' : undefined} style={{ fontFamily: "var(--app-font)" }}>
       {/* Breadcrumb */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-5 border-b border-border">
         <nav className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -99,7 +101,7 @@ export default function ProfileLayout({
           </aside>
 
           {/* Content */}
-          <div className="min-w-0 rounded-2xl border border-border bg-card p-4 sm:p-6">
+          <div className={flush ? 'min-w-0' : 'min-w-0 rounded-2xl border border-border bg-card p-4 sm:p-6'}>
             {children}
           </div>
         </div>

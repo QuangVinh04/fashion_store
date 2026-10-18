@@ -1,5 +1,5 @@
 import { customerError } from "../api/client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { Heart, Trash2, ShoppingBag, ArrowRight } from "lucide-react";
 import { store } from "../api/store";
@@ -19,12 +19,24 @@ export default function Wishlist() {
   const [busyId, setBusyId] = useState<string>("");
   const [notice, setNotice] = useState<string>("");
 
+  useEffect(() => {
+    const data = wishlistLoad.data;
+    if (!wishlistLoad.loading && !wishlistLoad.error && data?.pageNo === page
+        && data.items.length === 0 && page > 0) {
+      setPage(Math.max(0, Math.min(page - 1, data.totalPage - 1)));
+    }
+  }, [wishlistLoad.data, wishlistLoad.loading, wishlistLoad.error, page]);
+
   async function handleRemove(productId: string) {
     setBusyId(productId);
     setNotice("");
     try {
       await store.wishRemove(productId);
-      await wishlistLoad.refresh();
+      if (wishlistLoad.data && wishlistLoad.data.items.length === 1 && page > 0) {
+        setPage(prev => Math.max(0, prev - 1));
+      } else {
+        await wishlistLoad.refresh();
+      }
     } catch (e) {
       setNotice(customerError(e));
     } finally {

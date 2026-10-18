@@ -15,7 +15,19 @@ import org.springframework.data.repository.query.Param;
 
 import java.util.Optional;
 
-public interface OrderRepository extends JpaRepository<Order, String> {
+public interface OrderRepository extends JpaRepository<Order, String>, org.springframework.data.jpa.repository.JpaSpecificationExecutor<Order> {
+    /** Load collections only after the database has selected a page of order IDs. */
+    @EntityGraph(attributePaths = {"items"})
+    java.util.List<Order> findWithItemsByIdIn(java.util.Collection<String> ids);
+
+    @Query("""
+            select new com.fashionstore.order.dto.OrderReturnReference(r.order.id, r.id,
+                r.status, r.kind, r.approvedRefundAmount, r.refundLedgerEntryId,
+                r.refundFailureReason, r.refundStartedAt, r.closedAt)
+            from ReturnRequest r where r.order.id in :ids
+            """)
+    java.util.List<com.fashionstore.order.dto.OrderReturnReference> findReturnReferences(
+            @Param("ids") java.util.Collection<String> ids);
     @Query("""
             select o.id from Order o
             where o.status = com.fashionstore.order.entity.enumeration.OrderStatus.DELIVERED

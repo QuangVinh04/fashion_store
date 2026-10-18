@@ -141,19 +141,22 @@ interface + `impl` như các service khác. `outbox/**` chưa flatten theo tần
 
 ## Flyway
 
-Ba lịch sử migration được nhập vào một, đánh số theo dải để còn chỗ mở rộng:
+Đã squash cho local/dev ngày 17/10/2026 theo xác nhận được phép tạo lại database.
+Đường dẫn Flyway đang chạy chỉ còn `V1__create_catalog_schema.sql`; thay đổi tiếp theo dùng V2.
+Hibernate dùng `ddl-auto=validate` để kiểm tra schema sau khi Flyway chạy.
 
-| Dải | Nguồn | Nội dung |
-|---|---|---|
-| `V1`–`V10` | product-service | schema sản phẩm, outbox (`V2`/`V3`), domain model, vòng đời + ảnh, color/size |
-| `V20`–`V23` | inventory-service | tồn kho, `processed_message`, reservation, align cột |
-| `V40` | file-service | media library |
-| `V41` | catalog | presigned upload: `checksum_sha256` nullable, thêm `etag` |
-
-`V22` không còn tạo bảng `outbox_event` như bản gốc — bảng đó đã do `V2`/`V3` tạo trong
-cùng database, nên `V22` chỉ bù hai cột `created_by` / `updated_by`.
+36 migration cũ được lưu ngoài classpath, kèm checksum, tại
+[`docs/database/catalog/pre-squash-2026-10-17`](../../docs/database/catalog/pre-squash-2026-10-17).
+Database có lịch sử cũ phải được tạo lại; không dùng `repair` để ghép hai lịch sử.
+Xem [mô hình cuối cùng và hướng dẫn áp dụng](../../docs/database/catalog/README.md).
 
 ## Security
+
+Chi tiết công khai `GET /api/v1/products/{id}` (và alias `/api/v1/product/{id}`)
+chỉ trả sản phẩm `PUBLISHED`; draft/archived trả `PRODUCT_NOT_FOUND` (404).
+Endpoint bảng size theo sản phẩm dùng cùng kiểm tra này.
+Admin dùng `GET /admin/products/{productId}` và lookup riêng có quyền ADMIN,
+vẫn xem được draft/archived để quản lý.
 
 Ba service cũ có ba luật `anyRequest()` khác nhau, nên thay vì trộn thành một chain, mỗi
 domain giữ một `SecurityFilterChain` riêng khoanh vùng bằng `securityMatcher`:

@@ -740,6 +740,35 @@ class ReturnServiceImplTest {
     }
 
     @Test
+    void returnDetailsExposeReturnCarrierRatherThanOutboundCarrier() {
+        Order order = deliveredOrder();
+        order.setShippingProvider("OTHER_OUTBOUND_CARRIER");
+        ReturnRequest request = returnRequest(order, ReturnRequestStatus.APPROVED);
+        when(returnRequestRepository.findByOrderId("ord-1")).thenReturn(Optional.of(request));
+        when(returnShipmentRepository.findByReturnRequestId("ret-1"))
+                .thenReturn(Optional.of(com.fashionstore.order.entity.ReturnShipment.builder()
+                        .ghnOrderCode("GHN-RETURN-1")
+                        .status(com.fashionstore.order.entity.enumeration.ReturnShipmentStatus.READY_TO_PICK)
+                        .build()));
+
+        var response = service.getReturnRequestByOrderId("ord-1");
+        var json = objectMapper.findAndRegisterModules().valueToTree(response);
+
+        assertThat(json.path("returnShippingProvider").asText()).isEqualTo("GHN");
+        assertThat(response.getReturnTrackingCode()).isEqualTo("GHN-RETURN-1");
+    }
+
+    @Test
+    void returnDetailsWithoutReturnShipmentDoNotInventCarrier() {
+        ReturnRequest request = returnRequest(deliveredOrder(), ReturnRequestStatus.REQUESTED);
+        when(returnRequestRepository.findByOrderId("ord-1")).thenReturn(Optional.of(request));
+
+        var json = objectMapper.findAndRegisterModules().valueToTree(service.getReturnRequestByOrderId("ord-1"));
+
+        assertThat(json.path("returnShippingProvider").isNull()).isTrue();
+    }
+
+    @Test
     void getReturnRequestByOrderId_whenBelongsToDifferentUser_throwsNotFound() {
         Order order = Order.builder().userId("user-2").build();
         ReturnRequest returnRequest =
@@ -796,6 +825,80 @@ class ReturnServiceImplTest {
                 .isEqualTo("https://signed");
         assertThatThrownBy(() -> service.getCustomerEvidenceReadUrl("ret-1", "media-x"))
                 .isInstanceOf(AppException.class);
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(
+            value = ReturnRequestStatus.class, names = {"REQUESTED", "REFUNDED"})
+    void myReturnEvidenceRemainsReadableAfterRefund(ReturnRequestStatus status) {
+        ReturnRequest request = returnRequest(deliveredOrder(), status);
+        request.setImages("[\"media-1\"]");
+        when(returnRequestRepository.findByOrderId("ord-1")).thenReturn(Optional.of(request));
+        when(catalogClient.getEvidenceReadUrl("media-1", "user-1"))
+                .thenReturn(com.fashionstore.common.dto.ApiResponse.<String>builder()
+                        .data("https://signed.example/evidence").build());
+
+        assertThat(service.getMyReturnEvidenceReadUrl("ord-1", "media-1"))
+                .isEqualTo("https://signed.example/evidence");
+    }
+
+    @Test
+    void myReturnEvidenceHidesOtherCustomersRequests() {
+        ReturnRequest request = returnRequest(deliveredOrder(), ReturnRequestStatus.REQUESTED);
+        request.setUserId("another-user");
+        request.setImages("[\"media-1\"]");
+        when(returnRequestRepository.findByOrderId("ord-1")).thenReturn(Optional.of(request));
+
+        assertThatThrownBy(() -> service.getMyReturnEvidenceReadUrl("ord-1", "media-1"))
+                .isInstanceOfSatisfying(AppException.class, ex ->
+                        assertThat(ex.getErrorCode()).isEqualTo(OrderErrorCode.RETURN_REQUEST_NOT_FOUND));
+        org.mockito.Mockito.verifyNoInteractions(catalogClient);
+    }
+
+    @Test
+    void myReturnEvidenceRejectsMissingRequest() {
+        when(returnRequestRepository.findByOrderId("ord-missing")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.getMyReturnEvidenceReadUrl("ord-missing", "media-1"))
+                .isInstanceOfSatisfying(AppException.class, ex ->
+                        assertThat(ex.getErrorCode()).isEqualTo(OrderErrorCode.RETURN_REQUEST_NOT_FOUND));
+        org.mockito.Mockito.verifyNoInteractions(catalogClient);
+    }
+
+    @Test
+    void myReturnEvidenceRejectsMediaOutsideSubmittedImages() {
+        ReturnRequest request = returnRequest(deliveredOrder(), ReturnRequestStatus.REQUESTED);
+        request.setImages("[\"media-1\"]");
+        when(returnRequestRepository.findByOrderId("ord-1")).thenReturn(Optional.of(request));
+
+        assertThatThrownBy(() -> service.getMyReturnEvidenceReadUrl("ord-1", "media-other"))
+                .isInstanceOfSatisfying(AppException.class, ex ->
+                        assertThat(ex.getErrorCode()).isEqualTo(OrderErrorCode.RETURN_EVIDENCE_INVALID));
+        org.mockito.Mockito.verifyNoInteractions(catalogClient);
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.MethodSource("invalidEvidenceReadResponses")
+    void myReturnEvidenceRejectsInvalidReadUrl(
+            com.fashionstore.common.dto.ApiResponse<String> response) {
+        ReturnRequest request = returnRequest(deliveredOrder(), ReturnRequestStatus.REQUESTED);
+        request.setImages("[\"media-1\"]");
+        when(returnRequestRepository.findByOrderId("ord-1")).thenReturn(Optional.of(request));
+        when(catalogClient.getEvidenceReadUrl("media-1", "user-1")).thenReturn(response);
+
+        assertThatThrownBy(() -> service.getMyReturnEvidenceReadUrl("ord-1", "media-1"))
+                .isInstanceOfSatisfying(AppException.class, ex ->
+                        assertThat(ex.getErrorCode()).isEqualTo(OrderErrorCode.RETURN_EVIDENCE_INVALID));
+    }
+
+    static java.util.stream.Stream<com.fashionstore.common.dto.ApiResponse<String>>
+            invalidEvidenceReadResponses() {
+        return java.util.stream.Stream.of(
+                null,
+                com.fashionstore.common.dto.ApiResponse.<String>builder().build(),
+                com.fashionstore.common.dto.ApiResponse.<String>builder().data(" ").build(),
+                com.fashionstore.common.dto.ApiResponse.<String>builder()
+                        .code(9999).data("https://signed.example/evidence").build());
     }
 
     // ----- quá hạn gửi hàng trả -----

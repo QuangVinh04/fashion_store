@@ -84,6 +84,18 @@ class ProductControllerTest {
     }
 
     @Test
+    void adminDetailUsesTheBackofficeLookup() throws Exception {
+        when(productService.getProductByIdForBackoffice("draft-1"))
+                .thenReturn(ProductResponse.builder().id("draft-1").build());
+
+        mockMvc.perform(get("/admin/products/draft-1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.id").value("draft-1"));
+        verify(productService).getProductByIdForBackoffice("draft-1");
+        org.mockito.Mockito.verify(productService, org.mockito.Mockito.never()).getProductById("draft-1");
+    }
+
+    @Test
     void getSizeChartReturnsSuccessWithoutCallingServiceWhenProductHasNoChart() throws Exception {
         when(productService.getProductById("product-1"))
                 .thenReturn(ProductResponse.builder().id("product-1").sizeChartId(null).build());

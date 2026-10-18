@@ -27,10 +27,19 @@ public class ProductVariantSnapshotResponse {
     String colorHex;
     BigDecimal price;
     BigDecimal salePrice;
+
+    // Shipping parameters for logistics (GHN / GHTK: cm & gram)
+    Integer weight;
+    Integer length;
+    Integer width;
+    Integer height;
+
+    // Legacy fields for backward compatibility
     Integer weightGram;
     Integer lengthMm;
     Integer widthMm;
     Integer heightMm;
+
     Boolean active;
     String optionSignature;
     String displayName;

@@ -65,11 +65,6 @@ public class RabbitMQConfig {
     }
 
     @Bean
-    Queue inventoryRestockRequestedQueue() {
-        return consumerQueue(RabbitMQNames.INVENTORY_RESTOCK_REQUESTED_QUEUE);
-    }
-
-    @Bean
     Binding inventoryReservationRequestedBinding(Queue inventoryReservationRequestedQueue, DirectExchange fashionEventsExchange) {
         return RabbitTopology.bind(inventoryReservationRequestedQueue, fashionEventsExchange, EventTypes.INVENTORY_RESERVATION_REQUESTED);
     }
@@ -82,11 +77,6 @@ public class RabbitMQConfig {
     @Bean
     Binding inventoryReleaseRequestedBinding(Queue inventoryReleaseRequestedQueue, DirectExchange fashionEventsExchange) {
         return RabbitTopology.bind(inventoryReleaseRequestedQueue, fashionEventsExchange, EventTypes.INVENTORY_RELEASE_REQUESTED);
-    }
-
-    @Bean
-    Binding inventoryRestockRequestedBinding(Queue inventoryRestockRequestedQueue, DirectExchange fashionEventsExchange) {
-        return RabbitTopology.bind(inventoryRestockRequestedQueue, fashionEventsExchange, EventTypes.INVENTORY_RESTOCK_REQUESTED);
     }
 
     // ----- Avatar từ identity-service -----

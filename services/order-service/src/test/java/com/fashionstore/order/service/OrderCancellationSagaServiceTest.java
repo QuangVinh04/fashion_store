@@ -117,6 +117,32 @@ class OrderCancellationSagaServiceTest {
     }
 
     @Test
+    void carrierHandoffResultRejectsCancellationBeforeCompensationAndDuplicateWebhookIsHarmless() {
+        var order = order();
+        var saga = cancellation(order, OrderSagaStep.STOP_SHIPMENT);
+        order.setCancelReason("Changed mind");
+        var shipment = Shipment.builder().order(order).trackingCode("tracking-1")
+                .status(ShipmentStatus.PENDING).build();
+        shipment.setId("shipment-1");
+        when(shipments.findByOrderIdForUpdate(order.getId())).thenReturn(Optional.of(shipment));
+        var work = new CancellationCarrierWork(order.getId(), saga.getId(), "tracking-1", "shipment-1", null);
+        var result = new ShipmentCancellationResult("tracking-1", "HANDED_OFF", "GHN picked parcel");
+
+        service.applyCarrierResult(work, result);
+
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.SHIPPING);
+        assertThat(order.getCancelReason()).isNull();
+        assertThat(saga.getStatus()).isEqualTo(OrderSagaStatus.FAILED);
+        assertThat(saga.getFailureCode()).isEqualTo("CARRIER_HANDOFF");
+        service.applyCarrierResult(work, result);
+        service.lateHandoff(order.getId(), "GHN status picked");
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.SHIPPING);
+        verify(history, times(1)).save(argThat(row -> "CANCELLATION_REJECTED".equals(row.getAction())));
+        verify(notifications, times(1)).sendOrderShippedNotification(order, shipment);
+        verifyNoInteractions(outbox, promotions);
+    }
+
+    @Test
     void handoffBlocksOrdinaryRetry() {
         var order = order();
         var saga = cancellation(order, OrderSagaStep.STOP_SHIPMENT);

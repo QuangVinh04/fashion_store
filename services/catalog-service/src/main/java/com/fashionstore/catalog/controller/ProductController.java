@@ -242,7 +242,7 @@ public class ProductController {
     public ApiResponse<ProductResponse> getAdminProduct(@PathVariable String productId) {
         return ApiResponse.<ProductResponse>builder()
                 .message("Get product by id successfully")
-                .data(productService.getProductById(productId))
+                .data(productService.getProductByIdForBackoffice(productId))
                 .build();
     }
 

@@ -1,0 +1,195 @@
+{
+  "ifResourceExists": "SKIP",
+  "users": [
+    {
+      "id": "00000000-0000-0000-0000-000000000011",
+      "username": "nguyen.van.an@fashion.local",
+      "email": "nguyen.van.an@fashion.local",
+      "firstName": "An",
+      "lastName": "Nguyễn Văn",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "User@12345",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "USER"
+      ]
+    },
+    {
+      "id": "00000000-0000-0000-0000-000000000012",
+      "username": "tran.thi.binh@fashion.local",
+      "email": "tran.thi.binh@fashion.local",
+      "firstName": "Bình",
+      "lastName": "Trần Thị",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "User@12345",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "USER"
+      ]
+    },
+    {
+      "id": "00000000-0000-0000-0000-000000000013",
+      "username": "le.hoang.nam@fashion.local",
+      "email": "le.hoang.nam@fashion.local",
+      "firstName": "Nam",
+      "lastName": "Lê Hoàng",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "User@12345",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "USER"
+      ]
+    },
+    {
+      "id": "00000000-0000-0000-0000-000000000014",
+      "username": "pham.minh.trang@fashion.local",
+      "email": "pham.minh.trang@fashion.local",
+      "firstName": "Trang",
+      "lastName": "Phạm Minh",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "User@12345",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "USER"
+      ]
+    },
+    {
+      "id": "00000000-0000-0000-0000-000000000015",
+      "username": "vu.duc.thang@fashion.local",
+      "email": "vu.duc.thang@fashion.local",
+      "firstName": "Thắng",
+      "lastName": "Vũ Đức",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "User@12345",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "USER"
+      ]
+    },
+    {
+      "id": "00000000-0000-0000-0000-000000000016",
+      "username": "hoang.thu.thao@fashion.local",
+      "email": "hoang.thu.thao@fashion.local",
+      "firstName": "Thảo",
+      "lastName": "Hoàng Thu",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "User@12345",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "USER"
+      ]
+    },
+    {
+      "id": "00000000-0000-0000-0000-000000000017",
+      "username": "do.quoc.bao@fashion.local",
+      "email": "do.quoc.bao@fashion.local",
+      "firstName": "Bảo",
+      "lastName": "Đỗ Quốc",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "User@12345",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "USER"
+      ]
+    },
+    {
+      "id": "00000000-0000-0000-0000-000000000018",
+      "username": "ngo.phuong.linh@fashion.local",
+      "email": "ngo.phuong.linh@fashion.local",
+      "firstName": "Linh",
+      "lastName": "Ngô Phương",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "User@12345",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "USER"
+      ]
+    },
+    {
+      "id": "00000000-0000-0000-0000-000000000019",
+      "username": "bui.anh.tuan@fashion.local",
+      "email": "bui.anh.tuan@fashion.local",
+      "firstName": "Tuấn",
+      "lastName": "Bùi Anh",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "User@12345",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "USER"
+      ]
+    },
+    {
+      "id": "00000000-0000-0000-0000-000000000020",
+      "username": "dinh.ngoc.mai@fashion.local",
+      "email": "dinh.ngoc.mai@fashion.local",
+      "firstName": "Mai",
+      "lastName": "Đinh Ngọc",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "User@12345",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "USER"
+      ]
+    }
+  ]
+}

@@ -73,8 +73,9 @@ export default function ProductDetail() {
   const { addItem } = useCart();
   const { isLoggedIn, login } = useAuth();
 
+  const [reviewPage, setReviewPage] = useState(0);
   const productLoad = useLoad(() => store.product(id), [id]);
-  const reviewsLoad = useLoad(() => store.reviews(id), [id]);
+  const reviewsLoad = useLoad(() => store.reviews(id, reviewPage), [id, reviewPage]);
   const sizeChartLoad = useLoad(() => store.productSizeChart(id), [id]);
 
   const [selectedColor, setSelectedColor] = useState<string>("");
@@ -83,6 +84,7 @@ export default function ProductDetail() {
   const [activeImg, setActiveImg] = useState<string>("");
   const [liked, setLiked] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [variantPrompt, setVariantPrompt] = useState(false);
   const [feedback, setFeedback] = useState<{
     type: "success" | "error";
     message: string;
@@ -99,6 +101,8 @@ export default function ProductDetail() {
     setQty(1);
     setActiveImg("");
     setFeedback(null);
+    setVariantPrompt(false);
+    setReviewPage(0);
   }, [id]);
 
   // Wishlist check
@@ -212,6 +216,7 @@ export default function ProductDetail() {
       return;
     }
     if (!selectedColor || !selectedSize || !selectedVariant) {
+      setVariantPrompt(true);
       setFeedback({
         type: "error",
         message: "Vui lòng chọn đầy đủ màu sắc và kích cỡ sản phẩm.",
@@ -220,6 +225,7 @@ export default function ProductDetail() {
     }
 
     setBusy(true);
+    setVariantPrompt(false);
     setFeedback(null);
     try {
       await addItem(selectedVariant.id, qty);
@@ -400,15 +406,19 @@ export default function ProductDetail() {
 
                 {/* Color Selector */}
                 {colorOptions.length > 0 && (
-                  <div className="mb-6">
+                  <div className={`mb-6 p-3 rounded-2xl transition-all ${
+                    variantPrompt && !selectedColor
+                      ? "border border-destructive/30 bg-primary-light/40"
+                      : ""
+                  }`}>
                     <div className="flex items-center justify-between mb-2.5">
                       <span className="text-xs font-semibold text-foreground">
                         Màu Sắc:{" "}
-                        <strong className="text-primary font-semibold">
+                        <strong className={variantPrompt && !selectedColor ? "text-destructive font-semibold" : "text-primary font-semibold"}>
                           {colorOptions.find(
                             (c) =>
                               (c.colorOptionId || c.color) === selectedColor,
-                          )?.color || "Chưa chọn"}
+                          )?.color || (variantPrompt ? "Chưa chọn — vui lòng chọn màu" : "Chưa chọn")}
                         </strong>
                       </span>
                     </div>
@@ -426,6 +436,7 @@ export default function ProductDetail() {
                               setSelectedSize("");
                               setActiveImg("");
                               setFeedback(null);
+                              setVariantPrompt(false);
                             }}
                             className={`flex items-center gap-2 px-3 py-2 border text-xs font-medium transition-all ${
                               isSelected
@@ -447,14 +458,18 @@ export default function ProductDetail() {
 
                 {/* Size Selector */}
                 {sizeOptions.length > 0 && (
-                  <div className="mb-6">
+                  <div className={`mb-6 p-3 rounded-2xl transition-all ${
+                    variantPrompt && !selectedSize
+                      ? "border border-destructive/30 bg-primary-light/40"
+                      : ""
+                  }`}>
                     <div className="flex items-center justify-between mb-2.5">
                       <span className="text-xs font-semibold text-foreground">
                         Kích Cỡ:{" "}
-                        <strong className="text-primary font-semibold">
+                        <strong className={variantPrompt && !selectedSize ? "text-destructive font-semibold" : "text-primary font-semibold"}>
                           {sizeOptions.find(
                             (s) => (s.sizeOptionId || s.size) === selectedSize,
-                          )?.size || "Chưa chọn"}
+                          )?.size || (variantPrompt ? "Chưa chọn — vui lòng chọn size" : "Chưa chọn")}
                         </strong>
                       </span>
                     </div>
@@ -470,6 +485,7 @@ export default function ProductDetail() {
                             onClick={() => {
                               setSelectedSize(key);
                               setFeedback(null);
+                              setVariantPrompt(false);
                             }}
                             className={`min-w-12 h-10 px-3 border text-xs font-semibold transition-all ${
                               isSelected
@@ -734,40 +750,76 @@ export default function ProductDetail() {
                 retry={() => void reviewsLoad.refresh()}
               />
 
-              {reviewsLoad.data && reviewsLoad.data.reviews.items.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {reviewsLoad.data.reviews.items.map((r: Review) => (
-                    <article
-                      key={r.id}
-                      className="border border-border p-4 sm:p-5 bg-white flex flex-col justify-between rounded-2xl"
-                    >
-                      <div>
-                        <div className="flex items-center justify-between mb-3">
-                          <StarRating rating={r.rating} size={14} />
-                          {r.verifiedPurchase && (
-                            <span className="text-xs font-semibold text-success bg-success-light px-2 py-0.5 border border-success/20">
-                              Đã Mua Hàng
-                            </span>
-                          )}
+              {!reviewsLoad.error && reviewsLoad.data
+                && reviewsLoad.data.reviews.pageNo === reviewPage
+                && reviewsLoad.data.reviews.items.length > 0 ? (
+                <div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {reviewsLoad.data.reviews.items.map((r: Review) => (
+                      <article
+                        key={r.id}
+                        className="border border-border p-4 sm:p-5 bg-white flex flex-col justify-between rounded-2xl"
+                      >
+                        <div>
+                          <div className="flex items-center justify-between mb-3">
+                            <StarRating rating={r.rating} size={14} />
+                            {r.verifiedPurchase && (
+                              <span className="text-xs font-semibold text-success bg-success-light px-2 py-0.5 border border-success/20">
+                                Đã Mua Hàng
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-sm text-foreground leading-relaxed mb-4">
+                            {r.comment}
+                          </p>
                         </div>
-                        <p className="text-sm text-foreground leading-relaxed mb-4">
-                          {r.comment}
+                        <p className="text-xs text-muted-foreground border-t border-border pt-3">
+                          {new Date(r.createdAt).toLocaleDateString("vi-VN")}
                         </p>
-                      </div>
-                      <p className="text-xs text-muted-foreground border-t border-border pt-3">
-                        {new Date(r.createdAt).toLocaleDateString("vi-VN")}
-                      </p>
-                    </article>
-                  ))}
+                      </article>
+                    ))}
+                  </div>
                 </div>
               ) : (
-                !reviewsLoad.loading && (
+                !reviewsLoad.loading && !reviewsLoad.error && (
                   <div className="text-center py-12 border border-dashed border-border-strong p-6">
                     <p className="text-sm text-muted-foreground">
-                      Chưa có đánh giá nào cho sản phẩm này.
+                      {reviewsLoad.data && reviewsLoad.data.totalReviews > 0
+                        ? 'Không có đánh giá ở trang này.'
+                        : 'Chưa có đánh giá nào cho sản phẩm này.'}
                     </p>
                   </div>
                 )
+              )}
+
+
+              {(reviewPage > 0 || (reviewsLoad.data?.reviews.totalPage ?? 0) > 1) && (
+                <nav aria-label="Phân trang đánh giá" className="mt-8 pt-6 border-t border-border flex items-center justify-between">
+                  <button
+                    type="button"
+                    aria-label="Trang đánh giá trước"
+                    disabled={reviewsLoad.loading || reviewPage === 0}
+                    onClick={() => setReviewPage(page => Math.max(0, page - 1))}
+                    className="bg-primary text-white px-5 py-2.5 text-xs font-semibold hover:bg-primary-hover disabled:opacity-30 disabled:hover:bg-primary-hover store-button"
+                  >
+                    ← Trước
+                  </button>
+                  <span aria-live="polite" className="text-xs text-muted-foreground">
+                    Trang {reviewPage + 1}
+                    {reviewsLoad.data && reviewPage < reviewsLoad.data.reviews.totalPage
+                      ? ` / ${reviewsLoad.data.reviews.totalPage}` : ''}
+                  </span>
+                  <button
+                    type="button"
+                    aria-label="Trang đánh giá sau"
+                    disabled={reviewsLoad.loading || Boolean(reviewsLoad.error) || !reviewsLoad.data
+                      || reviewPage + 1 >= reviewsLoad.data.reviews.totalPage}
+                    onClick={() => setReviewPage(page => page + 1)}
+                    className="bg-primary text-white px-5 py-2.5 text-xs font-semibold hover:bg-primary-hover disabled:opacity-30 disabled:hover:bg-primary-hover store-button"
+                  >
+                    Sau →
+                  </button>
+                </nav>
               )}
             </section>
 

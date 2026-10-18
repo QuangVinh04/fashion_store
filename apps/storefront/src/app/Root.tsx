@@ -34,6 +34,7 @@ const NAV_LINKS = [
   { label: "Sản Phẩm", href: "/products" },
 ];
 const ACCOUNT_LINKS = [
+  { label: "Ví Cửa Hàng", href: "/profile/wallet" },
   { label: "Hồ Sơ", href: "/profile" },
   { label: "Đơn Hàng", href: "/profile/orders" },
   { label: "Địa Chỉ", href: "/profile/addresses" },

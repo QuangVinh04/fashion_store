@@ -26,7 +26,6 @@ public class InventoryCommandListener {
     private final InventoryService inventoryService;
     private final ProcessedMessageService processedMessageService;
     private final ObjectMapper objectMapper;
-    private final com.fashionstore.catalog.service.LegacyReturnRestockGuard legacyRestock;
 
     @RabbitListener(queues = RabbitMQNames.INVENTORY_RESERVATION_REQUESTED_QUEUE)
     public void onReservationRequested(
@@ -65,19 +64,6 @@ public class InventoryCommandListener {
                 messageId,
                 RabbitMQNames.INVENTORY_RESERVATION_CONSUMER + "-release-v1",
                 () -> handleRelease(envelope));
-    }
-
-    @RabbitListener(queues = RabbitMQNames.INVENTORY_RESTOCK_REQUESTED_QUEUE)
-    public void onRestockRequested(
-            EventEnvelope<?> envelope,
-            @Header(RabbitTopology.OUTBOX_EVENT_ID_HEADER) String messageId) {
-        if (!EventTypes.INVENTORY_RESTOCK_REQUESTED.equals(envelope.eventType())) {
-            throw new IllegalArgumentException("Unsupported eventType on restock queue: " + envelope.eventType());
-        }
-        processedMessageService.processOnce(
-                messageId,
-                RabbitMQNames.INVENTORY_RESERVATION_CONSUMER + "-restock-v1",
-                () -> legacyRestock.quarantine(messageId,envelope));
     }
 
     private void handleReservation(EventEnvelope<?> envelope) {

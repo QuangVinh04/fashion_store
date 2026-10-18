@@ -22,7 +22,7 @@ import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
 
 export default function CheckoutPage() {
-  const { cart, refresh: refreshCart } = useCart();
+  const { cart, loading: cartLoading, error: cartError, refresh: refreshCart } = useCart();
   const { user } = useAuth();
   const navigate = useNavigate();
 
@@ -217,23 +217,39 @@ export default function CheckoutPage() {
     }
   }
 
-  if (!cart?.items.length && !checkout) {
-    return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-28 text-center">
-        <h2 className="text-foreground font-semibold text-lg mb-3 text-balance">
-          GIỎ HÀNG ĐANG TRỐNG
-        </h2>
-        <p className="text-sm text-muted-foreground mb-8">
-          Bạn không có sản phẩm nào để thanh toán.
-        </p>
-        <Link
-          to="/products"
-          className="inline-block bg-primary text-white px-8 py-4 text-xs font-semibold hover:bg-primary-hover store-action"
-        >
-          Xem Sản Phẩm
-        </Link>
-      </div>
-    );
+  if (!checkout) {
+    if (cartLoading) {
+      return (
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-28">
+          <Status loading={true} />
+        </div>
+      );
+    }
+    if (cartError) {
+      return (
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-28">
+          <Status loading={false} error={cartError} retry={() => void refreshCart()} />
+        </div>
+      );
+    }
+    if (!cart?.items.length) {
+      return (
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-28 text-center">
+          <h2 className="text-foreground font-semibold text-lg mb-3 text-balance">
+            GIỎ HÀNG ĐANG TRỐNG
+          </h2>
+          <p className="text-sm text-muted-foreground mb-8">
+            Bạn không có sản phẩm nào để thanh toán.
+          </p>
+          <Link
+            to="/products"
+            className="inline-block bg-primary text-white px-8 py-4 text-xs font-semibold hover:bg-primary-hover store-action"
+          >
+            Xem Sản Phẩm
+          </Link>
+        </div>
+      );
+    }
   }
 
   return (

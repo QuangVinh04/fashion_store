@@ -44,10 +44,19 @@ public class ProductResponse {
     BigDecimal basePrice;
     BigDecimal salePrice;
     BigDecimal price;
+
+    // Shipping parameters for logistics (GHN / GHTK)
+    Integer weight;
+    Integer length;
+    Integer width;
+    Integer height;
+
+    // Legacy fields for backward compatibility
     Integer weightGram;
     Integer lengthMm;
     Integer widthMm;
     Integer heightMm;
+
     String thumbnailMediaId;
     String thumbnailUrl;
     String sizeChartId;

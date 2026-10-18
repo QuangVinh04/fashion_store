@@ -52,9 +52,12 @@ class CallbackPaymentServiceImplTest {
         when(paymentRepository.findByMerchantReference("merchant-1"))
                 .thenReturn(Optional.of(pendingPayment(PaymentProvider.VNPAY)));
         when(paymentStateService.isProviderAmountValid(any(), any())).thenReturn(true);
-        when(paymentStateService.applyResult(any(), any())).thenReturn(new PaymentResponse());
-        service.verifyReturn(PaymentProvider.VNPAY, Map.of("vnp_TxnRef", "merchant-1"));
+        when(paymentStateService.applyResult(any(), any())).thenReturn(
+                PaymentResponse.builder().id("pay-999").orderId("order-888").build());
+        PaymentCallbackResult result = service.verifyReturn(PaymentProvider.VNPAY, Map.of("vnp_TxnRef", "merchant-1"));
         verify(paymentHandler, times(1)).verifyCallback(any(), any());
+        assertThat(result.getOrderId()).isEqualTo("order-888");
+        assertThat(result.getPaymentId()).isEqualTo("pay-999");
     }
 
     @BeforeEach

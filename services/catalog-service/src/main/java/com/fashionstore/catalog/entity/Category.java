@@ -41,6 +41,9 @@ public class Category extends BaseEntity {
     @Column(name = "thumbnail_media_id", length = 36)
     String thumbnailMediaId;
 
+    @Column(name = "thumbnail_url", length = 1000)
+    String thumbnailUrl;
+
     @Column(name = "display_order", nullable = false)
     @Builder.Default
     Integer displayOrder = 0;

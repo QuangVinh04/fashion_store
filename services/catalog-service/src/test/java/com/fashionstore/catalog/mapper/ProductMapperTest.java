@@ -21,6 +21,21 @@ class ProductMapperTest {
     private final ProductMapper productMapper = Mappers.getMapper(ProductMapper.class);
 
     @Test
+    void editableSkuOverridesStayNullWhileLogisticsUsesProductDefaults() {
+        Product product = Product.builder().weight(300).length(20).width(15).height(3).build();
+        ProductVariant variant = ProductVariant.builder().product(product).build();
+        var response = productMapper.toProductVariantResponse(variant);
+
+        assertThat(response.getWeightGram()).isNull();
+        assertThat(response.getLengthMm()).isNull();
+        assertThat(response.getWidthMm()).isNull();
+        assertThat(response.getHeightMm()).isNull();
+        assertThat(response.getWeight()).isEqualTo(300);
+        assertThat(response.getLength()).isEqualTo(20);
+        assertThat(variant.getWeightGram()).isEqualTo(300);
+    }
+
+    @Test
     void detailResponseIncludesDescriptionAndCategoryId() {
         Category category = category("category-1", "Shirts");
         Product product = Product.builder()

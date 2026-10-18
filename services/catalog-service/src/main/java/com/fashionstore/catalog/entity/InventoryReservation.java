@@ -27,4 +27,7 @@ public class InventoryReservation extends AuditedEntity {
 
     @Column(name = "rejection_reason", length = 500)
     private String rejectionReason;
+
+    @Column(name = "cancellation_id", length = 36)
+    private String cancellationId;
 }

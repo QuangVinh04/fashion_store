@@ -104,8 +104,18 @@ public class ProductServiceImpl implements ProductService {
     @Transactional(readOnly = true)
     public ProductResponse getProductById(String id) {
         Product product = productRepository.findDetailProductById(id)
+                .filter(value -> value.getStatus() == ProductStatus.PUBLISHED)
                 .orElseThrow(() -> new AppException(ProductErrorCode.PRODUCT_NOT_FOUND));
 
+        return productMapper.toProductResponse(product);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMIN')")
+    public ProductResponse getProductByIdForBackoffice(String id) {
+        Product product = productRepository.findDetailProductById(id)
+                .orElseThrow(() -> new AppException(ProductErrorCode.PRODUCT_NOT_FOUND));
         return productMapper.toProductResponse(product);
     }
 
@@ -273,17 +283,17 @@ public class ProductServiceImpl implements ProductService {
 
         product.setName(request.getName());
         product.setSlug(slug);
-        product.setShortDescription(request.getShortDescription());
         product.setDescription(request.getDescription());
         product.setFeatured(Boolean.TRUE.equals(request.getFeatured()));
         product.setGender(request.getGender());
-        product.setProductType(request.getProductType());
         product.setBasePrice(basePrice);
         product.setSalePrice(request.getSalePrice());
-        product.setWeightGram(request.getWeightGram());
-        product.setLengthMm(request.getLengthMm());
-        product.setWidthMm(request.getWidthMm());
-        product.setHeightMm(request.getHeightMm());
+        product.setShortDescription(request.getShortDescription());
+        product.setProductType(request.getProductType());
+        product.setWeight(request.getWeight());
+        product.setLength(request.getLength());
+        product.setWidth(request.getWidth());
+        product.setHeight(request.getHeight());
         product.setSizeChartId(resolveSizeChartId(request.getSizeChartId()));
         product.setMetaTitle(request.getMetaTitle());
         product.setMetaKeyword(request.getMetaKeyword());
@@ -438,6 +448,10 @@ public class ProductServiceImpl implements ProductService {
                 .price(variant.getPrice())
                 .salePrice(variant.getSalePrice())
                 .active(variant.getActive())
+                .weight(resolveLogisticsValue(variant.getWeight(), product.getWeight()))
+                .length(resolveLogisticsValue(variant.getLength(), product.getLength()))
+                .width(resolveLogisticsValue(variant.getWidth(), product.getWidth()))
+                .height(resolveLogisticsValue(variant.getHeight(), product.getHeight()))
                 .weightGram(resolveLogisticsValue(variant.getWeightGram(), product.getWeightGram()))
                 .lengthMm(resolveLogisticsValue(variant.getLengthMm(), product.getLengthMm()))
                 .widthMm(resolveLogisticsValue(variant.getWidthMm(), product.getWidthMm()))
@@ -532,21 +546,20 @@ public class ProductServiceImpl implements ProductService {
                 .name(request.getName())
                 .slug(request.getSlug())
                 .shortDescription(request.getShortDescription())
-                .description(request.getDescription())
-                .status(ProductStatus.DRAFT)
-                .published(false)
-                .featured(Boolean.TRUE.equals(request.getFeatured()))
-                .gender(request.getGender())
                 .productType(request.getProductType())
-                .basePrice(request.getBasePrice())
-                .salePrice(request.getSalePrice())
-                .weightGram(request.getWeightGram())
-                .lengthMm(request.getLengthMm())
-                .widthMm(request.getWidthMm())
-                .heightMm(request.getHeightMm())
                 .metaTitle(request.getMetaTitle())
                 .metaKeyword(request.getMetaKeyword())
                 .metaDescription(request.getMetaDescription())
+                .description(request.getDescription())
+                .status(ProductStatus.DRAFT)
+                .featured(Boolean.TRUE.equals(request.getFeatured()))
+                .gender(request.getGender())
+                .basePrice(request.getBasePrice())
+                .salePrice(request.getSalePrice())
+                .weight(request.getWeight())
+                .length(request.getLength())
+                .width(request.getWidth())
+                .height(request.getHeight())
                 .build();
     }
 
@@ -801,8 +814,8 @@ public class ProductServiceImpl implements ProductService {
             if (request.getActive() != null || newVariant) {
                 variant.setActive(Boolean.TRUE.equals(request.getActive()));
             }
-            variant.setThumbnailMediaId(firstNonBlank(request.getThumbnailMediaId(), request.getMediaId()));
             variant.setThumbnailUrl(StringUtils.cleanText(request.getThumbnailUrl()));
+            variant.setThumbnailMediaId(firstNonBlank(request.getThumbnailMediaId(), request.getMediaId()));
         }
 
         product.getVariants().stream()

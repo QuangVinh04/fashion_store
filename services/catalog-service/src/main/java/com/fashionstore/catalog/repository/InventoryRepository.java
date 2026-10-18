@@ -36,7 +36,7 @@ public interface InventoryRepository extends JpaRepository<Inventory, String> {
     @Query("""
             select i from Inventory i, ProductVariant v join v.product p
             where v.id = i.variantId
-              and (:includeInactive = true or (v.active = true and p.status = :published and p.deletedAt is null))
+              and (:includeInactive = true or (v.active = true and p.status = :published))
               and (:query is null or lower(coalesce(v.sku, '')) like :query or lower(p.name) like :query)
               and (:state = 'ALL'
                    or (:state = 'LOW' and i.quantity - i.reservedQuantity <= i.minThreshold)
@@ -50,7 +50,7 @@ public interface InventoryRepository extends JpaRepository<Inventory, String> {
 
     @Query("""
             select i from Inventory i, ProductVariant v join v.product p
-            where v.id = i.variantId and v.active = true and p.status = :published and p.deletedAt is null
+            where v.id = i.variantId and v.active = true and p.status = :published
               and i.quantity - i.reservedQuantity <= coalesce(:threshold, i.minThreshold)
             order by (i.quantity - i.reservedQuantity) asc
             """)
@@ -62,7 +62,7 @@ public interface InventoryRepository extends JpaRepository<Inventory, String> {
 
     @Query("""
             select count(i) from Inventory i, ProductVariant v join v.product p
-            where v.id = i.variantId and v.active = true and p.status = :published and p.deletedAt is null
+            where v.id = i.variantId and v.active = true and p.status = :published
               and i.quantity - i.reservedQuantity <= coalesce(:threshold, i.minThreshold)
             """)
     long countLowStockInventories(@Param("threshold") Integer threshold,

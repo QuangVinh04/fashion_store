@@ -28,9 +28,13 @@ import java.math.BigDecimal;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
+import com.fashionstore.common.exception.AppException;
+import com.fashionstore.payment.dto.PaymentReturnResolutionResponse;
+import com.fashionstore.payment.exception.PaymentErrorCode;
 
 class PaymentServiceImplTest {
     PaymentRepository repository = mock(PaymentRepository.class);
@@ -159,6 +163,100 @@ class PaymentServiceImplTest {
         service.initiate(payment.getId(), "127.0.0.1");
         assertThat(payment.getStatus()).isEqualTo(PaymentStatus.COMPLETED);
         assertThat(payment.getTransactionId()).isEqualTo("bank-transfer-1");
+    }
+
+    @Test
+    void resolvesOwnedPaymentByMerchantReferenceSuccessfully() {
+        Payment p = Payment.builder()
+                .orderId("order-100")
+                .userId("user-1")
+                .provider(PaymentProvider.VNPAY)
+                .status(PaymentStatus.COMPLETED)
+                .initiationAttempts(1)
+                .merchantReference("VNP-REF-123")
+                .build();
+        p.setId("pay-1");
+
+        when(repository.findForReturnByMerchantReference("VNP-REF-123")).thenReturn(Optional.of(p));
+        when(currentUser.getCurrentUserId()).thenReturn("user-1");
+
+        PaymentReturnResolutionResponse resolution =
+                service.resolveReturn(PaymentProvider.VNPAY, "VNP-REF-123");
+
+        assertThat(resolution.orderId()).isEqualTo("order-100");
+        assertThat(resolution.paymentId()).isEqualTo("pay-1");
+        assertThat(resolution.attemptGeneration()).isEqualTo(1);
+        assertThat(resolution.status()).isEqualTo("COMPLETED");
+        assertThat(resolution.captureStatus()).isEqualTo("CAPTURED");
+    }
+
+    @Test
+    void resolvesOwnedPaymentByTransactionIdFallbackSuccessfully() {
+        Payment p = Payment.builder()
+                .orderId("order-200")
+                .userId("user-1")
+                .provider(PaymentProvider.PAYOS)
+                .status(PaymentStatus.PENDING)
+                .initiationAttempts(2)
+                .transactionId("PAYOS-TXN-456")
+                .build();
+        p.setId("pay-2");
+
+        when(repository.findForReturnByMerchantReference("PAYOS-TXN-456")).thenReturn(Optional.empty());
+        when(repository.findByTransactionId("PAYOS-TXN-456")).thenReturn(Optional.of(p));
+        when(currentUser.getCurrentUserId()).thenReturn("user-1");
+
+        PaymentReturnResolutionResponse resolution =
+                service.resolveReturn(PaymentProvider.PAYOS, "PAYOS-TXN-456");
+
+        assertThat(resolution.orderId()).isEqualTo("order-200");
+        assertThat(resolution.paymentId()).isEqualTo("pay-2");
+        assertThat(resolution.status()).isEqualTo("PENDING");
+        assertThat(resolution.captureStatus()).isEqualTo("UNCONFIRMED");
+    }
+
+    @Test
+    void preventsIdorWhenPaymentBelongsToAnotherUser() {
+        Payment p = Payment.builder()
+                .orderId("order-300")
+                .userId("other-user")
+                .provider(PaymentProvider.VNPAY)
+                .status(PaymentStatus.COMPLETED)
+                .merchantReference("REF-FORBIDDEN")
+                .build();
+        p.setId("pay-3");
+
+        when(repository.findForReturnByMerchantReference("REF-FORBIDDEN")).thenReturn(Optional.of(p));
+        when(currentUser.getCurrentUserId()).thenReturn("attacker-user");
+
+        assertThatThrownBy(() -> service.resolveReturn(PaymentProvider.VNPAY, "REF-FORBIDDEN"))
+                .isInstanceOf(AppException.class)
+                .extracting("errorCode")
+                .isEqualTo(PaymentErrorCode.PAYMENT_NOT_FOUND);
+    }
+
+    @Test
+    void throwsNotFoundWhenPaymentDoesNotExist() {
+        when(repository.findForReturnByMerchantReference("NOT-FOUND")).thenReturn(Optional.empty());
+        when(repository.findByTransactionId("NOT-FOUND")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.resolveReturn(PaymentProvider.VNPAY, "NOT-FOUND"))
+                .isInstanceOf(AppException.class)
+                .extracting("errorCode")
+                .isEqualTo(PaymentErrorCode.PAYMENT_NOT_FOUND);
+    }
+
+    @Test
+    void throwsNotFoundForInvalidProviderOrBlankReference() {
+        assertThatThrownBy(() -> service.resolveReturn(PaymentProvider.COD, "REF"))
+                .isInstanceOf(AppException.class)
+                .extracting("errorCode")
+                .isEqualTo(PaymentErrorCode.PAYMENT_NOT_FOUND);
+
+        assertThatThrownBy(() -> service.resolveReturn(PaymentProvider.VNPAY, "   "))
+                .isInstanceOf(AppException.class)
+                .extracting("errorCode")
+                .isEqualTo(PaymentErrorCode.PAYMENT_NOT_FOUND);
     }
 
     private PaymentInitiationResult link() {

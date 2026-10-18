@@ -48,6 +48,12 @@ export default function AddressesPage() {
     text: string;
   } | null>(null);
 
+  const firstAddress = !editingId && addressesLoad.data?.length === 0;
+  const editingDefault = Boolean(editingId && addressesLoad.data?.some(
+    address => address.id === editingId && address.isDefault,
+  ));
+  const defaultLocked = firstAddress || editingDefault;
+
   // GHN wards belong directly to a province.
   useEffect(() => {
     setWards([]);
@@ -462,7 +468,8 @@ export default function AddressesPage() {
             <label className="flex items-center gap-2.5 text-xs text-foreground cursor-pointer">
               <input
                 type="checkbox"
-                checked={form.isDefault}
+                checked={defaultLocked || form.isDefault}
+                disabled={defaultLocked || busy}
                 onChange={(e) =>
                   setForm({ ...form, isDefault: e.target.checked })
                 }
@@ -470,6 +477,9 @@ export default function AddressesPage() {
               />
               <span>Đặt làm địa chỉ giao hàng mặc định</span>
             </label>
+            {defaultLocked && <p className="mt-2 text-xs text-muted-foreground">
+              {firstAddress ? 'Địa chỉ đầu tiên sẽ được đặt làm mặc định.' : 'Để đổi địa chỉ mặc định, hãy chọn một địa chỉ khác.'}
+            </p>}
           </div>
 
           <div className="pt-2 flex items-center gap-3">

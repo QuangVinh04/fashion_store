@@ -16,6 +16,7 @@ import com.fashionstore.catalog.service.InventoryService;
 import com.fashionstore.common.exception.AppException;
 import com.fashionstore.contracts.common.EventEnvelope;
 import com.fashionstore.contracts.common.EventTypes;
+import com.fashionstore.contracts.inventory.command.CancelOrderInventoryCommand;
 import com.fashionstore.contracts.inventory.command.ConfirmInventoryCommand;
 import com.fashionstore.contracts.inventory.command.InventoryItem;
 import com.fashionstore.contracts.inventory.command.ReleaseInventoryCommand;
@@ -24,6 +25,8 @@ import com.fashionstore.contracts.inventory.event.InventoryConfirmedEvent;
 import com.fashionstore.contracts.inventory.event.InventoryReleasedEvent;
 import com.fashionstore.contracts.inventory.event.InventoryReservationEvent;
 import com.fashionstore.contracts.inventory.event.InventoryReservationFailedEvent;
+import com.fashionstore.contracts.inventory.event.OrderInventoryCancelledEvent;
+import com.fashionstore.contracts.inventory.event.OrderInventoryCancellationRejectedEvent;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -418,6 +421,98 @@ public class InventoryServiceImpl implements InventoryService {
         reservation.setUpdatedAt(LocalDateTime.now());
         reservationRepository.save(reservation);
         log.info("[Inventory] restock completed for orderId={}, reservationId={}", orderId, reservation.getId());
+    }
+
+    @Override
+    @Transactional
+    public void cancelUnshippedOrder(CancelOrderInventoryCommand command, String correlationId) {
+        if (command == null || !validCancellationString(command.orderId()) || !validCancellationString(command.cancellationId()) || !validCancellationString(command.reservationId())) {
+            throw new IllegalArgumentException("Invalid inventory cancellation command");
+        }
+        var reservation = reservationRepository.findByOrderIdForUpdate(command.orderId()).orElse(null);
+        if (reservation == null || !command.reservationId().equals(reservation.getId())) {
+            cancellationRejected(command, correlationId, "RESERVATION_UNVERIFIED", "Inventory reservation does not match the cancellation");
+            return;
+        }
+        if (reservation.getCancellationId() != null) {
+            if (!command.cancellationId().equals(reservation.getCancellationId())) {
+                cancellationRejected(command, correlationId, "CANCELLATION_CONFLICT", "Reservation already belongs to another cancellation");
+            } else {
+                cancellationAcknowledged(command, correlationId);
+            }
+            return;
+        }
+        var original = reservation.getStatus();
+        if (original == InventoryReservationStatus.CONFIRMED || original == InventoryReservationStatus.RESERVED) {
+            var rows = new ArrayList<>(reservationItemRepository.findByReservationId(reservation.getId()));
+            rows.sort(Comparator.comparing(InventoryReservationItem::getVariantId));
+            var stocks = new LinkedHashMap<String, Inventory>();
+            if (rows.isEmpty()) {
+                cancellationRejected(command, correlationId, "INVENTORY_UNVERIFIED", "Reservation items are missing");
+                return;
+            }
+            for (var row : rows) {
+                var stock = inventoryRepository.findByVariantIdWithLock(row.getVariantId()).orElse(null);
+                if (stock == null || row.getQuantity() == null || row.getQuantity() <= 0 || stocks.containsKey(row.getVariantId())
+                        || stock.getQuantity() == null || stock.getQuantity() < 0 || stock.getReservedQuantity() == null || stock.getReservedQuantity() < 0
+                        || (original == InventoryReservationStatus.RESERVED && stock.getReservedQuantity() < row.getQuantity())
+                        || (original == InventoryReservationStatus.CONFIRMED && (long) stock.getQuantity() + row.getQuantity() > Integer.MAX_VALUE)) {
+                    cancellationRejected(command, correlationId, "INVENTORY_UNVERIFIED", "Stock cannot safely reverse this reservation");
+                    return;
+                }
+                stocks.put(row.getVariantId(), stock);
+            }
+            for (var row : rows) {
+                var stock = stocks.get(row.getVariantId());
+                int before = stock.getQuantity(), reserved = stock.getReservedQuantity();
+                if (original == InventoryReservationStatus.CONFIRMED) {
+                    stock.setQuantity(Math.addExact(before, row.getQuantity()));
+                } else {
+                    stock.setReservedQuantity(reserved - row.getQuantity());
+                }
+                inventoryRepository.save(stock);
+                inventoryLedgerRepository.save(InventoryLedger.builder()
+                        .variantId(row.getVariantId())
+                        .type(InventoryLedgerType.CANCEL_UNSHIPPED)
+                        .quantity(row.getQuantity())
+                        .refOrderId(command.orderId())
+                        .quantityBefore(before)
+                        .quantityAfter(stock.getQuantity())
+                        .reservedBefore(reserved)
+                        .reservedAfter(stock.getReservedQuantity())
+                        .operationId(UUID.randomUUID().toString())
+                        .reason("Unshipped cancellation " + command.cancellationId())
+                        .createdBy("ORDER_CANCELLATION")
+                        .createdAt(LocalDateTime.now())
+                        .build());
+            }
+        } else if (original != InventoryReservationStatus.RELEASED && original != InventoryReservationStatus.REJECTED) {
+            cancellationRejected(command, correlationId, "RESERVATION_UNVERIFIED", "Reservation state cannot be reconciled");
+            return;
+        }
+        reservation.setCancellationId(command.cancellationId());
+        reservation.setStatus(InventoryReservationStatus.RELEASED);
+        reservation.setUpdatedAt(LocalDateTime.now());
+        reservationRepository.save(reservation);
+        cancellationAcknowledged(command, correlationId);
+    }
+
+    private boolean validCancellationString(String value) {
+        return value != null && !value.isBlank() && value.length() <= 36;
+    }
+
+    private void cancellationAcknowledged(CancelOrderInventoryCommand command, String correlationId) {
+        outboxService.saveMessage(command.orderId(), EventTypes.ORDER_INVENTORY_CANCELLED, EventEnvelope.v1(
+                EventTypes.ORDER_INVENTORY_CANCELLED,
+                command.orderId(), correlationId,
+                new OrderInventoryCancelledEvent(command.cancellationId(), command.orderId(), command.reservationId())));
+    }
+
+    private void cancellationRejected(CancelOrderInventoryCommand command, String correlationId, String code, String reason) {
+        outboxService.saveMessage(command.orderId(), EventTypes.ORDER_INVENTORY_CANCELLATION_REJECTED, EventEnvelope.v1(
+                EventTypes.ORDER_INVENTORY_CANCELLATION_REJECTED,
+                command.orderId(), correlationId,
+                new OrderInventoryCancellationRejectedEvent(command.cancellationId(), command.orderId(), code, reason)));
     }
 
     @Override

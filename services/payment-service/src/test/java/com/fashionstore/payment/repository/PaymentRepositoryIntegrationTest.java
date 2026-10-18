@@ -20,10 +20,60 @@ import static org.assertj.core.api.Assertions.assertThat;
 @DataJpaTest
 @TestPropertySource(properties = {"spring.flyway.enabled=false", "spring.jpa.hibernate.ddl-auto=create-drop",
         "spring.jpa.database-platform=org.hibernate.dialect.H2Dialect",
-        "spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.H2Dialect"})
+        "spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.H2Dialect",
+        "spring.jpa.properties.hibernate.session_factory.statement_inspector=com.fashionstore.payment.repository.PaymentRepositoryIntegrationTest$SqlCapture"})
 class PaymentRepositoryIntegrationTest {
     @Autowired TestEntityManager entityManager;
     @Autowired PaymentRepository repository;
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(value = PaymentProvider.class, names = {"VNPAY", "PAYOS"})
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    void returnResolutionReadsWithoutLocking(PaymentProvider provider) {
+        Payment payment = persist("order-return", "return-reference", PaymentStatus.COMPLETED, null);
+        payment.setProvider(provider);
+        entityManager.flush();
+        entityManager.clear();
+        var user = org.mockito.Mockito.mock(com.fashionstore.common.security.CurrentUserProvider.class);
+        org.mockito.Mockito.when(user.getCurrentUserId()).thenReturn("user-1");
+        var service = new com.fashionstore.payment.service.impl.PaymentServiceImpl(
+                repository, null, null, user, null, null, null);
+
+        SqlCapture.SQL.get().clear();
+        var result = service.resolveReturn(provider, "return-reference");
+
+        assertThat(result.orderId()).isEqualTo("order-return");
+        assertThat(SqlCapture.SQL.get()).isNotEmpty()
+                .noneMatch(sql -> sql.toLowerCase(java.util.Locale.ROOT).contains("for update"));
+
+    }
+
+    @Test
+    void callbackLookupStillAcquiresWriteLock() {
+        persist("order-callback", "callback-reference", PaymentStatus.PENDING, null);
+        entityManager.flush();
+        entityManager.clear();
+        SqlCapture.SQL.get().clear();
+
+        assertThat(repository.findByMerchantReference("callback-reference")).isPresent();
+
+        assertThat(SqlCapture.SQL.get()).anyMatch(sql -> sql.toLowerCase(java.util.Locale.ROOT).contains("for update"));
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void clearCapturedSql() {
+        SqlCapture.SQL.remove();
+    }
+
+    public static class SqlCapture implements org.hibernate.resource.jdbc.spi.StatementInspector {
+        static final ThreadLocal<java.util.List<String>> SQL = ThreadLocal.withInitial(java.util.ArrayList::new);
+
+        @Override
+        public String inspect(String sql) {
+            SQL.get().add(sql);
+            return sql;
+        }
+    }
 
     @Test
     void reconciliationSelectsOnlyDueOpenPaymentsWithPersistedReferences() {

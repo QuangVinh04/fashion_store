@@ -35,6 +35,7 @@ public interface InventoryService {
     void reserveSaga(ReservationInventoryCommand command, String correlationId);
     void confirmSaga(ConfirmInventoryCommand command, String correlationId);
     void releaseSaga(ReleaseInventoryCommand command, String correlationId);
+    void cancelUnshippedOrder(com.fashionstore.contracts.inventory.command.CancelOrderInventoryCommand command, String correlationId);
 
     com.fashionstore.common.dto.PageResponse<List<com.fashionstore.catalog.dto.inventory.InventoryLedgerResponse>> getLedger(
             String variantId, InventoryLedgerType type, LocalDateTime fromTime,

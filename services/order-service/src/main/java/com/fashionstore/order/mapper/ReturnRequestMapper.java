@@ -1,13 +1,16 @@
 package com.fashionstore.order.mapper;
 
 import com.fashionstore.order.dto.ReturnRequestResponse;
+import com.fashionstore.order.dto.ReturnRefundStatus;
 import com.fashionstore.order.entity.ReturnRequest;
+import com.fashionstore.order.entity.enumeration.ReturnRequestStatus;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import lombok.extern.slf4j.Slf4j;
 
 import java.time.Instant;
+import java.math.BigDecimal;
 import java.util.Collections;
 import java.util.List;
 
@@ -46,6 +49,10 @@ public final class ReturnRequestMapper {
 
     public static ReturnRequestResponse toResponse(
             ReturnRequest request, ObjectMapper objectMapper, Instant sendBackBy) {
+        ReturnRefundStatus refundStatus = refundStatus(request);
+        BigDecimal expectedRefundAmount = request.getApprovedRefundAmount() != null
+                ? request.getApprovedRefundAmount()
+                : request.getOrder() == null ? null : request.getOrder().getTotalAmount();
         return ReturnRequestResponse.builder()
                 .id(request.getId())
                 .kind(request.getKind())
@@ -68,6 +75,13 @@ public final class ReturnRequestMapper {
                 .approvedAt(request.getApprovedAt())
                 .receivedAt(request.getReceivedAt())
                 .closedAt(request.getClosedAt())
+                .refundStatus(refundStatus)
+                .refundDestination("FASHION_STORE_WALLET")
+                .expectedRefundAmount(money(expectedRefundAmount))
+                .actualRefundAmount(refundStatus == ReturnRefundStatus.COMPLETED
+                        ? money(request.getApprovedRefundAmount()) : null)
+                .currency(request.getOrder() == null ? null : request.getOrder().getCurrency())
+                .refundedAt(refundStatus == ReturnRefundStatus.COMPLETED ? request.getClosedAt() : null)
                 .receivedBy(request.getReceivedBy())
                 .qcPassed(request.getQcPassed())
                 .qcNote(request.getQcNote())
@@ -83,5 +97,36 @@ public final class ReturnRequestMapper {
                 .createdAt(request.getCreatedAt())
                 .updatedAt(request.getUpdatedAt())
                 .build();
+    }
+
+    private static ReturnRefundStatus refundStatus(ReturnRequest request) {
+        return refundStatus(request.getStatus(), request.getRefundLedgerEntryId(),
+                request.getRefundFailureReason(), request.getRefundStartedAt(), request.getClosedAt());
+    }
+
+    public static ReturnRefundStatus refundStatus(ReturnRequestStatus status, String ledgerEntryId,
+            String failureReason, Instant startedAt, Instant closedAt) {
+        boolean hasReceipt = hasText(ledgerEntryId);
+        if (status == ReturnRequestStatus.REFUNDED && hasReceipt) {
+            return ReturnRefundStatus.COMPLETED;
+        }
+        if (status == ReturnRequestStatus.REFUNDED
+                || status == ReturnRequestStatus.REFUND_PENDING
+                || status == ReturnRequestStatus.LEGACY_REVIEW_REQUIRED
+                || hasReceipt
+                || hasText(failureReason)
+                || startedAt != null && closedAt != null) {
+            return ReturnRefundStatus.REVIEW_REQUIRED;
+        }
+        return startedAt == null
+                ? ReturnRefundStatus.NOT_STARTED : ReturnRefundStatus.PROCESSING;
+    }
+
+    private static boolean hasText(String value) {
+        return value != null && !value.isBlank();
+    }
+
+    private static String money(BigDecimal value) {
+        return value == null ? null : value.toPlainString();
     }
 }

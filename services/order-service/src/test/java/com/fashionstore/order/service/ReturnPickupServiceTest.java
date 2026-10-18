@@ -314,7 +314,7 @@ class ReturnPickupServiceTest {
         assertThat(actions()).containsExactly("RETURN_SHIPMENT_ATTENTION");
     }
 
-    // ----- hủy phiếu: khách / admin -----
+    // ----- hủy phiếu: admin -----
 
     private void ghnCancels(String outcome) {
         when(ghn.cancelPendingShipment("GHN-RET-1"))
@@ -327,11 +327,11 @@ class ReturnPickupServiceTest {
     }
 
     @Test
-    void aCustomerCancelsBeforeApprovalWithoutTouchingGhn() {
+    void anAdminCancelsBeforeApprovalWithoutTouchingGhn() {
         returned.setStatus(ReturnRequestStatus.REQUESTED);
         when(shipments.findByReturnRequestIdForUpdate("ret-1")).thenReturn(Optional.empty());
 
-        service.cancelByCustomer("ord-1");
+        service.cancelByAdmin("ret-1", "Admin cancellation");
 
         assertThat(returned.getStatus()).isEqualTo(ReturnRequestStatus.CANCELLED);
         assertThat(returned.getClosedAt()).isEqualTo(NOW);
@@ -341,10 +341,10 @@ class ReturnPickupServiceTest {
     }
 
     @Test
-    void aCustomerCancelsAnApprovedReturnOnlyOnceGhnConfirmsTheCancellation() {
+    void anAdminCancelsAnApprovedReturnOnlyOnceGhnConfirmsTheCancellation() {
         ghnCancels("CANCELLED");
 
-        service.cancelByCustomer("ord-1");
+        service.cancelByAdmin("ret-1", "Admin cancellation");
 
         verify(ghn).cancelPendingShipment("GHN-RET-1");
         assertThat(shipment.getStatus()).isEqualTo(ReturnShipmentStatus.CANCELLED);
@@ -357,7 +357,7 @@ class ReturnPickupServiceTest {
     void ifGhnAlreadyPickedTheParcelUpTheCancellationIsRefusedAndTheReturnIsLocked() {
         ghnCancels("HANDED_OFF");
 
-        assertConflict(() -> service.cancelByCustomer("ord-1"), OrderErrorCode.RETURN_WORKFLOW_CONFLICT);
+        assertConflict(() -> service.cancelByAdmin("ret-1", "Admin cancellation"), OrderErrorCode.RETURN_WORKFLOW_CONFLICT);
 
         assertThat(returned.getStatus()).isEqualTo(ReturnRequestStatus.IN_TRANSIT);
         assertThat(shipment.getStatus()).isEqualTo(ReturnShipmentStatus.PICKED);
@@ -368,30 +368,20 @@ class ReturnPickupServiceTest {
     void anUnconfirmedGhnCancellationKeepsEverythingAsItWas() {
         ghnCancels("UNKNOWN");
 
-        assertConflict(() -> service.cancelByCustomer("ord-1"), ErrorCode.UPSTREAM_SERVICE_ERROR);
+        assertConflict(() -> service.cancelByAdmin("ret-1", "Admin cancellation"), ErrorCode.UPSTREAM_SERVICE_ERROR);
 
         assertThat(returned.getStatus()).isEqualTo(ReturnRequestStatus.APPROVED);
         assertThat(shipment.getStatus()).isEqualTo(ReturnShipmentStatus.READY_TO_PICK);
     }
 
     @Test
-    void onceTheParcelIsInTransitTheCustomerCannotCancel() {
+    void onceTheParcelIsInTransitTheAdminCannotCancel() {
         returned.setStatus(ReturnRequestStatus.IN_TRANSIT);
         shipment.setStatus(ReturnShipmentStatus.PICKED);
 
-        assertConflict(() -> service.cancelByCustomer("ord-1"), OrderErrorCode.RETURN_WORKFLOW_CONFLICT);
+        assertConflict(() -> service.cancelByAdmin("ret-1", "Admin cancellation"), OrderErrorCode.RETURN_WORKFLOW_CONFLICT);
 
         verifyNoInteractions(ghn);
-    }
-
-    @Test
-    void aCustomerCannotCancelSomeoneElsesReturn() {
-        when(currentUser.getCurrentUserId()).thenReturn("intruder");
-
-        assertConflict(() -> service.cancelByCustomer("ord-1"), OrderErrorCode.RETURN_REQUEST_NOT_FOUND);
-
-        verifyNoInteractions(ghn);
-        assertThat(returned.getStatus()).isEqualTo(ReturnRequestStatus.APPROVED);
     }
 
     @Test
@@ -399,7 +389,7 @@ class ReturnPickupServiceTest {
         returned.setStatus(ReturnRequestStatus.CANCELLED);
         returned.setClosedAt(NOW.minusSeconds(5));
 
-        service.cancelByCustomer("ord-1");
+        service.cancelByAdmin("ret-1", "Admin cancellation");
 
         verifyNoInteractions(ghn);
         verify(history, never()).save(any());
@@ -429,7 +419,7 @@ class ReturnPickupServiceTest {
                             return new com.fashionstore.order.dto.ShipmentCancellationResult("GHN-RET-1", "CANCELLED", "ok");
                         });
 
-        assertConflict(() -> service.cancelByCustomer("ord-1"), OrderErrorCode.RETURN_WORKFLOW_CONFLICT);
+        assertConflict(() -> service.cancelByAdmin("ret-1", "Admin cancellation"), OrderErrorCode.RETURN_WORKFLOW_CONFLICT);
 
         assertThat(returned.getClosedAt()).isNull();
         verify(receipts, never()).completeAfterReturnClosed(any(), any(), any(), any());

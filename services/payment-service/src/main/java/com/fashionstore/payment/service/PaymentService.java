@@ -1,7 +1,9 @@
 package com.fashionstore.payment.service;
 
+import com.fashionstore.common.payment.PaymentProvider;
 import com.fashionstore.payment.dto.PaymentInitiationResult;
 import com.fashionstore.payment.dto.PaymentResponse;
+import com.fashionstore.payment.dto.PaymentReturnResolutionResponse;
 import com.fashionstore.contracts.payment.command.AuthorizePaymentCommand;
 import com.fashionstore.contracts.payment.command.CancelPaymentCommand;
 
@@ -14,4 +16,6 @@ public interface PaymentService {
     
     void authorize(AuthorizePaymentCommand request, String messageId, String correlationId);
     void cancel(CancelPaymentCommand request, String messageId, String correlationId);
+
+    PaymentReturnResolutionResponse resolveReturn(PaymentProvider provider, String reference);
 }

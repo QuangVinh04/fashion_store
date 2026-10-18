@@ -42,6 +42,9 @@ public interface PaymentRepository extends JpaRepository<Payment, String> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     Optional<Payment> findByMerchantReference(String merchantReference);
 
+    /** Read-only return-page lookup; callback processing retains its write lock above. */
+    Optional<Payment> findForReturnByMerchantReference(String merchantReference);
+
     Optional<Payment> findByUserIdAndOperationId(String userId, String operationId);
 
     Optional<Payment> findByIdAndUserId(String id, String userId);

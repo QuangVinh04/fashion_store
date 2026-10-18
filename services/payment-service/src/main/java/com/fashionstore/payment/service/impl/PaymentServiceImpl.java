@@ -33,7 +33,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
+import com.fashionstore.payment.dto.PaymentReturnResolutionResponse;
 
 @Service
 @Slf4j
@@ -236,5 +238,36 @@ public class PaymentServiceImpl implements PaymentService {
             }
             throw ex;
         }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PaymentReturnResolutionResponse resolveReturn(PaymentProvider provider, String reference) {
+        if ((provider != PaymentProvider.PAYOS && provider != PaymentProvider.VNPAY)
+                || reference == null || reference.isBlank() || reference.length() > 100) {
+            throw new AppException(PaymentErrorCode.PAYMENT_NOT_FOUND);
+        }
+
+        Payment payment = paymentRepository.findForReturnByMerchantReference(reference)
+                .filter(p -> p.getProvider() == provider)
+                .or(() -> paymentRepository.findByTransactionId(reference)
+                        .filter(p -> p.getProvider() == provider))
+                .orElseThrow(() -> new AppException(PaymentErrorCode.PAYMENT_NOT_FOUND));
+
+        if (!Objects.equals(payment.getUserId(), currentUserProvider.getCurrentUserId())) {
+            throw new AppException(PaymentErrorCode.PAYMENT_NOT_FOUND);
+        }
+
+        String captureStatus = payment.getStatus() == PaymentStatus.COMPLETED
+                ? "CAPTURED"
+                : "UNCONFIRMED";
+
+        return new PaymentReturnResolutionResponse(
+                payment.getOrderId(),
+                payment.getId(),
+                payment.getInitiationAttempts(),
+                payment.getStatus().name(),
+                captureStatus
+        );
     }
 }

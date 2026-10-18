@@ -168,7 +168,8 @@ public class OrderCancellationSagaService {
         Shipment shipment = shipments.findByOrderIdForUpdate(order.getId()).orElse(null);
         if (isShipmentHandedOff(shipment)
                 || (result != null && "HANDED_OFF".equals(result.outcome()) && Objects.equals(work.trackingCode(), result.trackingCode()))) {
-            failCarrierHandoff(order, saga, "Carrier handoff confirmed during cancellation");
+            rejectCancellationBeforeCarrierStop(order, saga, shipment,
+                    "Carrier handoff confirmed during cancellation");
             return;
         }
 
@@ -270,13 +271,8 @@ public class OrderCancellationSagaService {
 
         // Carrier lấy hàng trước khi dừng được vận đơn: chưa nhả kho/hoàn tiền → từ chối hủy, đơn đi tiếp
         if (saga.getCurrentStep() == OrderSagaStep.STOP_SHIPMENT) {
-            saga.fail("CARRIER_HANDOFF", "Carrier handoff before cancellation: " + proofDescription);
-            OrderStatus previousStatus = order.getStatus();
-            order.setStatus(OrderStatus.SHIPPING);
-            order.setCancelReason(null);
-            recordHistory(order, previousStatus, OrderStatus.SHIPPING, "CANCELLATION_REJECTED", "CARRIER", proofDescription, null);
-            shipments.findByOrderIdForUpdate(orderId)
-                    .ifPresent(shipment -> notifications.sendOrderShippedNotification(order, shipment));
+            rejectCancellationBeforeCarrierStop(order, saga,
+                    shipments.findByOrderIdForUpdate(orderId).orElse(null), proofDescription);
             return;
         }
 
@@ -526,6 +522,17 @@ public class OrderCancellationSagaService {
 
     private boolean isShipmentHandedOff(Shipment shipment) {
         return shipment != null && shipment.isHandedOff();
+    }
+
+    private void rejectCancellationBeforeCarrierStop(Order order, OrderSaga saga, Shipment shipment, String proofDescription) {
+        saga.fail("CARRIER_HANDOFF", "Carrier handoff before cancellation: " + proofDescription);
+        OrderStatus previousStatus = order.getStatus();
+        order.setStatus(OrderStatus.SHIPPING);
+        order.setCancelReason(null);
+        recordHistory(order, previousStatus, OrderStatus.SHIPPING, "CANCELLATION_REJECTED", "CARRIER", proofDescription, null);
+        if (shipment != null) {
+            notifications.sendOrderShippedNotification(order, shipment);
+        }
     }
 
     private void failCarrierHandoff(Order order, OrderSaga saga, String reason) {

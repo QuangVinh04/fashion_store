@@ -3,6 +3,8 @@ package com.fashionstore.order.dto;
 import com.fashionstore.common.payment.PaymentMethod;
 import com.fashionstore.common.payment.PaymentProvider;
 import com.fashionstore.order.entity.enumeration.OrderStatus;
+import com.fashionstore.order.entity.enumeration.ReturnRequestKind;
+import com.fashionstore.order.entity.enumeration.ReturnRequestStatus;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -15,8 +17,8 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /**
- * Bản rút gọn dùng cho danh sách. Không kèm item: nạp collection cùng lúc với phân trang buộc Hibernate
- * phải phân trang trong bộ nhớ, và danh sách đơn cũng không cần tới từng dòng hàng.
+ * Bản rút gọn dùng cho danh sách. Danh sách khách nạp item bằng truy vấn theo các ID đã phân trang,
+ * không fetch collection cùng truy vấn phân trang. Danh sách admin giữ bản rút gọn không có item.
  */
 @Getter
 @Setter
@@ -35,4 +37,13 @@ public class OrderSummaryResponse {
     String cancelReason;
     LocalDateTime createdAt;
     LocalDateTime updatedAt;
+    @Builder.Default
+    java.util.List<OrderItemResponse> items = java.util.List.of();
+    String returnRequestId;
+    ReturnRequestStatus returnStatus;
+    ReturnRequestKind returnKind;
+    ReturnRefundStatus returnRefundStatus;
+    BigDecimal expectedRefundAmount;
+    BigDecimal actualRefundAmount;
+    boolean canRequestReturn;
 }

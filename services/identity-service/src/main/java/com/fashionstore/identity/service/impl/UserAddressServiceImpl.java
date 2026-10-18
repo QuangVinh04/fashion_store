@@ -38,7 +38,7 @@ public class UserAddressServiceImpl implements UserAddressService {
     @Override
     @Transactional
     public UserAddressResponse createAddress(UserAddressRequest request) {
-        String userId = currentUserProvider.getCurrentUserId();
+        String userId = currentUserProvider.getCurrentUserForUpdate().getId();
         boolean hasNoAddress = !userAddressRepository.existsByUserId(userId);
 
         UserAddress address = userAddressMapper.toEntity(request);
@@ -82,7 +82,7 @@ public class UserAddressServiceImpl implements UserAddressService {
     @Override
     @Transactional
     public UserAddressResponse updateAddress(String id, UserAddressRequest request) {
-        String userId = currentUserProvider.getCurrentUserId();
+        String userId = currentUserProvider.getCurrentUserForUpdate().getId();
         UserAddress address = userAddressRepository.findByIdAndUserId(id, userId)
                 .orElseThrow(() -> new AppException(IdentityErrorCode.ADDRESS_NOT_FOUND));
 
@@ -102,7 +102,7 @@ public class UserAddressServiceImpl implements UserAddressService {
     @Override
     @Transactional
     public void deleteAddress(String id) {
-        String userId = currentUserProvider.getCurrentUserId();
+        String userId = currentUserProvider.getCurrentUserForUpdate().getId();
         UserAddress address = userAddressRepository.findByIdAndUserId(id, userId)
                 .orElseThrow(() -> new AppException(IdentityErrorCode.ADDRESS_NOT_FOUND));
 
@@ -120,7 +120,7 @@ public class UserAddressServiceImpl implements UserAddressService {
     @Override
     @Transactional
     public UserAddressResponse setDefaultAddress(String id) {
-        String userId = currentUserProvider.getCurrentUserId();
+        String userId = currentUserProvider.getCurrentUserForUpdate().getId();
         UserAddress address = userAddressRepository.findByIdAndUserId(id, userId)
                 .orElseThrow(() -> new AppException(IdentityErrorCode.ADDRESS_NOT_FOUND));
 

@@ -169,7 +169,7 @@ public class OrderReceiptService {
         response.setDeliveryEvidenceIssue(order.getDeliveryEvidenceIssue());
         response.setReturnEligibleUntil(
                 order.getDeliveredAt() == null ? null : order.getDeliveredAt().plus(RETURN_WINDOW));
-        response.setCanRequestReturn(inWindow(order, clock.instant()) && request.isEmpty());
+        response.setCanRequestReturn(canRequestReturn(order, request.isPresent()));
         response.setCanConfirmReceipt(order.getStatus() == OrderStatus.DELIVERED && !open);
         response.setActiveReturnId(
                 request.filter(value -> value.getClosedAt() == null)
@@ -183,6 +183,10 @@ public class OrderReceiptService {
                 && order.getDeliveredAt() != null
                 && order.getCompletedAt() == null
                 && now.isBefore(order.getDeliveredAt().plus(RETURN_WINDOW));
+    }
+
+    public boolean canRequestReturn(Order order, boolean hasReturnRequest) {
+        return !hasReturnRequest && inWindow(order, clock.instant());
     }
 
     public Instant now() {

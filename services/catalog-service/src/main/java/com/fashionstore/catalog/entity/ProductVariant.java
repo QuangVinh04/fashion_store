@@ -121,4 +121,25 @@ public class ProductVariant extends BaseEntity {
         }
     }
 
+    public Integer getWeightGram() {
+        return weightGram != null && weightGram > 0 ? weightGram : product == null ? null : product.getWeightGram();
+    }
+    public Integer getLengthMm() {
+        return lengthMm != null && lengthMm > 0 ? lengthMm : product == null ? null : product.getLengthMm();
+    }
+    public Integer getWidthMm() {
+        return widthMm != null && widthMm > 0 ? widthMm : product == null ? null : product.getWidthMm();
+    }
+    public Integer getHeightMm() {
+        return heightMm != null && heightMm > 0 ? heightMm : product == null ? null : product.getHeightMm();
+    }
+    // Editable DTOs must retain null overrides, rather than freezing inherited defaults on save.
+    public Integer getWeightGramOverride() { return weightGram; }
+    public Integer getLengthMmOverride() { return lengthMm; }
+    public Integer getWidthMmOverride() { return widthMm; }
+    public Integer getHeightMmOverride() { return heightMm; }
+    public Integer getWeight() { return getWeightGram() == null ? null : getWeightGram(); }
+    public Integer getLength() { return getLengthMm() == null ? null : (int) Math.ceil(getLengthMm() / 10.0); }
+    public Integer getWidth() { return getWidthMm() == null ? null : (int) Math.ceil(getWidthMm() / 10.0); }
+    public Integer getHeight() { return getHeightMm() == null ? null : (int) Math.ceil(getHeightMm() / 10.0); }
 }

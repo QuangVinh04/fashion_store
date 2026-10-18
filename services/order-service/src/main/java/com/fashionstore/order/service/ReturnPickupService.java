@@ -121,21 +121,10 @@ public class ReturnPickupService {
         return true;
     }
 
-    /** Khách hủy yêu cầu trả hàng của đơn mình; chỉ được trước khi GHN lấy hàng. */
-    @Transactional(propagation = Propagation.NEVER)
-    public void cancelByCustomer(String orderId) {
-        String userId = currentUser.getCurrentUserId();
-        ReturnRequest returned =
-                returns.findByOrderId(orderId)
-                        .filter(request -> userId.equals(request.getUserId()))
-                        .orElseThrow(() -> new AppException(OrderErrorCode.RETURN_REQUEST_NOT_FOUND));
-        cancel(returned.getId(), userId, "Khách hủy yêu cầu trả hàng", userId);
-    }
-
     @Transactional(propagation = Propagation.NEVER)
     @PreAuthorize("hasRole('ADMIN')")
     public void cancelByAdmin(String returnRequestId, String reason) {
-        cancel(returnRequestId, currentUser.getCurrentUserId(), reason, null);
+        cancel(returnRequestId, currentUser.getCurrentUserId(), reason);
     }
 
     private enum CancelOutcome {
@@ -148,17 +137,17 @@ public class ReturnPickupService {
      * Hủy phiếu: chưa có đơn GHN thì đóng ngay; đã có thì GHN phải xác nhận hủy (ngoài transaction)
      * rồi mới đóng. GHN cho biết hàng đã được lấy thì khóa hủy và đưa phiếu sang IN_TRANSIT.
      */
-    private void cancel(String returnId, String actor, String reason, String ownerUserId) {
+    private void cancel(String returnId, String actor, String reason) {
         TransactionTemplate transaction = new TransactionTemplate(transactionManager);
         String ghnCode =
-                transaction.execute(status -> prepareCancel(returnId, actor, reason, ownerUserId));
+                transaction.execute(status -> prepareCancel(returnId, actor, reason));
         if (ghnCode == null) {
             return;
         }
         var result = ghnClient.cancelPendingShipment(ghnCode);
         CancelOutcome outcome =
                 transaction.execute(
-                        status -> finishCancel(returnId, actor, reason, ownerUserId, result.outcome()));
+                        status -> finishCancel(returnId, actor, reason, result.outcome()));
         if (outcome == CancelOutcome.ALREADY_PICKED) {
             throw new AppException(OrderErrorCode.RETURN_WORKFLOW_CONFLICT);
         }
@@ -168,12 +157,9 @@ public class ReturnPickupService {
     }
 
     /** @return mã đơn GHN cần hủy, hoặc null nếu đã xử lý xong (đã đóng / không cần GHN). */
-    private String prepareCancel(String returnId, String actor, String reason, String ownerUserId) {
+    private String prepareCancel(String returnId, String actor, String reason) {
         Order order = lockOrder(returnId);
         ReturnRequest returned = lockReturn(returnId);
-        if (ownerUserId != null && !ownerUserId.equals(returned.getUserId())) {
-            throw new AppException(OrderErrorCode.RETURN_REQUEST_NOT_FOUND);
-        }
         if (returned.getStatus() == ReturnRequestStatus.CANCELLED) {
             return null;
         }
@@ -202,7 +188,7 @@ public class ReturnPickupService {
     }
 
     private CancelOutcome finishCancel(
-            String returnId, String actor, String reason, String ownerUserId, String ghnOutcome) {
+            String returnId, String actor, String reason, String ghnOutcome) {
         Order order = lockOrder(returnId);
         ReturnRequest returned = lockReturn(returnId);
         ReturnShipment shipment =
@@ -264,8 +250,7 @@ public class ReturnPickupService {
                 cancel(
                         id,
                         "SYSTEM",
-                        "GHN không lấy được hàng quá hạn " + properties.getPickupTimeoutDays() + " ngày",
-                        null);
+                        "GHN không lấy được hàng quá hạn " + properties.getPickupTimeoutDays() + " ngày");
             } catch (AppException conflict) {
                 if (conflict.getErrorCode() == OrderErrorCode.RETURN_WORKFLOW_CONFLICT) {
                     log.info("[Return] Return {} changed while expiring its pickup", id);

@@ -31,33 +31,35 @@ class OrderControllerTest {
     @Mock
     private com.fashionstore.order.service.ReturnService returnService;
 
-    @Mock
-    private com.fashionstore.order.service.ReturnPickupService returnPickupService;
-
     @BeforeEach
     void setUp() {
         mockMvc = MockMvcBuilders.standaloneSetup(new OrderController(orderService, returnService,
                 org.mockito.Mockito.mock(com.fashionstore.order.service.OrderReceiptService.class),
-                org.mockito.Mockito.mock(com.fashionstore.order.service.OrderCancellationService.class),
-                returnPickupService))
+                org.mockito.Mockito.mock(com.fashionstore.order.service.OrderCancellationService.class)))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
     }
 
     @Test
-    void cancelReturnRequest_cancelsThroughThePickupServiceAndReturnsTheClosedRequest() throws Exception {
-        when(returnService.getReturnRequestByOrderId("ord-1"))
-                .thenReturn(com.fashionstore.order.dto.ReturnRequestResponse.builder()
-                        .orderId("ord-1")
-                        .status(com.fashionstore.order.entity.enumeration.ReturnRequestStatus.CANCELLED)
-                        .build());
+    void getReturnEvidence_returnsSignedUrl() throws Exception {
+        when(returnService.getMyReturnEvidenceReadUrl("ord-1", "media-1"))
+                .thenReturn("https://signed.example/evidence");
 
+        mockMvc.perform(get("/api/v1/orders/ord-1/return-request/evidence/media-1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(1000))
+                .andExpect(jsonPath("$.data").value("https://signed.example/evidence"));
+    }
+
+    @Test
+    void customerCannotCancelAReturnRequestByCallingTheApiDirectly() throws Exception {
         mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
                         .post("/api/v1/orders/ord-1/return-request/cancel"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.status").value("CANCELLED"));
+                .andExpect(result -> org.assertj.core.api.Assertions.assertThat(result.getHandler()).isNull())
+                .andExpect(result -> org.assertj.core.api.Assertions.assertThat(result.getResolvedException())
+                        .isInstanceOf(org.springframework.web.servlet.NoHandlerFoundException.class));
 
-        org.mockito.Mockito.verify(returnPickupService).cancelByCustomer("ord-1");
+        org.mockito.Mockito.verifyNoInteractions(returnService, orderService);
     }
 
     @Test

@@ -16,6 +16,8 @@ public interface UserAddressMapper {
 
 
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE, unmappedTargetPolicy = ReportingPolicy.IGNORE)
+    // Default changes are handled by the service; false must preserve the current default.
+    @Mapping(target = "isDefault", ignore = true)
     void updateEntityFromRequest(UserAddressRequest request, @MappingTarget UserAddress entity);
 
 

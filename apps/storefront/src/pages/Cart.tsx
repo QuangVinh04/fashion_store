@@ -84,7 +84,50 @@ export default function Cart() {
     Math.round((total / SHIPPING_THRESHOLD) * 100),
   );
 
-  if (!loading && !error && cart && cart.items.length === 0) {
+  if (!cart) {
+    if (loading) {
+      return (
+        <div className="w-full">
+          <div className="border-b border-border bg-background">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4">
+              <nav className="flex items-center gap-2 text-xs text-muted-foreground font-medium">
+                <Link to="/" className="hover:text-foreground store-text-link">
+                  Trang Chủ
+                </Link>
+                <span>/</span>
+                <span className="text-foreground">Giỏ Hàng</span>
+              </nav>
+            </div>
+          </div>
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-28">
+            <Status loading={true} />
+          </div>
+        </div>
+      );
+    }
+    if (error) {
+      return (
+        <div className="w-full">
+          <div className="border-b border-border bg-background">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4">
+              <nav className="flex items-center gap-2 text-xs text-muted-foreground font-medium">
+                <Link to="/" className="hover:text-foreground store-text-link">
+                  Trang Chủ
+                </Link>
+                <span>/</span>
+                <span className="text-foreground">Giỏ Hàng</span>
+              </nav>
+            </div>
+          </div>
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-28">
+            <Status loading={false} error={error} retry={() => void refresh()} />
+          </div>
+        </div>
+      );
+    }
+  }
+
+  if (cart && cart.items.length === 0) {
     return (
       <div className="w-full">
         {/* Breadcrumb */}

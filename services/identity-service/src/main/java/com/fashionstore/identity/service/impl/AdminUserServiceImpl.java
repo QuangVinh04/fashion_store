@@ -50,6 +50,7 @@ public class AdminUserServiceImpl implements AdminUserService {
                 .pageNo(pageable.getPageNumber())
                 .pageSize(pageable.getPageSize())
                 .totalPage(users.getTotalPages())
+                .totalElements(users.getTotalElements())
                 .items(users.getContent().stream().map(userMapper::toAdminUserResponse).toList())
                 .build();
     }

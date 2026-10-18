@@ -117,7 +117,7 @@ class OpenApiDocumentTest {
                 .andExpect(jsonPath("$.paths['/api/v1/orders/{id}/history'].get.summary").exists())
                 .andExpect(jsonPath("$.paths['/api/v1/orders/{id}/return-request'].post.summary").exists())
                 .andExpect(jsonPath("$.paths['/api/v1/orders/{id}/return-request'].get.summary").exists())
-                .andExpect(jsonPath("$.paths['/api/v1/orders/{id}/return-request/cancel'].post.summary").exists())
+                .andExpect(jsonPath("$.paths['/api/v1/orders/{id}/return-request/cancel']").doesNotExist())
                 .andExpect(jsonPath("$.paths['/api/v1/admin/orders/returns'].get.summary").exists())
                 .andExpect(jsonPath("$.paths['/api/v1/admin/orders/returns/{id}/approve'].post.summary").exists())
                 .andExpect(jsonPath("$.paths['/api/v1/admin/orders/returns/{id}/reject'].post.summary").exists())

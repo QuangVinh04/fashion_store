@@ -1125,6 +1125,20 @@ public class ReturnServiceImpl implements ReturnService {
                         .findById(returnRequestId)
                         .orElseThrow(
                                 () -> new AppException(OrderErrorCode.RETURN_REQUEST_NOT_FOUND));
+        return submittedEvidenceReadUrl(returned, mediaId);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.NEVER)
+    public String getMyReturnEvidenceReadUrl(String orderId, String mediaId) {
+        String currentUserId = currentUserProvider.getCurrentUserId();
+        ReturnRequest returned = returnRequestRepository.findByOrderId(orderId)
+                .filter(request -> java.util.Objects.equals(request.getUserId(), currentUserId))
+                .orElseThrow(() -> new AppException(OrderErrorCode.RETURN_REQUEST_NOT_FOUND));
+        return submittedEvidenceReadUrl(returned, mediaId);
+    }
+
+    private String submittedEvidenceReadUrl(ReturnRequest returned, String mediaId) {
         if (!ReturnRequestMapper.deserializeImages(objectMapper, returned.getImages())
                 .contains(mediaId)) {
             throw new AppException(OrderErrorCode.RETURN_EVIDENCE_INVALID);
@@ -1255,6 +1269,7 @@ public class ReturnServiceImpl implements ReturnService {
                 .ifPresent(
                         shipment -> {
                             response.setReturnTrackingCode(shipment.getGhnOrderCode());
+                            response.setReturnShippingProvider("GHN");
                             response.setReturnShipmentStatus(shipment.getStatus());
                         });
         return response;

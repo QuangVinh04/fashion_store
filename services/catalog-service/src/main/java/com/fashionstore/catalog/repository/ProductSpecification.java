@@ -9,6 +9,7 @@ import lombok.Getter;
 import org.springframework.data.jpa.domain.Specification;
 
 import java.math.BigDecimal;
+import java.util.Locale;
 
 
 @Getter
@@ -105,19 +106,19 @@ public class ProductSpecification implements Specification<Product> {
 
             case "color" -> {
                 query.distinct(true);
-                Join<Product, ProductVariant> variantJoin = root.join("variants");
+                Join<Product, ProductVariant> variantJoin = variantJoin(root);
                 // A deactivated variant must not keep its product in a public facet result.
                 yield cb.and(
-                        cb.equal(cb.lower(variantJoin.get("colorDisplay")), value.toString().toLowerCase()),
+                        cb.equal(cb.lower(variantJoin.get("colorDisplay")), value.toString().toLowerCase(Locale.ROOT)),
                         cb.isTrue(variantJoin.get("active")));
             }
 
             case "size" -> {
                 query.distinct(true);
-                Join<Product, ProductVariant> variantJoin = root.join("variants");
+                Join<Product, ProductVariant> variantJoin = variantJoin(root);
                 // A deactivated variant must not keep its product in a public facet result.
                 yield cb.and(
-                        cb.equal(cb.lower(variantJoin.get("sizeDisplay")), value.toString().toLowerCase()),
+                        cb.equal(cb.lower(variantJoin.get("sizeDisplay")), value.toString().toLowerCase(Locale.ROOT)),
                         cb.isTrue(variantJoin.get("active")));
             }
 
@@ -125,6 +126,17 @@ public class ProductSpecification implements Specification<Product> {
 
             default -> getPredicate(cb, root.get(key), value);
         };
+    }
+
+    @SuppressWarnings("unchecked")
+    private Join<Product, ProductVariant> variantJoin(Root<Product> root) {
+        // Color and size restrictions must refer to the same variant row.
+        for (Join<Product, ?> join : root.getJoins()) {
+            if ("variants".equals(join.getAttribute().getName()) && join.getJoinType() == JoinType.INNER) {
+                return (Join<Product, ProductVariant>) join;
+            }
+        }
+        return root.join("variants");
     }
 
     private Predicate getPredicate(CriteriaBuilder cb, Path path, Object value) {

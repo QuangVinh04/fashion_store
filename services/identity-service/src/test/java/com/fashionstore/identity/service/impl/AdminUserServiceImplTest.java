@@ -208,5 +208,6 @@ class AdminUserServiceImplTest {
                 .satisfies(u -> assertThat(u.getEmail()).isEqualTo("customer@fashion.local"));
         assertThat(page.getTotalPage()).isEqualTo(1);
         assertThat(page.getPageSize()).isEqualTo(20);
+        assertThat(page.getTotalElements()).isEqualTo(1L);
     }
 }

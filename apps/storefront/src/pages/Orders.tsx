@@ -1,220 +1,108 @@
-import { useState } from "react";
-import { Link, useSearchParams } from "react-router";
-import {
-  ShoppingBag,
-  ArrowRight,
-  Eye,
-  Calendar,
-  CreditCard,
-} from "lucide-react";
-import { store } from "../api/store";
-import { money } from "../api/client";
-import type { OrderStatus, OrderSummary } from "../api/types";
-import { ORDER_LABEL } from "../api/types";
-import ProfileLayout from "../components/ProfileLayout";
-import { PageTitle, Status, StatusBadge, useLoad } from "../components/StoreUI";
+import { useEffect, useState } from 'react';
+import { Link, useSearchParams } from 'react-router';
+import { ChevronLeft, ChevronRight, Search, Truck, X } from 'lucide-react';
+import { customerError, money, type Page } from '../api/client';
+import { getPurchases, PURCHASE_TABS, purchaseAction, purchasePresentation } from '../api/purchases';
+import { detailDate } from '../api/order-presentation';
+import { ORDER_LABEL, type OrderSummary } from '../api/types';
+import ProfileLayout from '../components/ProfileLayout';
+import StoreSelect from '../components/StoreSelect';
+import { Status, StatusBadge } from '../components/StoreUI';
+import OrderProducts from '../components/orders/OrderProducts';
+import { useOrderProductPhotos } from '../components/orders/useOrderProductPhotos';
+import '../styles/order-detail.css';
+import '../styles/purchases.css';
 
-const ORDER_TABS: { label: string; value: string }[] = [
-  { label: "Tất Cả", value: "" },
-  { label: "Chờ Xử Lý", value: "PENDING" },
-  { label: "Đã Xác Nhận", value: "CONFIRMED" },
-  { label: "Đang Giao", value: "SHIPPING" },
-  { label: "Đã Giao", value: "DELIVERED" },
-  { label: "Đã Hủy", value: "CANCELLED" },
-];
+const LEGACY_TABS: Record<string, string> = { PENDING: 'PENDING', CONFIRMED: 'PREPARING', PROCESSING: 'PREPARING', PACKED: 'PREPARING', SHIPPING: 'SHIPPING', DELIVERED: 'COMPLETED', COMPLETED: 'COMPLETED', CANCELLED: 'CANCELLED', RETURNED: 'RETURNS', REFUNDED: 'RETURNS' };
 
 export default function Orders() {
   const [params, setParams] = useSearchParams();
-  const page = Math.max(0, Number(params.get("page") || 0));
-  const status = params.get("status") || "";
+  const rawPage = Number(params.get('page') || 0);
+  const page = Number.isSafeInteger(rawPage) && rawPage >= 0 ? rawPage : 0;
+  const legacyStatus = !params.has('tab') && Object.hasOwn(ORDER_LABEL, params.get('status') || '') ? params.get('status')! : undefined;
+  const tab = PURCHASE_TABS.some(item => item.value === params.get('tab')) ? params.get('tab')! : LEGACY_TABS[legacyStatus || ''] || '';
+  const q = (params.get('q') || '').trim();
+  const [draft, setDraft] = useState(q);
+  const [data, setData] = useState<Page<OrderSummary> | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [retry, setRetry] = useState(0);
+  const photos = useOrderProductPhotos((data?.items || []).flatMap(order => order.items || []));
 
-  const ordersLoad = useLoad(
-    () => store.orders(page, status || undefined),
-    [page, status],
-  );
+  useEffect(() => setDraft(q), [q]);
+  useEffect(() => {
+    const abort = new AbortController();
+    setLoading(true); setError('');
+    void getPurchases(page, tab, q, abort.signal, legacyStatus)
+      .then(result => { if (!abort.signal.aborted) setData(result); })
+      .catch(failure => { if (!abort.signal.aborted) setError(customerError(failure)); })
+      .finally(() => { if (!abort.signal.aborted) setLoading(false); });
+    return () => abort.abort();
+  }, [page, tab, q, legacyStatus, retry]);
 
-  const setTab = (val: string) => {
+  function changeTab(value: string) {
     const next = new URLSearchParams(params);
-    if (val) next.set("status", val);
-    else next.delete("status");
-    next.delete("page");
+    next.delete('status'); next.delete('page');
+    if (value) next.set('tab', value); else next.delete('tab');
     setParams(next);
-  };
-
-  const setPage = (p: number) => {
+  }
+  function search(value: string) {
     const next = new URLSearchParams(params);
-    if (p > 0) next.set("page", String(p));
-    else next.delete("page");
+    next.delete('page');
+    if (value.trim()) next.set('q', value.trim()); else next.delete('q');
     setParams(next);
-  };
+  }
+  function changePage(value: number) {
+    const next = new URLSearchParams(params);
+    if (value > 0) next.set('page', String(value)); else next.delete('page');
+    setParams(next);
+  }
 
-  return (
-    <ProfileLayout>
-      <div className="w-full">
-        <PageTitle eyebrow="Tài Khoản Của Bạn">ĐƠN HÀNG CỦA TÔI</PageTitle>
-
-        {/* Status Filter Tabs */}
-        <div className="flex gap-1 mb-8 border-b border-border overflow-x-auto pb-px">
-          {ORDER_TABS.map((tab) => {
-            const isSelected = status === tab.value;
-            return (
-              <button
-                key={tab.value}
-                type="button"
-                aria-pressed={isSelected}
-                onClick={() => setTab(tab.value)}
-                className={`px-4 py-3 text-xs font-semibold whitespace-nowrap transition-all relative ${
-                  isSelected
-                    ? "text-foreground"
-                    : "text-muted-foreground hover:text-foreground"
-                } store-button`}
-              >
-                {tab.label}
-                {isSelected && (
-                  <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-foreground" />
-                )}
-              </button>
-            );
-          })}
-        </div>
-
-        <Status
-          loading={ordersLoad.loading}
-          error={ordersLoad.error}
-          retry={() => void ordersLoad.refresh()}
-        />
-
-        {ordersLoad.data && ordersLoad.data.items.length > 0 ? (
-          <div className="space-y-4">
-            {ordersLoad.data.items.map((order: OrderSummary) => (
-              <div
-                key={order.id}
-                className="border border-border bg-white hover:border-border-strong transition-all overflow-hidden rounded-2xl"
-              >
-                <div className="p-5 md:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-background border-b border-border">
-                  <div className="flex flex-wrap items-center gap-4">
-                    <div>
-                      <span className="text-xs font-semibold text-muted-foreground block">
-                        Mã Đơn Hàng
-                      </span>
-                      <strong className="text-sm text-foreground font-mono">
-                        {order.orderCode}
-                      </strong>
-                    </div>
-
-                    <div className="hidden md:block w-px h-8 bg-border-strong" />
-
-                    <div>
-                      <span className="text-xs font-semibold text-muted-foreground block">
-                        Ngày Đặt
-                      </span>
-                      <span className="text-xs text-muted-foreground">
-                        {new Date(order.createdAt).toLocaleDateString("vi-VN")}
-                      </span>
-                    </div>
-
-                    <div className="hidden md:block w-px h-8 bg-border-strong" />
-
-                    <div>
-                      <span className="text-xs font-semibold text-muted-foreground block">
-                        Tổng Tiền
-                      </span>
-                      <strong className="text-sm text-foreground">
-                        {money(order.totalAmount)}
-                      </strong>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-3">
-                    <StatusBadge status={order.status} />
-
-                    <Link
-                      to={`/profile/orders/${order.id}`}
-                      className="bg-primary text-white px-4 py-2 text-xs font-semibold hover:bg-primary-hover inline-flex items-center gap-1.5 transition-colors shrink-0 store-action"
-                    >
-                      <Eye size={13} /> Chi Tiết
-                    </Link>
-                  </div>
-                </div>
-
-                <div className="p-5 flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
-                  <div className="flex items-center gap-4">
-                    <span>
-                      Thanh toán:{" "}
-                      <strong className="text-foreground">
-                        {({ COD: "Thanh toán khi nhận hàng", VNPAY: "VNPay", PAYOS: "PayOS" } as Record<string, string>)[order.paymentProvider] || "Đang cập nhật"}
-                      </strong>
-                    </span>
-                    <span>·</span>
-                    <span>
-                      Phương thức:{" "}
-                      <strong className="text-foreground">
-                        {order.paymentMethod === "COD" ? "Khi nhận hàng" : "Trực tuyến"}
-                      </strong>
-                    </span>
-                  </div>
-
-                  <Link
-                    to={`/profile/orders/${order.id}`}
-                    className="text-xs text-foreground font-semibold hover:text-primary inline-flex items-center gap-1 underline underline-offset-4 store-text-link"
-                  >
-                    Xem lịch trình vận đơn & sản phẩm <ArrowRight size={12} />
-                  </Link>
-                </div>
-              </div>
-            ))}
-
-            {/* Pagination */}
-            {ordersLoad.data.totalPage > 1 && (
-              <div className="mt-8 pt-6 border-t border-border flex items-center justify-between">
-                <button
-                  type="button"
-                  disabled={page === 0}
-                  onClick={() => setPage(page - 1)}
-                  className="bg-primary text-white px-5 py-2.5 text-xs font-semibold hover:bg-primary-hover disabled:opacity-30 disabled:hover:bg-primary-hover store-button"
-                >
-                  ← Trước
-                </button>
-                <span className="text-xs text-muted-foreground font-medium">
-                  Trang {page + 1} / {ordersLoad.data.totalPage}
-                </span>
-                <button
-                  type="button"
-                  disabled={page + 1 >= ordersLoad.data.totalPage}
-                  onClick={() => setPage(page + 1)}
-                  className="bg-primary text-white px-5 py-2.5 text-xs font-semibold hover:bg-primary-hover disabled:opacity-30 disabled:hover:bg-primary-hover store-button"
-                >
-                  Sau →
-                </button>
-              </div>
-            )}
-          </div>
-        ) : (
-          !ordersLoad.loading &&
-          !ordersLoad.error && (
-            <div className="py-20 text-center border border-dashed border-border-strong p-8">
-              <ShoppingBag
-                size={36}
-                className="text-border-strong mx-auto mb-4"
-              />
-              <p className="text-base font-semibold text-foreground mb-1">
-                Không có đơn hàng nào
-              </p>
-              <p className="text-xs text-muted-foreground mb-6">
-                {status
-                  ? "Không tìm thấy đơn hàng nào ở trạng thái này."
-                  : "Bạn chưa thực hiện đơn đặt hàng nào tại LINO."}
-              </p>
-              <Link
-                to="/products"
-                className="inline-block bg-primary text-white px-4 sm:px-6 py-3 text-xs font-semibold hover:bg-primary-hover store-action"
-              >
-                Khám Phá Sản Phẩm Ngay
-              </Link>
-            </div>
-          )
-        )}
+  const totalPages = data?.totalPage || 0;
+  const firstPage = Math.max(0, Math.min(page - 2, totalPages - 5));
+  const pageNumbers = Array.from({ length: Math.min(5, totalPages) }, (_, index) => firstPage + index);
+  return <ProfileLayout flush>
+    <div className="purchases">
+      <h1 className="sr-only">Đơn mua của tôi</h1>
+      <nav className="purchases-tabs" aria-label="Lọc đơn mua theo trạng thái">
+        {PURCHASE_TABS.map(item => <button key={item.value} type="button" aria-pressed={tab === item.value} onClick={() => changeTab(item.value)}>{item.label}</button>)}
+      </nav>
+      <div className="purchases-mobile-filter"><span>Trạng thái:</span><StoreSelect aria-label="Trạng thái đơn mua" value={tab} onChange={event => changeTab(event.target.value)}>{PURCHASE_TABS.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}</StoreSelect></div>
+      <form role="search" className="purchases-search" onSubmit={event => { event.preventDefault(); search(draft); }}>
+        <Search size={18} aria-hidden="true"/>
+        <input aria-label="Tìm đơn theo mã đơn hoặc tên sản phẩm" placeholder="Tìm theo mã đơn hoặc tên sản phẩm" maxLength={120} value={draft} onChange={event => setDraft(event.target.value)}/>
+        {draft && <button type="button" aria-label="Xóa tìm kiếm" className="flex min-h-8 min-w-8 items-center justify-center" onClick={() => { setDraft(''); search(''); }}><X size={16}/></button>}
+        <button type="submit" className="order-small-link">Tìm kiếm</button>
+      </form>
+      <div className="purchases-count" aria-live="polite"><span>{loading ? 'Đang cập nhật đơn mua…' : error ? 'Chưa cập nhật được danh sách' : data?.items.length ? `${data.items.length} đơn trên trang ${page + 1}` : 'Danh sách đơn mua'}</span>{(q || tab) && <button className="min-h-8 text-foreground underline underline-offset-4" onClick={() => setParams(new URLSearchParams())}>Xóa bộ lọc</button>}</div>
+      {error && <Status loading={false} error={error} retry={() => setRetry(value => value + 1)}/>}
+      {loading && data && <div className="purchases-loading" role="status" aria-label="Đang tải đơn mua"/>}
+      <div aria-busy={loading}>
+        {loading && !data ? <div role="status" aria-label="Đang tải đơn mua">{[1, 2, 3].map(index => <div key={index} className="purchase-skeleton" aria-hidden="true"><span/><span/><span/></div>)}</div> : data?.items.map(order => {
+          const action = purchaseAction(order);
+          const presentation = purchasePresentation(order, tab);
+          const delivered = ['DELIVERED', 'COMPLETED'].includes(presentation.status);
+          const hint = order.returnRequestId ? 'Yêu cầu trả hàng/hoàn tiền được theo dõi riêng trong chi tiết yêu cầu.'
+            : order.status === 'CANCELLED' ? order.cancelReason || 'Đơn hàng đã hủy.'
+            : order.status === 'PENDING' ? 'Mở chi tiết để kiểm tra thanh toán và tiếp tục đơn hàng.'
+            : delivered ? 'Cảm ơn bạn đã mua sắm tại LINO.' : 'Tiến trình xử lý được cập nhật trong chi tiết đơn hàng.';
+          return <article key={order.id} className={`purchase-card${presentation.isReturn ? ' purchase-card-return' : ''}`}>
+            <header className="purchase-header"><div className="purchase-shop"><strong>LINO · Fashion Store</strong><Link to="/products" className="order-small-link">Xem cửa hàng</Link></div><div className="purchase-state">{presentation.isReturn ? <strong className="purchase-refund-state">{presentation.statusLabel}</strong> : <>{delivered && <span><Truck size={15}/>Đã giao hàng</span>}<StatusBadge status={presentation.status}/></>}</div></header>
+            <div className="purchase-meta"><Link to={`/profile/orders/${encodeURIComponent(order.id)}`}>Mã đơn: {order.orderCode}</Link><time>{detailDate(order.createdAt)}</time></div>
+            {order.items?.length ? <OrderProducts order={{ id: order.id, items: order.items }} showShopHeader={false} photos={photos} returnLabel={!presentation.isReturn ? presentation.returnLabel : undefined} refunded={!presentation.isReturn && order.returnRefundStatus === 'COMPLETED'}/> : <p className="px-6 py-6 text-sm text-muted-foreground">Chi tiết sản phẩm chưa được cập nhật. Bạn có thể xem trong đơn hàng.</p>}
+            <footer className="purchase-footer"><div className="purchase-total"><span>{presentation.totalLabel}{presentation.amount != null ? ':' : ''}</span>{presentation.amount != null && <strong>{money(presentation.amount)}</strong>}{presentation.isReturn && presentation.amount == null && presentation.totalLabel !== 'Yêu cầu đã đóng' && <span>Chưa cập nhật số tiền</span>}</div>
+              <div className="purchase-actions"><p className="purchase-hint">{presentation.isReturn ? presentation.description : hint}</p><div className="purchase-buttons">
+                <Link className={`order-action${presentation.isReturn ? '' : ' order-action-primary'}`} to={presentation.isReturn ? `/profile/orders/${encodeURIComponent(order.id)}/return` : `/profile/orders/${encodeURIComponent(order.id)}`}>{presentation.isReturn ? 'Xem chi tiết hoàn tiền' : order.returnRequestId ? 'Xem chi tiết đơn hàng' : action.label}</Link>
+                {!presentation.isReturn && order.returnRequestId && <Link className="order-action" to={action.href}>Xem trả hàng/Hoàn tiền</Link>}
+                {order.canRequestReturn && !order.returnRequestId && <Link className="order-action" to={`/profile/orders/${encodeURIComponent(order.id)}/return`}>Yêu cầu trả hàng/Hoàn tiền</Link>}
+                {!presentation.isReturn && (order.status === 'CANCELLED' ? <Link className="order-action" to="/products">Tiếp tục mua sắm</Link> : <Link className="order-action" to="/contact">Liên hệ hỗ trợ</Link>)}
+              </div></div>
+            </footer>
+          </article>;
+        })}
       </div>
-    </ProfileLayout>
-  );
+      {!loading && !error && !data?.items.length && <div className="order-panel px-6 py-10 text-center"><p className="text-sm text-muted-foreground">{q ? 'Không tìm thấy đơn khớp mã đơn hoặc tên sản phẩm này.' : tab ? 'Chưa có đơn hàng ở trạng thái này.' : 'Bạn chưa có đơn mua nào tại LINO.'}</p>{!tab && !q && <Link to="/products" className="order-action mt-4">Khám phá sản phẩm</Link>}</div>}
+      {!loading && !error && data && totalPages > 1 && <nav className="purchases-pagination" aria-label="Trang đơn mua"><button aria-label="Trang trước" disabled={page === 0} onClick={() => changePage(page - 1)}><ChevronLeft size={16}/></button>{pageNumbers.map(value => <button key={value} aria-label={`Trang ${value + 1}`} aria-current={value === page ? 'page' : undefined} onClick={() => changePage(value)}>{value + 1}</button>)}<button aria-label="Trang sau" disabled={page + 1 >= totalPages} onClick={() => changePage(page + 1)}><ChevronRight size={16}/></button></nav>}
+    </div>
+  </ProfileLayout>;
 }

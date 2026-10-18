@@ -112,6 +112,41 @@ class ProductServiceImplTest {
     ProductServiceImpl productService;
 
     @Test
+    void publicProductDetailDoesNotExposeDraftOrArchivedProducts() {
+        for (ProductStatus status : List.of(ProductStatus.DRAFT, ProductStatus.ARCHIVED)) {
+            Product product = Product.builder().status(status).build();
+            when(productRepository.findDetailProductById("hidden-product")).thenReturn(Optional.of(product));
+
+            assertThatThrownBy(() -> productService.getProductById("hidden-product"))
+                    .isInstanceOfSatisfying(AppException.class,
+                            exception -> assertThat(exception.getErrorCode()).isEqualTo(ProductErrorCode.PRODUCT_NOT_FOUND));
+        }
+        verifyNoInteractions(productMapper);
+    }
+
+    @Test
+    void publicProductDetailStillReturnsPublishedProducts() {
+        Product product = Product.builder().status(ProductStatus.PUBLISHED).build();
+        var response = com.fashionstore.catalog.dto.ProductResponse.builder().id("published").build();
+        when(productRepository.findDetailProductById("published")).thenReturn(Optional.of(product));
+        when(productMapper.toProductResponse(product)).thenReturn(response);
+
+        assertThat(productService.getProductById("published")).isSameAs(response);
+    }
+
+    @Test
+    void backofficeCanStillReadDraftPublishedAndArchivedProducts() {
+        for (ProductStatus status : List.of(ProductStatus.DRAFT, ProductStatus.PUBLISHED, ProductStatus.ARCHIVED)) {
+            Product product = Product.builder().status(status).build();
+            var response = com.fashionstore.catalog.dto.ProductResponse.builder().id(status.name()).build();
+            when(productRepository.findDetailProductById(status.name())).thenReturn(Optional.of(product));
+            when(productMapper.toProductResponse(product)).thenReturn(response);
+
+            assertThat(productService.getProductByIdForBackoffice(status.name())).isSameAs(response);
+        }
+    }
+
+    @Test
     void returnsVariantSnapshotWithoutExposingEntity() {
         Product product = Product.builder()
                 .name("Basic Tee")
@@ -996,7 +1031,9 @@ class ProductServiceImplTest {
         assertThat(response.getWeightGram()).isEqualTo(280);
         assertThat(response.getLengthMm()).isEqualTo(310);
         assertThat(response.getWidthMm()).isEqualTo(220);
-        assertThat(response.getHeightMm()).isEqualTo(55);
+        // Product defaults are stored in whole centimeters: 55 mm rounds up to 6 cm.
+        assertThat(response.getHeightMm()).isEqualTo(60);
+        assertThat(response.getHeight()).isEqualTo(6);
     }
 
     @Test

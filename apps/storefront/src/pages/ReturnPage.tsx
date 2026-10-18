@@ -105,8 +105,8 @@ function ReturnForm({id}:{id:string}) {
   }
 
   return (
-    <ProfileLayout>
-      <div className="w-full max-w-2xl">
+    <ProfileLayout flush={!!request}>
+      <div className={request ? "w-full" : "w-full max-w-2xl"}>
         <Link
           to={`/profile/orders/${id}`}
           className="text-xs text-muted-foreground hover:text-foreground font-semibold mb-4 inline-flex items-center gap-1.5 store-text-link"
@@ -114,7 +114,7 @@ function ReturnForm({id}:{id:string}) {
           <ArrowLeft size={13} /> Quay Lại Đơn Hàng {order?.orderCode || id}
         </Link>
 
-        <PageTitle eyebrow="Hậu Mãi & Đổi Trả">YÊU CẦU TRẢ HÀNG</PageTitle>
+        {!request && <PageTitle eyebrow="Hậu Mãi & Đổi Trả">YÊU CẦU TRẢ HÀNG</PageTitle>}
 
         <Status
           loading={orderLoad.loading}
@@ -141,7 +141,7 @@ function ReturnForm({id}:{id:string}) {
         )}
 
         <Status loading={requestLoad.loading && !requestLoad.data} error={requestLoad.error} retry={requestLoad.refresh}/>
-        {request ? <ReturnCaseDetails key={request.id} request={request} onRefresh={requestLoad.refresh}/>
+        {request ? <ReturnCaseDetails key={request.id} request={request} order={order || undefined} onRefresh={requestLoad.refresh}/>
         : !requestLoad.loading && !requestLoad.error && order?.canRequestReturn && !order.activeReturnId ? (
           /* Form Submission */
           <form
@@ -202,7 +202,7 @@ function ReturnForm({id}:{id:string}) {
               )}
 
               {images.length < 5 && (
-                <label className="border-2 border-dashed border-border-strong p-6 flex flex-col items-center justify-center cursor-pointer hover:border-border-strong transition-colors bg-background">
+                <label className="border-2 border-dashed border-border-strong p-6 flex flex-col items-center justify-center cursor-pointer hover:border-border-strong transition-colors bg-background rounded-2xl focus-within:ring-2 focus-within:ring-primary focus-within:border-primary">
                   <Upload size={22} className="text-muted-foreground mb-2" />
                   <span className="text-xs font-semibold text-foreground">
                     Tải ảnh lên từ thiết bị
@@ -216,7 +216,7 @@ function ReturnForm({id}:{id:string}) {
                     multiple
                     disabled={busy}
                     onChange={(e) => void handleFileUpload(e.target.files)}
-                    className="hidden store-input"
+                    className="sr-only store-input"
                   />
                 </label>
               )}
