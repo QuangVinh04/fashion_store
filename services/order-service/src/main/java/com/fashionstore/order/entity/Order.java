@@ -54,9 +54,6 @@ public class Order extends BaseEntity {
     @Column(name = "idempotency_key", nullable = false, unique = true, length = 120)
     String idempotencyKey;
 
-    @Column(name = "inventory_reservation_id", length = 36)
-    String inventoryReservationId;
-
     // ----- Snapshot dữ liệu thanh toán (copy từ Checkout lúc tạo đơn) -----
 
     @Enumerated(EnumType.STRING)

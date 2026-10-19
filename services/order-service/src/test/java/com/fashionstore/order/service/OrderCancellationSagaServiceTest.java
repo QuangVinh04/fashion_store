@@ -45,7 +45,6 @@ class OrderCancellationSagaServiceTest {
                         .status(OrderStatus.CONFIRMED)
                         .paymentMethod(PaymentMethod.ONLINE)
                         .paymentId("payment-1")
-                        .inventoryReservationId("reservation-1")
                         .currency("VND")
                         .subtotalAmount(new BigDecimal("100000"))
                         .totalAmount(new BigDecimal("100000"))
@@ -83,6 +82,26 @@ class OrderCancellationSagaServiceTest {
         assertThat(saga.getCurrentStep()).isEqualTo(OrderSagaStep.CANCEL_ORDER_INVENTORY);
         assertThat(checkout.getStatus()).isEqualTo(OrderSagaStatus.COMPLETED);
         verify(outbox).emit(eq(saga), any());
+    }
+
+    @Test
+    void requestTakesReservationFromCheckoutSagaWhenOrderDoesNotStoreIt() {
+        // Order không lưu ID giữ kho; ID này chỉ nằm trên saga checkout.
+        var order = order();
+        var checkout = OrderSaga.start(order.getId());
+        checkout.setPaymentId("payment-1");
+        checkout.setInventoryReservationId("reservation-1");
+        checkout.complete();
+        when(sagas.findByOrderIdAndTypeForUpdate(order.getId(), OrderSagaType.CHECKOUT))
+                .thenReturn(Optional.of(checkout));
+        when(sagas.saveAndFlush(any())).thenAnswer(i -> i.getArgument(0));
+
+        var saga = service.request(order.getId(), "operation-1", "Changed mind", "user-1", false);
+
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLING);
+        assertThat(saga.getInventoryReservationId()).isEqualTo("reservation-1");
+        assertThat(saga.getPaymentId()).isEqualTo("payment-1");
+        assertThat(saga.getCurrentStep()).isEqualTo(OrderSagaStep.CANCEL_ORDER_INVENTORY);
     }
 
     @Test

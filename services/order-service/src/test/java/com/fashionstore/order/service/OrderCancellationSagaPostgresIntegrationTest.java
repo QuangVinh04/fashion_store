@@ -120,7 +120,6 @@ class OrderCancellationSagaPostgresIntegrationTest {
                                                     .paymentMethod(PaymentMethod.ONLINE)
                                                     .paymentProvider(PaymentProvider.PAYOS)
                                                     .paymentId("payment-1")
-                                                    .inventoryReservationId("reservation-1")
                                                     .subtotalAmount(new BigDecimal("100000"))
                                                     .totalAmount(new BigDecimal("100000"))
                                                     .build());

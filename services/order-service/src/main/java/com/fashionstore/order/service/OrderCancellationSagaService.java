@@ -90,12 +90,9 @@ public class OrderCancellationSagaService {
             throw new AppException(OrderErrorCode.CANCELLATION_CONFLICT);
         }
 
-        // Kiểm tra Checkout Saga đã hoàn tất
+        // Kiểm tra Checkout Saga đã hoàn tất; ID giữ kho và thanh toán lấy từ saga này
         OrderSaga checkoutSaga = sagas.findByOrderIdAndTypeForUpdate(orderId, OrderSagaType.CHECKOUT).orElse(null);
-        if (checkoutSaga == null
-                || checkoutSaga.getStatus() != OrderSagaStatus.COMPLETED
-                || !Objects.equals(checkoutSaga.getInventoryReservationId(), order.getInventoryReservationId())
-                || !Objects.equals(checkoutSaga.getPaymentId(), order.getPaymentId())) {
+        if (checkoutSaga == null || checkoutSaga.getStatus() != OrderSagaStatus.COMPLETED) {
             throw new AppException(OrderErrorCode.CANCELLATION_CONFLICT);
         }
 
@@ -109,7 +106,7 @@ public class OrderCancellationSagaService {
         order.setCancelReason(reason);
 
         OrderSaga cancellationSaga = sagas.saveAndFlush(
-                OrderSaga.startCancellation(orderId, operationId, order.getPaymentId(), order.getInventoryReservationId()));
+                OrderSaga.startCancellation(orderId, operationId, checkoutSaga.getPaymentId(), checkoutSaga.getInventoryReservationId()));
 
         recordHistory(order, previousStatus, OrderStatus.CANCELLING, "CANCELLATION_REQUESTED", actor, reason, null);
 
