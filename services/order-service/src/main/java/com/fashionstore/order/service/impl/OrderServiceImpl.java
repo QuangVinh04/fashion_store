@@ -14,6 +14,7 @@ import com.fashionstore.order.entity.*;
 import com.fashionstore.order.entity.enumeration.CheckoutStatus;
 import com.fashionstore.order.entity.enumeration.OrderSagaType;
 import com.fashionstore.order.entity.enumeration.OrderStatus;
+import com.fashionstore.order.entity.enumeration.ShipmentStatus;
 import com.fashionstore.order.event.OutboxEventRecorder;
 import com.fashionstore.order.event.SagaOutbox;
 import com.fashionstore.order.exception.OrderErrorCode;
@@ -369,7 +370,10 @@ public class OrderServiceImpl implements OrderService {
         // Guard: Chỉ cho phép chuyển sang SHIPPING khi đã có vận đơn hoặc trackingCode
         if (request.getStatus() == OrderStatus.SHIPPING) {
             boolean hasShipment =
-                    shipmentRepository.findByOrderId(order.getId()).isPresent()
+                    shipmentRepository
+                                    .findByOrderId(order.getId())
+                                    .filter(s -> s.getStatus() != ShipmentStatus.CANCELLED)
+                                    .isPresent()
                             || (order.getTrackingCode() != null
                                     && !order.getTrackingCode().isBlank());
             if (!hasShipment) {

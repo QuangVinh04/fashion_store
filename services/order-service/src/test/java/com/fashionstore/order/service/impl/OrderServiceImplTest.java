@@ -584,6 +584,28 @@ class OrderServiceImplTest {
     }
 
     @Test
+    void updateOrderStatus_toShipping_withOnlyCancelledShipment_throwsShipmentRequired() {
+        Order order = order(OrderStatus.PACKED);
+        when(orderRepository.findWithItemsById("order-1")).thenReturn(Optional.of(order));
+        when(shipmentRepository.findByOrderId("order-1"))
+                .thenReturn(
+                        Optional.of(
+                                Shipment.builder()
+                                        .order(order)
+                                        .trackingCode("OLD1")
+                                        .status(com.fashionstore.order.entity.enumeration.ShipmentStatus.CANCELLED)
+                                        .build()));
+
+        UpdateOrderStatusRequest request = new UpdateOrderStatusRequest();
+        request.setStatus(OrderStatus.SHIPPING);
+
+        AppException ex =
+                assertThrows(
+                        AppException.class, () -> service.updateOrderStatus("order-1", request));
+        assertEquals(OrderErrorCode.SHIPMENT_REQUIRED, ex.getErrorCode());
+    }
+
+    @Test
     void
             updateOrderStatus_toShipping_whenClientSendsTrackingCodeWithoutShipment_throwsShipmentRequired() {
         Order order = order(OrderStatus.PACKED);

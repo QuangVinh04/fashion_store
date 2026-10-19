@@ -252,7 +252,7 @@ class ShipmentServiceImplTest {
                                         .variantId("var-1")
                                         .weightGram(500)
                                         .build()));
-        when(ghnClient.createOrder(eq(order), any(), eq(500))).thenReturn("GHN_TRACK_123");
+        when(ghnClient.createOrder(eq(order), any(), eq(500), any())).thenReturn("GHN_TRACK_123");
 
         ShipmentResponse response =
                 service.createShipment("order-1", CreateShipmentRequest.builder().build());
@@ -293,7 +293,7 @@ class ShipmentServiceImplTest {
                                         .build()));
         assertThatThrownBy(() -> service.createShipment("order-1", null))
                 .isInstanceOf(AppException.class);
-        verify(ghnClient, never()).createOrder(any(), any(), any(Integer.class));
+        verify(ghnClient, never()).createOrder(any(), any(), any(Integer.class), any());
     }
 
     @Test
@@ -316,6 +316,60 @@ class ShipmentServiceImplTest {
                         .build());
         assertThat(shipment.getStatus()).isEqualTo(ShipmentStatus.PENDING);
         assertThat(shipment.getHandedOffAt()).isNull();
+    }
+
+    @Test
+    void carrierCancelReturnsOrderToProcessingForNewLabel() {
+        var order = confirmedOrder(null);
+        order.setStatus(OrderStatus.PACKED);
+        order.setTrackingCode("tracking");
+        var shipment =
+                Shipment.builder()
+                        .order(order)
+                        .provider(ShipmentProvider.GHN)
+                        .trackingCode("tracking")
+                        .ghnOrderCode("tracking")
+                        .status(ShipmentStatus.PENDING)
+                        .build();
+        when(shipmentRepository.findByGhnOrderCode("tracking")).thenReturn(Optional.of(shipment));
+        service.handleGhnCallback(
+                GhnWebhookPayload.builder()
+                        .shopId("123")
+                        .time("2026-10-01T03:00:00Z")
+                        .orderCode("tracking")
+                        .status("cancel")
+                        .build());
+        assertThat(shipment.getStatus()).isEqualTo(ShipmentStatus.CANCELLED);
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.PROCESSING);
+        assertThat(order.getTrackingCode()).isNull();
+        ArgumentCaptor<OrderStatusHistory> history = ArgumentCaptor.forClass(OrderStatusHistory.class);
+        verify(orderStatusHistoryRepository).save(history.capture());
+        assertThat(history.getValue().getAction()).isEqualTo("CARRIER_CANCELLED");
+        assertThat(history.getValue().getToStatus()).isEqualTo(OrderStatus.PROCESSING);
+    }
+
+    @Test
+    void recreatedLabelCallbackAcceptsSuffixedClientOrderCode() {
+        var order = confirmedOrder(null);
+        order.setStatus(OrderStatus.PACKED);
+        var shipment =
+                Shipment.builder()
+                        .order(order)
+                        .provider(ShipmentProvider.GHN)
+                        .trackingCode("NEW1")
+                        .ghnOrderCode("NEW1")
+                        .status(ShipmentStatus.PENDING)
+                        .build();
+        when(shipmentRepository.findByGhnOrderCode("NEW1")).thenReturn(Optional.of(shipment));
+        service.handleGhnCallback(
+                GhnWebhookPayload.builder()
+                        .shopId("123")
+                        .time("2026-10-01T03:00:00Z")
+                        .orderCode("NEW1")
+                        .clientOrderCode("ORD123-OLD1")
+                        .status("picked")
+                        .build());
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.SHIPPING);
     }
 
     @Test
@@ -421,7 +475,7 @@ class ShipmentServiceImplTest {
                                     .isFalse();
                             return List.of();
                         });
-        when(ghnClient.createOrder(eq(order), any(), any(Integer.class)))
+        when(ghnClient.createOrder(eq(order), any(), any(Integer.class), any()))
                 .thenAnswer(
                         call -> {
                             assertThat(
@@ -454,7 +508,7 @@ class ShipmentServiceImplTest {
                                 .wardCode("ward")
                                 .build());
         when(orderRepository.findByIdForUpdate("order-1")).thenReturn(Optional.of(order));
-        when(ghnClient.createOrder(eq(order), any(), any(Integer.class)))
+        when(ghnClient.createOrder(eq(order), any(), any(Integer.class), any()))
                 .thenAnswer(
                         call -> {
                             order.setStatus(OrderStatus.CANCELLING);
@@ -466,7 +520,7 @@ class ShipmentServiceImplTest {
     }
 
     @Test
-    void unknownCarrierCreationRetainsClaimAndNeverCreatesAnotherLabelOnRetry() {
+    void failedCarrierCreationReleasesClaimSoAdminCanRetry() {
         var order =
                 confirmedOrder(
                         ShippingAddress.builder()
@@ -478,16 +532,20 @@ class ShipmentServiceImplTest {
                                 .wardCode("ward")
                                 .build());
         when(orderRepository.findByIdForUpdate("order-1")).thenReturn(Optional.of(order));
-        when(ghnClient.createOrder(eq(order), any(), any(Integer.class)))
-                .thenThrow(new IllegalStateException("timeout"));
+        when(shipmentRepository.save(any(Shipment.class))).thenAnswer(i -> i.getArgument(0));
+        // Lần gọi lại gửi cùng client_order_code nên GHN không tạo vận đơn trùng.
+        when(ghnClient.createOrder(eq(order), any(), any(Integer.class), any()))
+                .thenThrow(new IllegalStateException("timeout"))
+                .thenReturn("GHN_TRACK_123");
         assertThatThrownBy(() -> service.createShipment("order-1", null))
                 .isInstanceOf(IllegalStateException.class);
-        String claim = order.getShipmentInitiationToken();
-        assertThat(claim).isNotBlank();
-        assertThatThrownBy(() -> service.createShipment("order-1", null))
-                .isInstanceOf(AppException.class);
-        assertThat(order.getShipmentInitiationToken()).isEqualTo(claim);
-        verify(ghnClient, times(1)).createOrder(eq(order), any(), any(Integer.class));
+        assertThat(order.getShipmentInitiationToken()).isNull();
+
+        var response = service.createShipment("order-1", null);
+
+        assertThat(response.getTrackingCode()).isEqualTo("GHN_TRACK_123");
+        assertThat(order.getTrackingCode()).isEqualTo("GHN_TRACK_123");
+        verify(ghnClient, times(2)).createOrder(eq(order), any(), any(Integer.class), any());
     }
 
     @Test
@@ -500,7 +558,7 @@ class ShipmentServiceImplTest {
                 .isInstanceOf(AppException.class)
                 .extracting("errorCode")
                 .isEqualTo(OrderErrorCode.SHIPPING_ADDRESS_INVALID);
-        verify(ghnClient, never()).createOrder(any(), any(), any(Integer.class));
+        verify(ghnClient, never()).createOrder(any(), any(), any(Integer.class), any());
     }
 
     /** Đơn tạo trước khi có snapshot: còn tên/SĐT (cột cũ) nhưng không có mã GHN. */
@@ -519,7 +577,7 @@ class ShipmentServiceImplTest {
                 .isInstanceOf(AppException.class)
                 .extracting("errorCode")
                 .isEqualTo(OrderErrorCode.SHIPPING_ADDRESS_INVALID);
-        verify(ghnClient, never()).createOrder(any(), any(), any(Integer.class));
+        verify(ghnClient, never()).createOrder(any(), any(), any(Integer.class), any());
     }
 
     private Order confirmedOrder(ShippingAddress address) {
@@ -567,7 +625,45 @@ class ShipmentServiceImplTest {
 
         assertThat(response.getId()).isEqualTo("ship-1");
         assertThat(response.getTrackingCode()).isEqualTo("EXISTING_CODE");
-        verify(ghnClient, never()).createOrder(any(), any(), any(Integer.class));
+        verify(ghnClient, never()).createOrder(any(), any(), any(Integer.class), any());
+    }
+
+    @Test
+    void createShipment_afterCarrierCancel_createsNewLabelOnSameRow() {
+        var order =
+                confirmedOrder(
+                        ShippingAddress.builder()
+                                .recipientName("Test")
+                                .recipientPhone("0900000000")
+                                .provinceId(1)
+                                .wardId(2)
+                                .districtId(3)
+                                .wardCode("ward")
+                                .build());
+        order.setStatus(OrderStatus.PROCESSING);
+        Shipment cancelled =
+                Shipment.builder()
+                        .order(order)
+                        .provider(ShipmentProvider.GHN)
+                        .trackingCode("OLD1")
+                        .ghnOrderCode("OLD1")
+                        .status(ShipmentStatus.CANCELLED)
+                        .build();
+        cancelled.setId("ship-1");
+        when(orderRepository.findByIdForUpdate("order-1")).thenReturn(Optional.of(order));
+        when(shipmentRepository.findByOrderId("order-1")).thenReturn(Optional.of(cancelled));
+        // client_order_code mới để GHN không gộp vào vận đơn đã huỷ
+        when(ghnClient.createOrder(eq(order), any(), any(Integer.class), eq("ORD123-OLD1")))
+                .thenReturn("NEW1");
+
+        ShipmentResponse response = service.createShipment("order-1", null);
+
+        assertThat(response.getId()).isEqualTo("ship-1");
+        assertThat(response.getTrackingCode()).isEqualTo("NEW1");
+        assertThat(response.getStatus()).isEqualTo(ShipmentStatus.PENDING);
+        assertThat(cancelled.getGhnOrderCode()).isEqualTo("NEW1");
+        assertThat(order.getTrackingCode()).isEqualTo("NEW1");
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.PACKED);
     }
 
     @Test

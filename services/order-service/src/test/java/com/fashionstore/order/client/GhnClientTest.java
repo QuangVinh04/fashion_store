@@ -195,7 +195,7 @@ class GhnClientTest {
                 GhnCreateOrderResponse.builder().data(GhnCreateOrderResponse.CreateOrderData.builder()
                         .orderCode("GHN1").build()).build());
 
-        assertThat(client.createOrder(order, destination, 600)).isEqualTo("GHN1");
+        assertThat(client.createOrder(order, destination, 600, "ORD1")).isEqualTo("GHN1");
         ArgumentCaptor<GhnCreateOrderRequest> captor = ArgumentCaptor.forClass(GhnCreateOrderRequest.class);
         verify(ghnApi).createOrder(eq("token"), eq("42"), captor.capture());
         assertThat(captor.getValue().getIsNewToAddress()).isTrue();

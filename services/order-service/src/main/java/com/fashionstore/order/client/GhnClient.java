@@ -13,14 +13,11 @@ import java.time.Instant;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import com.fashionstore.order.entity.Order;
-import com.fashionstore.order.entity.OrderItem;
 import com.fashionstore.order.entity.ShippingAddress;
 import com.fashionstore.order.entity.enumeration.ShippingMethod;
 import com.fashionstore.order.exception.OrderErrorCode;
 import feign.FeignException;
 
-import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
-import io.github.resilience4j.retry.annotation.Retry;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -167,7 +164,7 @@ public class GhnClient {
     /**
      * Tạo vận đơn bên GHN.
      */
-    public String createOrder(Order order, UserAddressDto address, int weightGram) {
+    public String createOrder(Order order, UserAddressDto address, int weightGram, String clientOrderCode) {
         if (address == null || address.getProvinceId() == null || address.getWardId() == null
                 || address.getProvince() == null || address.getProvince().isBlank()
                 || address.getWard() == null || address.getWard().isBlank()) {
@@ -181,7 +178,7 @@ public class GhnClient {
 
         if (!isGhnConfigured) {
             if (isMockAllowed) {
-                String mockTracking = "GHN_MOCK_" + order.getOrderCode();
+                String mockTracking = "GHN_MOCK_" + clientOrderCode;
                 log.info("[GHN] Token not configured or disabled; returning mock tracking code: {} (mock allowed)", mockTracking);
                 return mockTracking;
             }
@@ -203,7 +200,7 @@ public class GhnClient {
 
         GhnCreateOrderRequest request = GhnCreateOrderRequest.builder()
                 .paymentTypeId(1) // Shop trả cước vận chuyển
-                .clientOrderCode(order.getOrderCode())
+                .clientOrderCode(clientOrderCode)
                 .toName(order.getAddress().getRecipientName())
                 .toPhone(order.getAddress().getRecipientPhone())
                 .toAddress(order.getShippingAddress())

@@ -85,7 +85,7 @@ public class ShipmentServiceImpl implements ShipmentService {
         var claim = shipmentCreation.claim(orderId, request, weight);
         if (claim.existing() != null) return toResponse(claim.existing());
         try {
-            String tracking = ghnClient.createOrder(claim.order(), claim.address(), claim.weight());
+            String tracking = ghnClient.createOrder(claim.order(), claim.address(), claim.weight(), claim.clientOrderCode());
             return toResponse(shipmentCreation.finish(claim, tracking));
         } catch (RuntimeException error) {
             shipmentCreation.unknown(orderId, claim.token());
@@ -209,12 +209,11 @@ public class ShipmentServiceImpl implements ShipmentService {
                                             && !orderCode.equals(shipment.getTrackingCode())
                                     || payload.getClientOrderCode() != null
                                             && !payload.getClientOrderCode().isBlank()
-                                            && !payload.getClientOrderCode()
-                                                    .equals(order.getOrderCode())
+                                            && !isOrderClientCode(
+                                                    payload.getClientOrderCode(), order)
                                     || verified != null
-                                            && !Objects.equals(
-                                                    order.getOrderCode(),
-                                                    verified.clientOrderCode())) {
+                                            && !isOrderClientCode(
+                                                    verified.clientOrderCode(), order)) {
                                 throw new AppException(OrderErrorCode.SHIPMENT_EVIDENCE_INVALID);
                             }
 
@@ -394,6 +393,26 @@ public class ShipmentServiceImpl implements ShipmentService {
                                     orderReceiptService.markDelivered(
                                             orderId, eventTime, "GHN", null, null, null, null);
                                 }
+                            } else if (nextStatus == ShipmentStatus.CANCELLED
+                                    && Set.of(
+                                                    OrderStatus.CONFIRMED,
+                                                    OrderStatus.PROCESSING,
+                                                    OrderStatus.PACKED)
+                                            .contains(order.getStatus())) {
+                                // GHN huỷ trước khi lấy hàng: hàng còn ở kho, đơn chờ admin tạo vận đơn mới
+                                OrderStatus before = order.getStatus();
+                                if (before == OrderStatus.PACKED) {
+                                    order.setStatus(OrderStatus.PROCESSING);
+                                }
+                                order.setTrackingCode(null);
+                                orderRepository.save(order);
+                                recordHistory(
+                                        order,
+                                        before,
+                                        order.getStatus(),
+                                        "CARRIER_CANCELLED",
+                                        "GHN",
+                                        "GHN cancelled shipment " + orderCode);
                             } else if (nextStatus == ShipmentStatus.RETURNED
                                     && order.getStatus() != OrderStatus.RETURNED
                                     && order.getStatus() != OrderStatus.CANCELLED
@@ -443,6 +462,14 @@ public class ShipmentServiceImpl implements ShipmentService {
                     e.getMessage());
             return items.stream().mapToInt(item -> 200 * item.getQuantity()).sum();
         }
+    }
+
+    /** Lần đầu gửi {@code orderCode}; vận đơn tạo lại sau khi GHN huỷ gửi {@code orderCode-<mã cũ>}. */
+    private static boolean isOrderClientCode(String clientOrderCode, Order order) {
+        return Objects.equals(clientOrderCode, order.getOrderCode())
+                || clientOrderCode != null
+                        && order.getOrderCode() != null
+                        && clientOrderCode.startsWith(order.getOrderCode() + "-");
     }
 
     private ShipmentStatus mapGhnStatus(String ghnStatus) {

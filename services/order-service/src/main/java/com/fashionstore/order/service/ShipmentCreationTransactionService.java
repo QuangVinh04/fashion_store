@@ -17,8 +17,8 @@ import java.time.Instant;
 import java.util.*;
 
 /**
- * Claims and commits shipment creation around provider HTTP; uncertainty retains the original
- * claim.
+ * Claims and commits shipment creation around provider HTTP; a failed call releases the claim so
+ * the admin can retry (GHN dedupes by client_order_code).
  */
 @Service
 @RequiredArgsConstructor
@@ -35,7 +35,8 @@ public class ShipmentCreationTransactionService {
             int weight,
             ShipmentProvider provider,
             String token,
-            Shipment existing) {}
+            Shipment existing,
+            String clientOrderCode) {}
 
     @Transactional(readOnly = true)
     public Order snapshot(String id) {
@@ -53,8 +54,8 @@ public class ShipmentCreationTransactionService {
         if (Set.of(OrderStatus.CANCELLING, OrderStatus.CANCELLED).contains(order.getStatus()))
             throw new AppException(OrderErrorCode.FULFILLMENT_BLOCKED);
         var existing = shipments.findByOrderId(id).orElse(null);
-        if (existing != null)
-            return new Claim(order, null, weight, existing.getProvider(), null, existing);
+        if (existing != null && !recreatable(existing))
+            return new Claim(order, null, weight, existing.getProvider(), null, existing, null);
         if (!Set.of(OrderStatus.CONFIRMED, OrderStatus.PROCESSING, OrderStatus.PACKED)
                 .contains(order.getStatus()))
             throw new AppException(OrderErrorCode.ORDER_STATUS_INVALID);
@@ -87,7 +88,12 @@ public class ShipmentCreationTransactionService {
                         ? request.getProvider()
                         : ShipmentProvider.GHN,
                 token,
-                null);
+                null,
+                // Tạo lại sau khi GHN huỷ: mã mới để GHN không gộp vào vận đơn cũ, nhưng cố định
+                // giữa các lần bấm lại nên GHN vẫn chống trùng được.
+                existing == null
+                        ? order.getOrderCode()
+                        : order.getOrderCode() + "-" + existing.getTrackingCode());
     }
 
     @Transactional
@@ -98,24 +104,28 @@ public class ShipmentCreationTransactionService {
         if (!Objects.equals(order.getShipmentInitiationToken(), claim.token()))
             throw new AppException(OrderErrorCode.SHIPMENT_INITIATION_CONFLICT);
         var existing = shipments.findByOrderId(order.getId()).orElse(null);
-        if (existing != null) {
+        if (existing != null && !recreatable(existing)) {
             if (!Objects.equals(existing.getTrackingCode(), tracking))
                 throw new AppException(OrderErrorCode.SHIPMENT_INITIATION_CONFLICT);
             return existing;
         }
-        var shipment =
-                shipments.save(
-                        Shipment.builder()
-                                .order(order)
-                                .provider(claim.provider())
-                                .trackingCode(tracking)
-                                .ghnOrderCode(tracking)
-                                .toDistrictId(claim.address().getDistrictId())
-                                .toWardCode(claim.address().getWardCode())
-                                .weightGram(claim.weight())
-                                .fee(order.getShippingFee())
-                                .status(ShipmentStatus.PENDING)
-                                .build());
+        // Mỗi đơn một dòng shipment: vận đơn tạo lại ghi đè dòng đã huỷ
+        var shipment = existing != null ? existing : Shipment.builder().order(order).build();
+        shipment.setProvider(claim.provider());
+        shipment.setTrackingCode(tracking);
+        shipment.setGhnOrderCode(tracking);
+        shipment.setToDistrictId(claim.address().getDistrictId());
+        shipment.setToWardCode(claim.address().getWardCode());
+        shipment.setWeightGram(claim.weight());
+        shipment.setFee(order.getShippingFee());
+        shipment.setStatus(ShipmentStatus.PENDING);
+        shipment.setCodStatus("PENDING");
+        shipment.setCodAmount(null);
+        shipment.setCodCollectedAt(null);
+        shipment.setCodTransferredAt(null);
+        shipment.setDeliveredAt(null);
+        shipment.setPodUrl(null);
+        shipment = shipments.save(shipment);
         order.setTrackingCode(tracking);
         order.setShippingProvider(claim.provider().name());
         order.setShipmentInitiationToken(null);
@@ -158,10 +168,11 @@ public class ShipmentCreationTransactionService {
     public void unknown(String id, String token) {
         var order = locked(id);
         if (!Objects.equals(order.getShipmentInitiationToken(), token)) return;
+        order.setShipmentInitiationToken(null);
         record(
                 order,
                 "SHIPMENT_CREATION_UNKNOWN",
-                "Provider creation result needs verification before another attempt");
+                "Provider creation failed; retry reuses the same client_order_code");
         cancellations
                 .findByOrderIdAndTypeForUpdate(id, OrderSagaType.CANCELLATION)
                 .filter(
@@ -175,6 +186,11 @@ public class ShipmentCreationTransactionService {
                                     "Shipment creation result is uncertain; fulfillment remains"
                                             + " blocked");
                         });
+    }
+
+    /** Vận đơn GHN đã huỷ trước khi lấy hàng thì được tạo lại. */
+    private static boolean recreatable(Shipment shipment) {
+        return shipment.getStatus() == ShipmentStatus.CANCELLED && shipment.getHandedOffAt() == null;
     }
 
     private Order locked(String id) {
