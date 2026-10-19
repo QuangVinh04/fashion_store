@@ -15,6 +15,7 @@ import {
   Tag,
 } from "lucide-react";
 import { store } from "../api/store";
+import { walletCheckoutPath } from "../api/wallet-payment";
 import { money } from "../api/client";
 import type { Address, Checkout } from "../api/types";
 import { Status, useLoad } from "../components/StoreUI";
@@ -145,11 +146,12 @@ export default function CheckoutPage() {
         setProcessingText("\u0110ang m\u1edf thanh to\u00e1n b\u1eb1ng v\u00ed...");
         const until = Date.now() + 8000;
         let fresh = order;
-        while (!fresh.paymentUrl && Date.now() < until && fresh.status === "PENDING") {
+        while (!walletCheckoutPath(fresh) && Date.now() < until && fresh.status === "PENDING") {
           await new Promise(resolve => setTimeout(resolve, 600));
           fresh = await store.order(order.id);
         }
-        if (fresh.paymentUrl) window.location.assign(fresh.paymentUrl);
+        const walletPath = walletCheckoutPath(fresh);
+        if (walletPath) navigate(walletPath);
         else navigate(`/profile/orders/${order.id}`);
         return;
       }

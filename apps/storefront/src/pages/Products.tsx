@@ -62,15 +62,22 @@ function FilterSection({
   );
 }
 
+const PRODUCT_TYPES = [
+  ["T_SHIRT", "Áo thun"], ["SHIRT", "Áo sơ mi"], ["POLO", "Áo polo"],
+  ["HOODIE", "Áo hoodie"], ["SWEATER", "Áo len"], ["JACKET", "Áo khoác"],
+  ["JEANS", "Quần jeans"], ["PANTS", "Quần dài"], ["SHORTS", "Quần short"],
+  ["DRESS", "Đầm"], ["SKIRT", "Chân váy"], ["ACTIVEWEAR", "Đồ thể thao"],
+  ["UNDERWEAR", "Đồ lót"], ["SLEEPWEAR", "Đồ ngủ"],
+];
+
 export default function Products() {
   const [params, setParams] = useSearchParams();
   const page = Math.max(0, Number(params.get("page") || 0));
   const keyword = params.get("q") || "";
   const gender = params.get("gender") || "";
   const categoryId = params.get("categoryId") || "";
-  const brandId = params.get("brandId") || "";
-  const color = params.get("color") || "";
-  const fit = params.get("fit") || "";
+  const productType = params.get("productType") || "";
+  const minRating = ["3", "4", "5"].includes(params.get("minRating") || "") ? params.get("minRating")! : "";
   const minPrice = params.get("minPrice") || "";
   const maxPrice = params.get("maxPrice") || "";
   const sort = params.get("sort") || "";
@@ -84,9 +91,6 @@ export default function Products() {
   }, [keyword]);
 
   const categories = useLoad(store.categories, []);
-  const brands = useLoad(store.brands, []);
-  const sizes = useLoad(store.sizes, []);
-  const colors = useLoad(store.colors, []);
 
   const queryKey = params.toString();
   const listing = useLoad(
@@ -98,13 +102,12 @@ export default function Products() {
           keyword: keyword || undefined,
           gender: gender || undefined,
           categoryId: categoryId || undefined,
-          brandId: brandId || undefined,
-          color: color || undefined,
+          productType: productType || undefined,
+          minRating: minRating ? Number(minRating) : undefined,
           minPrice: minPrice ? Number(minPrice) : undefined,
           maxPrice: maxPrice ? Number(maxPrice) : undefined,
           sort: sort || undefined,
         },
-        fit || null,
       ),
     [queryKey],
   );
@@ -113,9 +116,27 @@ export default function Products() {
     const next = new URLSearchParams(params);
     if (value) next.set(name, value);
     else next.delete(name);
-    next.delete("page");
+    if (name !== "page") next.delete("page");
+    next.delete("brandId");
+    next.delete("color");
+    next.delete("fit");
     setParams(next);
   };
+
+  const updatePrice = (min: string, max: string) => {
+    const next = new URLSearchParams(params);
+    if (min) next.set("minPrice", min); else next.delete("minPrice");
+    if (max) next.set("maxPrice", max); else next.delete("maxPrice");
+    next.delete("page");
+    next.delete("brandId");
+    next.delete("color");
+    next.delete("fit");
+    setParams(next);
+  };
+
+  const selectedCategory = useMemo(() => categories.data
+    ?.flatMap(category => [category, ...(category.children || [])])
+    .find(category => category.id === categoryId), [categories.data, categoryId]);
 
   const clearAllFilters = () => {
     setSearchInput("");
@@ -131,39 +152,18 @@ export default function Products() {
     keyword,
     gender,
     categoryId,
-    brandId,
-    color,
-    fit,
-    minPrice,
-    maxPrice,
+    productType,
+    minRating,
+    minPrice || maxPrice,
   ].filter(Boolean).length;
 
   const filterSidebar = (
     <div className="space-y-1">
-      {/* Gender */}
-      <FilterSection title="Giới Tính">
-        <div className="flex flex-col gap-2">
-          {[
-            { label: "Tất Cả", value: "" },
-            { label: "Nam", value: "MEN" },
-            { label: "Nữ", value: "WOMEN" },
-            { label: "Unisex", value: "UNISEX" },
-          ].map((item) => (
-            <label
-              key={item.label}
-              className="flex items-center gap-2.5 text-xs text-foreground cursor-pointer hover:text-foreground py-0.5"
-            >
-              <input
-                type="radio"
-                name="gender"
-                checked={gender === item.value}
-                onChange={() => updateParam("gender", item.value || null)}
-                className="w-3.5 h-3.5 choice-control"
-              />
-              <span>{item.label}</span>
-            </label>
-          ))}
-        </div>
+      <FilterSection title="Loại Sản Phẩm">
+        <StoreSelect aria-label="Loại sản phẩm" value={productType} onChange={event => updateParam("productType", event.target.value || null)}>
+          <option value="">Tất cả loại sản phẩm</option>
+          {PRODUCT_TYPES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+        </StoreSelect>
       </FilterSection>
 
       {/* Categories */}
@@ -215,148 +215,34 @@ export default function Products() {
         </div>
       </FilterSection>
 
-      {/* Brands */}
-      {brands.data && brands.data.length > 0 && (
-        <FilterSection title="Thương Hiệu" defaultOpen={false}>
-          <div className="flex flex-col gap-1.5 max-h-48 overflow-y-auto pr-2 text-xs">
-            <button
-              type="button"
-              onClick={() => updateParam("brandId", null)}
-              aria-pressed={!brandId}
-              className={`text-left py-0.5 hover:text-primary ${!brandId ? "font-semibold text-primary" : "text-muted-foreground"} store-button`}
-            >
-              Tất Cả Thương Hiệu
+      <FilterSection title="Đánh Giá">
+        <div className="flex flex-col gap-1">
+          {[["", "Tất cả đánh giá"], ["5", "5 sao"], ["4", "4 sao trở lên"], ["3", "3 sao trở lên"]].map(([value, label]) => (
+            <button key={label} type="button" aria-pressed={minRating === value} onClick={() => updateParam("minRating", value || null)}
+              className={`flex min-h-10 items-center gap-2 rounded-xl px-3 text-left text-sm transition-colors ${minRating === value ? "bg-secondary font-medium text-foreground" : "text-muted-foreground hover:bg-accent hover:text-foreground"}`}>
+              <span className="flex-1">{label}</span>{minRating === value && <Check size={14} aria-hidden="true" />}
             </button>
-            {brands.data.map((b) => (
-              <button
-                key={b.id}
-                type="button"
-                onClick={() => updateParam("brandId", b.id)}
-                aria-pressed={brandId === b.id}
-                className={`text-left py-0.5 hover:text-primary truncate ${
-                  brandId === b.id
-                    ? "font-semibold text-primary"
-                    : "text-foreground"
-                } store-button`}
-              >
-                {b.name}
-              </button>
-            ))}
-          </div>
-        </FilterSection>
-      )}
+          ))}
+        </div>
+        <p className="mt-2 text-xs text-muted-foreground">Theo điểm đánh giá trung bình.</p>
+      </FilterSection>
 
-      {/* Sizes */}
-      {sizes.data && sizes.data.length > 0 && (
-        <FilterSection title="Kích Cỡ">
-          <div className="flex flex-wrap gap-1.5">
-            {sizes.data.map((s) => {
-              const selected = fit === s.name;
-              return (
-                <button
-                  key={s.id}
-                  type="button"
-                  aria-pressed={selected}
-                  onClick={() => updateParam("fit", selected ? null : s.name)}
-                  className={`min-w-9 h-8 px-2 border text-xs font-medium transition-colors ${
-                    selected
-                      ? "bg-secondary text-foreground border-border-strong"
-                      : "bg-white text-foreground border-border-strong hover:border-border-strong"
-                  } rounded-2xl store-button`}
-                >
-                  {s.name}
-                </button>
-              );
-            })}
-          </div>
-        </FilterSection>
-      )}
-
-      {/* Colors */}
-      {colors.data && colors.data.length > 0 && (
-        <FilterSection title="Màu Sắc">
-          <div className="flex flex-wrap gap-2">
-            {colors.data.map((c) => {
-              const selected = color === c.name;
-              return (
-                <button
-                  key={c.id}
-                  type="button"
-                  aria-pressed={selected}
-                  onClick={() => updateParam("color", selected ? null : c.name)}
-                  className={`h-7 px-2.5 rounded-full border text-xs flex items-center gap-1.5 transition-all ${
-                    selected
-                      ? "border-transparent bg-secondary text-foreground"
-                      : "border-border-strong hover:border-border-strong"
-                  } store-button`}
-                  title={c.name}
-                >
-                  <span
-                    className="w-3 h-3 rounded-full border border-black/10 shrink-0"
-                    style={{ backgroundColor: c.colorHex || "#bbb" }}
-                  />
-                  <span>{c.name}</span>
-                </button>
-              );
-            })}
-          </div>
-        </FilterSection>
-      )}
-
-      {/* Price Range */}
+      {/* MVP: quick price choices replace custom min/max fields. */}
       <FilterSection title="Khoảng Giá">
-        <div className="space-y-2.5 text-xs">
-          <div className="flex items-center gap-2">
-            <input
-              type="number"
-              min="0"
-              placeholder="Từ ₫"
-              aria-label="Giá tối thiểu"
-              value={minPrice}
-              onChange={(e) => updateParam("minPrice", e.target.value || null)}
-              className="w-full border border-border-strong px-2.5 py-2 text-xs outline-none focus:border-border-strong store-input"
-            />
-            <span className="text-muted-foreground">—</span>
-            <input
-              type="number"
-              min="0"
-              placeholder="Đến ₫"
-              aria-label="Giá tối đa"
-              value={maxPrice}
-              onChange={(e) => updateParam("maxPrice", e.target.value || null)}
-              className="w-full border border-border-strong px-2.5 py-2 text-xs outline-none focus:border-border-strong store-input"
-            />
-          </div>
-
-          <div className="flex flex-col gap-1 text-xs text-muted-foreground">
-            {[
-              { label: "Dưới 300.000 ₫", min: "", max: "300000" },
-              { label: "300.000 ₫ – 500.000 ₫", min: "300000", max: "500000" },
-              {
-                label: "500.000 ₫ – 1.000.000 ₫",
-                min: "500000",
-                max: "1000000",
-              },
-              { label: "Trên 1.000.000 ₫", min: "1000000", max: "" },
-            ].map((p, i) => (
-              <button
-                key={i}
-                type="button"
-                onClick={() => {
-                  const next = new URLSearchParams(params);
-                  if (p.min) next.set("minPrice", p.min);
-                  else next.delete("minPrice");
-                  if (p.max) next.set("maxPrice", p.max);
-                  else next.delete("maxPrice");
-                  next.delete("page");
-                  setParams(next);
-                }}
-                className="text-left py-0.5 hover:text-foreground hover:underline store-button"
-              >
-                {p.label}
-              </button>
-            ))}
-          </div>
+        <div className="flex flex-col gap-1">
+          {[
+            { label: "Tất cả mức giá", min: "", max: "" },
+            { label: "Dưới 300.000 ₫", min: "", max: "300000" },
+            { label: "300.000 ₫ – 500.000 ₫", min: "300000", max: "500000" },
+            { label: "Từ 500.000 ₫", min: "500000", max: "" },
+          ].map(preset => {
+            const selected = minPrice === preset.min && maxPrice === preset.max;
+            return <button key={preset.label} type="button" aria-pressed={selected}
+              onClick={() => updatePrice(preset.min, preset.max)}
+              className={`flex min-h-10 items-center gap-2 rounded-xl px-3 text-left text-sm transition-colors ${selected ? "bg-secondary font-medium text-foreground" : "text-muted-foreground hover:bg-accent hover:text-foreground"}`}>
+              <span className="flex-1">{preset.label}</span>{selected && <Check size={14} aria-hidden="true" />}
+            </button>;
+          })}
         </div>
       </FilterSection>
 
@@ -519,20 +405,22 @@ export default function Products() {
                 </button>
               </span>
             )}
-            {fit && (
-              <span className="inline-flex items-center gap-1 bg-background border border-border-strong px-2.5 py-1 text-xs">
-                Size: {fit}
-                <button aria-label="Bỏ lọc kích cỡ" onClick={() => updateParam("fit", null)}>
-                  <X size={12} className="hover:text-primary" />
-                </button>
+            {categoryId && (
+              <span className="inline-flex items-center gap-1 rounded-full border border-border-strong px-2.5 py-1 text-xs">
+                {selectedCategory?.name || "Danh mục đã chọn"}
+                <button type="button" aria-label="Bỏ lọc danh mục" onClick={() => updateParam("categoryId", null)} className="inline-flex size-8 items-center justify-center rounded-lg hover:bg-accent"><X size={12} /></button>
               </span>
             )}
-            {color && (
-              <span className="inline-flex items-center gap-1 bg-background border border-border-strong px-2.5 py-1 text-xs">
-                Màu: {color}
-                <button aria-label="Bỏ lọc màu sắc" onClick={() => updateParam("color", null)}>
-                  <X size={12} className="hover:text-primary" />
-                </button>
+            {productType && (
+              <span className="inline-flex items-center gap-1 rounded-full border border-border-strong px-2.5 py-1 text-xs">
+                {PRODUCT_TYPES.find(([value]) => value === productType)?.[1] || productType}
+                <button type="button" aria-label="Bỏ lọc loại sản phẩm" onClick={() => updateParam("productType", null)} className="inline-flex size-8 items-center justify-center rounded-lg hover:bg-accent"><X size={12} /></button>
+              </span>
+            )}
+            {minRating && (
+              <span className="inline-flex items-center gap-1 rounded-full border border-border-strong px-2.5 py-1 text-xs">
+                {minRating} sao trở lên
+                <button type="button" aria-label="Bỏ lọc đánh giá" onClick={() => updateParam("minRating", null)} className="inline-flex size-8 items-center justify-center rounded-lg hover:bg-accent"><X size={12} /></button>
               </span>
             )}
             {(minPrice || maxPrice) && (
@@ -541,12 +429,7 @@ export default function Products() {
                 {maxPrice ? money(Number(maxPrice)) : "∞"}
                 <button
                   aria-label="Bỏ lọc khoảng giá"
-                  onClick={() => {
-                    const next = new URLSearchParams(params);
-                    next.delete("minPrice");
-                    next.delete("maxPrice");
-                    setParams(next);
-                  }}
+                  onClick={() => updatePrice("", "")}
                 >
                   <X size={12} className="hover:text-primary" />
                 </button>

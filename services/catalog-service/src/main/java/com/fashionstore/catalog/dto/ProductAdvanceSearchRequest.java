@@ -12,6 +12,8 @@ import java.math.BigDecimal;
 @NoArgsConstructor
 @AllArgsConstructor
 public class ProductAdvanceSearchRequest {
+    private com.fashionstore.catalog.entity.enumeration.ProductType productType;
+    private Integer minRating;
     private String[] search;
     private BigDecimal minPrice;
     private BigDecimal maxPrice;

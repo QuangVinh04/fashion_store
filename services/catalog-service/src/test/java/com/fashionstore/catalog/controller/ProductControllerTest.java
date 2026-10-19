@@ -39,6 +39,21 @@ class ProductControllerTest {
 
     private MockMvc mockMvc;
 
+    @Test
+    void mvpFiltersArePassedToRealProductSearch() throws Exception {
+        mockMvc.perform(get("/api/v1/products/advance-search").param("productType", "SHIRT")
+                .param("categoryId", "c1").param("minRating", "4")
+                .param("minPrice", "100000").param("maxPrice", "500000"))
+                .andExpect(status().isOk());
+        ArgumentCaptor<ProductAdvanceSearchRequest> filters = ArgumentCaptor.forClass(ProductAdvanceSearchRequest.class);
+        verify(productService).advanceSearchWithRequest(org.mockito.ArgumentMatchers.any(Pageable.class), filters.capture());
+        assertThat(filters.getValue().getProductType()).isEqualTo(com.fashionstore.catalog.entity.enumeration.ProductType.SHIRT);
+        assertThat(filters.getValue().getCategoryId()).isEqualTo("c1");
+        assertThat(filters.getValue().getMinRating()).isEqualTo(4);
+        assertThat(filters.getValue().getMinPrice()).isEqualByComparingTo("100000");
+        assertThat(filters.getValue().getMaxPrice()).isEqualByComparingTo("500000");
+    }
+
     @BeforeEach
     void setUp() {
         mockMvc = MockMvcBuilders.standaloneSetup(new ProductController(productService, sizeChartService))

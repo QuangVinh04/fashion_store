@@ -5,6 +5,7 @@ import RequireAuth from '../components/RequireAuth';
 import Home from '../pages/Home';
 import Products from '../pages/Products';
 import ProductDetail from '../pages/ProductDetail';
+import ProductReviews from '../pages/ProductReviews';
 import Cart from '../pages/Cart';
 import Checkout from '../pages/Checkout';
 import PaymentReturn from '../pages/PaymentReturn';
@@ -33,6 +34,7 @@ export const router = createBrowserRouter([
       { index: true, Component: Home },
       { path: 'products', Component: Products },
       { path: 'products/:id', Component: ProductDetail },
+      { path: 'products/:id/reviews', Component: ProductReviews },
       { path: 'cart', element: protectedPage(createElement(Cart)) },
       { path: 'checkout/wallet-pay', element: protectedPage(createElement(WalletPay)) },
       { path: 'profile/wallet', element: protectedPage(createElement(Wallet)) },

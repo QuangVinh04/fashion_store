@@ -27,6 +27,16 @@ public class ProductSpecification implements Specification<Product> {
 
         // Xá»­ lÃ½ Ä‘áº·c biá»‡t cho má»™t sá»‘ trÆ°á»ng
         return switch (key) {
+            case "productType" -> cb.equal(root.get("productType"), value);
+            case "minRating" -> {
+                Subquery<Double> average = query.subquery(Double.class);
+                Root<com.fashionstore.catalog.entity.Review> review = average.from(com.fashionstore.catalog.entity.Review.class);
+                average.select(cb.avg(review.<Integer>get("rating")));
+                average.where(
+                        cb.equal(review.get("product"), root),
+                        cb.equal(review.get("status"), com.fashionstore.catalog.entity.enumeration.ReviewStatus.VISIBLE));
+                yield cb.greaterThanOrEqualTo(average, ((Number) value).doubleValue());
+            }
             case "category" -> {
                 query.distinct(true);
                 Join<Product, ProductCategory> productCategoryJoin = root.join("productCategories");

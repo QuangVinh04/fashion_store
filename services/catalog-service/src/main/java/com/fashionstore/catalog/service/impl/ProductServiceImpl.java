@@ -167,6 +167,7 @@ public class ProductServiceImpl implements ProductService {
         assignCategories(product, validation.categories());
         synchronizeVariants(product, request.getVariants(), validation.variantOptions());
         assignImages(product, request.getImages());
+        applyThumbnailFallbacks(product);
         assignAttributes(product, request.getAttributes(), validation.attributesById());
 
         if (validation.publishImmediately()) {
@@ -308,6 +309,7 @@ public class ProductServiceImpl implements ProductService {
         assignCategories(product, categories);
         assignImages(product, request.getImages());
         assignAttributes(product, request.getAttributes());
+        applyThumbnailFallbacks(product);
 
         Product saved = productRepository.save(product);
         seedInventoryForVariants(saved);
@@ -329,6 +331,7 @@ public class ProductServiceImpl implements ProductService {
                         : request.getVariants();
 
         synchronizeVariants(product, variantRequests);
+        applyThumbnailFallbacks(product);
         Product saved = productRepository.save(product);
         seedInventoryForVariants(saved);
         applyInitialStock(saved, variantRequests, existingVariantIds);
@@ -490,6 +493,15 @@ public class ProductServiceImpl implements ProductService {
         }
 
         if (request != null) {
+            if (request.getProductType() != null) {
+                builder.with("productType", ":", request.getProductType(), null, null);
+            }
+            if (request.getMinRating() != null) {
+                if (request.getMinRating() < 1 || request.getMinRating() > 5) {
+                    throw new AppException(ProductErrorCode.INVALID_SEARCH_CRITERIA, "minRating must be between 1 and 5");
+                }
+                builder.with("minRating", ":", request.getMinRating(), null, null);
+            }
             if (request.getMinPrice() != null && request.getMaxPrice() != null
                     && request.getMinPrice().compareTo(request.getMaxPrice()) > 0) {
                 throw new AppException(ProductErrorCode.INVALID_SEARCH_CRITERIA, "minPrice cannot be greater than maxPrice");
@@ -652,10 +664,13 @@ public class ProductServiceImpl implements ProductService {
             }
         }
 
+        boolean hasExplicitPrimary = images.stream().anyMatch(item -> Boolean.TRUE.equals(item.getIsPrimary()));
+
         product.getImages().clear();
         for (int i = 0; i < images.size(); i++) {
             ProductImageItem item = images.get(i);
             ColorOption colorOption = productColorsById.get(StringUtils.cleanText(item.getColorOptionId()));
+            boolean isPrimary = Boolean.TRUE.equals(item.getIsPrimary()) || (!hasExplicitPrimary && i == 0);
             product.getImages().add(ProductImage.builder()
                     .product(product)
                     .mediaId(item.getMediaId())
@@ -664,8 +679,46 @@ public class ProductServiceImpl implements ProductService {
                     .colorOption(colorOption)
                     .altText(StringUtils.cleanText(item.getAltText()))
                     .sortOrder(item.getSortOrder() != null ? item.getSortOrder() : i)
-                    .isPrimary(Boolean.TRUE.equals(item.getIsPrimary()) || i == 0)
+                    .isPrimary(isPrimary)
                     .build());
+        }
+    }
+
+    private void applyThumbnailFallbacks(Product product) {
+        ProductImage primaryImage = product.getImages().stream()
+                .filter(img -> Boolean.TRUE.equals(img.getIsPrimary()))
+                .findFirst()
+                .orElse(product.getImages().isEmpty() ? null : product.getImages().get(0));
+
+        if (primaryImage != null) {
+            product.setThumbnailMediaId(primaryImage.getMediaId());
+            product.setThumbnailUrl(primaryImage.getUrl());
+        } else {
+            product.setThumbnailMediaId(null);
+            product.setThumbnailUrl(null);
+        }
+
+        Map<String, ProductImage> colorImageMap = new HashMap<>();
+        for (ProductImage image : product.getImages()) {
+            if (image.getColorOption() != null && image.getColorOption().getId() != null) {
+                colorImageMap.putIfAbsent(image.getColorOption().getId(), image);
+            }
+        }
+
+        for (ProductVariant variant : product.getVariants()) {
+            boolean hasMediaId = StringUtils.cleanText(variant.getThumbnailMediaId()) != null;
+            boolean hasUrl = StringUtils.cleanText(variant.getThumbnailUrl()) != null;
+            if (!hasMediaId && !hasUrl) {
+                String colorId = variant.getColorOption() != null ? variant.getColorOption().getId() : null;
+                ProductImage colorImage = colorId != null ? colorImageMap.get(colorId) : null;
+                if (colorImage != null) {
+                    variant.setThumbnailMediaId(colorImage.getMediaId());
+                    variant.setThumbnailUrl(colorImage.getUrl());
+                } else if (primaryImage != null) {
+                    variant.setThumbnailMediaId(primaryImage.getMediaId());
+                    variant.setThumbnailUrl(primaryImage.getUrl());
+                }
+            }
         }
     }
 
@@ -1051,6 +1104,8 @@ public class ProductServiceImpl implements ProductService {
 
     private boolean isEmptyRequest(com.fashionstore.catalog.dto.ProductAdvanceSearchRequest request) {
         return (request.getSearch() == null || request.getSearch().length == 0)
+                && request.getProductType() == null
+                && request.getMinRating() == null
                 && request.getMinPrice() == null
                 && request.getMaxPrice() == null
                 && (request.getSize() == null || request.getSize().isBlank())

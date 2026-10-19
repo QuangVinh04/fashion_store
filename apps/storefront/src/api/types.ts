@@ -4,6 +4,7 @@ export type Address = { id: string; recipientName: string; phone: string; provin
 export type ProductSummary = { id: string; name: string; slug: string; basePrice: number; salePrice?: number; price: number; status: string; published: boolean; thumbnailMediaId?: string; thumbnailUrl?: string; brandName?: string; categoryName?: string };
 export type Variant = { id: string; productId: string; sku: string; price?: number; salePrice?: number; active: boolean; sizeOptionId?: string; colorOptionId?: string; size?: string; color?: string; colorHex?: string; thumbnailMediaId?: string };
 export type ProductImage = { id: string; mediaId: string; colorOptionId?: string; color?: string; url?: string; altText?: string; sortOrder: number; primary: boolean };
+export type SizeChartRow = { id: string; sizeCode: string; chest?: number; waist?: number; hip?: number; shoulder?: number; length?: number; inseam?: number; heightMin?: number; heightMax?: number; weightMin?: number; weightMax?: number };
 export type Product = ProductSummary & { description?: string; shortDescription?: string; gender?: string; categoryId?: string; images: ProductImage[]; variants: Variant[]; attributes?: { id: string; name?: string; value?: string }[] };
 export type CartItem = { id: string; variantId: string; productId: string; quantity: number; unitPrice: number; totalPrice: number; productName: string; size?: string; color?: string; sku?: string; available: boolean | null };
 export type Cart = { id?: string; items: CartItem[]; totalPrice: number; totalQuantity: number };

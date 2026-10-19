@@ -1,5 +1,5 @@
 import { api, json, query, type Page } from './client';
-import type { Address, Cart, Checkout, Order, OrderSummary, Payment, Product, ProductSummary, Profile, ReturnRequest, ReviewSummary, Session, WishlistItem } from './types';
+import type { Address, Cart, Checkout, Order, OrderSummary, Payment, Product, ProductSummary, Profile, ReturnRequest, ReviewSummary, Session, SizeChartRow, WishlistItem } from './types';
 async function uploadFile(file: File, folder: string) {
   const avatar = folder === 'avatars';
   const route = avatar ? '/api/v1/files/avatars' : '/api/v1/files';
@@ -35,8 +35,8 @@ export const store = {
   products: (filters: Record<string, string | number | undefined | null>, sizeFilter?: string | null) => api<Page<ProductSummary>>(`/api/v1/products/advance-search?${query(filters)}${sizeFilter ? `&search=${encodeURIComponent(`size:${sizeFilter}`)}` : ''}`),
   product: (id: string) => api<Product>(`/api/v1/products/${id}`),
   variantSnapshots: (ids: string[]) => api<{ variantId: string; productId: string }[]>(`/api/v1/products/variants/batch?${ids.map(id => `variantIds=${encodeURIComponent(id)}`).join('&')}`),
-  productSizeChart: (id: string) => api<{ rows: { id: string; sizeCode: string; chest?: number; waist?: number; heightMin?: number; heightMax?: number; weightMin?: number; weightMax?: number }[] } | null>(`/api/v1/products/${id}/size-chart`),
-  reviews: (id: string, page = 0) => api<ReviewSummary>(`/api/v1/products/${id}/reviews?${query({ page })}`),
+  productSizeChart: (id: string) => api<{ rows: SizeChartRow[] } | null>(`/api/v1/products/${id}/size-chart`),
+  reviews: (id: string, page = 0, options: { rating?: number; sort?: string } = {}) => api<ReviewSummary>(`/api/v1/products/${id}/reviews?${query({ page, ...options })}`),
   addReview: (id: string, orderId: string, rating: number, comment: string) => api(`/api/v1/products/${id}/reviews`, json('POST', { orderId, rating, comment })),
   deleteReview: (id: string, reviewId: string) => api<void>(`/api/v1/products/${id}/reviews/${reviewId}`, json('DELETE')),
   wishlist: (page = 0) => api<Page<WishlistItem>>(`/api/v1/wishlist?${query({ page })}`),

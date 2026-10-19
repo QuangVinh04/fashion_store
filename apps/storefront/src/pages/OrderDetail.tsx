@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { Link, useParams } from "react-router";
 import { AlertCircle, ArrowLeft, Check, Copy, Star } from "lucide-react";
 import { store } from "../api/store";
+import { walletCheckoutPath } from "../api/wallet-payment";
 import { money } from "../api/client";
 import { loadOrderPayment, loadOrderShipment } from "../api/order-resources";
 import type { Order, Payment, ReturnRequest } from "../api/types";
@@ -267,7 +268,7 @@ export default function OrderDetail() {
           <div className="order-actions">
             <OrderCancellationActions key={order.id} order={order} onRefresh={orderLoad.refresh}/>
             {order.paymentMethod === 'ONLINE' && (payment?.status === 'PENDING' || order.status === 'PENDING') && !cancelled && <button disabled={busyAction} className="order-action order-action-primary" onClick={()=>void handleOnlinePayment()}>{busyAction ? 'Đang mở thanh toán…' : 'Thanh toán ngay'}</button>}
-            {order.paymentMethod === 'WALLET' && order.status === 'PENDING' && order.paymentId && <Link className="order-action order-action-primary" to={`/checkout/wallet-pay?paymentId=${encodeURIComponent(order.paymentId)}`}>Thanh toán bằng ví</Link>}
+            {order.paymentMethod === 'WALLET' && order.status === 'PENDING' && walletCheckoutPath(order) && <Link className="order-action order-action-primary" to={walletCheckoutPath(order)!}>Thanh toán bằng ví</Link>}
             {order.canConfirmReceipt && !order.activeReturnId && <button className="order-action order-action-primary" disabled={receiptBusy || orderLoad.loading} onClick={()=>{setReceiptError('');setReceiptOpen(true);}}>Đã nhận được hàng</button>}
             {(order.canRequestReturn || order.activeReturnId || returnRequest) && <Link className="order-action" to={`/profile/orders/${id}/return`}>{order.activeReturnId || returnRequest ? 'Xem yêu cầu trả hàng / hoàn tiền' : 'Yêu cầu trả hàng / hoàn tiền'}</Link>}
             <Link className="order-action" to="/contact">Liên hệ hỗ trợ</Link>

@@ -3,6 +3,16 @@ export type WalletSession = { paymentId: string; orderId: string; attemptGenerat
 export type SwitchOrder = { paymentMethod: string; currentPaymentGeneration: number; pendingSwitchOperationId?: string; paymentSwitchFailureReason?: string };
 export const getWalletSession = (id: string, signal?: AbortSignal) => api<WalletSession>(`/api/v1/payments/${encodeURIComponent(id)}/wallet-session`, { signal });
 export const confirmWallet = (id: string, attemptGeneration: number) => api<WalletSession>(`/api/v1/payments/${encodeURIComponent(id)}/wallet-confirm`, json('POST', { attemptGeneration }));
+export function walletCheckoutPath(order: { paymentId?: string | null; paymentUrl?: string | null }): string | null {
+  let id = order.paymentId;
+  if (!id && order.paymentUrl) {
+    try {
+      const url = new URL(order.paymentUrl, 'http://wallet.local');
+      if (url.pathname === '/checkout/wallet-pay') id = url.searchParams.get('paymentId');
+    } catch { return null; }
+  }
+  return id?.trim() ? `/checkout/wallet-pay?paymentId=${encodeURIComponent(id)}` : null;
+}
 /**
  * Theo quy định thiết kế: Không hỗ trợ đổi phương thức thanh toán trực tiếp khi đơn đã khởi tạo.
  * Khách hàng đổi ý cần hủy đơn hàng cũ và đặt lại đơn mới.

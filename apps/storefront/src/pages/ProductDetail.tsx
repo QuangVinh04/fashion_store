@@ -3,34 +3,28 @@ import { useState, useEffect, useMemo } from "react";
 import { Link, useParams, useNavigate } from "react-router";
 import {
   Heart,
-  Star,
   ChevronDown,
   ChevronUp,
-  ShoppingBag,
-  ArrowRight,
   Truck,
   RefreshCw,
-  ShieldCheck,
   Check,
   AlertCircle,
 } from "lucide-react";
 import { store } from "../api/store";
 import { media, money } from "../api/client";
 import type {
-  Product,
-  ProductImage,
   ProductSummary,
-  Review,
   Variant,
 } from "../api/types";
 import {
-  PageTitle,
   ProductCard,
-  ProductPhoto,
   StarRating,
   Status,
   useLoad,
 } from "../components/StoreUI";
+import ProductGallery from "../components/products/ProductGallery";
+import SizeGuide from "../components/products/SizeGuide";
+import "../styles/product-detail.css";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
 
@@ -44,27 +38,12 @@ function AccordionItem({
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(defaultOpen);
-  return (
-    <div className="border-b border-border py-4">
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        className="flex items-center justify-between w-full py-1 text-left font-semibold text-xs text-foreground hover:text-primary transition-colors store-button"
-      >
-        <span>{title}</span>
-        {open ? (
-          <ChevronUp size={16} className="text-muted-foreground shrink-0" />
-        ) : (
-          <ChevronDown size={16} className="text-muted-foreground shrink-0" />
-        )}
-      </button>
-      {open && (
-        <div className="pt-3 pb-2 text-sm text-muted-foreground leading-relaxed">
-          {children}
-        </div>
-      )}
-    </div>
-  );
+  return <div className="pd-fold">
+    <button type="button" aria-expanded={open} onClick={() => setOpen(!open)}>
+      {title}{open ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+    </button>
+    <div className={`pd-fold-content ${open ? "is-open" : ""}`} aria-hidden={!open}><div>{children}</div></div>
+  </div>;
 }
 
 export default function ProductDetail() {
@@ -73,15 +52,14 @@ export default function ProductDetail() {
   const { addItem } = useCart();
   const { isLoggedIn, login } = useAuth();
 
-  const [reviewPage, setReviewPage] = useState(0);
   const productLoad = useLoad(() => store.product(id), [id]);
-  const reviewsLoad = useLoad(() => store.reviews(id, reviewPage), [id, reviewPage]);
+  const reviewsLoad = useLoad(() => store.reviews(id), [id]);
   const sizeChartLoad = useLoad(() => store.productSizeChart(id), [id]);
 
   const [selectedColor, setSelectedColor] = useState<string>("");
   const [selectedSize, setSelectedSize] = useState<string>("");
   const [qty, setQty] = useState(1);
-  const [activeImg, setActiveImg] = useState<string>("");
+  const [sizeOpen, setSizeOpen] = useState(false);
   const [liked, setLiked] = useState(false);
   const [busy, setBusy] = useState(false);
   const [variantPrompt, setVariantPrompt] = useState(false);
@@ -92,17 +70,17 @@ export default function ProductDetail() {
 
   const [relatedProducts, setRelatedProducts] = useState<ProductSummary[]>([]);
 
-  const p = productLoad.data;
+  const p = productLoad.data?.id === id ? productLoad.data : null;
 
   // Reset state when product id changes
   useEffect(() => {
+    window.scrollTo(0, 0);
     setSelectedColor("");
     setSelectedSize("");
     setQty(1);
-    setActiveImg("");
+    setSizeOpen(false);
     setFeedback(null);
     setVariantPrompt(false);
-    setReviewPage(0);
   }, [id]);
 
   // Wishlist check
@@ -184,7 +162,7 @@ export default function ProductDetail() {
 
   // Images filtered by color or default
   const filteredImages = useMemo(() => {
-    const list = p?.images || [];
+    const list = [...(p?.images || [])];
     if (!selectedColor) return list.sort((a, b) => a.sortOrder - b.sortOrder);
     const colorImages = list.filter(
       (img) => !img.colorOptionId || img.colorOptionId === selectedColor,
@@ -194,12 +172,8 @@ export default function ProductDetail() {
     );
   }, [p?.images, selectedColor]);
 
-  const currentPhotoUrl =
-    activeImg ||
-    filteredImages[0]?.url ||
-    (filteredImages[0]?.mediaId ? media(filteredImages[0].mediaId) : "") ||
-    p?.thumbnailUrl ||
-    media(p?.thumbnailMediaId);
+  const galleryPhotos = filteredImages.map(img => ({ key: img.id, src: img.url || media(img.mediaId), alt: img.altText || p?.name || "Sản phẩm" }));
+  if (!galleryPhotos.length && p) galleryPhotos.push({ key: "thumbnail", src: p.thumbnailUrl || media(p.thumbnailMediaId), alt: p.name });
 
   const displayPrice =
     selectedVariant?.salePrice ??
@@ -269,581 +243,74 @@ export default function ProductDetail() {
     }
   }
 
-  return (
-    <div className="w-full">
-      {/* Breadcrumb */}
-      <div className="border-b border-border bg-background">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4">
-          <nav className="flex items-center gap-2 text-xs text-muted-foreground font-medium overflow-x-auto whitespace-nowrap">
-            <Link to="/" className="hover:text-foreground store-text-link">
-              Trang Chủ
-            </Link>
-            <span>/</span>
-            <Link
-              to="/products"
-              className="hover:text-foreground store-text-link"
-            >
-              Sản Phẩm
-            </Link>
-            {p?.categoryName && (
-              <>
-                <span>/</span>
-                <Link
-                  to={`/products?categoryId=${p.categoryId || ""}`}
-                  className="hover:text-foreground store-text-link"
-                >
-                  {p.categoryName}
-                </Link>
-              </>
-            )}
-            <span>/</span>
-            <span className="text-foreground truncate max-w-xs">
-              {p?.name || "Chi Tiết Sản Phẩm"}
-            </span>
-          </nav>
-        </div>
-      </div>
-
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-10">
-        <Status
-          loading={productLoad.loading}
-          error={productLoad.error}
-          retry={() => void productLoad.refresh()}
-        />
-
-        {p && (
-          <>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 xl:gap-6">
-              {/* Product Gallery */}
-              <div className="space-y-4">
-                <div className="relative aspect-[3/4] rounded-2xl bg-card overflow-hidden group">
-                  <ProductPhoto src={currentPhotoUrl} name={p.name} />
-                  {isSale && (
-                    <span className="absolute top-4 left-4 bg-primary text-white text-xs font-semibold px-3 py-1">
-                      Sale
-                    </span>
-                  )}
-                </div>
-
-                {/* Thumbnails */}
-                {filteredImages.length > 1 && (
-                  <div className="flex gap-3 overflow-x-auto pb-2">
-                    {filteredImages.map((img) => {
-                      const url =
-                        img.url || (img.mediaId ? media(img.mediaId) : "");
-                      const isActive = url === currentPhotoUrl;
-                      return (
-                        <button
-                          key={img.id}
-                          type="button"
-                          aria-label={`Xem ảnh ${img.altText || p.name}`}
-                          aria-pressed={isActive}
-                          onClick={() => setActiveImg(url)}
-                          className={`w-20 h-24 shrink-0 bg-background overflow-hidden border-2 transition-all ${
-                            isActive
-                              ? "border-border-strong"
-                              : "border-transparent hover:border-border-strong"
-                          } store-button`}
-                        >
-                          <img
-                            src={url}
-                            alt={img.altText || p.name}
-                            className="w-full h-full object-cover"
-                          />
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-
-              {/* Product Info & Controls */}
-              <div className="store-panel flex flex-col">
-                <p className="text-xs text-muted-foreground font-semibold mb-2">
-                  {p.brandName || p.categoryName || "LINO"}
-                </p>
-                <h1 className="text-foreground font-medium text-base leading-snug mb-4 text-balance">
-                  {p.name}
-                </h1>
-
-                {/* Reviews Summary Rating */}
-                {reviewsLoad.data && (
-                  <div className="flex items-center gap-2 mb-6">
-                    <StarRating
-                      rating={reviewsLoad.data.averageRating}
-                      size={15}
-                    />
-                    <span className="text-xs text-muted-foreground font-medium">
-                      {reviewsLoad.data.averageRating.toFixed(1)} / 5 (
-                      {reviewsLoad.data.totalReviews} đánh giá)
-                    </span>
-                  </div>
-                )}
-
-                {/* Price Display */}
-                <div className="flex items-baseline gap-3 mb-6 pb-6 border-b border-border">
-                  <span className="text-lg font-semibold tabular-nums text-foreground">
-                    {money(displayPrice)}
-                  </span>
-                  {isSale && (
-                    <span className="text-base text-muted-foreground line-through">
-                      {money(p.basePrice)}
-                    </span>
-                  )}
-                  {isSale && (
-                    <span className="text-xs font-semibold text-primary bg-primary-light border border-destructive/20 px-2 py-0.5">
-                      Tiết kiệm {money(p.basePrice - displayPrice)}
-                    </span>
-                  )}
-                </div>
-
-                {/* Short Description */}
-                {(p.shortDescription || p.description) && (
-                  <p className="text-sm text-muted-foreground leading-relaxed mb-6">
-                    {p.shortDescription || p.description}
-                  </p>
-                )}
-
-                {/* Color Selector */}
-                {colorOptions.length > 0 && (
-                  <div className={`mb-6 p-3 rounded-2xl transition-all ${
-                    variantPrompt && !selectedColor
-                      ? "border border-destructive/30 bg-primary-light/40"
-                      : ""
-                  }`}>
-                    <div className="flex items-center justify-between mb-2.5">
-                      <span className="text-xs font-semibold text-foreground">
-                        Màu Sắc:{" "}
-                        <strong className={variantPrompt && !selectedColor ? "text-destructive font-semibold" : "text-primary font-semibold"}>
-                          {colorOptions.find(
-                            (c) =>
-                              (c.colorOptionId || c.color) === selectedColor,
-                          )?.color || (variantPrompt ? "Chưa chọn — vui lòng chọn màu" : "Chưa chọn")}
-                        </strong>
-                      </span>
-                    </div>
-                    <div className="flex flex-wrap gap-2.5">
-                      {colorOptions.map((v) => {
-                        const key = v.colorOptionId || v.color || "";
-                        const isSelected = selectedColor === key;
-                        return (
-                          <button
-                            key={key}
-                            type="button"
-                            aria-pressed={isSelected}
-                            onClick={() => {
-                              setSelectedColor(key);
-                              setSelectedSize("");
-                              setActiveImg("");
-                              setFeedback(null);
-                              setVariantPrompt(false);
-                            }}
-                            className={`flex items-center gap-2 px-3 py-2 border text-xs font-medium transition-all ${
-                              isSelected
-                                ? "border-transparent bg-secondary text-foreground "
-                                : "border-border-strong bg-white text-foreground hover:border-border-strong"
-                            } rounded-2xl store-button`}
-                          >
-                            <span
-                              className="w-3.5 h-3.5 rounded-full border border-black/10 shrink-0"
-                              style={{ backgroundColor: v.colorHex || "#bbb" }}
-                            />
-                            <span>{v.color || "Màu"}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {/* Size Selector */}
-                {sizeOptions.length > 0 && (
-                  <div className={`mb-6 p-3 rounded-2xl transition-all ${
-                    variantPrompt && !selectedSize
-                      ? "border border-destructive/30 bg-primary-light/40"
-                      : ""
-                  }`}>
-                    <div className="flex items-center justify-between mb-2.5">
-                      <span className="text-xs font-semibold text-foreground">
-                        Kích Cỡ:{" "}
-                        <strong className={variantPrompt && !selectedSize ? "text-destructive font-semibold" : "text-primary font-semibold"}>
-                          {sizeOptions.find(
-                            (s) => (s.sizeOptionId || s.size) === selectedSize,
-                          )?.size || (variantPrompt ? "Chưa chọn — vui lòng chọn size" : "Chưa chọn")}
-                        </strong>
-                      </span>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {sizeOptions.map((v) => {
-                        const key = v.sizeOptionId || v.size || "";
-                        const isSelected = selectedSize === key;
-                        return (
-                          <button
-                            key={key}
-                            type="button"
-                            aria-pressed={isSelected}
-                            onClick={() => {
-                              setSelectedSize(key);
-                              setFeedback(null);
-                              setVariantPrompt(false);
-                            }}
-                            className={`min-w-12 h-10 px-3 border text-xs font-semibold transition-all ${
-                              isSelected
-                                ? "bg-secondary text-foreground border-border-strong"
-                                : "bg-white text-foreground border-border-strong hover:border-border-strong"
-                            } rounded-2xl store-button`}
-                          >
-                            {v.size || "Size"}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {/* Quantity */}
-                <div className="mb-8 flex items-center gap-4">
-                  <span className="text-xs font-semibold text-foreground">
-                    Số Lượng:
-                  </span>
-                  <div className="flex items-center border border-border-strong">
-                    <button
-                      type="button"
-                      disabled={qty <= 1}
-                      aria-label="Giảm số lượng"
-                      onClick={() => setQty((q) => Math.max(1, q - 1))}
-                      className="w-10 h-10 flex items-center justify-center text-sm font-semibold text-foreground hover:bg-background disabled:opacity-30 store-button"
-                    >
-                      −
-                    </button>
-                    <input
-                      type="number"
-                      aria-label="Số lượng sản phẩm"
-                      min="1"
-                      max="99"
-                      value={qty}
-                      onChange={(e) =>
-                        setQty(
-                          Math.max(
-                            1,
-                            Math.min(99, Number(e.target.value) || 1),
-                          ),
-                        )
-                      }
-                      className="w-12 text-center text-sm font-semibold outline-none store-input"
-                    />
-                    <button
-                      type="button"
-                      disabled={qty >= 99}
-                      aria-label="Tăng số lượng"
-                      onClick={() => setQty((q) => Math.min(99, q + 1))}
-                      className="w-10 h-10 flex items-center justify-center text-sm font-semibold text-foreground hover:bg-background disabled:opacity-30 store-button"
-                    >
-                      +
-                    </button>
-                  </div>
-                </div>
-
-                {/* Feedback Toast */}
-                {feedback && (
-                  <div
-                    className={`mb-6 p-4 text-xs font-medium flex items-center gap-3 border ${
-                      feedback.type === "success"
-                        ? "bg-success-light text-success border-success/20"
-                        : "bg-primary-light text-destructive border-destructive/20"
-                    }`}
-                  >
-                    {feedback.type === "success" ? (
-                      <Check size={16} className="text-success shrink-0" />
-                    ) : (
-                      <AlertCircle
-                        size={16}
-                        className="text-destructive shrink-0"
-                      />
-                    )}
-                    <span>{feedback.message}</span>
-                  </div>
-                )}
-
-                {/* Action Buttons */}
-                <div className="flex flex-col sm:flex-row gap-3 mb-8">
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => void handleAddToCart(false)}
-                    className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-medium text-white transition-colors hover:bg-primary-hover disabled:opacity-45 md:min-h-10"
-                  >
-                    <ShoppingBag size={15} /> Thêm Vào Giỏ
-                  </button>
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => void handleAddToCart(true)}
-                    className="min-h-11 flex-1 rounded-xl border border-border-strong bg-card px-4 text-sm font-medium text-foreground transition-colors hover:bg-accent disabled:opacity-45 md:min-h-10"
-                  >
-                    Mua Ngay
-                  </button>
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => void toggleWishlist()}
-                    aria-label={liked ? "Bỏ yêu thích" : "Yêu thích"}
-                    className={`size-11 md:size-10 flex items-center justify-center rounded-xl border transition-colors shrink-0 ${
-                      liked
-                        ? "border-primary bg-primary-light text-primary"
-                        : "border-border-strong hover:border-border-strong text-foreground"
-                    } store-button`}
-                  >
-                    <Heart
-                      size={18}
-                      className={
-                        liked ? "fill-primary stroke-primary" : "stroke-current"
-                      }
-                    />
-                  </button>
-                </div>
-
-                {/* Guarantees */}
-                <div className="bg-background border border-border p-5 space-y-3 mb-8 text-xs text-muted-foreground">
-                  <div className="flex items-center gap-3">
-                    <Truck size={16} className="text-foreground shrink-0" />
-                    <span>Miễn phí vận chuyển cho đơn hàng từ 500.000 ₫</span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <RefreshCw size={16} className="text-foreground shrink-0" />
-                    <span>Đổi trả thuận tiện trong vòng 7 ngày</span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <ShieldCheck
-                      size={16}
-                      className="text-foreground shrink-0"
-                    />
-                    <span>Cam kết chất lượng chính hãng từ LINO</span>
-                  </div>
-                </div>
-
-                {/* Accordions */}
-                <div className="border-t border-border">
-                  <AccordionItem title="Mô Tả Sản Phẩm" defaultOpen={true}>
-                    <div className="space-y-4">
-                      <p>
-                        {p.description || "Chưa có thông tin mô tả chi tiết."}
-                      </p>
-                      {p.attributes && p.attributes.length > 0 && (
-                        <div className="pt-2 border-t border-border">
-                          <p className="font-semibold text-xs text-foreground mb-2">
-                            Đặc tính nổi bật:
-                          </p>
-                          <ul className="list-disc pl-5 space-y-1 text-xs text-muted-foreground">
-                            {p.attributes.map((attr) => (
-                              <li key={attr.id}>
-                                <strong>{attr.name}:</strong> {attr.value}
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                    </div>
-                  </AccordionItem>
-
-                  {/* Size Chart Accordion */}
-                  {sizeChartLoad.data?.rows &&
-                    sizeChartLoad.data.rows.length > 0 && (
-                      <AccordionItem title="Bảng Thông Số Kích Cỡ">
-                        <div className="overflow-x-auto">
-                          <table className="w-full text-left text-xs border border-secondary">
-                            <thead className="bg-background text-foreground font-semibold">
-                              <tr>
-                                <th className="p-2.5 border-b">Size</th>
-                                <th className="p-2.5 border-b">
-                                  Vòng Ngực (cm)
-                                </th>
-                                <th className="p-2.5 border-b">Vòng Eo (cm)</th>
-                                <th className="p-2.5 border-b">
-                                  Chiều Cao (cm)
-                                </th>
-                                <th className="p-2.5 border-b">
-                                  Cân Nặng (kg)
-                                </th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-secondary">
-                              {sizeChartLoad.data.rows.map((r) => (
-                                <tr key={r.id}>
-                                  <td className="p-2.5 font-semibold">
-                                    {r.sizeCode}
-                                  </td>
-                                  <td className="p-2.5">{r.chest || "—"}</td>
-                                  <td className="p-2.5">{r.waist || "—"}</td>
-                                  <td className="p-2.5">
-                                    {r.heightMin && r.heightMax
-                                      ? `${r.heightMin}–${r.heightMax}`
-                                      : "—"}
-                                  </td>
-                                  <td className="p-2.5">
-                                    {r.weightMin && r.weightMax
-                                      ? `${r.weightMin}–${r.weightMax}`
-                                      : "—"}
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                        <p className="mt-2 text-xs text-muted-foreground">
-                          * Bảng kích cỡ mang tính chất tham khảo chuẩn theo
-                          form dáng thiết kế của LINO.
-                        </p>
-                      </AccordionItem>
-                    )}
-
-                  <AccordionItem title="Chính Sách Giao Hàng & Đổi Trả">
-                    <div className="space-y-2 text-xs">
-                      <p>
-                        <strong>Thời gian giao hàng:</strong> Từ 2–4 ngày làm
-                        việc trên toàn quốc qua đơn vị vận chuyển Giao Hàng
-                        Nhanh (GHN).
-                      </p>
-                      <p>
-                        <strong>Chính sách đổi trả:</strong> Hỗ trợ trả hàng
-                        trong vòng 7 ngày kể từ ngày nhận hàng đối với sản phẩm
-                        còn nguyên tem mác và chưa qua sử dụng.
-                      </p>
-                    </div>
-                  </AccordionItem>
-                </div>
-              </div>
-            </div>
-
-            {/* Customer Reviews Section */}
-            <section className="mt-10 pt-6 border-t border-border">
-              <div className="flex flex-col sm:flex-row sm:items-end justify-between mb-8 gap-4">
-                <div>
-                  <p className="text-xs text-muted-foreground font-semibold mb-1">
-                    Trải Nghiệm Khách Hàng
-                  </p>
-                  <h2 className="text-foreground font-semibold text-lg text-balance">
-                    ĐÁNH GIÁ SẢN PHẨM
-                  </h2>
-                </div>
-                {reviewsLoad.data && (
-                  <div className="flex items-center gap-3">
-                    <span className="text-2xl font-semibold text-foreground">
-                      {reviewsLoad.data.averageRating.toFixed(1)}
-                    </span>
-                    <div>
-                      <StarRating
-                        rating={reviewsLoad.data.averageRating}
-                        size={16}
-                      />
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        Dựa trên {reviewsLoad.data.totalReviews} lượt đánh giá
-                      </p>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <Status
-                loading={reviewsLoad.loading}
-                error={reviewsLoad.error}
-                retry={() => void reviewsLoad.refresh()}
-              />
-
-              {!reviewsLoad.error && reviewsLoad.data
-                && reviewsLoad.data.reviews.pageNo === reviewPage
-                && reviewsLoad.data.reviews.items.length > 0 ? (
-                <div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {reviewsLoad.data.reviews.items.map((r: Review) => (
-                      <article
-                        key={r.id}
-                        className="border border-border p-4 sm:p-5 bg-white flex flex-col justify-between rounded-2xl"
-                      >
-                        <div>
-                          <div className="flex items-center justify-between mb-3">
-                            <StarRating rating={r.rating} size={14} />
-                            {r.verifiedPurchase && (
-                              <span className="text-xs font-semibold text-success bg-success-light px-2 py-0.5 border border-success/20">
-                                Đã Mua Hàng
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-sm text-foreground leading-relaxed mb-4">
-                            {r.comment}
-                          </p>
-                        </div>
-                        <p className="text-xs text-muted-foreground border-t border-border pt-3">
-                          {new Date(r.createdAt).toLocaleDateString("vi-VN")}
-                        </p>
-                      </article>
-                    ))}
-                  </div>
-                </div>
-              ) : (
-                !reviewsLoad.loading && !reviewsLoad.error && (
-                  <div className="text-center py-12 border border-dashed border-border-strong p-6">
-                    <p className="text-sm text-muted-foreground">
-                      {reviewsLoad.data && reviewsLoad.data.totalReviews > 0
-                        ? 'Không có đánh giá ở trang này.'
-                        : 'Chưa có đánh giá nào cho sản phẩm này.'}
-                    </p>
-                  </div>
-                )
-              )}
-
-
-              {(reviewPage > 0 || (reviewsLoad.data?.reviews.totalPage ?? 0) > 1) && (
-                <nav aria-label="Phân trang đánh giá" className="mt-8 pt-6 border-t border-border flex items-center justify-between">
-                  <button
-                    type="button"
-                    aria-label="Trang đánh giá trước"
-                    disabled={reviewsLoad.loading || reviewPage === 0}
-                    onClick={() => setReviewPage(page => Math.max(0, page - 1))}
-                    className="bg-primary text-white px-5 py-2.5 text-xs font-semibold hover:bg-primary-hover disabled:opacity-30 disabled:hover:bg-primary-hover store-button"
-                  >
-                    ← Trước
-                  </button>
-                  <span aria-live="polite" className="text-xs text-muted-foreground">
-                    Trang {reviewPage + 1}
-                    {reviewsLoad.data && reviewPage < reviewsLoad.data.reviews.totalPage
-                      ? ` / ${reviewsLoad.data.reviews.totalPage}` : ''}
-                  </span>
-                  <button
-                    type="button"
-                    aria-label="Trang đánh giá sau"
-                    disabled={reviewsLoad.loading || Boolean(reviewsLoad.error) || !reviewsLoad.data
-                      || reviewPage + 1 >= reviewsLoad.data.reviews.totalPage}
-                    onClick={() => setReviewPage(page => page + 1)}
-                    className="bg-primary text-white px-5 py-2.5 text-xs font-semibold hover:bg-primary-hover disabled:opacity-30 disabled:hover:bg-primary-hover store-button"
-                  >
-                    Sau →
-                  </button>
-                </nav>
-              )}
+  return <div className="pd-page">
+    <div className="pd-container">
+      <nav className="pd-breadcrumb" aria-label="Đường dẫn">
+        <Link to="/">Trang chủ</Link><span>/</span><Link to="/products">Sản phẩm</Link>
+        {p?.categoryName && <><span>/</span><Link to={`/products?categoryId=${p.categoryId || ""}`}>{p.categoryName}</Link></>}
+        {p && <span className="pd-crumb-current">/ {p.name}</span>}
+      </nav>
+      <Status loading={productLoad.loading} error={productLoad.error} retry={() => void productLoad.refresh()} />
+      {p && !productLoad.loading && !productLoad.error && <>
+        <div className="pd-product">
+          <div className="pd-media-column">
+            <ProductGallery key={`${id}:${selectedColor}`} photos={galleryPhotos} name={p.name} />
+            <section className="pd-description">
+              <h2>Mô tả sản phẩm</h2>
+              <AccordionItem title="Chi tiết sản phẩm" defaultOpen>
+                <p>{p.description || p.shortDescription || "Chưa có mô tả sản phẩm."}</p>
+                {!!p.attributes?.length && <dl className="pd-attributes">{p.attributes.map(attr => <div key={attr.id}><dt>{attr.name}</dt><dd>{attr.value || "—"}</dd></div>)}</dl>}
+              </AccordionItem>
+              <AccordionItem title="Giao hàng / Đổi trả"><p>Giao hàng từ 2–4 ngày làm việc. Hỗ trợ trả hàng trong 7 ngày đối với sản phẩm còn nguyên tem mác, chưa qua sử dụng.</p></AccordionItem>
             </section>
-
-            {/* Related Products */}
-            {relatedProducts.length > 0 && (
-              <section className="mt-10 pt-6 border-t border-border">
-                <div className="mb-8">
-                  <p className="text-xs text-muted-foreground font-semibold mb-1">
-                    Gợi Ý Dành Cho Bạn
-                  </p>
-                  <h2 className="text-foreground font-semibold text-lg text-balance">
-                    SẢN PHẨM LIÊN QUAN
-                  </h2>
-                </div>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-5">
-                  {relatedProducts.map((item) => (
-                    <ProductCard key={item.id} product={item} />
-                  ))}
-                </div>
-              </section>
-            )}
-          </>
-        )}
-      </div>
+          </div>
+          <section className="pd-info" aria-label="Chọn mua sản phẩm">
+            <p className="pd-meta">{p.brandName || p.categoryName || "LINO"}</p>
+            <h1>{p.name}</h1>
+            <Link className="pd-rating-link" to={`/products/${id}/reviews`}>
+              <StarRating rating={reviewsLoad.data?.averageRating || 0} size={15} />
+              <span>{reviewsLoad.data ? `${reviewsLoad.data.averageRating.toFixed(1)} (${reviewsLoad.data.totalReviews} đánh giá)` : "Xem đánh giá"}</span>
+            </Link>
+            <div className="pd-price"><strong>{money(displayPrice)}</strong>{isSale && <del>{money(p.basePrice)}</del>}</div>
+            {!!colorOptions.length && <div className={`pd-field ${variantPrompt && !selectedColor ? "pd-invalid" : ""}`}>
+              <p className="pd-label">Màu sắc: <strong>{colorOptions.find(c => (c.colorOptionId || c.color) === selectedColor)?.color || "Chưa chọn"}</strong></p>
+              <div className="pd-choices">{colorOptions.map(v => {
+                const key = v.colorOptionId || v.color || "";
+                return <button key={key} type="button" className="pd-swatch" aria-label={v.color || "Màu"} title={v.color} aria-pressed={selectedColor === key}
+                  onClick={() => { setSelectedColor(key); setSelectedSize(""); setFeedback(null); setVariantPrompt(false); }}>
+                  <span style={{ background: v.colorHex || "#bbb" }} />
+                </button>;
+              })}</div>
+            </div>}
+            <div className={`pd-field ${variantPrompt && !selectedSize ? "pd-invalid" : ""}`}>
+              <div className="pd-label-row"><p className="pd-label">Kích cỡ: <strong>{sizeOptions.find(s => (s.sizeOptionId || s.size) === selectedSize)?.size || "Chưa chọn"}</strong></p><button type="button" id="pd-size-trigger" className="pd-text-link" onClick={() => setSizeOpen(true)}>Bảng kích cỡ</button></div>
+              <div className="pd-choices">{sizeOptions.map(v => {
+                const key = v.sizeOptionId || v.size || "";
+                return <button key={key} type="button" className="pd-size-choice" aria-pressed={selectedSize === key} onClick={() => { setSelectedSize(key); setFeedback(null); setVariantPrompt(false); }}>{v.size || "Size"}</button>;
+              })}</div>
+            </div>
+            <div className="pd-field"><label className="pd-label" htmlFor="pd-qty">Số lượng</label>
+              <div className="pd-quantity"><button type="button" aria-label="Giảm số lượng" disabled={qty <= 1} onClick={() => setQty(q => Math.max(1, q - 1))}>−</button>
+                <input id="pd-qty" aria-label="Số lượng sản phẩm" type="number" min="1" max="99" value={qty} onChange={e => setQty(Math.max(1, Math.min(99, Math.trunc(Number(e.target.value)) || 1)))} />
+                <button type="button" aria-label="Tăng số lượng" disabled={qty >= 99} onClick={() => setQty(q => Math.min(99, q + 1))}>+</button></div>
+            </div>
+            <div className="pd-feedback" role={feedback?.type === "error" ? "alert" : "status"} aria-live="polite" data-tone={feedback?.type}>{feedback && <>{feedback.type === "success" ? <Check size={16} /> : <AlertCircle size={16} />}<span>{feedback.message}</span></>}</div>
+            <div className="pd-actions">
+              <button type="button" className="pd-add" disabled={busy} onClick={() => void handleAddToCart(false)}>{busy ? "Đang xử lý…" : "Thêm vào giỏ hàng"}</button>
+              <button type="button" className="pd-wish" aria-label={liked ? "Bỏ yêu thích" : "Yêu thích"} aria-pressed={liked} disabled={busy} onClick={() => void toggleWishlist()}><Heart size={20} fill={liked ? "currentColor" : "none"} /></button>
+              <button type="button" className="pd-buy" disabled={busy} onClick={() => void handleAddToCart(true)}>Mua ngay</button>
+            </div>
+            <div className="pd-services"><p><Truck size={17} />Miễn phí vận chuyển từ 500.000 ₫</p><p><RefreshCw size={17} />Đổi trả trong 7 ngày</p></div>
+          </section>
+        </div>
+        <section className="pd-section" aria-labelledby="pd-reviews-title">
+          <div className="pd-section-title"><h2 id="pd-reviews-title">Đánh giá sản phẩm</h2><Link className="pd-text-link" to={`/products/${id}/reviews`}>Xem thêm đánh giá</Link></div>
+          <Status loading={reviewsLoad.loading} error={reviewsLoad.error} retry={() => void reviewsLoad.refresh()} />
+          {!reviewsLoad.loading && !reviewsLoad.error && reviewsLoad.data && <div className="pd-review-preview"><div><strong className="pd-review-score">{reviewsLoad.data.averageRating.toFixed(1)} <small>/ 5</small></strong><StarRating rating={reviewsLoad.data.averageRating} size={16} /><p className="pd-meta">{reviewsLoad.data.totalReviews} đánh giá</p></div><div>{reviewsLoad.data.reviews.items.length ? reviewsLoad.data.reviews.items.slice(0, 3).map(review => <article key={review.id} className="pd-review-excerpt"><StarRating rating={review.rating} size={14} /><p>{review.comment}</p><time dateTime={review.createdAt}>{new Date(review.createdAt).toLocaleDateString("vi-VN")}</time></article>) : <p className="pd-empty">Chưa có đánh giá cho sản phẩm này.</p>}</div></div>}
+        </section>
+        {!!relatedProducts.length && <section className="pd-section"><h2>Sản phẩm liên quan</h2><div className="pd-related">{relatedProducts.map(item => <ProductCard key={item.id} product={item} />)}</div></section>}
+        <SizeGuide open={sizeOpen} onOpenChange={setSizeOpen} rows={sizeChartLoad.data?.rows || []} loading={sizeChartLoad.loading} error={sizeChartLoad.error} retry={() => void sizeChartLoad.refresh()} />
+      </>}
     </div>
-  );
+  </div>;
 }

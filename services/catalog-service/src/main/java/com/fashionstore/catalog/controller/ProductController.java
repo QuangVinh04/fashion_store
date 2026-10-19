@@ -189,6 +189,8 @@ public class ProductController {
 
     @GetMapping({"/api/v1/products/advance-search", "/api/v1/product/advance-search"})
     public ApiResponse<PageResponse<List<ProductSummaryResponse>>> advanceSearch(
+            @RequestParam(required = false) com.fashionstore.catalog.entity.enumeration.ProductType productType,
+            @RequestParam(required = false) Integer minRating,
             @RequestParam(value = "search", required = false) String[] search,
             @RequestParam(required = false) java.math.BigDecimal minPrice,
             @RequestParam(required = false) java.math.BigDecimal maxPrice,
@@ -202,6 +204,8 @@ public class ProductController {
             @PageableDefault(page = 0, size = 10, sort = "createdAt", direction = Sort.Direction.DESC)
             Pageable pageable) {
         com.fashionstore.catalog.dto.ProductAdvanceSearchRequest request = com.fashionstore.catalog.dto.ProductAdvanceSearchRequest.builder()
+                .productType(productType)
+                .minRating(minRating)
                 .search(search)
                 .minPrice(minPrice)
                 .maxPrice(maxPrice)

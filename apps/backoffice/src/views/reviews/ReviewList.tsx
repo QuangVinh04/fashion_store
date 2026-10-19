@@ -2,8 +2,6 @@
 
 import { useEffect, useState } from 'react'
 
-import Link from 'next/link'
-
 // eslint-disable-next-line import/named
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -14,7 +12,9 @@ import {
   Chip,
   Dialog,
   DialogContent,
+  Divider,
   IconButton,
+  InputAdornment,
   MenuItem,
   Rating,
   Table,
@@ -128,14 +128,32 @@ export default function ReviewList() {
       <PageHeader title='Đánh giá sản phẩm' />
 
       <Card>
-        <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', p: 3 }}>
+        <Box sx={{ p: { xs: 4, sm: 5 }, display: 'flex', gap: 3, flexWrap: 'wrap', alignItems: 'center' }}>
           <TextField
             size='small'
-            label='Tìm kiếm'
-            placeholder='Tên sản phẩm, khách hàng, nội dung...'
+            placeholder='Tìm sản phẩm, khách hàng hoặc nội dung...'
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
-            sx={{ minWidth: 280 }}
+            sx={{ flexGrow: 1, minWidth: { xs: '100%', sm: 260 } }}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position='start'>
+                  <i className='ri-search-line text-lg text-textSecondary' />
+                </InputAdornment>
+              ),
+              endAdornment: searchTerm ? (
+                <InputAdornment position='end'>
+                  <IconButton
+                    size='small'
+                    edge='end'
+                    onClick={() => setSearchTerm('')}
+                    aria-label='Xóa tìm kiếm'
+                  >
+                    <i className='ri-close-line text-lg' />
+                  </IconButton>
+                </InputAdornment>
+              ) : null
+            }}
           />
 
           <TextField
@@ -168,6 +186,8 @@ export default function ReviewList() {
           </TextField>
         </Box>
 
+        <Divider />
+
         <ListResult query={query} page={page} size={size} setPage={setPage} setSize={setSize}>
           <TableContainer>
             <Table sx={{ minWidth: 1100 }}>
@@ -183,7 +203,7 @@ export default function ReviewList() {
               </TableHead>
               <TableBody>
                 {query.data?.items.map(row => (
-                  <TableRow key={row.id}>
+                  <TableRow key={row.id} hover>
                     {/* Khách hàng */}
                     <TableCell sx={{ minWidth: 180 }}>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
@@ -212,11 +232,15 @@ export default function ReviewList() {
 
                     {/* Sản phẩm */}
                     <TableCell sx={{ minWidth: 180, maxWidth: 220 }}>
-                      <Link href={`/products/${row.productId}`} style={{ textDecoration: 'none' }}>
-                        <Typography variant='subtitle2' fontWeight={600} color='primary.main'>
-                          {row.productName || 'Sản phẩm'}
-                        </Typography>
-                      </Link>
+                      <Typography
+                        variant='body2'
+                        sx={{
+                          fontWeight: 600,
+                          color: 'text.primary'
+                        }}
+                      >
+                        {row.productName || 'Sản phẩm'}
+                      </Typography>
                       <Typography variant='caption' color='text.secondary' display='block'>
                         ID: {row.productId}
                       </Typography>

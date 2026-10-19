@@ -326,7 +326,7 @@ services:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin
       # Browser PUT thang len :9000 nen CORS phai mo o day, SecurityConfig cua catalog khong voi toi.
-      MINIO_API_CORS_ALLOW_ORIGIN: "http://localhost:3000,http://localhost:5173,http://localhost:8083"
+      MINIO_API_CORS_ALLOW_ORIGIN: "http://localhost:3000,http://localhost:5173,http://localhost:8083,http://localhost:8084,http://127.0.0.1:3000,http://127.0.0.1:5173,http://127.0.0.1:8083,http://127.0.0.1:8084"
     ports:
       - "9000:9000"   # S3 API — browser goi presigned URL vao day
       - "9001:9001"   # Console

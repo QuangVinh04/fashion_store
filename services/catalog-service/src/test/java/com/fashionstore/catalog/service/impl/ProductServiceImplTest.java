@@ -112,6 +112,16 @@ class ProductServiceImplTest {
     ProductServiceImpl productService;
 
     @Test
+    void ratingFilterRejectsValuesOutsideStarRange() {
+        for (int rating : new int[]{0, 6}) {
+            var request = com.fashionstore.catalog.dto.ProductAdvanceSearchRequest.builder().minRating(rating).build();
+            assertThatThrownBy(() -> productService.advanceSearchWithRequest(PageRequest.of(0, 12), request))
+                    .isInstanceOf(AppException.class);
+        }
+        verifyNoInteractions(productRepository);
+    }
+
+    @Test
     void publicProductDetailDoesNotExposeDraftOrArchivedProducts() {
         for (ProductStatus status : List.of(ProductStatus.DRAFT, ProductStatus.ARCHIVED)) {
             Product product = Product.builder().status(status).build();
@@ -1093,11 +1103,99 @@ class ProductServiceImplTest {
     }
 
     @Test
-    void advanceSearchWithSpecifications_whenInvalidGenderField_throwsInvalidSearchCriteria() {
-        Pageable pageable = PageRequest.of(0, 10);
-        assertThatThrownBy(() -> productService.advanceSearchWithSpecifications(pageable, new String[]{"gender:UNKNOWN"}))
-                .isInstanceOf(AppException.class)
-                .extracting("errorCode")
-                .isEqualTo(ProductErrorCode.INVALID_SEARCH_CRITERIA);
+    void createProduct_appliesThumbnailFallbacks_forProductAndVariants() {
+        Category category = Category.builder().name("Tops").slug("tops").build();
+        category.setId("cat-1");
+
+        ColorOption brown = ColorOption.builder().name("Brown").colorHex("#8B4513").build();
+        brown.setId("color-brown");
+        ColorOption black = ColorOption.builder().name("Black").colorHex("#000000").build();
+        black.setId("color-black");
+
+        SizeOption sizeM = SizeOption.builder().name("M").build();
+        sizeM.setId("size-m");
+        SizeOption sizeL = SizeOption.builder().name("L").build();
+        sizeL.setId("size-l");
+
+        ProductRequest request = ProductRequest.builder()
+                .name("Fallback Tee")
+                .slug("fallback-tee")
+                .basePrice(new BigDecimal("150000"))
+                .weightGram(200)
+                .lengthMm(250)
+                .widthMm(150)
+                .heightMm(30)
+                .categoryIds(List.of("cat-1"))
+                .images(List.of(
+                        com.fashionstore.catalog.dto.ProductImageItem.builder()
+                                .mediaId("media-primary")
+                                .url("https://img.test/primary.png")
+                                .isPrimary(true)
+                                .build(),
+                        com.fashionstore.catalog.dto.ProductImageItem.builder()
+                                .mediaId("media-brown")
+                                .url("https://img.test/brown.png")
+                                .colorOptionId("color-brown")
+                                .build()
+                ))
+                .variants(List.of(
+                        ProductVariantRequest.builder()
+                                .colorOptionId("color-brown")
+                                .sizeOptionId("size-m")
+                                .sku("TEE-BRN-M")
+                                .build(),
+                        ProductVariantRequest.builder()
+                                .colorOptionId("color-black")
+                                .sizeOptionId("size-m")
+                                .sku("TEE-BLK-M")
+                                .build(),
+                        ProductVariantRequest.builder()
+                                .colorOptionId("color-black")
+                                .sizeOptionId("size-l")
+                                .sku("TEE-BLK-L")
+                                .thumbnailMediaId("media-custom")
+                                .thumbnailUrl("https://img.test/custom.png")
+                                .build()
+                ))
+                .build();
+
+        when(categoryRepository.findAllById(List.of("cat-1"))).thenReturn(List.of(category));
+        when(colorOptionRepository.findAllById(List.of("color-brown", "color-black"))).thenReturn(List.of(brown, black));
+        when(sizeOptionRepository.findAllById(List.of("size-m", "size-l"))).thenReturn(List.of(sizeM, sizeL));
+        when(mediaFileRepository.existsByIdAndStatus("media-primary", MediaStatus.ACTIVE)).thenReturn(true);
+        when(mediaFileRepository.existsByIdAndStatus("media-brown", MediaStatus.ACTIVE)).thenReturn(true);
+        when(mediaFileRepository.existsByIdAndStatus("media-custom", MediaStatus.ACTIVE)).thenReturn(true);
+        when(productRepository.save(any(Product.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        productService.createProduct(request);
+
+        org.mockito.ArgumentCaptor<Product> captor = org.mockito.ArgumentCaptor.forClass(Product.class);
+        verify(productRepository).save(captor.capture());
+        Product saved = captor.getValue();
+
+        // Product thumbnail is set from primary image
+        assertThat(saved.getThumbnailMediaId()).isEqualTo("media-primary");
+        assertThat(saved.getThumbnailUrl()).isEqualTo("https://img.test/primary.png");
+
+        // Brown variant inherits Brown color image
+        ProductVariant brownVariant = saved.getVariants().stream()
+                .filter(v -> "color-brown".equals(v.getColorOption().getId()))
+                .findFirst().orElseThrow();
+        assertThat(brownVariant.getThumbnailMediaId()).isEqualTo("media-brown");
+        assertThat(brownVariant.getThumbnailUrl()).isEqualTo("https://img.test/brown.png");
+
+        // Black M variant has no custom thumbnail and no Black image -> falls back to primary
+        ProductVariant blackMVariant = saved.getVariants().stream()
+                .filter(v -> "TEE-BLK-M".equals(v.getSku()))
+                .findFirst().orElseThrow();
+        assertThat(blackMVariant.getThumbnailMediaId()).isEqualTo("media-primary");
+        assertThat(blackMVariant.getThumbnailUrl()).isEqualTo("https://img.test/primary.png");
+
+        // Black L variant keeps custom thumbnail
+        ProductVariant blackLVariant = saved.getVariants().stream()
+                .filter(v -> "TEE-BLK-L".equals(v.getSku()))
+                .findFirst().orElseThrow();
+        assertThat(blackLVariant.getThumbnailMediaId()).isEqualTo("media-custom");
+        assertThat(blackLVariant.getThumbnailUrl()).isEqualTo("https://img.test/custom.png");
     }
 }
