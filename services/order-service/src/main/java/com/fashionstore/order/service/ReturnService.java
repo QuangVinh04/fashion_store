@@ -29,6 +29,9 @@ public interface ReturnService {
 
     ReturnRequestResponse approveReturn(String returnRequestId);
 
+    /** Đặt lại lượt lấy hàng GHN sau khi lượt trước thất bại (PICKUP_FAILED, chưa lấy hàng). */
+    ReturnRequestResponse recreatePickup(String returnRequestId);
+
     ReturnRequestResponse rejectReturn(String returnRequestId, RejectReturnRequest request);
 
     ReturnRequestResponse receiveReturn(String returnRequestId, ReceiveReturnRequest request);

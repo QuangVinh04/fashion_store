@@ -33,6 +33,9 @@ import java.util.List;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class GhnClient {
 
+    private static final com.fasterxml.jackson.databind.ObjectMapper JSON =
+            new com.fasterxml.jackson.databind.ObjectMapper();
+
     GhnApi ghnApi;
     GhnProperties ghnProperties;
 
@@ -225,7 +228,7 @@ public class GhnClient {
             throw new AppException(ErrorCode.UPSTREAM_SERVICE_ERROR);
         } catch (FeignException e) {
             log.error("[GHN] Feign error while creating order: status={}, message={}", e.status(), e.getMessage());
-            throw new AppException(ErrorCode.UPSTREAM_SERVICE_ERROR);
+            throw creationFailure(e);
         } catch (AppException e) {
             throw e;
         } catch (Exception e) {
@@ -239,7 +242,7 @@ public class GhnClient {
      * ({@code to_*}), shop trả cước, không thu COD. {@code client_order_code} duy nhất theo shop và
      * GHN trả lại mã cũ khi gửi lại cùng mã, nên gọi lại sau lỗi/timeout không tạo đơn trùng.
      */
-    public String createReturnOrder(ReturnPickup pickup) {
+    public String createReturnOrder(ReturnPickup pickup, String clientOrderCode) {
         if (pickup.senderProvince() == null || pickup.senderProvince().isBlank()
                 || pickup.senderWard() == null || pickup.senderWard().isBlank()) {
             throw new AppException(OrderErrorCode.SHIPPING_ADDRESS_INVALID);
@@ -250,7 +253,7 @@ public class GhnClient {
         boolean isGhnConfigured = Boolean.TRUE.equals(ghnProperties.getEnabled()) && token != null && !token.isBlank();
         if (!isGhnConfigured) {
             if (isMockAllowed) {
-                String mockTracking = "GHN_MOCK_RET_" + pickup.orderCode();
+                String mockTracking = "GHN_MOCK_" + clientOrderCode;
                 log.info("[GHN] Not configured; returning mock return tracking code: {} (mock allowed)", mockTracking);
                 return mockTracking;
             }
@@ -277,7 +280,7 @@ public class GhnClient {
 
         GhnCreateOrderRequest request = GhnCreateOrderRequest.builder()
                 .paymentTypeId(1) // Shop trả cước chiều về
-                .clientOrderCode("RET-" + pickup.returnId())
+                .clientOrderCode(clientOrderCode)
                 .fromName(pickup.senderName())
                 .fromPhone(pickup.senderPhone())
                 .fromAddress(pickup.senderAddress())
@@ -309,13 +312,29 @@ public class GhnClient {
             throw new AppException(ErrorCode.UPSTREAM_SERVICE_ERROR);
         } catch (FeignException e) {
             log.error("[GHN] Feign error while creating return order: status={}, message={}", e.status(), e.getMessage());
-            throw new AppException(ErrorCode.UPSTREAM_SERVICE_ERROR);
+            throw creationFailure(e);
         } catch (AppException e) {
             throw e;
         } catch (Exception e) {
             log.error("[GHN] Unexpected error while creating return order: {}", e.getMessage(), e);
             throw new AppException(ErrorCode.UPSTREAM_SERVICE_ERROR);
         }
+    }
+
+    /** GHN trả 4xx là từ chối dữ liệu: giữ nguyên lời GHN cho admin. Còn lại là GHN không phục vụ được. */
+    private static AppException creationFailure(FeignException e) {
+        if (e.status() < 400 || e.status() >= 500) {
+            return new AppException(ErrorCode.UPSTREAM_SERVICE_ERROR);
+        }
+        try {
+            String message = JSON.readTree(e.contentUTF8()).path("message").asText("");
+            if (!message.isBlank()) {
+                return new AppException(OrderErrorCode.CARRIER_REJECTED, message);
+            }
+        } catch (Exception unreadable) {
+            log.warn("[GHN] Could not read the rejection body: {}", unreadable.getMessage());
+        }
+        return new AppException(OrderErrorCode.CARRIER_REJECTED);
     }
 
     private BigDecimal estimateFeeFallback(int weightGram, ShippingMethod shippingMethod) {

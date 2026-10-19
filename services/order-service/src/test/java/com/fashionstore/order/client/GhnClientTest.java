@@ -70,7 +70,7 @@ class GhnClientTest {
                 GhnCreateOrderResponse.builder().data(GhnCreateOrderResponse.CreateOrderData.builder()
                         .orderCode("GHN-RET-1").build()).build());
 
-        assertThat(client.createReturnOrder(pickup())).isEqualTo("GHN-RET-1");
+        assertThat(client.createReturnOrder(pickup(), "RET-ret-1")).isEqualTo("GHN-RET-1");
 
         ArgumentCaptor<GhnCreateOrderRequest> captor = ArgumentCaptor.forClass(GhnCreateOrderRequest.class);
         verify(ghnApi).createOrder(eq("token"), eq("42"), captor.capture());
@@ -98,7 +98,7 @@ class GhnClientTest {
         properties.setToken("token");
         properties.setShopId("42");
 
-        assertThatThrownBy(() -> client.createReturnOrder(pickup()))
+        assertThatThrownBy(() -> client.createReturnOrder(pickup(), "RET-ret-1"))
                 .isInstanceOfSatisfying(AppException.class,
                         e -> assertThat(e.getErrorCode()).isEqualTo(OrderErrorCode.RETURN_WAREHOUSE_NOT_CONFIGURED));
         org.mockito.Mockito.verifyNoInteractions(ghnApi);
@@ -109,7 +109,7 @@ class GhnClientTest {
         var noWard = new com.fashionstore.order.dto.ReturnPickup(
                 "ret-1", "ORD-1", "A", "0987654321", "123 Le Loi", " ", "Hồ Chí Minh", 600, List.of());
 
-        assertThatThrownBy(() -> client.createReturnOrder(noWard))
+        assertThatThrownBy(() -> client.createReturnOrder(noWard, "RET-ret-1"))
                 .isInstanceOfSatisfying(AppException.class,
                         e -> assertThat(e.getErrorCode()).isEqualTo(OrderErrorCode.SHIPPING_ADDRESS_INVALID));
     }
@@ -118,16 +118,32 @@ class GhnClientTest {
         configureWarehouse();
         when(ghnApi.createOrder(eq("token"), eq("42"), any())).thenReturn(GhnCreateOrderResponse.builder().build());
 
-        assertThatThrownBy(() -> client.createReturnOrder(pickup()))
+        assertThatThrownBy(() -> client.createReturnOrder(pickup(), "RET-ret-1"))
                 .isInstanceOfSatisfying(AppException.class,
                         e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.UPSTREAM_SERVICE_ERROR));
+    }
+
+    @Test void createReturnOrder_ghnRejectingTheDataSurfacesGhnsReason() {
+        configureWarehouse();
+        var request = feign.Request.create(feign.Request.HttpMethod.POST, "https://ghn/create",
+                java.util.Map.of(), null, java.nio.charset.StandardCharsets.UTF_8, null);
+        when(ghnApi.createOrder(eq("token"), eq("42"), any())).thenThrow(new feign.FeignException.BadRequest(
+                "400", request,
+                "{\"code\":400,\"message\":\"Phường không hợp lệ\"}".getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                java.util.Map.of()));
+
+        assertThatThrownBy(() -> client.createReturnOrder(pickup(), "RET-ret-1"))
+                .isInstanceOfSatisfying(AppException.class, e -> {
+                    assertThat(e.getErrorCode()).isEqualTo(OrderErrorCode.CARRIER_REJECTED);
+                    assertThat(e.getMessage()).isEqualTo("Phường không hợp lệ");
+                });
     }
 
     @Test void createReturnOrder_inMockModeReturnsAStableMockCode() {
         properties.setEnabled(false);
         properties.setAllowMock(true);
 
-        assertThat(client.createReturnOrder(pickup())).isEqualTo("GHN_MOCK_RET_ORD-1");
+        assertThat(client.createReturnOrder(pickup(), "RET-ret-1")).isEqualTo("GHN_MOCK_RET-ret-1");
         org.mockito.Mockito.verifyNoInteractions(ghnApi);
     }
 

@@ -140,6 +140,14 @@ hàng trả (503) · `4025` yêu cầu đổi trạng thái trong lúc gọi GHN
                 .build();
     }
 
+    @Operation(summary = "Tạo lại lượt lấy hàng trả sau khi GHN hủy / quá hạn")
+    @PostMapping("/{id}/recreate-pickup")
+    public ApiResponse<ReturnRequestResponse> recreatePickup(@PathVariable String id) {
+        return ApiResponse.<ReturnRequestResponse>builder()
+                .data(returnService.recreatePickup(id))
+                .build();
+    }
+
     @Operation(summary = "Xác nhận đã nhận kiện hàng trả về")
     @PostMapping("/{id}/receive")
     public ApiResponse<ReturnRequestResponse> receive(

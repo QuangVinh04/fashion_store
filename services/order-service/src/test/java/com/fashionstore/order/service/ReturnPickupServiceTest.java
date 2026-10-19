@@ -216,21 +216,32 @@ class ReturnPickupServiceTest {
     }
 
     @Test
-    void ghnCancellingBeforePickupClosesTheReturnAndCompletesTheOrder() {
+    void ghnCancellingBeforePickupKeepsTheReturnOpenForTheAdminToDecide() {
         ghnSays("cancel");
         GhnWebhookPayload cancelled = callback("cancel");
         cancelled.setReason("Khách không nghe máy");
 
         service.handleGhnCallback(cancelled);
 
-        assertThat(shipment.getStatus()).isEqualTo(ReturnShipmentStatus.CANCELLED);
+        assertThat(shipment.getStatus()).isEqualTo(ReturnShipmentStatus.PICKUP_FAILED);
         assertThat(shipment.getCancelledAt()).isEqualTo(NOW);
-        assertThat(returned.getStatus()).isEqualTo(ReturnRequestStatus.CANCELLED);
-        assertThat(returned.getClosedAt()).isEqualTo(NOW);
-        assertThat(returned.getRejectReason()).contains("Khách không nghe máy");
-        assertThat(actions()).containsExactly("RETURN_CANCELLED");
-        verify(receipts).completeAfterReturnClosed(eq(order), eq(NOW), eq("GHN"), contains("Khách không nghe máy"));
+        assertThat(shipment.getFailureCode()).isEqualTo("CARRIER_CANCELLED");
+        assertThat(shipment.getFailureReason()).contains("Khách không nghe máy");
+        assertThat(shipment.getFailedAt()).isEqualTo(NOW);
+        assertThat(returned.getStatus()).isEqualTo(ReturnRequestStatus.APPROVED);
+        assertThat(returned.getClosedAt()).isNull();
+        assertThat(actions()).containsExactly("RETURN_PICKUP_FAILED");
+        verify(receipts, never()).completeAfterReturnClosed(any(), any(), any(), any());
         verify(notifications).sendReturnStatusNotification(eq(order), anyString(), anyString());
+    }
+
+    @Test
+    void aCallbackForARecreatedPickupAcceptsItsSuffixedClientCode() {
+        ghnSays("GHN-RET-1", "42", "RET-ret-1-GHN-OLD", "picked");
+
+        service.handleGhnCallback(callback("picked"));
+
+        assertThat(shipment.getStatus()).isEqualTo(ReturnShipmentStatus.PICKED);
     }
 
     @Test
@@ -341,6 +352,18 @@ class ReturnPickupServiceTest {
     }
 
     @Test
+    void anAdminCancelsAFailedPickupWithoutCallingGhnAgain() {
+        shipment.setStatus(ReturnShipmentStatus.PICKUP_FAILED);
+
+        service.cancelByAdmin("ret-1", "Khách không còn muốn trả");
+
+        assertThat(returned.getStatus()).isEqualTo(ReturnRequestStatus.CANCELLED);
+        assertThat(returned.getClosedAt()).isEqualTo(NOW);
+        verify(ghn, never()).cancelPendingShipment(any());
+        verify(receipts).completeAfterReturnClosed(eq(order), eq(NOW), eq("user-1"), contains("Khách không còn muốn trả"));
+    }
+
+    @Test
     void anAdminCancelsAnApprovedReturnOnlyOnceGhnConfirmsTheCancellation() {
         ghnCancels("CANCELLED");
 
@@ -448,15 +471,18 @@ class ReturnPickupServiceTest {
     }
 
     @Test
-    void aReturnGhnNeverPickedUpIsClosedOnceGhnConfirmsTheCancellation() {
+    void anOverduePickupIsCancelledAtGhnAndLeftOpenForTheAdmin() {
         overdue();
         ghnCancels("CANCELLED");
 
         service.expirePickups(NOW);
 
-        assertThat(returned.getStatus()).isEqualTo(ReturnRequestStatus.CANCELLED);
-        assertThat(shipment.getStatus()).isEqualTo(ReturnShipmentStatus.CANCELLED);
-        verify(receipts).completeAfterReturnClosed(eq(order), eq(NOW), eq("SYSTEM"), contains("quá hạn"));
+        assertThat(shipment.getStatus()).isEqualTo(ReturnShipmentStatus.PICKUP_FAILED);
+        assertThat(shipment.getFailureCode()).isEqualTo("PICKUP_FAILED");
+        assertThat(shipment.getFailureReason()).contains("quá hạn");
+        assertThat(returned.getStatus()).isEqualTo(ReturnRequestStatus.APPROVED);
+        assertThat(returned.getClosedAt()).isNull();
+        verify(receipts, never()).completeAfterReturnClosed(any(), any(), any(), any());
     }
 
     @Test

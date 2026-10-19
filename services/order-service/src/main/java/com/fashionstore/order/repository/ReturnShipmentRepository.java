@@ -23,14 +23,18 @@ public interface ReturnShipmentRepository extends JpaRepository<ReturnShipment, 
 
     Optional<ReturnShipment> findByGhnOrderCode(String ghnOrderCode);
 
-    /** Đơn trả vẫn chờ GHN lấy hàng quá hạn (duyệt trước {@code cutoff}) và còn được thử hủy. */
+    /**
+     * Đơn trả vẫn chờ GHN lấy hàng quá hạn (lượt lấy hàng đặt trước {@code cutoff}; dữ liệu cũ chưa có
+     * mốc này thì tính từ ngày duyệt) và còn được thử hủy.
+     */
     @org.springframework.data.jpa.repository.Query(
             "select s.returnRequest.id from ReturnShipment s"
                     + " where s.status = com.fashionstore.order.entity.enumeration.ReturnShipmentStatus.READY_TO_PICK"
                     + " and s.cancelAttempts < :maxAttempts"
                     + " and s.returnRequest.status in (com.fashionstore.order.entity.enumeration.ReturnRequestStatus.APPROVED,"
                     + " com.fashionstore.order.entity.enumeration.ReturnRequestStatus.RETURN_APPROVED)"
-                    + " and s.returnRequest.approvedAt <= :cutoff order by s.returnRequest.approvedAt")
+                    + " and coalesce(s.pickupRequestedAt, s.returnRequest.approvedAt) <= :cutoff"
+                    + " order by coalesce(s.pickupRequestedAt, s.returnRequest.approvedAt)")
     java.util.List<String> findPickupOverdueReturnIds(
             @org.springframework.data.repository.query.Param("cutoff") java.time.Instant cutoff,
             @org.springframework.data.repository.query.Param("maxAttempts") int maxAttempts,
@@ -71,7 +75,7 @@ public interface ReturnShipmentRepository extends JpaRepository<ReturnShipment, 
             "select count(s) from ReturnShipment s"
                     + " where s.status = com.fashionstore.order.entity.enumeration.ReturnShipmentStatus.READY_TO_PICK"
                     + " and s.cancelAttempts >= :maxAttempts and s.returnRequest.closedAt is null"
-                    + " and s.returnRequest.approvedAt <= :cutoff")
+                    + " and coalesce(s.pickupRequestedAt, s.returnRequest.approvedAt) <= :cutoff")
     long countPickupCancelExhausted(
             @org.springframework.data.repository.query.Param("maxAttempts") int maxAttempts,
             @org.springframework.data.repository.query.Param("cutoff") java.time.Instant cutoff);

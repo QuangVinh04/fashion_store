@@ -105,7 +105,7 @@ public class ReturnPickupService {
         if (verified == null
                 || !code.equals(verified.orderCode())
                 || !payload.getShopId().equals(verified.shopId())
-                || !("RET-" + returnId).equals(verified.clientOrderCode())) {
+                || !isReturnClientCode(verified.clientOrderCode(), returnId)) {
             throw new AppException(OrderErrorCode.SHIPMENT_EVIDENCE_INVALID);
         }
 
@@ -124,7 +124,7 @@ public class ReturnPickupService {
     @Transactional(propagation = Propagation.NEVER)
     @PreAuthorize("hasRole('ADMIN')")
     public void cancelByAdmin(String returnRequestId, String reason) {
-        cancel(returnRequestId, currentUser.getCurrentUserId(), reason);
+        cancel(returnRequestId, currentUser.getCurrentUserId(), reason, false);
     }
 
     private enum CancelOutcome {
@@ -134,10 +134,12 @@ public class ReturnPickupService {
     }
 
     /**
-     * Hủy phiếu: chưa có đơn GHN thì đóng ngay; đã có thì GHN phải xác nhận hủy (ngoài transaction)
-     * rồi mới đóng. GHN cho biết hàng đã được lấy thì khóa hủy và đưa phiếu sang IN_TRANSIT.
+     * Hủy lượt lấy hàng: chưa có đơn GHN (hoặc lượt đã thất bại) thì xử lý ngay; đã có thì GHN phải
+     * xác nhận hủy (ngoài transaction). Admin hủy thì đóng phiếu; quá hạn thì chỉ đưa lượt lấy hàng
+     * sang PICKUP_FAILED để admin quyết định. GHN cho biết hàng đã được lấy thì khóa hủy, phiếu sang
+     * IN_TRANSIT.
      */
-    private void cancel(String returnId, String actor, String reason) {
+    private void cancel(String returnId, String actor, String reason, boolean overdue) {
         TransactionTemplate transaction = new TransactionTemplate(transactionManager);
         String ghnCode =
                 transaction.execute(status -> prepareCancel(returnId, actor, reason));
@@ -147,7 +149,7 @@ public class ReturnPickupService {
         var result = ghnClient.cancelPendingShipment(ghnCode);
         CancelOutcome outcome =
                 transaction.execute(
-                        status -> finishCancel(returnId, actor, reason, result.outcome()));
+                        status -> finishCancel(returnId, actor, reason, overdue, result.outcome()));
         if (outcome == CancelOutcome.ALREADY_PICKED) {
             throw new AppException(OrderErrorCode.RETURN_WORKFLOW_CONFLICT);
         }
@@ -176,8 +178,8 @@ public class ReturnPickupService {
             throw new AppException(OrderErrorCode.RETURN_WORKFLOW_CONFLICT);
         }
         ReturnShipment shipment = shipments.findByReturnRequestIdForUpdate(returnId).orElse(null);
-        if (shipment == null) {
-            // Duyệt từ trước khi có đơn trả GHN: không có gì để hủy bên GHN.
+        if (shipment == null || shipment.getStatus() == ReturnShipmentStatus.PICKUP_FAILED) {
+            // Chưa có đơn trả GHN, hoặc GHN đã hủy lượt lấy hàng: không còn gì để hủy bên GHN.
             close(order, returned, actor, "RETURN_CANCELLED", reason);
             return null;
         }
@@ -188,7 +190,7 @@ public class ReturnPickupService {
     }
 
     private CancelOutcome finishCancel(
-            String returnId, String actor, String reason, String ghnOutcome) {
+            String returnId, String actor, String reason, boolean overdue, String ghnOutcome) {
         Order order = lockOrder(returnId);
         ReturnRequest returned = lockReturn(returnId);
         ReturnShipment shipment =
@@ -206,6 +208,10 @@ public class ReturnPickupService {
         }
         switch (ghnOutcome == null ? "" : ghnOutcome) {
             case "CANCELLED" -> {
+                if (overdue) {
+                    pickupFailed(order, returned, shipment, actor, "PICKUP_FAILED", reason, clock.instant());
+                    return CancelOutcome.CLOSED;
+                }
                 shipment.setStatus(ReturnShipmentStatus.CANCELLED);
                 shipment.setCancelledAt(clock.instant());
                 close(order, returned, actor, "RETURN_CANCELLED", reason);
@@ -250,7 +256,8 @@ public class ReturnPickupService {
                 cancel(
                         id,
                         "SYSTEM",
-                        "GHN không lấy được hàng quá hạn " + properties.getPickupTimeoutDays() + " ngày");
+                        "GHN không lấy được hàng quá hạn " + properties.getPickupTimeoutDays() + " ngày",
+                        true);
             } catch (AppException conflict) {
                 if (conflict.getErrorCode() == OrderErrorCode.RETURN_WORKFLOW_CONFLICT) {
                     log.info("[Return] Return {} changed while expiring its pickup", id);
@@ -311,7 +318,7 @@ public class ReturnPickupService {
                             if (fromGhn != null
                                     && code.equals(fromGhn.orderCode())
                                     && ghnProperties.getShopId().equals(fromGhn.shopId())
-                                    && ("RET-" + returnId).equals(fromGhn.clientOrderCode())) {
+                                    && isReturnClientCode(fromGhn.clientOrderCode(), returnId)) {
                                 apply(
                                         returnId,
                                         fromGhn.status().toLowerCase(Locale.ROOT).trim(),
@@ -402,20 +409,51 @@ public class ReturnPickupService {
             }
         } else if ("cancel".equals(ghnStatus)) {
             if (shipment.getStatus() == ReturnShipmentStatus.READY_TO_PICK) {
-                shipment.setStatus(ReturnShipmentStatus.CANCELLED);
-                shipment.setCancelledAt(eventTime);
-                close(
+                pickupFailed(
                         order,
                         returned,
+                        shipment,
                         "GHN",
-                        "RETURN_CANCELLED",
-                        "GHN hủy đơn trả" + (reason == null || reason.isBlank() ? "" : ": " + reason.trim()));
-            } else {
+                        "CARRIER_CANCELLED",
+                        "GHN hủy lượt lấy hàng" + (reason == null || reason.isBlank() ? "" : ": " + reason.trim()),
+                        eventTime);
+            } else if (shipment.getStatus() != ReturnShipmentStatus.PICKUP_FAILED) {
                 flagAttention(order, returned, shipment, ghnStatus, "GHN hủy sau khi đã lấy hàng", previousGhnStatus);
             }
         } else if (ATTENTION_STATUSES.contains(ghnStatus)) {
             flagAttention(order, returned, shipment, ghnStatus, reason, previousGhnStatus);
         }
+    }
+
+    /**
+     * Lượt lấy hàng thất bại trước khi GHN lấy hàng: phiếu vẫn mở, admin tạo lại lượt lấy hàng hoặc
+     * hủy phiếu dựa trên lý do lưu ở đây.
+     */
+    private void pickupFailed(
+            Order order,
+            ReturnRequest returned,
+            ReturnShipment shipment,
+            String actor,
+            String failureCode,
+            String reason,
+            Instant at) {
+        shipment.setStatus(ReturnShipmentStatus.PICKUP_FAILED);
+        shipment.setCancelledAt(at);
+        shipment.setFailureCode(failureCode);
+        shipment.setFailureReason(reason.length() > 500 ? reason.substring(0, 500) : reason);
+        shipment.setFailedAt(at);
+        record(order, "RETURN_PICKUP_FAILED", actor, reason);
+        notifications.sendReturnStatusNotification(
+                order,
+                "Lấy hàng trả chưa thành công",
+                "GHN chưa lấy được hàng của bạn. Chúng tôi sẽ liên hệ để sắp xếp lại lượt lấy hàng.");
+    }
+
+    private static boolean isReturnClientCode(String clientOrderCode, String returnId) {
+        // Lượt đầu gửi RET-<id>; lượt tạo lại sau khi thất bại gửi RET-<id>-<mã GHN cũ>.
+        String code = "RET-" + returnId;
+        return code.equals(clientOrderCode)
+                || clientOrderCode != null && clientOrderCode.startsWith(code + "-");
     }
 
     private void markPickedUp(

@@ -453,7 +453,7 @@ class ReturnServiceImplTest {
                                 com.fashionstore.order.entity.Shipment.builder()
                                         .weightGram(600)
                                         .build()));
-        when(ghnClient.createReturnOrder(any())).thenReturn("GHN-RET-1");
+        when(ghnClient.createReturnOrder(any(), any())).thenReturn("GHN-RET-1");
         java.util.concurrent.atomic.AtomicReference<com.fashionstore.order.entity.ReturnShipment>
                 saved = new java.util.concurrent.atomic.AtomicReference<>();
         when(returnShipmentRepository.save(any(com.fashionstore.order.entity.ReturnShipment.class)))
@@ -474,7 +474,7 @@ class ReturnServiceImplTest {
 
         ArgumentCaptor<com.fashionstore.order.dto.ReturnPickup> pickup =
                 ArgumentCaptor.forClass(com.fashionstore.order.dto.ReturnPickup.class);
-        verify(ghnClient).createReturnOrder(pickup.capture());
+        verify(ghnClient).createReturnOrder(pickup.capture(), eq("RET-ret-1"));
         assertThat(pickup.getValue().returnId()).isEqualTo("ret-1");
         assertThat(pickup.getValue().orderCode()).isEqualTo("ORD-1");
         assertThat(pickup.getValue().senderName()).isEqualTo("Nguyen Van A");
@@ -503,11 +503,81 @@ class ReturnServiceImplTest {
                         org.mockito.ArgumentMatchers.contains("GHN-RET-1"));
     }
 
+    private com.fashionstore.order.entity.ReturnShipment failedPickup(ReturnRequest returnRequest) {
+        returnRequest.setStatus(ReturnRequestStatus.APPROVED);
+        var shipment =
+                com.fashionstore.order.entity.ReturnShipment.builder()
+                        .returnRequest(returnRequest)
+                        .ghnOrderCode("GHN-OLD")
+                        .status(com.fashionstore.order.entity.enumeration.ReturnShipmentStatus.PICKUP_FAILED)
+                        .failureCode("CARRIER_CANCELLED")
+                        .failureReason("Khách không nghe máy")
+                        .failedAt(java.time.Instant.now())
+                        .build();
+        org.mockito.Mockito.lenient()
+                .when(returnShipmentRepository.findByReturnRequestIdForUpdate("ret-1"))
+                .thenReturn(Optional.of(shipment));
+        org.mockito.Mockito.lenient()
+                .when(returnShipmentRepository.findByReturnRequestId("ret-1"))
+                .thenReturn(Optional.of(shipment));
+        return shipment;
+    }
+
+    @Test
+    void recreatePickup_afterAFailedPickup_ordersANewGhnPickupOnTheSameRow() {
+        Order order = deliveredOrderWithPickupAddress();
+        var shipment = failedPickup(requestedReturn(order));
+        // client_order_code mới để GHN không trả lại lượt đã hủy
+        when(ghnClient.createReturnOrder(any(), eq("RET-ret-1-GHN-OLD"))).thenReturn("GHN-NEW");
+
+        ReturnRequestResponse response = service.recreatePickup("ret-1");
+
+        assertThat(shipment.getGhnOrderCode()).isEqualTo("GHN-NEW");
+        assertThat(shipment.getStatus())
+                .isEqualTo(com.fashionstore.order.entity.enumeration.ReturnShipmentStatus.READY_TO_PICK);
+        assertThat(shipment.getFailureCode()).isNull();
+        assertThat(shipment.getFailureReason()).isNull();
+        assertThat(shipment.getPickupRequestedAt()).isNotNull();
+        assertThat(response.getReturnTrackingCode()).isEqualTo("GHN-NEW");
+        ArgumentCaptor<OrderStatusHistory> history = ArgumentCaptor.forClass(OrderStatusHistory.class);
+        verify(orderStatusHistoryRepository).save(history.capture());
+        assertThat(history.getValue().getAction()).isEqualTo("RETURN_PICKUP_RECREATED");
+    }
+
+    @Test
+    void recreatePickup_whenGhnRejectsTheData_keepsItFailedWithGhnsReason() {
+        Order order = deliveredOrderWithPickupAddress();
+        var shipment = failedPickup(requestedReturn(order));
+        when(ghnClient.createReturnOrder(any(), any()))
+                .thenThrow(new AppException(OrderErrorCode.CARRIER_REJECTED, "Phường không hợp lệ"));
+
+        assertThatThrownBy(() -> service.recreatePickup("ret-1")).isInstanceOf(AppException.class);
+
+        assertThat(shipment.getStatus())
+                .isEqualTo(com.fashionstore.order.entity.enumeration.ReturnShipmentStatus.PICKUP_FAILED);
+        assertThat(shipment.getGhnOrderCode()).isEqualTo("GHN-OLD");
+        assertThat(shipment.getFailureCode()).isEqualTo("INVALID_DATA");
+        assertThat(shipment.getFailureReason()).isEqualTo("Phường không hợp lệ");
+    }
+
+    @Test
+    void recreatePickup_whilePickupIsStillPending_isAConflict() {
+        Order order = deliveredOrderWithPickupAddress();
+        var shipment = failedPickup(requestedReturn(order));
+        shipment.setStatus(com.fashionstore.order.entity.enumeration.ReturnShipmentStatus.READY_TO_PICK);
+
+        assertThatThrownBy(() -> service.recreatePickup("ret-1"))
+                .isInstanceOfSatisfying(
+                        AppException.class,
+                        e -> assertThat(e.getErrorCode()).isEqualTo(OrderErrorCode.RETURN_WORKFLOW_CONFLICT));
+        verify(ghnClient, never()).createReturnOrder(any(), any());
+    }
+
     @Test
     void approveReturn_whenGhnFails_keepsTheRequestOpenForARetry() {
         Order order = deliveredOrderWithPickupAddress();
         ReturnRequest returnRequest = requestedReturn(order);
-        when(ghnClient.createReturnOrder(any()))
+        when(ghnClient.createReturnOrder(any(), any()))
                 .thenThrow(new AppException(com.fashionstore.common.exception.ErrorCode.UPSTREAM_SERVICE_ERROR));
 
         assertThatThrownBy(() -> service.approveReturn("ret-1")).isInstanceOf(AppException.class);
@@ -523,7 +593,7 @@ class ReturnServiceImplTest {
     void approveReturn_whenRejectedWhileGhnWasBeingCalled_cancelsTheOrphanGhnOrder() {
         Order order = deliveredOrderWithPickupAddress();
         ReturnRequest returnRequest = requestedReturn(order);
-        when(ghnClient.createReturnOrder(any()))
+        when(ghnClient.createReturnOrder(any(), any()))
                 .thenAnswer(
                         inv -> {
                             returnRequest.setStatus(ReturnRequestStatus.REJECTED);
@@ -546,7 +616,7 @@ class ReturnServiceImplTest {
     void approveReturn_whenAnotherAdminApprovedMeanwhile_returnsItWithoutTouchingTheSharedGhnOrder() {
         Order order = deliveredOrderWithPickupAddress();
         ReturnRequest returnRequest = requestedReturn(order);
-        when(ghnClient.createReturnOrder(any()))
+        when(ghnClient.createReturnOrder(any(), any()))
                 .thenAnswer(
                         inv -> {
                             returnRequest.setStatus(ReturnRequestStatus.APPROVED);
@@ -949,7 +1019,7 @@ class ReturnServiceImplTest {
     // ----- thông báo cho khách -----
 
     @Test
-    void approveReturn_notifiesCustomerWithSendBackDeadline() {
+    void approveReturn_tellsTheCustomerAFailedPickupIsRearrangedNotCancelled() {
         Order order = deliveredOrder();
         ReturnRequest request = returnRequest(order, ReturnRequestStatus.REQUESTED);
         stubLocks(order, request);
@@ -960,7 +1030,7 @@ class ReturnServiceImplTest {
                 .sendReturnStatusNotification(
                         org.mockito.ArgumentMatchers.eq(order),
                         org.mockito.ArgumentMatchers.anyString(),
-                        org.mockito.ArgumentMatchers.contains("trước ngày"));
+                        org.mockito.ArgumentMatchers.contains("sắp xếp lại"));
     }
 
     @Test

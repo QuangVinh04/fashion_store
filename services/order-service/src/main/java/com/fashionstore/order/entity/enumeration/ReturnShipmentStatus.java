@@ -10,6 +10,8 @@ public enum ReturnShipmentStatus {
     ARRIVED,
     /** Đơn trả đã hủy bên GHN trước khi lấy hàng. */
     CANCELLED,
+    /** GHN hủy / quá hạn lấy hàng: phiếu vẫn mở, admin tạo lại lượt lấy hàng hoặc hủy phiếu. */
+    PICKUP_FAILED,
     /** GHN báo giao thất bại / hoàn / thất lạc / hư hỏng: cần admin xử lý, không tự đóng phiếu. */
     NEEDS_ATTENTION
 }

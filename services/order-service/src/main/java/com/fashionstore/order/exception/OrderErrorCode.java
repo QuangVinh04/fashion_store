@@ -50,6 +50,7 @@ public enum OrderErrorCode implements BaseErrorCode {
     RETURN_REFUND_AMOUNT_INVALID(4031, "Return refunds must equal the whole order paid amount", HttpStatus.BAD_REQUEST),
     SHIPMENT_INITIATION_CONFLICT(4030,"Shipment creation needs reconciliation before retrying",HttpStatus.CONFLICT),
     RETURN_WAREHOUSE_NOT_CONFIGURED(4035, "Return warehouse address is not configured", HttpStatus.SERVICE_UNAVAILABLE),
+    CARRIER_REJECTED(4036, "Carrier rejected the shipment data", HttpStatus.BAD_REQUEST),
     ORDER_SAGA_NOT_RETRYABLE(4034, "Only a FAILED checkout saga stopped at a replayable step can be retried", HttpStatus.CONFLICT);
 
 

@@ -64,6 +64,10 @@ public class ReturnRequestResponse {
     /** Carrier of the return shipment, independent of the outbound shipment. */
     String returnShippingProvider;
     ReturnShipmentStatus returnShipmentStatus;
+    /** Lý do lượt lấy hàng gần nhất thất bại, để admin chọn tạo lại hay hủy phiếu. */
+    String returnShipmentFailureCode;
+    String returnShipmentFailureReason;
+    Instant returnShipmentFailedAt;
     LocalDateTime createdAt;
     LocalDateTime updatedAt;
 }

@@ -62,4 +62,17 @@ public class ReturnShipment extends BaseEntity {
 
     @Column(name = "last_reconciled_at")
     Instant lastReconciledAt;
+
+    /** Lý do lần lỗi gần nhất: CARRIER_CANCELLED, PICKUP_FAILED, INVALID_DATA, CARRIER_UNAVAILABLE. */
+    @Column(name = "failure_code", length = 40)
+    String failureCode;
+
+    @Column(name = "failure_reason", length = 500)
+    String failureReason;
+
+    @Column(name = "failed_at")
+    Instant failedAt;
+
+    @Column(name = "pickup_requested_at")
+    Instant pickupRequestedAt;
 }

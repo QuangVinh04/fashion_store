@@ -28,6 +28,7 @@ import com.fashionstore.order.entity.ReturnRequest;
 import com.fashionstore.order.entity.enumeration.OrderStatus;
 import com.fashionstore.order.entity.enumeration.ReturnRequestKind;
 import com.fashionstore.order.entity.enumeration.ReturnRequestStatus;
+import com.fashionstore.order.entity.enumeration.ReturnShipmentStatus;
 import com.fashionstore.order.entity.enumeration.ShipmentStatus;
 import com.fashionstore.order.event.OutboxEventRecorder;
 import com.fashionstore.order.exception.OrderErrorCode;
@@ -183,10 +184,127 @@ public class ReturnServiceImpl implements ReturnService {
             return approval.alreadyApproved();
         }
 
-        String ghnOrderCode = ghnClient.createReturnOrder(approval.pickup());
+        String ghnOrderCode =
+                ghnClient.createReturnOrder(approval.pickup(), "RET-" + returnRequestId);
 
         return transaction.execute(
                 status -> finishApproval(returnRequestId, adminId, ghnOrderCode));
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.NEVER)
+    @PreAuthorize("hasRole('ADMIN')")
+    public ReturnRequestResponse recreatePickup(String returnRequestId) {
+        String adminId = currentUserProvider.getCurrentUserId();
+        TransactionTemplate transaction = new TransactionTemplate(transactionManager);
+
+        Recreation recreation = transaction.execute(status -> prepareRecreation(returnRequestId));
+        String ghnOrderCode;
+        try {
+            ghnOrderCode =
+                    ghnClient.createReturnOrder(recreation.pickup(), recreation.clientOrderCode());
+        } catch (RuntimeException failure) {
+            transaction.executeWithoutResult(status -> recordPickupFailure(returnRequestId, failure));
+            throw failure;
+        }
+        return transaction.execute(
+                status ->
+                        finishRecreation(
+                                returnRequestId, adminId, recreation.previousCode(), ghnOrderCode));
+    }
+
+    /** Bản chụp lấy hàng + client_order_code mới (khác lượt đã hủy, cố định giữa các lần bấm lại). */
+    private record Recreation(ReturnPickup pickup, String clientOrderCode, String previousCode) {}
+
+    private Recreation prepareRecreation(String returnRequestId) {
+        ReturnRequest returnRequest = lockOrderThenReturn(returnRequestId);
+        ReturnShipment shipment =
+                returnShipmentRepository.findByReturnRequestIdForUpdate(returnRequestId).orElse(null);
+        if (!canRecreatePickup(returnRequest, shipment)) {
+            throw new AppException(OrderErrorCode.RETURN_WORKFLOW_CONFLICT);
+        }
+        return new Recreation(
+                pickupOf(returnRequest),
+                "RET-" + returnRequestId + "-" + shipment.getGhnOrderCode(),
+                shipment.getGhnOrderCode());
+    }
+
+    /** Chỉ tạo lại khi lượt trước thất bại và hàng vẫn ở chỗ khách. */
+    private static boolean canRecreatePickup(ReturnRequest returnRequest, ReturnShipment shipment) {
+        return isApproved(returnRequest)
+                && returnRequest.getClosedAt() == null
+                && shipment != null
+                && shipment.getStatus() == ReturnShipmentStatus.PICKUP_FAILED
+                && shipment.getPickedAt() == null;
+    }
+
+    private void recordPickupFailure(String returnRequestId, RuntimeException failure) {
+        boolean rejected =
+                failure instanceof AppException app
+                        && app.getErrorCode() == OrderErrorCode.CARRIER_REJECTED;
+        String reason =
+                failure.getMessage() == null ? failure.getClass().getSimpleName() : failure.getMessage();
+        returnShipmentRepository
+                .findByReturnRequestIdForUpdate(returnRequestId)
+                .filter(shipment -> shipment.getStatus() == ReturnShipmentStatus.PICKUP_FAILED)
+                .ifPresent(
+                        shipment -> {
+                            shipment.setFailureCode(rejected ? "INVALID_DATA" : "CARRIER_UNAVAILABLE");
+                            shipment.setFailureReason(
+                                    reason.length() > 500 ? reason.substring(0, 500) : reason);
+                            shipment.setFailedAt(clock.instant());
+                        });
+    }
+
+    private ReturnRequestResponse finishRecreation(
+            String returnRequestId, String adminId, String previousCode, String ghnOrderCode) {
+        ReturnRequest returnRequest = lockOrderThenReturn(returnRequestId);
+        ReturnShipment shipment =
+                returnShipmentRepository.findByReturnRequestIdForUpdate(returnRequestId).orElse(null);
+        if (shipment != null && ghnOrderCode.equals(shipment.getGhnOrderCode())) {
+            // Admin khác vừa tạo lại: cùng client_order_code nên cùng một đơn GHN.
+            return toResponse(returnRequest);
+        }
+        if (!canRecreatePickup(returnRequest, shipment)
+                || !previousCode.equals(shipment.getGhnOrderCode())) {
+            cancelOrphanGhnOrder(ghnOrderCode);
+            throw new AppException(OrderErrorCode.RETURN_WORKFLOW_CONFLICT);
+        }
+
+        // Một phiếu một dòng vận đơn trả: lượt mới ghi đè lượt đã thất bại.
+        shipment.setGhnOrderCode(ghnOrderCode);
+        shipment.setStatus(ReturnShipmentStatus.READY_TO_PICK);
+        shipment.setPickupRequestedAt(clock.instant());
+        shipment.setCancelledAt(null);
+        shipment.setFailureCode(null);
+        shipment.setFailureReason(null);
+        shipment.setFailedAt(null);
+        shipment.setLastGhnStatus(null);
+        shipment.setCancelAttempts(0);
+        shipment.setLastReconciledAt(null);
+        returnShipmentRepository.save(shipment);
+
+        orderStatusHistoryRepository.save(
+                OrderStatusHistory.builder()
+                        .order(returnRequest.getOrder())
+                        .fromStatus(returnRequest.getOrder().getStatus())
+                        .toStatus(returnRequest.getOrder().getStatus())
+                        .action("RETURN_PICKUP_RECREATED")
+                        .changedBy(adminId)
+                        .reason(
+                                "Admin tạo lại lượt lấy hàng, mã vận đơn trả "
+                                        + ghnOrderCode
+                                        + " (thay cho "
+                                        + previousCode
+                                        + ")")
+                        .build());
+        notifyCustomer(
+                returnRequest,
+                "Đã đặt lại lượt lấy hàng trả",
+                "Shipper GHN sẽ liên hệ lấy hàng tại địa chỉ giao hàng của bạn (mã vận đơn "
+                        + ghnOrderCode
+                        + ").");
+        return toResponse(returnRequest);
     }
 
     /** Hoặc yêu cầu đã duyệt từ trước, hoặc bản chụp để tạo đơn GHN. */
@@ -230,6 +348,7 @@ public class ReturnServiceImpl implements ReturnService {
                 ReturnShipment.builder()
                         .returnRequest(returnRequest)
                         .ghnOrderCode(ghnOrderCode)
+                        .pickupRequestedAt(clock.instant())
                         .build());
 
         if (returnRequest.getOrder() != null) {
@@ -247,12 +366,8 @@ public class ReturnServiceImpl implements ReturnService {
                     "Yêu cầu trả hàng đã được duyệt",
                     "Shipper GHN sẽ liên hệ lấy hàng tại địa chỉ giao hàng của bạn (mã vận đơn "
                             + ghnOrderCode
-                            + "). Nếu không lấy được hàng trước ngày "
-                            + formatDate(
-                                    returnRequest
-                                            .getApprovedAt()
-                                            .plus(OrderReceiptService.RETURN_WINDOW))
-                            + ", yêu cầu trả hàng sẽ tự động bị hủy.");
+                            + "). Nếu GHN không lấy được hàng, chúng tôi sẽ liên hệ để sắp xếp"
+                            + " lại.");
         }
 
         log.info(
@@ -577,12 +692,6 @@ public class ReturnServiceImpl implements ReturnService {
         if (returned.getKind() == ReturnRequestKind.CUSTOMER_RETURN) {
             notifications.sendReturnStatusNotification(returned.getOrder(), title, message);
         }
-    }
-
-    private static String formatDate(Instant instant) {
-        return java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy")
-                .withZone(java.time.ZoneId.of("Asia/Ho_Chi_Minh"))
-                .format(instant);
     }
 
     @Override
@@ -1271,6 +1380,9 @@ public class ReturnServiceImpl implements ReturnService {
                             response.setReturnTrackingCode(shipment.getGhnOrderCode());
                             response.setReturnShippingProvider("GHN");
                             response.setReturnShipmentStatus(shipment.getStatus());
+                            response.setReturnShipmentFailureCode(shipment.getFailureCode());
+                            response.setReturnShipmentFailureReason(shipment.getFailureReason());
+                            response.setReturnShipmentFailedAt(shipment.getFailedAt());
                         });
         return response;
     }

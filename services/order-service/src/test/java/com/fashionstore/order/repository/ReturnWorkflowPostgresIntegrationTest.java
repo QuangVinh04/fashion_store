@@ -172,7 +172,7 @@ class ReturnWorkflowPostgresIntegrationTest {
                 service.createReturnRequest(
                         delivered.getId(),
                         ReturnOrderRequest.builder().reason("Wrong size").build());
-        when(ghn.createReturnOrder(org.mockito.ArgumentMatchers.any())).thenReturn("GHN-RET-1");
+        when(ghn.createReturnOrder(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any())).thenReturn("GHN-RET-1");
 
         var first = service.approveReturn(requested.getId());
         var again = service.approveReturn(requested.getId());
@@ -181,7 +181,7 @@ class ReturnWorkflowPostgresIntegrationTest {
         assertThat(first.getReturnTrackingCode()).isEqualTo("GHN-RET-1");
         assertThat(again.getReturnTrackingCode()).isEqualTo("GHN-RET-1");
         verify(ghn, org.mockito.Mockito.times(1))
-                .createReturnOrder(org.mockito.ArgumentMatchers.any());
+                .createReturnOrder(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
         assertThat(
                         jdbc.queryForObject(
                                 "select count(*) from return_shipment where return_request_id = ?"
@@ -235,6 +235,25 @@ class ReturnWorkflowPostgresIntegrationTest {
         assertThat(returns.countAwaitingReviewSince(java.time.LocalDateTime.now().plusDays(1))).isGreaterThanOrEqualTo(0);
         assertThat(returnShipments.countInTransitSince(NOW)).isGreaterThanOrEqualTo(0);
         assertThat(returnShipments.countArrivedUnreceivedSince(NOW)).isGreaterThanOrEqualTo(0);
+    }
+
+    @Test
+    void aRecreatedPickupIsOverdueFromItsOwnRequestNotFromTheApproval() {
+        Instant cutoff = NOW.minusSeconds(7 * 24 * 3600);
+        var recreated = approvedReturn(NOW.minusSeconds(2 * 24 * 3600));
+        recreated.setApprovedAt(NOW.minusSeconds(8 * 24 * 3600));
+        returns.saveAndFlush(recreated);
+        returnShipments.saveAndFlush(
+                com.fashionstore.order.entity.ReturnShipment.builder()
+                        .returnRequest(recreated)
+                        .ghnOrderCode("GHN-AGAIN-" + recreated.getId())
+                        .pickupRequestedAt(NOW.minusSeconds(24 * 3600))
+                        .build());
+
+        assertThat(
+                        returnShipments.findPickupOverdueReturnIds(
+                                cutoff, 5, org.springframework.data.domain.PageRequest.of(0, 100)))
+                .doesNotContain(recreated.getId());
     }
 
     @Test
