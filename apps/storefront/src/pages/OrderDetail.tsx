@@ -1,9 +1,10 @@
 import { customerError } from "../api/client";
 import { useState, useEffect } from "react";
-import { Link, useParams } from "react-router";
+import { Link, useLocation, useParams } from "react-router";
 import { AlertCircle, ArrowLeft, Check, Copy, Star } from "lucide-react";
 import { store } from "../api/store";
 import { walletCheckoutPath } from "../api/wallet-payment";
+import { paymentLinkMessage, requestPaymentUrl } from "../api/payment-link";
 import { money } from "../api/client";
 import { loadOrderPayment, loadOrderShipment } from "../api/order-resources";
 import type { Order, Payment, ReturnRequest } from "../api/types";
@@ -23,6 +24,8 @@ import "../styles/order-detail.css";
 
 export default function OrderDetail() {
   const { id = "" } = useParams();
+  // Checkout chuyển sang đây kèm lý do khi không mở được cổng thanh toán.
+  const checkoutPaymentError = (useLocation().state as { paymentError?: string } | null)?.paymentError;
 
   const orderLoad = useLoad(() => store.order(id), [id]);
   const historyLoad = useLoad(() => store.orderHistory(id), [id]);
@@ -44,10 +47,11 @@ export default function OrderDetail() {
 
   const [copiedTracking, setCopiedTracking] = useState(false);
   const [busyAction, setBusyAction] = useState(false);
+  const [cancelRequested, setCancelRequested] = useState(false);
   const [actionNotice, setActionNotice] = useState<{
     type: "success" | "error";
     text: string;
-  } | null>(null);
+  } | null>(checkoutPaymentError ? { type: "error", text: checkoutPaymentError } : null);
 
   const order = orderLoad.data;
   const [receiptOpen,setReceiptOpen]=useState(false);
@@ -174,71 +178,12 @@ export default function OrderDetail() {
     setBusyAction(true);
     setActionNotice(null);
     try {
-      let payUrl = order?.paymentUrl;
-      let p = payment;
-
-      // 1. Thử lấy payment nếu state chưa có
-      if (!p) {
-        try {
-          p = await store.payment(id);
-          if (p) setPayment(p);
-        } catch {
-          // Chưa có bản ghi payment
-        }
-      }
-
-      // 2. Nếu có payment mà chưa có payUrl -> gọi initiate
-      if (!payUrl && p) {
-        try {
-          const res = await store.paymentInitiate(p.id);
-          payUrl = res.paymentUrl;
-        } catch {
-          // Bỏ qua nếu lỗi initiate
-        }
-      }
-
-      // 3. Nếu vẫn chưa có, đợi và thử lại ngầm trong 4 giây (tránh hiển thị lỗi sớm)
-      if (!payUrl) {
-        for (let i = 0; i < 6; i++) {
-          await new Promise((resolve) => setTimeout(resolve, 600));
-          try {
-            const freshOrder = await store.order(id);
-            if (freshOrder.paymentUrl) {
-              payUrl = freshOrder.paymentUrl;
-              break;
-            }
-          } catch {}
-
-          if (!p) {
-            try {
-              p = await store.payment(id);
-              if (p) setPayment(p);
-            } catch {}
-          }
-
-          if (p) {
-            try {
-              const res = await store.paymentInitiate(p.id);
-              if (res.paymentUrl) {
-                payUrl = res.paymentUrl;
-                break;
-              }
-            } catch {}
-          }
-        }
-      }
-
-      if (payUrl) {
-        sessionStorage.setItem("lino:pendingOrder", id);
-        window.location.assign(payUrl);
-      } else {
-        setActionNotice({
-          type: "error",
-          text: "Cổng thanh toán chưa sẵn sàng cấp URL giao dịch. Vui lòng thử lại sau ít phút.",
-        });
-      }
+      const payUrl = order?.paymentUrl || await requestPaymentUrl(id, store);
+      sessionStorage.setItem("lino:pendingOrder", id);
+      window.location.assign(payUrl);
     } catch (e) {
-      setActionNotice({ type: "error", text: customerError(e) });
+      setActionNotice({ type: "error", text: paymentLinkMessage(e) || customerError(e) });
+      void orderLoad.refresh();
     } finally {
       setBusyAction(false);
     }
@@ -266,8 +211,8 @@ export default function OrderDetail() {
             <p>Đặt lúc {detailDate(order.createdAt)}{cancelled && order.cancellation?.closedAt ? ` · Hủy lúc ${detailDate(order.cancellation.closedAt)}` : ''}</p>
           </div>
           <div className="order-actions">
-            <OrderCancellationActions key={order.id} order={order} onRefresh={orderLoad.refresh}/>
-            {order.paymentMethod === 'ONLINE' && (payment?.status === 'PENDING' || order.status === 'PENDING') && !cancelled && <button disabled={busyAction} className="order-action order-action-primary" onClick={()=>void handleOnlinePayment()}>{busyAction ? 'Đang mở thanh toán…' : 'Thanh toán ngay'}</button>}
+            <OrderCancellationActions key={order.id} order={order} onRefresh={orderLoad.refresh} onCancelRequested={()=>{setCancelRequested(true);setActionNotice(null);}}/>
+            {order.paymentMethod === 'ONLINE' && (payment?.status === 'PENDING' || order.status === 'PENDING') && !cancelled && !cancelRequested && <button disabled={busyAction} className="order-action order-action-primary" onClick={()=>void handleOnlinePayment()}>{busyAction ? 'Đang mở thanh toán…' : 'Thanh toán ngay'}</button>}
             {order.paymentMethod === 'WALLET' && order.status === 'PENDING' && walletCheckoutPath(order) && <Link className="order-action order-action-primary" to={walletCheckoutPath(order)!}>Thanh toán bằng ví</Link>}
             {order.canConfirmReceipt && !order.activeReturnId && <button className="order-action order-action-primary" disabled={receiptBusy || orderLoad.loading} onClick={()=>{setReceiptError('');setReceiptOpen(true);}}>Đã nhận được hàng</button>}
             {(order.canRequestReturn || order.activeReturnId || returnRequest) && <Link className="order-action" to={`/profile/orders/${id}/return`}>{order.activeReturnId || returnRequest ? 'Xem yêu cầu trả hàng / hoàn tiền' : 'Yêu cầu trả hàng / hoàn tiền'}</Link>}

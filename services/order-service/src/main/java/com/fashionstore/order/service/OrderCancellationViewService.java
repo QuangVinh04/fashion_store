@@ -41,6 +41,12 @@ public class OrderCancellationViewService {
             Shipment shipment = shipments.findByOrderId(order.getId()).orElse(null);
             eligible = shipment == null || !shipment.isHandedOff();
         }
+        if (order.getStatus() == OrderStatus.PENDING) {
+            eligible =
+                    sagas.findByOrderIdAndType(order.getId(), OrderSagaType.CHECKOUT)
+                            .map(SagaCancellationService::cancellable)
+                            .orElse(false);
+        }
         response.setCanCancel(eligible);
         return response;
     }

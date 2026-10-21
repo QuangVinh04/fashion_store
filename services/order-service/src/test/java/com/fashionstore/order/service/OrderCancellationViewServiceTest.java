@@ -35,8 +35,34 @@ class OrderCancellationViewServiceTest {
     }
 
     @Test
-    void pendingOrderCannotCancel() {
+    void pendingOrderWithoutCheckoutSagaCannotCancel() {
         assertThat(project(order(OrderStatus.PENDING)).isCanCancel()).isEqualTo(false);
+    }
+
+    @Test
+    void pendingOrderAwaitingPaymentCanCancel() {
+        var saga = OrderSaga.start("order");
+        saga.inventoryReserved("reservation");
+        when(sagas.findByOrderIdAndType("order", OrderSagaType.CHECKOUT)).thenReturn(Optional.of(saga));
+        assertThat(project(order(OrderStatus.PENDING)).isCanCancel()).isTrue();
+    }
+
+    @Test
+    void pendingOrderAlreadyBeingCancelledCannotCancelAgain() {
+        var saga = OrderSaga.start("order");
+        saga.inventoryReserved("reservation");
+        saga.startCompensation(OrderSagaStep.CANCEL_PAYMENT, "CANCELLED_BY_CUSTOMER", "Đổi ý");
+        when(sagas.findByOrderIdAndType("order", OrderSagaType.CHECKOUT)).thenReturn(Optional.of(saga));
+        assertThat(project(order(OrderStatus.PENDING)).isCanCancel()).isFalse();
+    }
+
+    @Test
+    void pendingOrderAlreadyPaidCannotCancel() {
+        var saga = OrderSaga.start("order");
+        saga.inventoryReserved("reservation");
+        saga.paymentAuthorized("payment");
+        when(sagas.findByOrderIdAndType("order", OrderSagaType.CHECKOUT)).thenReturn(Optional.of(saga));
+        assertThat(project(order(OrderStatus.PENDING)).isCanCancel()).isFalse();
     }
 
     @Test

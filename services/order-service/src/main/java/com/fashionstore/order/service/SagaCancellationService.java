@@ -46,6 +46,14 @@ public class SagaCancellationService {
         NOT_ALLOWED
     }
 
+    /** Khách còn tự huỷ được: saga checkout chưa thanh toán xong và chưa ai khởi động bù trừ. */
+    public static boolean cancellable(OrderSaga saga) {
+        return saga.getType() == OrderSagaType.CHECKOUT
+                && saga.getStatus() == OrderSagaStatus.RUNNING
+                && (saga.getCurrentStep() == OrderSagaStep.RESERVE_INVENTORY
+                        || saga.getCurrentStep() == OrderSagaStep.AUTHORIZE_PAYMENT);
+    }
+
     private final OrderSagaRepository sagaRepository;
     private final OrderRepository orderRepository;
     private final SagaOutbox sagaOutbox;

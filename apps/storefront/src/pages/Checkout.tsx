@@ -15,6 +15,7 @@ import {
   Tag,
 } from "lucide-react";
 import { store } from "../api/store";
+import { paymentLinkMessage, requestPaymentUrl } from "../api/payment-link";
 import { walletCheckoutPath } from "../api/wallet-payment";
 import { money } from "../api/client";
 import type { Address, Checkout } from "../api/types";
@@ -156,60 +157,15 @@ export default function CheckoutPage() {
         return;
       }
 
-      // Online payment (VNPay or PayOS) -> Chờ URL thanh toán để tự động chuyển hướng chuẩn TMĐT
+      // Online payment (VNPay or PayOS): tạo link một lần rồi chuyển sang cổng thanh toán.
       setProcessingText(`Đang kết nối cổng thanh toán ${paymentProvider}...`);
-
-      let payUrl: string | undefined = order.paymentUrl;
-      const startTime = Date.now();
-      const maxWaitMs = 8000;
-
-      while (!payUrl && Date.now() - startTime < maxWaitMs) {
-        await new Promise((resolve) => setTimeout(resolve, 600));
-
-        // 1. Thử lấy order mới nhất từ order-service
-        try {
-          const freshOrder = await store.order(order.id);
-          if (freshOrder.paymentUrl) {
-            payUrl = freshOrder.paymentUrl;
-            break;
-          }
-          if (freshOrder.paymentId) {
-            try {
-              const initRes = await store.paymentInitiate(freshOrder.paymentId);
-              if (initRes.paymentUrl) {
-                payUrl = initRes.paymentUrl;
-                break;
-              }
-            } catch {
-              // Bỏ qua nếu chưa initiate được
-            }
-          }
-        } catch {
-          // Bỏ qua lỗi mạng tạm thời trong lúc chờ
-        }
-
-        // 2. Thử tra cứu payment từ payment-service theo orderId
-        if (!payUrl) {
-          try {
-            const p = await store.payment(order.id);
-            if (p && p.id) {
-              const initRes = await store.paymentInitiate(p.id);
-              if (initRes.paymentUrl) {
-                payUrl = initRes.paymentUrl;
-                break;
-              }
-            }
-          } catch {
-            // payment có thể chưa được tạo xong trong 1 vài ms đầu
-          }
-        }
-      }
-
-      if (payUrl) {
-        window.location.assign(payUrl);
-      } else {
-        // Fallback về trang chi tiết đơn hàng nếu cổng thanh toán phản hồi quá lâu
-        navigate(`/profile/orders/${order.id}`);
+      try {
+        window.location.assign(order.paymentUrl || await requestPaymentUrl(order.id, store));
+      } catch (e) {
+        // Đơn đã tạo: đưa khách tới trang đơn để thử lại hoặc hủy, kèm lý do.
+        navigate(`/profile/orders/${order.id}`, {
+          state: { paymentError: paymentLinkMessage(e) || customerError(e) },
+        });
       }
     } catch (e) {
       setError(customerError(e));
