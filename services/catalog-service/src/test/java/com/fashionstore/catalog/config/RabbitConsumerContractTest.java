@@ -8,6 +8,6 @@ class RabbitConsumerContractTest extends RabbitListenerContract {
     protected String deadLetterQueue() { return "catalog.dlq"; }
     protected List<String> sourceQueues() {
         return List.of("inventory.reservation-requested", "inventory.confirmation-requested",
-                "inventory.release-requested", "inventory.restock-requested", "catalog.profile-avatar-changed");
+                "inventory.release-requested", "catalog.profile-avatar-changed");
     }
 }
