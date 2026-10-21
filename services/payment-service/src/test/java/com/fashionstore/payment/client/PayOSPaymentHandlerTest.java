@@ -64,6 +64,18 @@ class PayOSPaymentHandlerTest {
     }
 
     @Test
+    void cancelLinkClosesProviderLinkByOrderCode() {
+        PayOS client = mock(PayOS.class);
+        PaymentRequestsService requests = mock(PaymentRequestsService.class);
+        when(client.paymentRequests()).thenReturn(requests);
+        Payment payment = Payment.builder().merchantReference("123").build();
+
+        new PayOSPaymentHandler(client, objectMapper).cancelLink(payment);
+
+        org.mockito.Mockito.verify(requests).cancel(org.mockito.ArgumentMatchers.eq(123L), any(String.class));
+    }
+
+    @Test
     void providerLookupFailureCannotConfirmBrowserCancellation() {
         PayOS client = mock(PayOS.class);
         PaymentRequestsService requests = mock(PaymentRequestsService.class);

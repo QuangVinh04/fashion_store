@@ -64,7 +64,7 @@ public class PaymentServiceImpl implements PaymentService {
         }
         LocalDateTime dueBefore = LocalDateTime.now().minusSeconds(30);
         // Chỉ tra cứu link đã phát cho khách để bù webhook bị mất; CANCELLED/FAILED vẫn tra để bắt
-        // late capture. Không bao giờ tạo link ở đây.
+        // late capture và đóng link còn mở. Không bao giờ tạo link ở đây.
         List<PaymentStatus> openStatuses =
                 List.of(PaymentStatus.PENDING, PaymentStatus.CANCELLED, PaymentStatus.FAILED);
         List<Payment> candidates =
@@ -81,8 +81,15 @@ public class PaymentServiceImpl implements PaymentService {
                 if (payment == null) {
                     continue;
                 }
-                var result =
-                        paymentHandlerRegistry.get(payment.getProvider()).queryPayment(payment);
+                var handler = paymentHandlerRegistry.get(payment.getProvider());
+                var result = handler.queryPayment(payment);
+                // Đơn đã huỷ mà link còn mở: đóng link. Khách trả tiền ngay trước đó thì cancel lỗi,
+                // lượt sau query thấy PAID và đi nhánh late capture.
+                if (payment.getStatus() == PaymentStatus.CANCELLED
+                        && result.getStatus() == PaymentStatus.PENDING) {
+                    handler.cancelLink(payment);
+                    continue;
+                }
                 callbackPaymentService.applyVerifiedResult(payment.getProvider(), result);
             } catch (RuntimeException exception) {
                 // Không suy diễn thành FAILED khi provider lỗi hoặc chưa tìm thấy giao dịch.

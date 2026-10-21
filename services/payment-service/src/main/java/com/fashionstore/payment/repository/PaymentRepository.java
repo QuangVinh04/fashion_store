@@ -26,10 +26,13 @@ public interface PaymentRepository extends JpaRepository<Payment, String> {
     @Query("""
             select p from Payment p where p.status in :statuses and p.merchantReference is not null and p.paymentUrl is not null and p.method=com.fashionstore.common.payment.PaymentMethod.ONLINE
               and (p.lastReconciledAt is null or p.lastReconciledAt < :dueBefore)
+              and (p.status = com.fashionstore.payment.entity.enumeration.PaymentStatus.PENDING
+                   or p.authorizationExpiresAt > :closedAfter)
             order by p.lastReconciledAt asc nulls first, p.createdAt asc
             """)
     List<Payment> findForReconciliation(@Param("statuses") List<PaymentStatus> statuses,
-                                       @Param("dueBefore") LocalDateTime dueBefore, Pageable pageable);
+                                       @Param("dueBefore") LocalDateTime dueBefore,
+                                       @Param("closedAfter") java.time.Instant closedAfter, Pageable pageable);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select payment from Payment payment where payment.id = :id")

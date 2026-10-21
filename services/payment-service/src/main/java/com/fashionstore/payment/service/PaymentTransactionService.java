@@ -39,6 +39,8 @@ import java.util.concurrent.atomic.AtomicReference;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class PaymentTransactionService {
 
+    private static final java.time.Duration LATE_CAPTURE_WINDOW = java.time.Duration.ofHours(1);
+
     PaymentRepository paymentRepository;
     org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
     ProcessedMessageService processedMessageService;
@@ -317,7 +319,10 @@ public class PaymentTransactionService {
             java.util.List<PaymentStatus> openStatuses,
             LocalDateTime dueBefore,
             org.springframework.data.domain.Pageable pageable) {
-        return paymentRepository.findForReconciliation(openStatuses, dueBefore, pageable);
+        // Payment đã đóng chỉ cần tra tới khi link hết hạn cộng một khoảng chờ tiền về muộn; sau đó
+        // provider không còn nhận thanh toán, quét tiếp chỉ tốn quota API.
+        return paymentRepository.findForReconciliation(
+                openStatuses, dueBefore, java.time.Instant.now().minus(LATE_CAPTURE_WINDOW), pageable);
     }
 
     @Transactional

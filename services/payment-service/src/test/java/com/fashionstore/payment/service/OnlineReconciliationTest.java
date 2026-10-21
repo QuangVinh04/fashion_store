@@ -53,4 +53,35 @@ class OnlineReconciliationTest {
         service.reconcilePendingPayments();verifyNoInteractions(paymentHandlerRegistry);
         verify(paymentTransactionService,never()).lockAndPrepareForReconciliation(any(),any(),any());
     }
+    private Payment link(PaymentStatus status){
+        var p=Payment.builder().method(PaymentMethod.ONLINE).provider(PaymentProvider.PAYOS).status(status)
+                .merchantReference("123").paymentUrl("https://pay").build();p.setId("pay");
+        when(paymentTransactionService.findForReconciliation(any(),any(),any())).thenReturn(List.of(p));
+        when(paymentTransactionService.lockAndPrepareForReconciliation(any(),any(),any())).thenReturn(p);
+        when(paymentHandlerRegistry.get(PaymentProvider.PAYOS)).thenReturn(handler);
+        return p;
+    }
+    private PaymentCallbackResult provider(PaymentStatus status){
+        return PaymentCallbackResult.builder().signatureValid(true).status(status).build();
+    }
+    @Test void cancelledPaymentWithOpenProviderLinkGetsTheLinkCancelled() {
+        var p=link(PaymentStatus.CANCELLED);
+        when(handler.queryPayment(p)).thenReturn(provider(PaymentStatus.PENDING));
+        service.reconcilePendingPayments();
+        verify(handler).cancelLink(p);
+    }
+    @Test void cancelledPaymentPaidAtProviderIsRecoveredInsteadOfCancelled() {
+        var p=link(PaymentStatus.CANCELLED);
+        var paid=provider(PaymentStatus.COMPLETED);
+        when(handler.queryPayment(p)).thenReturn(paid);
+        service.reconcilePendingPayments();
+        verify(callbackPaymentService).applyVerifiedResult(PaymentProvider.PAYOS,paid);
+        verify(handler,never()).cancelLink(any());
+    }
+    @Test void pendingPaymentLinkIsNeverCancelled() {
+        var p=link(PaymentStatus.PENDING);
+        when(handler.queryPayment(p)).thenReturn(provider(PaymentStatus.PENDING));
+        service.reconcilePendingPayments();
+        verify(handler,never()).cancelLink(any());
+    }
 }

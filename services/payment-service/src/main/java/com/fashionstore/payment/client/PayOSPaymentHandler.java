@@ -224,6 +224,17 @@ public class PayOSPaymentHandler implements PaymentHandler {
                 .build();
     }
 
+    @Override
+    public void cancelLink(Payment payment) {
+        try {
+            payOSClient
+                    .paymentRequests()
+                    .cancel(toOrderCode(payment.getMerchantReference()), "Don hang da huy");
+        } catch (PayOSException exception) {
+            throw new AppException(PaymentErrorCode.PAYMENT_PROVIDER_ERROR, exception);
+        }
+    }
+
     /** Dùng lại link provider đã tạo, kể cả khi response khởi tạo trước đó bị mất. */
     private PaymentInitiationResult recoverExistingLink(Payment payment, long orderCode) {
         PaymentLink link = payOSClient.paymentRequests().get(orderCode);

@@ -88,9 +88,31 @@ class PaymentRepositoryIntegrationTest {
         entityManager.clear();
         List<Payment> selected = repository.findForReconciliation(
                 List.of(PaymentStatus.PENDING, PaymentStatus.CANCELLED, PaymentStatus.FAILED),
-                now.minusSeconds(30), PageRequest.of(0, 50));
+                now.minusSeconds(30), java.time.Instant.now().minusSeconds(3600), PageRequest.of(0, 50));
         assertThat(selected).extracting(Payment::getId).containsExactly(due.getId());
         assertThat(repository.findByMerchantReference("123")).isPresent();
+    }
+
+    @Test
+    void closedPaymentsStopBeingReconciledAfterTheLateCaptureWindow() {
+        LocalDateTime now = LocalDateTime.now();
+        java.time.Instant instant = java.time.Instant.now();
+        Payment recent = persist("order-cancelled-recent", "111", PaymentStatus.CANCELLED, null);
+        recent.setPaymentUrl("https://pay/111");
+        recent.setAuthorizationExpiresAt(instant.minusSeconds(600));
+        Payment old = persist("order-cancelled-old", "222", PaymentStatus.CANCELLED, null);
+        old.setPaymentUrl("https://pay/222");
+        old.setAuthorizationExpiresAt(instant.minusSeconds(7200));
+        Payment stalePending = persist("order-pending-old", "333", PaymentStatus.PENDING, null);
+        stalePending.setPaymentUrl("https://pay/333");
+        stalePending.setAuthorizationExpiresAt(instant.minusSeconds(7200));
+        entityManager.flush();
+        entityManager.clear();
+        List<Payment> selected = repository.findForReconciliation(
+                List.of(PaymentStatus.PENDING, PaymentStatus.CANCELLED, PaymentStatus.FAILED),
+                now.minusSeconds(30), instant.minusSeconds(3600), PageRequest.of(0, 50));
+        assertThat(selected).extracting(Payment::getId)
+                .containsExactlyInAnyOrder(recent.getId(), stalePending.getId());
     }
 
     private Payment persist(String orderId, String reference, PaymentStatus status, LocalDateTime checkedAt) {

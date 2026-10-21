@@ -83,7 +83,7 @@ class PaymentServiceImplTest {
         payment.setPaymentUrl("https://pay.payos.vn/web/link-1");
         payment.setProviderAmount(new BigDecimal("450000"));
         payment.setProviderCurrency("VND");
-        when(repository.findForReconciliation(any(), any(), any())).thenReturn(java.util.List.of(payment));
+        when(repository.findForReconciliation(any(), any(), any(), any())).thenReturn(java.util.List.of(payment));
         when(repository.findByMerchantReference("123")).thenReturn(Optional.of(payment));
         when(handler.queryPayment(any())).thenAnswer(call -> {
             assertThat(TransactionSynchronizationManager.isActualTransactionActive()).isFalse();

@@ -27,4 +27,10 @@ public interface PaymentHandler {
 
     /** Tra cứu từ server provider; phục vụ local và phục hồi khi callback bị mất. */
     PaymentCallbackResult queryPayment(Payment payment);
+
+    /**
+     * Đóng link đang mở sau khi payment bị huỷ, để khách không trả tiền được nữa. Provider không có
+     * API huỷ (VNPay) thì link tự hết hạn theo deadline.
+     */
+    default void cancelLink(Payment payment) {}
 }
