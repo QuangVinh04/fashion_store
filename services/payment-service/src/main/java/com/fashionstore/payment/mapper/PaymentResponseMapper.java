@@ -21,6 +21,7 @@ public class PaymentResponseMapper {
                 .transactionId(payment.getTransactionId())
                 .failureReason(payment.getFailureReason())
                 .paidAt(payment.getPaidAt())
+                .authorizationExpiresAt(payment.getAuthorizationExpiresAt())
                 .build();
     }
 }

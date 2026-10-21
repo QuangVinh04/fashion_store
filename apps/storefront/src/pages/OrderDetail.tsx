@@ -4,7 +4,7 @@ import { Link, useLocation, useParams } from "react-router";
 import { AlertCircle, ArrowLeft, Check, Copy, Star } from "lucide-react";
 import { store } from "../api/store";
 import { walletCheckoutPath } from "../api/wallet-payment";
-import { paymentLinkMessage, requestPaymentUrl } from "../api/payment-link";
+import { canPayOnline, paymentDeadline, paymentLinkMessage, requestPaymentUrl } from "../api/payment-link";
 import { money } from "../api/client";
 import { loadOrderPayment, loadOrderShipment } from "../api/order-resources";
 import type { Order, Payment, ReturnRequest } from "../api/types";
@@ -87,11 +87,8 @@ export default function OrderDetail() {
       setPaymentLoading(false);
       return () => controller.abort();
     }
-    // Before authorization there is no payment yet. Order polling discovers it.
-    if (order.status === "PENDING" && !order.paymentId && !order.paymentUrl) {
-      setPaymentLoading(true);
-      return () => controller.abort();
-    }
+    // Đơn PENDING chưa có paymentId/paymentUrl cho tới khi khách trả tiền hoặc mở link, nên luôn
+    // tải payment; loadOrderPayment tự chờ khi payment chưa được tạo.
     setPaymentLoading(true);
     void loadOrderPayment(() => store.payment(id), controller.signal)
       .then((p) => {
@@ -108,7 +105,7 @@ export default function OrderDetail() {
         if (!controller.signal.aborted) setPaymentLoading(false);
       });
     return () => controller.abort();
-  }, [id, order?.id, order?.status, order?.paymentId, order?.paymentUrl, resourceRetry]);
+  }, [id, order?.id, order?.status, resourceRetry]);
 
   useEffect(() => {
     if (!order || order.id !== id) return;
@@ -151,15 +148,26 @@ export default function OrderDetail() {
       if (!document.hidden && attempts++ < 30) {
         void orderLoad.refresh();
       }
-      if (attempts >= 30) {
-        window.clearInterval(interval);
-        setPaymentLoading(false);
-        if (!order?.paymentId && !order?.paymentUrl)
-          setPaymentError("Đơn hàng vẫn đang xử lý. Vui lòng thử cập nhật lại.");
-      }
+      if (attempts >= 30) window.clearInterval(interval);
     }, 5000);
     return () => window.clearInterval(interval);
-  }, [order?.id, order?.status, order?.paymentId, order?.paymentUrl, id, resourceRetry]);
+  }, [order?.id, order?.status, id, resourceRetry]);
+
+  // Đồng hồ hạn thanh toán cho đơn online chưa trả tiền.
+  const [now, setNow] = useState(() => Date.now());
+  const awaitingPayment = !!order && canPayOnline(order, payment) && !cancelRequested;
+  const deadline = awaitingPayment ? paymentDeadline(payment?.authorizationExpiresAt, now) : null;
+  useEffect(() => {
+    if (!awaitingPayment || !payment?.authorizationExpiresAt) return;
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [awaitingPayment, payment?.authorizationExpiresAt]);
+  // Quá hạn: saga tự huỷ đơn sau vài chục giây; làm mới cho tới khi đơn đổi trạng thái.
+  useEffect(() => {
+    if (!deadline?.expired) return;
+    const timer = window.setInterval(() => void orderLoad.refresh(), 10000);
+    return () => window.clearInterval(timer);
+  }, [deadline?.expired]);
 
   const retryResources = () => {
     void orderLoad.refresh();
@@ -206,13 +214,13 @@ export default function OrderDetail() {
         {order && <>
           <OrderProgress status={order.status}/>
           <div className="order-banner" data-tone={cancelled ? 'cancelled' : delivered ? 'success' : 'neutral'}>
-            <h1>{cancelled ? 'Đã hủy đơn hàng' : ORDER_LABEL[order.status]}</h1>
-            <p>{cancelled ? 'Đơn hàng này đã được hủy.' : delivered ? 'Cảm ơn bạn đã mua sắm tại LINO. Thông tin đơn hàng và các hỗ trợ sau mua được cập nhật bên dưới.' : 'Theo dõi tiến trình xử lý và thông tin vận chuyển của đơn hàng tại đây.'}</p>
+            <h1>{cancelled ? 'Đã hủy đơn hàng' : awaitingPayment ? 'Chờ thanh toán' : ORDER_LABEL[order.status]}</h1>
+            <p>{cancelled ? 'Đơn hàng này đã được hủy.' : awaitingPayment ? 'Hoàn tất thanh toán để shop xác nhận và chuẩn bị đơn hàng của bạn.' : delivered ? 'Cảm ơn bạn đã mua sắm tại LINO. Thông tin đơn hàng và các hỗ trợ sau mua được cập nhật bên dưới.' : 'Theo dõi tiến trình xử lý và thông tin vận chuyển của đơn hàng tại đây.'}</p>
             <p>Đặt lúc {detailDate(order.createdAt)}{cancelled && order.cancellation?.closedAt ? ` · Hủy lúc ${detailDate(order.cancellation.closedAt)}` : ''}</p>
           </div>
           <div className="order-actions">
             <OrderCancellationActions key={order.id} order={order} onRefresh={orderLoad.refresh} onCancelRequested={()=>{setCancelRequested(true);setActionNotice(null);}}/>
-            {order.paymentMethod === 'ONLINE' && (payment?.status === 'PENDING' || order.status === 'PENDING') && !cancelled && !cancelRequested && <button disabled={busyAction} className="order-action order-action-primary" onClick={()=>void handleOnlinePayment()}>{busyAction ? 'Đang mở thanh toán…' : 'Thanh toán ngay'}</button>}
+            {awaitingPayment && !deadline?.expired && <button disabled={busyAction} className="order-action order-action-primary" onClick={()=>void handleOnlinePayment()}>{busyAction ? 'Đang mở thanh toán…' : 'Thanh toán ngay'}</button>}
             {order.paymentMethod === 'WALLET' && order.status === 'PENDING' && walletCheckoutPath(order) && <Link className="order-action order-action-primary" to={walletCheckoutPath(order)!}>Thanh toán bằng ví</Link>}
             {order.canConfirmReceipt && !order.activeReturnId && <button className="order-action order-action-primary" disabled={receiptBusy || orderLoad.loading} onClick={()=>{setReceiptError('');setReceiptOpen(true);}}>Đã nhận được hàng</button>}
             {(order.canRequestReturn || order.activeReturnId || returnRequest) && <Link className="order-action" to={`/profile/orders/${id}/return`}>{order.activeReturnId || returnRequest ? 'Xem yêu cầu trả hàng / hoàn tiền' : 'Yêu cầu trả hàng / hoàn tiền'}</Link>}
@@ -220,6 +228,9 @@ export default function OrderDetail() {
             {(cancelled || delivered) && <Link className="order-action" to="/products">Tiếp tục mua sắm</Link>}
           </div>
           {order.canRequestReturn && order.returnEligibleUntil && <p className="px-6 pb-4 text-xs text-muted-foreground">Hạn yêu cầu trả hàng: {detailDate(order.returnEligibleUntil)}</p>}
+          {deadline && <p role="timer" className="px-6 pb-4 text-sm text-muted-foreground">{deadline.expired
+            ? 'Đã quá hạn thanh toán. Đơn hàng đang được hủy tự động.'
+            : <>Vui lòng thanh toán trong <strong className="text-foreground tabular-nums">{deadline.remaining}</strong> (trước {detailDate(payment!.authorizationExpiresAt!)}). Quá thời hạn, đơn hàng sẽ tự hủy.</>}</p>}
           {actionNotice && <p role="status" className="px-6 pb-4 text-sm text-destructive">{actionNotice.text}</p>}
           {returnError && <p role="alert" className="px-6 pb-4 text-sm text-destructive">{returnError}</p>}
           {returnRequest && <Link to={`/profile/orders/${id}/return`} className="block border-t border-border px-6 py-4 text-sm">Yêu cầu trả hàng: <strong>{RETURN_LABEL[returnRequest.status] || 'Đang cập nhật'}</strong> →</Link>}

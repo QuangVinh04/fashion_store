@@ -28,4 +28,6 @@ public class PaymentResponse {
     String transactionId;
     String failureReason;
     LocalDateTime paidAt;
+    /** Hạn thanh toán; quá hạn thì saga tự huỷ đơn. */
+    java.time.Instant authorizationExpiresAt;
 }

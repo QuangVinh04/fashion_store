@@ -125,6 +125,19 @@ export function PaymentReturnContent() {
   const isCompleted=state==='COMPLETED';
   const isFailed=state==='FAILED';
   const isPending=!['COMPLETED','FAILED','REFUNDED'].includes(state);
+  // Thanh toán lỗi thì saga huỷ đơn và nhả kho; giỏ hàng chỉ bị xoá khi đơn được xác nhận nên vẫn còn hàng.
+  const orderCancelled=orderLoad.data?.status==='CANCELLED';
+
+  // Chờ saga đóng đơn để báo đúng "đã hủy" thay vì để khách đoán.
+  useEffect(() => {
+    if (!isFailed || orderCancelled) return;
+    let attempts = 0;
+    const interval = window.setInterval(() => {
+      if (!document.hidden && attempts++ < 15) void orderLoad.refresh();
+      else if (attempts >= 15) window.clearInterval(interval);
+    }, 4000);
+    return () => window.clearInterval(interval);
+  }, [isFailed, orderCancelled]);
 
   // Polling for final status from backend
   useEffect(() => {
@@ -189,8 +202,9 @@ export function PaymentReturnContent() {
               GIAO DỊCH KHÔNG THÀNH CÔNG
             </h1>
             <p className="text-sm text-muted-foreground mt-2 max-w-md mx-auto">
-              Giao dịch đã bị hủy hoặc xảy ra lỗi trong quá trình xử lý từ ngân
-              hàng.
+              {orderCancelled
+                ? "Đơn hàng đã được hủy vì thanh toán chưa thành công. Sản phẩm vẫn còn trong giỏ hàng, bạn có thể đặt lại."
+                : "Giao dịch đã bị hủy hoặc ngân hàng từ chối. Đơn hàng đang được hủy và hàng giữ chỗ sẽ được hoàn lại."}
             </p>
           </div>
         ) : state!=='REFUNDED' ? (
@@ -264,20 +278,32 @@ export function PaymentReturnContent() {
 
         {/* Navigation CTAs */}
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+          {isFailed && (
+            <Link
+              to="/cart"
+              className="bg-primary text-white px-8 py-3.5 text-xs font-semibold hover:bg-primary-hover active:scale-[0.98] transition-all inline-flex items-center gap-2 store-action"
+            >
+              Quay Lại Giỏ Hàng Để Đặt Lại <ArrowRight size={14} />
+            </Link>
+          )}
           {orderId && (
             <Link
               to={`/profile/orders/${orderId}`}
-              className="bg-primary text-white px-8 py-3.5 text-xs font-semibold hover:bg-primary-hover active:scale-[0.98] transition-all inline-flex items-center gap-2 store-action"
+              className={isFailed
+                ? "border border-border-strong text-foreground px-8 py-3.5 text-xs font-semibold hover:border-primary hover:text-primary transition-colors inline-flex items-center gap-2 store-action"
+                : "bg-primary text-white px-8 py-3.5 text-xs font-semibold hover:bg-primary-hover active:scale-[0.98] transition-all inline-flex items-center gap-2 store-action"}
             >
               Xem Chi Tiết Đơn Hàng <ArrowRight size={14} />
             </Link>
           )}
-          <Link
-            to="/products"
-            className="border border-border-strong text-foreground px-8 py-3.5 text-xs font-semibold hover:border-primary hover:text-primary transition-colors store-action"
-          >
-            Tiếp Tục Mua Sắm
-          </Link>
+          {!isFailed && (
+            <Link
+              to="/products"
+              className="border border-border-strong text-foreground px-8 py-3.5 text-xs font-semibold hover:border-primary hover:text-primary transition-colors store-action"
+            >
+              Tiếp Tục Mua Sắm
+            </Link>
+          )}
         </div>
       </div>
     </div>

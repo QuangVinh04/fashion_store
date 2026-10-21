@@ -59,3 +59,32 @@ test('unexpected errors keep their original cause', async () => {
   assert.equal(paymentLinkMessage(fail(401)), undefined);
   assert.match(paymentLinkMessage(new PaymentLinkError('gateway')), /hủy đơn hàng/);
 });
+
+test('a paid payment is reported as paid, not as an expired session', async () => {
+  await assert.rejects(requestPaymentUrl('o1', {
+    payment: async () => ({ id: 'pay-1', status: 'COMPLETED' }),
+    paymentInitiate: async () => assert.fail('must not initiate'),
+  }, noSleep), error => error.reason === 'paid');
+  assert.match(paymentLinkMessage(new PaymentLinkError('paid')), /đã được thanh toán/);
+});
+
+test('pay button only for unpaid online orders', () => {
+  const { canPayOnline } = module.exports;
+  const order = { paymentMethod: 'ONLINE', status: 'PENDING' };
+  assert.equal(canPayOnline(order, null), true);
+  assert.equal(canPayOnline(order, { status: 'PENDING' }), true);
+  assert.equal(canPayOnline(order, { status: 'COMPLETED' }), false);
+  assert.equal(canPayOnline({ ...order, status: 'CANCELLED' }, null), false);
+  assert.equal(canPayOnline({ ...order, paymentMethod: 'COD' }, null), false);
+});
+
+test('deadline shows remaining time and flips to expired', () => {
+  const { paymentDeadline } = module.exports;
+  const now = Date.parse('2026-10-21T07:26:28Z');
+  // Object tạo trong vm context khác realm: so sánh từng field.
+  const open = paymentDeadline('2026-10-21T07:35:00Z', now);
+  assert.equal(open.expired, false); assert.equal(open.remaining, '08:32');
+  const late = paymentDeadline('2026-10-21T07:35:00Z', Date.parse('2026-10-21T07:35:01Z'));
+  assert.equal(late.expired, true); assert.equal(late.remaining, '00:00');
+  assert.equal(paymentDeadline(undefined, now), null);
+});

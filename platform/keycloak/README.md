@@ -50,14 +50,16 @@ Without SMTP credentials, self-registered users cannot receive the verification 
 
 ## Dev users (dev only)
 
-**Production:** set `DEV_USERS_ENABLED=false` (the two users are imported disabled) and override every
-`*_CLIENT_SECRET`; passwords can be changed with `DEV_ADMIN_PASSWORD` / `DEV_CUSTOMER_PASSWORD`.
+**Production:** set `DEV_USERS_ENABLED=false` (all dev users are imported disabled) and override every
+`*_CLIENT_SECRET`; passwords can be changed with `DEV_ADMIN_PASSWORD` / `DEV_CUSTOMER_PASSWORD` /
+`DEV_USER_PASSWORD` (the 10 seeded `*@fashion.local` customers).
 Create real admins in Keycloak afterwards. A realm is imported only once, so change an existing realm in the admin console.
 
 | email | password | roles |
 |---|---|---|
 | `admin@fashion.local` | `Admin@12345` | `ADMIN`, `fashion-api/product:write` |
 | `customer@fashion.local` | `Customer@12345` | `USER` |
+| 10 seeded customers (`nguyen.van.an@fashion.local`, …) | `User@12345` | `USER` |
 
 ## Migrating legacy identity users
 

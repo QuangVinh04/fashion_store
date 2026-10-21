@@ -56,6 +56,24 @@ test('backend completed payment wins over a cancel URL', async () => {
   assert.doesNotMatch(text(tree), /GIAO DỊCH KHÔNG THÀNH CÔNG/);
 });
 
+// useLoad được gọi theo thứ tự: resolve-return, order, payment.
+const loads = (...data) => { let call = 0; return { useLoad: () => ({ data: data[call++ % data.length], loading: false, error: '', refresh() {} }), Status: 'status' }; };
+
+test('failed payment on a cancelled order explains the cancellation and offers the cart', async () => {
+  const { tree } = await render('pages/PaymentReturn.tsx', {
+    '../components/StoreUI': loads({ orderId: 'o1', captureStatus: 'UNCONFIRMED' }, { id: 'o1', status: 'CANCELLED' }, { status: 'FAILED', provider: 'PAYOS', amount: 100 }),
+  }, 'PaymentReturnContent');
+  assert.match(text(tree), /Đơn hàng đã được hủy/);
+  assert.ok(nodes(tree).some(node => node.props.to === '/cart'));
+});
+
+test('failed payment before the order is closed says the order is being cancelled', async () => {
+  const { tree } = await render('pages/PaymentReturn.tsx', {
+    '../components/StoreUI': loads({ orderId: 'o1', captureStatus: 'UNCONFIRMED' }, { id: 'o1', status: 'PENDING' }, { status: 'FAILED', provider: 'VNPAY', amount: 100 }),
+  }, 'PaymentReturnContent');
+  assert.match(text(tree), /đang được hủy/);
+});
+
 test('cart load failure is not presented as an empty cart', async () => {
   const { tree } = await render('pages/Cart.tsx', {
     '../context/CartContext': { useCart: () => ({ cart: null, count: 0, total: 0, loading: false, error: 'Unavailable' }) },

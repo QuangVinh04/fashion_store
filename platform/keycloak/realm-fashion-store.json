@@ -454,12 +454,12 @@
       "email": "nguyen.van.an@fashion.local",
       "firstName": "An",
       "lastName": "Nguyễn Văn",
-      "enabled": true,
+      "enabled": "${DEV_USERS_ENABLED:true}",
       "emailVerified": true,
       "credentials": [
         {
           "type": "password",
-          "value": "User@12345",
+          "value": "${DEV_USER_PASSWORD:User@12345}",
           "temporary": false
         }
       ],
@@ -473,12 +473,12 @@
       "email": "tran.thi.binh@fashion.local",
       "firstName": "Bình",
       "lastName": "Trần Thị",
-      "enabled": true,
+      "enabled": "${DEV_USERS_ENABLED:true}",
       "emailVerified": true,
       "credentials": [
         {
           "type": "password",
-          "value": "User@12345",
+          "value": "${DEV_USER_PASSWORD:User@12345}",
           "temporary": false
         }
       ],
@@ -492,12 +492,12 @@
       "email": "le.hoang.nam@fashion.local",
       "firstName": "Nam",
       "lastName": "Lê Hoàng",
-      "enabled": true,
+      "enabled": "${DEV_USERS_ENABLED:true}",
       "emailVerified": true,
       "credentials": [
         {
           "type": "password",
-          "value": "User@12345",
+          "value": "${DEV_USER_PASSWORD:User@12345}",
           "temporary": false
         }
       ],
@@ -511,12 +511,12 @@
       "email": "pham.minh.trang@fashion.local",
       "firstName": "Trang",
       "lastName": "Phạm Minh",
-      "enabled": true,
+      "enabled": "${DEV_USERS_ENABLED:true}",
       "emailVerified": true,
       "credentials": [
         {
           "type": "password",
-          "value": "User@12345",
+          "value": "${DEV_USER_PASSWORD:User@12345}",
           "temporary": false
         }
       ],
@@ -530,12 +530,12 @@
       "email": "vu.duc.thang@fashion.local",
       "firstName": "Thắng",
       "lastName": "Vũ Đức",
-      "enabled": true,
+      "enabled": "${DEV_USERS_ENABLED:true}",
       "emailVerified": true,
       "credentials": [
         {
           "type": "password",
-          "value": "User@12345",
+          "value": "${DEV_USER_PASSWORD:User@12345}",
           "temporary": false
         }
       ],
@@ -549,12 +549,12 @@
       "email": "hoang.thu.thao@fashion.local",
       "firstName": "Thảo",
       "lastName": "Hoàng Thu",
-      "enabled": true,
+      "enabled": "${DEV_USERS_ENABLED:true}",
       "emailVerified": true,
       "credentials": [
         {
           "type": "password",
-          "value": "User@12345",
+          "value": "${DEV_USER_PASSWORD:User@12345}",
           "temporary": false
         }
       ],
@@ -568,12 +568,12 @@
       "email": "do.quoc.bao@fashion.local",
       "firstName": "Bảo",
       "lastName": "Đỗ Quốc",
-      "enabled": true,
+      "enabled": "${DEV_USERS_ENABLED:true}",
       "emailVerified": true,
       "credentials": [
         {
           "type": "password",
-          "value": "User@12345",
+          "value": "${DEV_USER_PASSWORD:User@12345}",
           "temporary": false
         }
       ],
@@ -587,12 +587,12 @@
       "email": "ngo.phuong.linh@fashion.local",
       "firstName": "Linh",
       "lastName": "Ngô Phương",
-      "enabled": true,
+      "enabled": "${DEV_USERS_ENABLED:true}",
       "emailVerified": true,
       "credentials": [
         {
           "type": "password",
-          "value": "User@12345",
+          "value": "${DEV_USER_PASSWORD:User@12345}",
           "temporary": false
         }
       ],
@@ -606,12 +606,12 @@
       "email": "bui.anh.tuan@fashion.local",
       "firstName": "Tuấn",
       "lastName": "Bùi Anh",
-      "enabled": true,
+      "enabled": "${DEV_USERS_ENABLED:true}",
       "emailVerified": true,
       "credentials": [
         {
           "type": "password",
-          "value": "User@12345",
+          "value": "${DEV_USER_PASSWORD:User@12345}",
           "temporary": false
         }
       ],
@@ -625,12 +625,12 @@
       "email": "dinh.ngoc.mai@fashion.local",
       "firstName": "Mai",
       "lastName": "Đinh Ngọc",
-      "enabled": true,
+      "enabled": "${DEV_USERS_ENABLED:true}",
       "emailVerified": true,
       "credentials": [
         {
           "type": "password",
-          "value": "User@12345",
+          "value": "${DEV_USER_PASSWORD:User@12345}",
           "temporary": false
         }
       ],
