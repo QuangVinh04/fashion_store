@@ -116,15 +116,16 @@ public class OrderController {
     }
 
     /**
-     * Chỉ huỷ được khi đơn đã được xác nhận (CONFIRMED, PROCESSING, PACKED) và chưa bàn giao vận chuyển.
-     * Đơn PENDING đang trong tiến trình checkout saga nên không thể huỷ.
+     * Đơn đã xác nhận (CONFIRMED, PROCESSING, PACKED) và chưa bàn giao vận chuyển huỷ qua cancellation saga.
+     * Đơn PENDING chưa thanh toán huỷ qua checkout saga.
      */
     @Operation(
             summary = "Khách tự huỷ đơn",
             description = """
-                    Chỉ huỷ được sau khi đơn đã xác nhận và chưa bàn giao vận chuyển (`CONFIRMED`, `PROCESSING`, `PACKED`).
-                    Đơn ở trạng thái `PENDING` đang trong tiến trình checkout saga nên không thể huỷ thủ công.
-                    Hệ thống sẽ thực hiện huỷ đơn qua Cancellation Saga gồm: dừng vận đơn, nhả kho và hoàn tiền.
+                    Đơn `PENDING` chưa thanh toán huỷ qua checkout saga: huỷ payment rồi nhả kho; đơn về `CANCELLED`
+                    khi bù trừ xong. Đơn đã thanh toán nhưng chưa xác nhận thì không huỷ được.
+                    Đơn đã xác nhận và chưa bàn giao vận chuyển (`CONFIRMED`, `PROCESSING`, `PACKED`) huỷ qua
+                    Cancellation Saga gồm: dừng vận đơn, nhả kho và hoàn tiền.
                     Huỷ hai lần trả cùng kết quả.
 
                     Mã lỗi: `4001` không tìm thấy đơn (404) · `4006` đơn ở trạng thái không thể huỷ (409) · `4029` xung đột yêu cầu huỷ (409).""")

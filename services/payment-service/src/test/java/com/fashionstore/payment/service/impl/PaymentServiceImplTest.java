@@ -45,9 +45,10 @@ class PaymentServiceImplTest {
     PaymentServiceImpl target;
     Payment payment;
 
+    OutboxEventRecorder outbox = mock(OutboxEventRecorder.class);
+
     @BeforeEach
     void setUp() {
-        com.fashionstore.payment.event.OutboxEventRecorder outbox = mock(com.fashionstore.payment.event.OutboxEventRecorder.class);
         PaymentResponseMapper mapper = mock(PaymentResponseMapper.class);
         var jdbcTemplate = mock(org.springframework.jdbc.core.JdbcTemplate.class);
         when(jdbcTemplate.queryForObject(anyString(), eq(Long.class))).thenReturn(5000000000000000L);
@@ -67,7 +68,8 @@ class PaymentServiceImplTest {
         service = (PaymentService) proxy.getProxy();
         payment = Payment.builder().orderId("order-1").userId("user-1")
                 .method(PaymentMethod.ONLINE).provider(PaymentProvider.PAYOS)
-                .status(PaymentStatus.PENDING).amount(new BigDecimal("450000")).currency("VND").build();
+                .status(PaymentStatus.PENDING).amount(new BigDecimal("450000")).currency("VND")
+                .merchantReference("123").authorizationExpiresAt(java.time.Instant.now().plusSeconds(900)).build();
         payment.setId("00000000-0000-0000-0000-000000000123");
         when(repository.findByIdForUpdate(payment.getId())).thenReturn(Optional.of(payment));
         when(repository.save(any())).thenAnswer(call -> call.getArgument(0));
@@ -95,53 +97,47 @@ class PaymentServiceImplTest {
     }
 
     @Test
-    void reconciliationAppliesTerminalProviderStatusBeforeTryingToRecoverMissingUrl() {
-        payment.setStatus(PaymentStatus.INITIATION_UNKNOWN);
-        payment.setMerchantReference("123");
-        payment.setProviderAmount(new BigDecimal("450000"));
-        payment.setProviderCurrency("VND");
-        when(repository.findForReconciliation(any(), any(), any())).thenReturn(java.util.List.of(payment));
-        when(repository.findByMerchantReference("123")).thenReturn(Optional.of(payment));
-        when(handler.initiate(any(), any())).thenThrow(
-                new com.fashionstore.common.exception.AppException(com.fashionstore.payment.exception.PaymentErrorCode.PAYMENT_STATUS_INVALID));
-        when(handler.queryPayment(any())).thenReturn(com.fashionstore.payment.dto.PaymentCallbackResult.builder()
-                .signatureValid(true).merchantReference("123").amount(new BigDecimal("450000"))
-                .currency("VND").status(PaymentStatus.FAILED).failureReason("Provider link expired").build());
-        target.reconcilePendingPayments();
-        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.FAILED);
-        assertThat(payment.getFailureReason()).isEqualTo("Provider link expired");
-    }
-
-    @Test
-    void providerTimeoutKeepsUnknownInitiationInsteadOfFailingPayment() {
+    void providerFailureLeavesPaymentPendingAndReportsGatewayError() {
         when(handler.initiate(any(), anyString())).thenThrow(new RuntimeException("timeout"));
-        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.initiate(payment.getId(), "127.0.0.1"))
-                .isInstanceOf(RuntimeException.class);
-        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.INITIATION_UNKNOWN);
-        assertThat(payment.getMerchantReference()).isEqualTo("5000000000000000");
+        assertThatThrownBy(() -> service.initiate(payment.getId(), "127.0.0.1"))
+                .isInstanceOf(AppException.class)
+                .extracting("errorCode").isEqualTo(PaymentErrorCode.PAYMENT_PROVIDER_ERROR);
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.PENDING);
+        assertThat(payment.getPaymentUrl()).isNull();
+        verify(outbox, never()).saveMessage(any(), any(), any());
     }
 
     @Test
-    void concurrentInitiationCannotStartAnotherProviderRequest() {
+    void initiationStoresUrlAndPublishesItToTheSaga() {
         when(handler.initiate(any(), anyString())).thenAnswer(call -> {
-            org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.initiate(payment.getId(), "127.0.0.1"))
-                    .isInstanceOf(com.fashionstore.common.exception.AppException.class)
-                    .extracting("errorCode").isEqualTo(com.fashionstore.payment.exception.PaymentErrorCode.PAYMENT_INITIATION_IN_PROGRESS);
-            return link();
-        });
-        service.initiate(payment.getId(), "127.0.0.1");
-        verify(handler, times(1)).initiate(any(), anyString());
-    }
-
-    @Test
-    void providerRequestRunsAfterDatabaseTransactionEnds() {
-        when(handler.initiate(any(), anyString())).thenAnswer(call -> {
-            assertThat(TransactionSynchronizationManager.isActualTransactionActive()).isFalse();
-            assertThat(payment.getMerchantReference()).isNotBlank();
+            // Khoá dòng payment được giữ suốt lúc gọi provider để cancel/callback xếp hàng sau.
+            assertThat(TransactionSynchronizationManager.isActualTransactionActive()).isTrue();
             return link();
         });
         assertThat(service.initiate(payment.getId(), "127.0.0.1").getPaymentUrl())
                 .isEqualTo("https://pay.payos.vn/link-1");
+        assertThat(payment.getPaymentUrl()).isEqualTo("https://pay.payos.vn/link-1");
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.PENDING);
+        verify(outbox).saveMessage(eq("order-1"),
+                eq(com.fashionstore.contracts.common.EventTypes.PAYMENT_INITIATED), any());
+    }
+
+    @Test
+    void cancelledPaymentCannotCreateAnotherLink() {
+        payment.setStatus(PaymentStatus.CANCELLED);
+        assertThatThrownBy(() -> service.initiate(payment.getId(), "127.0.0.1"))
+                .isInstanceOf(AppException.class)
+                .extracting("errorCode").isEqualTo(PaymentErrorCode.PAYMENT_STATUS_INVALID);
+        verify(handler, never()).initiate(any(), any());
+    }
+
+    @Test
+    void expiredAuthorizationCannotCreateLink() {
+        payment.setAuthorizationExpiresAt(java.time.Instant.now().minusSeconds(1));
+        assertThatThrownBy(() -> service.initiate(payment.getId(), "127.0.0.1"))
+                .isInstanceOf(AppException.class)
+                .extracting("errorCode").isEqualTo(PaymentErrorCode.PAYMENT_STATUS_INVALID);
+        verify(handler, never()).initiate(any(), any());
     }
 
     @Test
@@ -151,18 +147,6 @@ class PaymentServiceImplTest {
         PaymentInitiationResult second = service.initiate(payment.getId(), "127.0.0.1");
         assertThat(second.getPaymentUrl()).isEqualTo(first.getPaymentUrl());
         verify(handler, times(1)).initiate(any(), anyString());
-    }
-
-    @Test
-    void callbackArrivingDuringInitiationKeepsCapturedTransactionId() {
-        when(handler.initiate(any(), anyString())).thenAnswer(call -> {
-            payment.setStatus(PaymentStatus.COMPLETED);
-            payment.setTransactionId("bank-transfer-1");
-            return link();
-        });
-        service.initiate(payment.getId(), "127.0.0.1");
-        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.COMPLETED);
-        assertThat(payment.getTransactionId()).isEqualTo("bank-transfer-1");
     }
 
     @Test
@@ -273,5 +257,6 @@ class PaymentServiceImplTest {
         @Override protected void doBegin(Object transaction, TransactionDefinition definition) { }
         @Override protected void doCommit(DefaultTransactionStatus status) { }
         @Override protected void doRollback(DefaultTransactionStatus status) { }
+        @Override protected void doSetRollbackOnly(DefaultTransactionStatus status) { }
     }
 }

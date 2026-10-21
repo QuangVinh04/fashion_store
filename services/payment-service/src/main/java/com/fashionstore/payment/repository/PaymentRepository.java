@@ -24,7 +24,7 @@ public interface PaymentRepository extends JpaRepository<Payment, String> {
     Optional<Payment> findByTransactionIdForUpdate(@Param("transactionId") String transactionId);
 
     @Query("""
-            select p from Payment p where p.status in :statuses and p.merchantReference is not null and p.method=com.fashionstore.common.payment.PaymentMethod.ONLINE
+            select p from Payment p where p.status in :statuses and p.merchantReference is not null and p.paymentUrl is not null and p.method=com.fashionstore.common.payment.PaymentMethod.ONLINE
               and (p.lastReconciledAt is null or p.lastReconciledAt < :dueBefore)
             order by p.lastReconciledAt asc nulls first, p.createdAt asc
             """)

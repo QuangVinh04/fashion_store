@@ -264,9 +264,10 @@ public class OrderServiceImpl implements OrderService {
 
     private OrderResponse cancelPendingOrder(
             String orderId, CancelOrderRequest request, String userId, boolean admin) {
+        // Khoá Order trước Saga như mọi handler của saga.
         Order order =
                 orderRepository
-                        .findWithItemsById(orderId)
+                        .findByIdForUpdate(orderId)
                         .orElseThrow(() -> new AppException(OrderErrorCode.ORDER_NOT_FOUND));
         if (!admin && !order.getUserId().equals(userId)) {
             throw new AppException(OrderErrorCode.ORDER_NOT_FOUND);
@@ -274,7 +275,23 @@ public class OrderServiceImpl implements OrderService {
         if (order.getStatus() == OrderStatus.CANCELLED) {
             return toResponse(order, order.getCheckoutId()); // hủy hai lần vẫn ra cùng kết quả
         }
-        // Đơn PENDING đang trong tiến trình checkout saga không được phép huỷ chủ động; các trạng thái khác đi qua OrderCancellationService.
+        // Đơn PENDING huỷ qua checkout saga (chưa giữ kho: đóng ngay; đang chờ thanh toán: huỷ
+        // payment rồi nhả kho). Các trạng thái sau xác nhận đi qua OrderCancellationService.
+        if (order.getStatus() == OrderStatus.PENDING) {
+            OrderSaga saga =
+                    orderSagaRepository
+                            .findByOrderIdAndTypeForUpdate(orderId, OrderSagaType.CHECKOUT)
+                            .orElse(null);
+            String reason =
+                    request == null || request.getReason() == null || request.getReason().isBlank()
+                            ? "Khách hàng yêu cầu hủy đơn"
+                            : request.getReason().trim();
+            if (saga != null
+                    && sagaCancellationService.cancel(saga, order, reason)
+                            != SagaCancellationService.Outcome.NOT_ALLOWED) {
+                return toResponse(order, order.getCheckoutId());
+            }
+        }
         throw new AppException(OrderErrorCode.ORDER_CANNOT_BE_CANCELLED);
     }
 

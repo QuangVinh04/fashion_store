@@ -69,9 +69,12 @@ public class VnPayPaymentHandler implements PaymentHandler {
         params.put("vnp_ReturnUrl", properties.getReturnUrl());
         params.put("vnp_IpAddr", StringUtils.hasText(clientIp) ? clientIp : "127.0.0.1");
         params.put("vnp_CreateDate", now.format(DATE_FORMATTER));
-        params.put(
-                "vnp_ExpireDate",
-                now.plusMinutes(properties.getExpirationMinutes()).format(DATE_FORMATTER));
+        // Link hết hạn đúng deadline của saga, để sau khi saga huỷ thì khách không trả tiền được nữa.
+        LocalDateTime expiresAt =
+                payment.getAuthorizationExpiresAt() == null
+                        ? now.plusMinutes(properties.getExpirationMinutes())
+                        : LocalDateTime.ofInstant(payment.getAuthorizationExpiresAt(), VN_TIME_ZONE);
+        params.put("vnp_ExpireDate", expiresAt.format(DATE_FORMATTER));
 
         String query = toQueryString(params);
         return PaymentInitiationResult.builder()

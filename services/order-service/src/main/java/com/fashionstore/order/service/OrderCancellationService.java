@@ -46,12 +46,10 @@ public class OrderCancellationService {
             throw new AppException(OrderErrorCode.ORDER_NOT_FOUND);
         }
 
-        if (order.getStatus() == OrderStatus.PENDING) {
-            throw new AppException(OrderErrorCode.ORDER_CANNOT_BE_CANCELLED);
-        }
-
-        if (order.getStatus() == OrderStatus.CANCELLED
-                && sagas.findByOrderIdAndType(orderId, OrderSagaType.CANCELLATION).isEmpty()) {
+        // Đơn chưa xác nhận huỷ qua checkout saga, không qua cancellation saga.
+        if (order.getStatus() == OrderStatus.PENDING
+                || order.getStatus() == OrderStatus.CANCELLED
+                        && sagas.findByOrderIdAndType(orderId, OrderSagaType.CANCELLATION).isEmpty()) {
             return orderService.cancelMyOrder(orderId, request);
         }
 
@@ -75,12 +73,9 @@ public class OrderCancellationService {
         Order order = orders.findById(orderId)
                 .orElseThrow(() -> new AppException(OrderErrorCode.ORDER_NOT_FOUND));
 
-        if (order.getStatus() == OrderStatus.PENDING) {
-            throw new AppException(OrderErrorCode.ORDER_CANNOT_BE_CANCELLED);
-        }
-
-        if (order.getStatus() == OrderStatus.CANCELLED
-                && sagas.findByOrderIdAndType(orderId, OrderSagaType.CANCELLATION).isEmpty()) {
+        if (order.getStatus() == OrderStatus.PENDING
+                || order.getStatus() == OrderStatus.CANCELLED
+                        && sagas.findByOrderIdAndType(orderId, OrderSagaType.CANCELLATION).isEmpty()) {
             return orderService.cancelOrderForAdmin(orderId, request);
         }
 

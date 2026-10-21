@@ -2,6 +2,8 @@ package com.fashionstore.order.service;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 
 import com.fashionstore.common.security.CurrentUserProvider;
 import com.fashionstore.order.client.GhnClient;
@@ -95,7 +97,7 @@ class OrderCancellationServiceTest {
     }
 
     @Test
-    void pendingOrderCannotBeCancelled() {
+    void pendingOrderIsCancelledThroughCheckoutSaga() {
         when(owner.getCurrentUserId()).thenReturn("owner");
         when(orders.findById("order"))
                 .thenReturn(
@@ -104,9 +106,8 @@ class OrderCancellationServiceTest {
                                         .userId("owner")
                                         .status(OrderStatus.PENDING)
                                         .build()));
-        assertThatThrownBy(this::request)
-                .isInstanceOf(com.fashionstore.common.exception.AppException.class)
-                .matches(e -> ((com.fashionstore.common.exception.AppException) e).getErrorCode() == com.fashionstore.order.exception.OrderErrorCode.ORDER_CANNOT_BE_CANCELLED);
-        verifyNoInteractions(database, carrier, orderService);
+        request();
+        verify(orderService).cancelMyOrder(eq("order"), any());
+        verifyNoInteractions(database, carrier);
     }
 }

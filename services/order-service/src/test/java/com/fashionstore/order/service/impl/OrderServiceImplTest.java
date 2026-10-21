@@ -468,9 +468,40 @@ class OrderServiceImplTest {
     // ----- POST /orders/{id}/cancel -----
 
     @Test
-    void cancellingAPendingOrderIsRejected() {
+    void cancellingAnOrderAwaitingPaymentStartsPaymentCancellation() {
+        Order order = order(OrderStatus.PENDING);
+        OrderSaga saga = OrderSaga.start("order-1");
+        saga.inventoryReserved("reservation-1");
+        registerOrderAndSaga(order, saga);
+
+        OrderResponse response =
+                service.cancelMyOrder("order-1", new CancelOrderRequest("Đổi ý"));
+
+        // Đơn chỉ về CANCELLED khi payment xác nhận huỷ và kho được nhả.
+        assertEquals(OrderStatus.PENDING, response.getStatus());
+        assertEquals(com.fashionstore.order.entity.enumeration.OrderSagaStatus.COMPENSATING, saga.getStatus());
+        assertEquals(OrderSagaStep.CANCEL_PAYMENT, saga.getCurrentStep());
+        verify(sagaOutbox).emit(org.mockito.ArgumentMatchers.eq(saga), any());
+    }
+
+    @Test
+    void cancellingAnOrderBeforeInventoryIsReservedClosesItImmediately() {
         Order order = order(OrderStatus.PENDING);
         registerOrderAndSaga(order, OrderSaga.start("order-1"));
+
+        OrderResponse response =
+                service.cancelMyOrder("order-1", new CancelOrderRequest("Đổi ý"));
+
+        assertEquals(OrderStatus.CANCELLED, response.getStatus());
+    }
+
+    @Test
+    void cancellingAPendingOrderAfterPaymentIsRejected() {
+        Order order = order(OrderStatus.PENDING);
+        OrderSaga saga = OrderSaga.start("order-1");
+        saga.inventoryReserved("reservation-1");
+        saga.paymentAuthorized("payment-1");
+        registerOrderAndSaga(order, saga);
 
         AppException exception =
                 assertThrows(

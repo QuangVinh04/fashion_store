@@ -34,7 +34,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
-import java.util.UUID;
 import com.fashionstore.payment.dto.PaymentReturnResolutionResponse;
 
 @Service
@@ -64,13 +63,10 @@ public class PaymentServiceImpl implements PaymentService {
             return;
         }
         LocalDateTime dueBefore = LocalDateTime.now().minusSeconds(30);
+        // Chỉ tra cứu link đã phát cho khách để bù webhook bị mất; CANCELLED/FAILED vẫn tra để bắt
+        // late capture. Không bao giờ tạo link ở đây.
         List<PaymentStatus> openStatuses =
-                List.of(
-                        PaymentStatus.PENDING,
-                        PaymentStatus.INITIATING,
-                        PaymentStatus.INITIATION_UNKNOWN,
-                        PaymentStatus.CANCELLED,
-                        PaymentStatus.FAILED);
+                List.of(PaymentStatus.PENDING, PaymentStatus.CANCELLED, PaymentStatus.FAILED);
         List<Payment> candidates =
                 paymentTransactionService.findForReconciliation(
                         openStatuses, dueBefore, PageRequest.of(0, 50));
@@ -84,43 +80,6 @@ public class PaymentServiceImpl implements PaymentService {
                                 candidate.getId(), openStatuses, dueBefore);
                 if (payment == null) {
                     continue;
-                }
-                if (payment.getMethod() != PaymentMethod.ONLINE) continue;
-                if (payment.getStatus() == PaymentStatus.CANCELLED
-                        || payment.getStatus() == PaymentStatus.FAILED) {
-                    callbackPaymentService.applyVerifiedResult(
-                            payment.getProvider(),
-                            paymentHandlerRegistry
-                                    .get(payment.getProvider())
-                                    .queryPayment(payment));
-                    continue;
-                }
-                if (payment.getPaymentUrl() == null) {
-                    if (payment.getProvider() == PaymentProvider.PAYOS) {
-                        try {
-                            // Link có thể đã PAID/CANCELLED/EXPIRED dù chưa lưu được URL.
-                            // Ghi nhận trạng thái thật trước; không bắt nó đi qua bước tạo link.
-                            var verified =
-                                    paymentHandlerRegistry
-                                            .get(payment.getProvider())
-                                            .queryPayment(payment);
-                            callbackPaymentService.applyVerifiedResult(
-                                    payment.getProvider(), verified);
-                            if (verified.getStatus() != PaymentStatus.PENDING) {
-                                continue;
-                            }
-                        } catch (AppException exception) {
-                            if (!(exception.getCause()
-                                    instanceof vn.payos.exception.NotFoundException)) {
-                                throw exception; // Timeout/lỗi API không chứng minh link chưa tồn
-                                                 // tại.
-                            }
-                        }
-                    }
-                    // Ứng dụng có thể chết sau HTTP nhưng trước bước lưu URL. Flow khởi tạo
-                    // dùng lại reference; PayOS tra cứu link cũ trước khi tạo lại.
-                    initiatePayment(payment.getId(), payment.getClientIp(), null);
-                    payment = paymentTransactionService.findByIdForUpdate(candidate.getId());
                 }
                 var result =
                         paymentHandlerRegistry.get(payment.getProvider()).queryPayment(payment);
@@ -146,34 +105,17 @@ public class PaymentServiceImpl implements PaymentService {
         return paymentResponseMapper.toResponse(payment);
     }
 
+    /**
+     * Khách bấm "Thanh toán": tạo link đồng bộ, một lần. Provider lỗi thì transaction rollback,
+     * payment vẫn PENDING và khách thử lại hoặc huỷ đơn — saga không bị ảnh hưởng.
+     */
     @Override
-    @Transactional(propagation = Propagation.NEVER)
+    @Transactional
     public PaymentInitiationResult initiate(String paymentId, String clientIp) {
-        return initiatePayment(paymentId, clientIp, currentUserProvider.getCurrentUserId());
-    }
-
-    @Override
-    @Transactional(propagation = Propagation.NEVER)
-    public PaymentInitiationResult initiateForOrder(String orderId, String clientIp) {
         Payment payment =
-                paymentRepository
-                        .findByOrderId(orderId)
-                        .orElseThrow(() -> new AppException(PaymentErrorCode.PAYMENT_NOT_FOUND));
-        return initiatePayment(payment.getId(), clientIp, null);
-    }
-
-    /** Hai entry point dùng cùng flow; chỉ HTTP của khách hàng cần kiểm tra owner. */
-    private PaymentInitiationResult initiatePayment(
-            String paymentId, String clientIp, String requiredUserId) {
-        String token = UUID.randomUUID().toString();
-        // 1. Khóa ngắn để nhận quyền khởi tạo. Định danh và số tiền phải commit TRƯỚC HTTP,
-        // vì webhook có thể đến ngay khi provider tạo link, trước khi trả response cho ta.
-        Payment payment =
-                paymentTransactionService.initiatePhaseOne(
-                        paymentId, clientIp, requiredUserId, token);
-        if (payment.getMethod() == PaymentMethod.WALLET)
-            return walletService.prepare(payment);
-
+                paymentTransactionService.lockForInitiation(
+                        paymentId, currentUserProvider.getCurrentUserId());
+        if (payment.getMethod() == PaymentMethod.WALLET) return walletService.prepare(payment);
         if (payment.getPaymentUrl() != null) {
             return PaymentInitiationResult.builder()
                     .paymentUrl(payment.getPaymentUrl())
@@ -185,16 +127,15 @@ public class PaymentServiceImpl implements PaymentService {
                     .build();
         }
 
-        // 2. Không giữ transaction/connection/khóa DB trong lúc đợi provider.
         PaymentInitiationResult result;
         try {
             result = paymentHandlerRegistry.get(payment.getProvider()).initiate(payment, clientIp);
-        } catch (RuntimeException exception) {
-            paymentTransactionService.initiateHandleException(paymentId, token);
+        } catch (AppException exception) {
             throw exception;
+        } catch (RuntimeException exception) {
+            throw new AppException(PaymentErrorCode.PAYMENT_PROVIDER_ERROR, exception);
         }
-        // 3. Đọc lại dưới khóa: callback có thể đã hoàn tất thanh toán trong lúc HTTP chạy.
-        paymentTransactionService.initiatePhaseTwo(paymentId, token, result);
+        paymentTransactionService.saveInitiatedLink(payment, result);
         return result;
     }
 
@@ -207,37 +148,19 @@ public class PaymentServiceImpl implements PaymentService {
     @Override
     @Transactional(propagation = Propagation.NEVER)
     public void authorize(AuthorizePaymentCommand request, String messageId, String correlationId) {
+        // Chỉ ghi DB. Link online do khách tạo qua initiate(), nên lỗi provider không chạm tới saga.
         Payment payment =
                 paymentTransactionService.createPaymentOnce(messageId, request, correlationId);
-
         if (payment != null
-                && payment.getMethod() != com.fashionstore.common.payment.PaymentMethod.COD
-                && (payment.getStatus() == PaymentStatus.PENDING
-                        || payment.getStatus() == PaymentStatus.INITIATING
-                        || payment.getStatus() == PaymentStatus.INITIATION_UNKNOWN)) {
-            try {
-                this.initiateForOrder(request.orderId(), request.clientIp());
-            } catch (AppException ex) {
-                if (ex.getErrorCode() == PaymentErrorCode.PAYMENT_INITIATION_IN_PROGRESS) {
-                    throw new IllegalStateException(
-                            "Payment initiation is in progress, please retry later");
-                }
-                throw ex;
-            }
+                && payment.getMethod() == PaymentMethod.WALLET
+                && payment.getStatus() == PaymentStatus.PENDING) {
+            walletService.prepare(payment);
         }
     }
 
     @Override
     public void cancel(CancelPaymentCommand request, String messageId, String correlationId) {
-        try {
-            paymentTransactionService.cancelPaymentOnce(messageId, request, correlationId);
-        } catch (AppException ex) {
-            if (ex.getErrorCode() == PaymentErrorCode.PAYMENT_INITIATION_IN_PROGRESS) {
-                throw new IllegalStateException(
-                        "Payment initiation is in progress, please retry later");
-            }
-            throw ex;
-        }
+        paymentTransactionService.cancelPaymentOnce(messageId, request, correlationId);
     }
 
     @Override

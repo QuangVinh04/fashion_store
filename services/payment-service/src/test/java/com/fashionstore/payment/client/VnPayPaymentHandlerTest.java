@@ -81,6 +81,18 @@ class VnPayPaymentHandlerTest {
     }
 
     @Test
+    void paymentUrlExpiresExactlyAtSagaAuthorizationDeadline() {
+        Payment payment = Payment.builder().orderId("order-1").merchantReference("merchant-1")
+                .amount(new BigDecimal("500000")).providerTransactionDate("20261008110000")
+                .authorizationExpiresAt(java.time.LocalDateTime.of(2026, 10, 8, 11, 7, 30)
+                        .atZone(java.time.ZoneId.of("Asia/Ho_Chi_Minh")).toInstant())
+                .build();
+        String url = new VnPayPaymentHandler(properties(), mock(VnPayApi.class))
+                .initiate(payment, "203.0.113.9").getPaymentUrl();
+        assertThat(url).contains("vnp_ExpireDate=20261008110730");
+    }
+
+    @Test
     void verifyCallbackRejectsTamperedSignature() {
         VnPayApi client = mock(VnPayApi.class);
         VnPayPaymentHandler handler = new VnPayPaymentHandler(properties(), client);

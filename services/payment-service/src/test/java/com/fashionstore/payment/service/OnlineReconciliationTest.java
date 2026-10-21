@@ -31,7 +31,20 @@ class OnlineReconciliationTest {
         service.reconcilePendingPayments();
         verify(paymentTransactionService).findForReconciliation(argThat(statuses->statuses.contains(PaymentStatus.CANCELLED)&&statuses.contains(PaymentStatus.FAILED)),any(),any());
         verify(handler).queryPayment(p);verify(handler,never()).initiate(any(),any());
-        verify(paymentTransactionService,never()).initiatePhaseOne(any(),any(),any(),any());
+    }
+    @Test void reconciliationOnlyQueriesLinksAndNeverCreatesThem() {
+        var p=Payment.builder().method(PaymentMethod.ONLINE).provider(PaymentProvider.PAYOS).status(PaymentStatus.PENDING)
+                .merchantReference("123").paymentUrl("https://pay").build();p.setId("pay");
+        when(paymentTransactionService.findForReconciliation(any(),any(),any())).thenReturn(List.of(p));
+        when(paymentTransactionService.lockAndPrepareForReconciliation(any(),any(),any())).thenReturn(p);
+        when(paymentHandlerRegistry.get(PaymentProvider.PAYOS)).thenReturn(handler);
+        var result=PaymentCallbackResult.builder().signatureValid(true).status(PaymentStatus.PENDING).build();
+        when(handler.queryPayment(p)).thenReturn(result);
+        service.reconcilePendingPayments();
+        verify(paymentTransactionService).findForReconciliation(argThat(statuses->!statuses.contains(PaymentStatus.INITIATING)
+                &&!statuses.contains(PaymentStatus.INITIATION_UNKNOWN)),any(),any());
+        verify(callbackPaymentService).applyVerifiedResult(PaymentProvider.PAYOS,result);
+        verify(handler,never()).initiate(any(),any());
     }
     @Test void codAndWalletNeverEnterExternalReconciliationEvenWithStaleCandidates() {
         var cod=Payment.builder().method(PaymentMethod.COD).provider(PaymentProvider.COD).status(PaymentStatus.COD_PENDING).build();

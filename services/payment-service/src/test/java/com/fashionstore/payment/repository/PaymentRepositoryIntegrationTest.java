@@ -76,16 +76,18 @@ class PaymentRepositoryIntegrationTest {
     }
 
     @Test
-    void reconciliationSelectsOnlyDueOpenPaymentsWithPersistedReferences() {
+    void reconciliationSelectsOnlyDueOpenPaymentsWithIssuedLinks() {
         LocalDateTime now = LocalDateTime.now();
-        Payment due = persist("order-due", "123", PaymentStatus.INITIATION_UNKNOWN, null);
-        persist("order-recent", "456", PaymentStatus.PENDING, now);
-        persist("order-paid", "789", PaymentStatus.COMPLETED, null);
+        Payment due = persist("order-due", "123", PaymentStatus.PENDING, null);
+        due.setPaymentUrl("https://pay/123");
+        persist("order-recent", "456", PaymentStatus.PENDING, now).setPaymentUrl("https://pay/456");
+        persist("order-paid", "789", PaymentStatus.COMPLETED, null).setPaymentUrl("https://pay/789");
         persist("order-unprepared", null, PaymentStatus.PENDING, null);
+        persist("order-no-link", "321", PaymentStatus.PENDING, null);
         entityManager.flush();
         entityManager.clear();
         List<Payment> selected = repository.findForReconciliation(
-                List.of(PaymentStatus.PENDING, PaymentStatus.INITIATING, PaymentStatus.INITIATION_UNKNOWN),
+                List.of(PaymentStatus.PENDING, PaymentStatus.CANCELLED, PaymentStatus.FAILED),
                 now.minusSeconds(30), PageRequest.of(0, 50));
         assertThat(selected).extracting(Payment::getId).containsExactly(due.getId());
         assertThat(repository.findByMerchantReference("123")).isPresent();

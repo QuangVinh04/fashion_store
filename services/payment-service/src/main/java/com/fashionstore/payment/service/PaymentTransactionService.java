@@ -26,6 +26,7 @@ import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -100,6 +101,9 @@ public class PaymentTransactionService {
                                                     ? PaymentStatus.COD_PENDING
                                                     : PaymentStatus.PENDING)
                                     .build();
+                    if (method == PaymentMethod.ONLINE) {
+                        assignProviderIdentity(payment);
+                    }
                     Payment saved = paymentRepository.save(payment);
                     if (saved.getStatus() == PaymentStatus.COD_PENDING) {
                         outboxEventRecorder.saveMessage(
@@ -152,12 +156,11 @@ public class PaymentTransactionService {
                         return;
                     }
 
-                    if (payment.getStatus() == PaymentStatus.INITIATING
-                            || payment.getStatus() == PaymentStatus.INITIATION_UNKNOWN) {
-                        throw new AppException(PaymentErrorCode.PAYMENT_INITIATION_IN_PROGRESS);
-                    }
+                    // INITIATING/INITIATION_UNKNOWN chỉ còn ở dữ liệu cũ; chưa ai nhận link nên huỷ được.
                     if (payment.getStatus() == PaymentStatus.PENDING
-                            || payment.getStatus() == PaymentStatus.COD_PENDING) {
+                            || payment.getStatus() == PaymentStatus.COD_PENDING
+                            || payment.getStatus() == PaymentStatus.INITIATING
+                            || payment.getStatus() == PaymentStatus.INITIATION_UNKNOWN) {
                         if (payment.getMethod() == PaymentMethod.WALLET)
                             walletService.cancelPending(payment.getId());
                         payment.setStatus(PaymentStatus.CANCELLED);
@@ -327,11 +330,6 @@ public class PaymentTransactionService {
                         && !current.getLastReconciledAt().isBefore(dueBefore))) {
             return null;
         }
-        if (current.getStatus() == PaymentStatus.INITIATING
-                && current.getInitiationStartedAt() != null
-                && current.getInitiationStartedAt().isAfter(LocalDateTime.now().minusMinutes(2))) {
-            return null; // Request khởi tạo còn hoạt động, chưa nhận quyền phục hồi.
-        }
         current.setLastReconciledAt(LocalDateTime.now());
         return paymentRepository.save(current);
     }
@@ -341,9 +339,12 @@ public class PaymentTransactionService {
         return paymentRepository.findByIdForUpdate(paymentId).orElseThrow();
     }
 
-    @Transactional
-    public Payment initiatePhaseOne(
-            String paymentId, String clientIp, String requiredUserId, String token) {
+    /**
+     * Khoá payment cho cả lượt tạo link. Caller gọi provider trong cùng transaction nên lệnh huỷ và
+     * callback đến lúc đó phải chờ, không cần trạng thái trung gian.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Payment lockForInitiation(String paymentId, String requiredUserId) {
         Payment current =
                 paymentRepository
                         .findByIdForUpdate(paymentId)
@@ -351,103 +352,61 @@ public class PaymentTransactionService {
         if (requiredUserId != null && !requiredUserId.equals(current.getUserId())) {
             throw new AppException(PaymentErrorCode.PAYMENT_NOT_FOUND);
         }
-        if (current.getStatus() != PaymentStatus.PENDING
-                && current.getStatus() != PaymentStatus.INITIATING
-                && current.getStatus() != PaymentStatus.INITIATION_UNKNOWN) {
+        if (current.getStatus() != PaymentStatus.PENDING) {
             throw new AppException(PaymentErrorCode.PAYMENT_STATUS_INVALID);
         }
-        if (current.getMethod() == PaymentMethod.WALLET) return current;
-        if (current.getPaymentUrl() != null) {
-            // Phát lại URL cho saga nếu reply trước bị thất lạc; consumer đã chống trùng.
-            outboxEventRecorder.saveMessage(
-                    current.getOrderId(),
-                    EventTypes.PAYMENT_INITIATED,
-                    EventEnvelope.v1(
-                            EventTypes.PAYMENT_INITIATED,
-                            current.getOrderId(),
-                            current.getSagaId() == null
-                                    ? current.getOrderId()
-                                    : current.getSagaId(),
-                            new PaymentInitiatedEvent(
-                                    current.getOrderId(),
-                                    current.getId(),
-                                    current.getPaymentUrl(),
-                                    0)));
-            return current;
+        // Quá deadline saga thì đơn đang/đã bị huỷ: không phát link mới.
+        if (current.getMethod() == PaymentMethod.ONLINE
+                && current.getPaymentUrl() == null
+                && current.getAuthorizationExpiresAt() != null
+                && !java.time.Instant.now().isBefore(current.getAuthorizationExpiresAt())) {
+            throw new AppException(PaymentErrorCode.PAYMENT_STATUS_INVALID);
         }
-        if (current.getStatus() == PaymentStatus.INITIATING
-                && current.getInitiationStartedAt() != null
-                && current.getInitiationStartedAt().isAfter(LocalDateTime.now().minusMinutes(2))) {
-            throw new AppException(PaymentErrorCode.PAYMENT_INITIATION_IN_PROGRESS);
+        // Payment tạo trước khi định danh được gán lúc authorize.
+        if (current.getMethod() == PaymentMethod.ONLINE && current.getMerchantReference() == null) {
+            assignProviderIdentity(current);
         }
-        if (current.getMerchantReference() == null) {
-            if (current.getProvider() == PaymentProvider.PAYOS) {
-                Long nextRef =
-                        jdbcTemplate.queryForObject(
-                                "select nextval('payos_reference_seq')", Long.class);
-                current.setMerchantReference(String.valueOf(nextRef));
-            } else {
-                current.setMerchantReference(
-                        java.util.UUID.randomUUID().toString().replace("-", ""));
-            }
-        }
-        current.setProviderAmount(current.getAmount());
-        current.setProviderCurrency(current.getCurrency());
-        if (current.getProviderTransactionDate() == null) {
-            current.setProviderTransactionDate(
-                    LocalDateTime.now(java.time.ZoneId.of("Asia/Ho_Chi_Minh"))
-                            .format(
-                                    java.time.format.DateTimeFormatter.ofPattern(
-                                            "yyyyMMddHHmmss")));
-        }
-        current.setClientIp(clientIp);
-        current.setStatus(PaymentStatus.INITIATING);
-        current.setInitiationToken(token);
-        current.setInitiationStartedAt(LocalDateTime.now());
-        current.setInitiationAttempts(current.getInitiationAttempts() + 1);
-        return paymentRepository.save(current);
+        return current;
     }
 
-    @Transactional
-    public void initiateHandleException(String paymentId, String token) {
-        Payment current = paymentRepository.findByIdForUpdate(paymentId).orElseThrow();
-        if (current.getStatus() == PaymentStatus.INITIATING
-                && java.util.Objects.equals(token, current.getInitiationToken())) {
-            // Timeout không chứng minh provider thất bại. Giữ định danh để đối soát/retry.
-            current.setStatus(PaymentStatus.INITIATION_UNKNOWN);
-            current.setFailureReason("Chưa xác định kết quả khởi tạo; cần tra cứu provider");
-            paymentRepository.save(current);
-        }
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void saveInitiatedLink(Payment payment, PaymentInitiationResult result) {
+        payment.setPaymentUrl(result.getPaymentUrl());
+        payment.setTransactionId(result.getProviderTransactionId());
+        payment.setProviderAmount(result.getProviderAmount());
+        payment.setProviderCurrency(result.getProviderCurrency());
+        payment.setFailureReason(null);
+        paymentRepository.save(payment);
+        outboxEventRecorder.saveMessage(
+                payment.getOrderId(),
+                EventTypes.PAYMENT_INITIATED,
+                EventEnvelope.v1(
+                        EventTypes.PAYMENT_INITIATED,
+                        payment.getOrderId(),
+                        payment.getSagaId() == null ? payment.getOrderId() : payment.getSagaId(),
+                        new PaymentInitiatedEvent(
+                                payment.getOrderId(),
+                                payment.getId(),
+                                payment.getPaymentUrl(),
+                                0)));
     }
 
-    @Transactional
-    public void initiatePhaseTwo(String paymentId, String token, PaymentInitiationResult result) {
-        Payment current = paymentRepository.findByIdForUpdate(paymentId).orElseThrow();
-        if (!java.util.Objects.equals(token, current.getInitiationToken())) {
-            return; // Kết quả thuộc worker cũ, không ghi đè lần phục hồi đang chạy.
+    /**
+     * Định danh phía provider cố định từ lúc tạo payment: tạo link lại sau timeout dùng đúng
+     * orderCode/TxnRef cũ, nên provider báo trùng thay vì sinh giao dịch thứ hai.
+     */
+    private void assignProviderIdentity(Payment payment) {
+        if (payment.getProvider() == PaymentProvider.PAYOS) {
+            Long nextRef =
+                    jdbcTemplate.queryForObject("select nextval('payos_reference_seq')", Long.class);
+            payment.setMerchantReference(String.valueOf(nextRef));
+        } else {
+            payment.setMerchantReference(java.util.UUID.randomUUID().toString().replace("-", ""));
         }
-        current.setPaymentUrl(result.getPaymentUrl());
-        if (current.getStatus() == PaymentStatus.INITIATING) {
-            current.setStatus(PaymentStatus.PENDING);
-            current.setTransactionId(result.getProviderTransactionId());
-            current.setProviderAmount(result.getProviderAmount());
-            current.setProviderCurrency(result.getProviderCurrency());
-            current.setFailureReason(null);
-            outboxEventRecorder.saveMessage(
-                    current.getOrderId(),
-                    EventTypes.PAYMENT_INITIATED,
-                    EventEnvelope.v1(
-                            EventTypes.PAYMENT_INITIATED,
-                            current.getOrderId(),
-                            current.getSagaId() == null
-                                    ? current.getOrderId()
-                                    : current.getSagaId(),
-                            new PaymentInitiatedEvent(
-                                    current.getOrderId(),
-                                    current.getId(),
-                                    result.getPaymentUrl(),
-                                    0)));
-        }
-        paymentRepository.save(current);
+        payment.setProviderAmount(payment.getAmount());
+        payment.setProviderCurrency(payment.getCurrency());
+        payment.setProviderTransactionDate(
+                LocalDateTime.now(java.time.ZoneId.of("Asia/Ho_Chi_Minh"))
+                        .format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMddHHmmss")));
     }
 }
