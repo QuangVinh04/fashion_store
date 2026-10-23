@@ -53,7 +53,8 @@ class PaymentServiceImplTest {
         var jdbcTemplate = mock(org.springframework.jdbc.core.JdbcTemplate.class);
         when(jdbcTemplate.queryForObject(anyString(), eq(Long.class))).thenReturn(5000000000000000L);
         var databaseTarget = new com.fashionstore.payment.payment.service.PaymentTransactionService(repository, jdbcTemplate, null, outbox,
-                new PaymentStateServiceImpl(repository, mapper, outbox), mock(com.fashionstore.payment.wallet.service.WalletService.class));
+                new PaymentStateServiceImpl(repository, mapper, outbox), mock(com.fashionstore.payment.wallet.service.WalletService.class),
+                mock(com.fashionstore.payment.payment.service.WalletPaymentService.class));
         ProxyFactory databaseProxy = new ProxyFactory(databaseTarget);
         databaseProxy.addAdvice(new TransactionInterceptor(new TestTransactionManager(),
                 new AnnotationTransactionAttributeSource()));
@@ -61,7 +62,7 @@ class PaymentServiceImplTest {
         com.fashionstore.payment.payment.service.CallbackPaymentService callbacks = new CallbackPaymentServiceImpl(
                 registry, database);
         target = new PaymentServiceImpl(repository, registry,
-                mapper, currentUser, database, callbacks, mock(com.fashionstore.payment.wallet.service.WalletService.class));
+                mapper, currentUser, database, callbacks, mock(com.fashionstore.payment.payment.service.WalletPaymentService.class));
         ProxyFactory proxy = new ProxyFactory(target);
         proxy.addAdvice(new TransactionInterceptor(new TestTransactionManager(),
                 new AnnotationTransactionAttributeSource()));

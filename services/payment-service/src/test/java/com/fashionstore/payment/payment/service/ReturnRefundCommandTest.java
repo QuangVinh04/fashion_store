@@ -1,12 +1,11 @@
 package com.fashionstore.payment.payment.service;
 
-import com.fashionstore.payment.wallet.service.WalletService;
+import com.fashionstore.payment.wallet.service.WalletLedger;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 import com.fashionstore.common.payment.*;
-import com.fashionstore.common.security.CurrentUserProvider;
 import com.fashionstore.contracts.common.*;
 import com.fashionstore.contracts.payment.command.RefundOrderFundsCommand;
 import com.fashionstore.contracts.payment.event.OrderFundsRefundCreditedEvent;
@@ -16,16 +15,10 @@ import com.fashionstore.payment.payment.entity.PaymentStatus;
 import com.fashionstore.payment.shared.outbox.OutboxEventRecorder;
 import com.fashionstore.payment.payment.repository.PaymentRefundRepository;
 import com.fashionstore.payment.payment.repository.PaymentRepository;
-import com.fashionstore.payment.wallet.repository.WalletAccountRepository;
-import com.fashionstore.payment.wallet.repository.WalletLedgerEntryRepository;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.transaction.PlatformTransactionManager;
-
-import vn.payos.PayOS;
 
 import java.math.BigDecimal;
 import java.time.*;
@@ -44,22 +37,12 @@ class ReturnRefundCommandTest {
                     "VND",
                     "RETURN_REFUND",
                     "return-1");
-    WalletService service;
+    final WalletLedger ledger = mock(WalletLedger.class);
+    OrderFundsRefundService service;
 
     @BeforeEach
     void setup() {
-        service =
-                spy(
-                        new WalletService(
-                                mock(WalletAccountRepository.class),
-                                mock(WalletLedgerEntryRepository.class),
-                                payments,
-                                refunds,
-                                mock(CurrentUserProvider.class),
-                                outbox,
-                                mock(JdbcTemplate.class),
-                                mock(PayOS.class),
-                                mock(PlatformTransactionManager.class)));
+        service = new OrderFundsRefundService(payments, refunds, ledger, outbox);
     }
 
     @Test
@@ -87,7 +70,7 @@ class ReturnRefundCommandTest {
                         .build();
         credit.setId("ledger-1");
         doReturn(credit)
-                .when(service)
+                .when(ledger)
                 .credit("buyer", 100000, "ORDER_REFUND", "pay-1", "wallet-refund:pay-1");
         service.refundOrderFunds(command, "message-1", "return-1");
         var envelope = ArgumentCaptor.forClass(EventEnvelope.class);

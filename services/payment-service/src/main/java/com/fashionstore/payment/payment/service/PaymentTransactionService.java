@@ -51,6 +51,7 @@ public class PaymentTransactionService {
     OutboxEventRecorder outboxEventRecorder;
     PaymentStateService paymentStateService;
     WalletService walletService;
+    WalletPaymentService walletPaymentService;
 
     @Transactional
     public Payment createPaymentOnce(
@@ -168,7 +169,7 @@ public class PaymentTransactionService {
                             || payment.getStatus() == PaymentStatus.INITIATING
                             || payment.getStatus() == PaymentStatus.INITIATION_UNKNOWN) {
                         if (payment.getMethod() == PaymentMethod.WALLET)
-                            walletService.cancelPending(payment.getId());
+                            walletPaymentService.cancelPending(payment.getId());
                         payment.setStatus(PaymentStatus.CANCELLED);
                         payment.setFailureReason(request.reason());
                         paymentRepository.save(payment);

@@ -25,7 +25,9 @@ import org.springframework.context.annotation.*;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.*;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.*;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import vn.payos.PayOS;
 
@@ -37,7 +39,8 @@ import java.util.UUID;
         includeFilters =
                 @ComponentScan.Filter(
                         type = FilterType.REGEX,
-                        pattern = "com.fashionstore.payment.wallet.service.WalletService"))
+                        pattern =
+                                "com\\.fashionstore\\.payment\\.(wallet\\.service\\.Wallet(Service|Ledger)|payment\\.service\\.OrderFundsRefundService)"))
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({OutboxEventRecorder.class, ReturnRefundTransactionIntegrationTest.Configuration.class})
 @TestPropertySource(
@@ -54,9 +57,11 @@ import java.util.UUID;
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 class ReturnRefundTransactionIntegrationTest {
     @Autowired WalletService service;
+    @Autowired OrderFundsRefundService refundService;
     @Autowired PaymentRepository payments;
     @Autowired PaymentRefundRepository refunds;
     @Autowired JdbcTemplate jdbc;
+    @Autowired PlatformTransactionManager transactionManager;
     @MockitoBean PayOS provider;
     @MockitoBean CurrentUserProvider actor;
     @MockitoSpyBean OutboxEventRecorder outbox;
@@ -65,9 +70,9 @@ class ReturnRefundTransactionIntegrationTest {
     void duplicateCommandWithNewMessageIdCreditsWalletOnceAndReplaysReceipt() {
         var payment = paidCod();
         var command = command(payment);
-        service.refundOrderFunds(command, "first-message", command.sourceId());
+        refundService.refundOrderFunds(command, "first-message", command.sourceId());
         var refund = refunds.findByBusinessRefundId(command.refundId()).orElseThrow();
-        service.refundOrderFunds(command, "retry-message", command.sourceId());
+        refundService.refundOrderFunds(command, "retry-message", command.sourceId());
         assertThat(service.getBalance(payment.getUserId())).isEqualTo(100000);
         assertThat(payments.findById(payment.getId()).orElseThrow().getStatus())
                 .isEqualTo(PaymentStatus.REFUNDED);
@@ -100,7 +105,7 @@ class ReturnRefundTransactionIntegrationTest {
                         eq(payment.getOrderId()),
                         eq(EventTypes.ORDER_FUNDS_REFUND_CREDITED),
                         any());
-        assertThatThrownBy(() -> service.refundOrderFunds(command, "message", command.sourceId()))
+        assertThatThrownBy(() -> refundService.refundOrderFunds(command, "message", command.sourceId()))
                 .isInstanceOf(IllegalStateException.class);
         assertThat(service.getBalance(payment.getUserId())).isZero();
         assertThat(refunds.findByBusinessRefundId(command.refundId())).isEmpty();
@@ -121,9 +126,40 @@ class ReturnRefundTransactionIntegrationTest {
         payment.setOperationId(null);
         payments.saveAndFlush(payment);
         var command = command(payment);
-        service.refundOrderFunds(command, "message", command.sourceId());
+        refundService.refundOrderFunds(command, "message", command.sourceId());
         assertThat(service.getBalance(payment.getUserId())).isZero();
         assertThat(refunds.findByBusinessRefundId(command.refundId())).isEmpty();
+        assertThat(
+                        jdbc.queryForObject(
+                                "select count(*) from outbox_event where aggregate_id=? and"
+                                    + " event_type=?",
+                                Long.class,
+                                payment.getOrderId(),
+                                EventTypes.ORDER_FUNDS_REFUND_REJECTED))
+                .isEqualTo(1);
+        assertThat(resultCount(payment)).isZero();
+    }
+
+    @Test
+    void ledgerConflictDuringCreditStillCommitsBusinessRejection() {
+        var payment = paidCod();
+        new TransactionTemplate(transactionManager)
+                .executeWithoutResult(
+                        status ->
+                                service.credit(
+                                        payment.getUserId(),
+                                        1,
+                                        "ORDER_REFUND",
+                                        payment.getId(),
+                                        "wallet-refund:" + payment.getId()));
+        var command = command(payment);
+
+        refundService.refundOrderFunds(command, "message", command.sourceId());
+
+        assertThat(service.getBalance(payment.getUserId())).isEqualTo(1);
+        assertThat(refunds.findByBusinessRefundId(command.refundId())).isEmpty();
+        assertThat(payments.findById(payment.getId()).orElseThrow().getStatus())
+                .isEqualTo(PaymentStatus.COMPLETED);
         assertThat(
                         jdbc.queryForObject(
                                 "select count(*) from outbox_event where aggregate_id=? and"

@@ -1,12 +1,13 @@
-package com.fashionstore.payment.wallet.service;
+package com.fashionstore.payment.payment.service;
 
+import com.fashionstore.payment.wallet.service.WalletService;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 import com.fashionstore.common.exception.AppException;
 import com.fashionstore.common.payment.*;
 import com.fashionstore.common.security.CurrentUserProvider;
-import com.fashionstore.payment.wallet.dto.WalletPaymentSession;
+import com.fashionstore.payment.payment.dto.WalletPaymentSession;
 import com.fashionstore.payment.payment.entity.Payment;
 import com.fashionstore.payment.payment.entity.PaymentStatus;
 import com.fashionstore.payment.shared.outbox.OutboxEventRecorder;
@@ -35,7 +36,8 @@ import java.util.concurrent.*;
         includeFilters =
                 @ComponentScan.Filter(
                         type = FilterType.REGEX,
-                        pattern = "com.fashionstore.payment.wallet.service.WalletService"))
+                        pattern =
+                                "com\\.fashionstore\\.payment\\.(wallet\\.service\\.Wallet(Service|Ledger)|payment\\.service\\.WalletPaymentService)"))
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({WalletPaymentIntegrationTest.Fixtures.class, OutboxEventRecorder.class})
 @TestPropertySource(
@@ -64,7 +66,7 @@ class WalletPaymentIntegrationTest {
         }
     }
 
-    @Autowired WalletService walletPaymentService;
+    @Autowired WalletPaymentService walletPaymentService;
     @Autowired PaymentRepository payments;
     @Autowired WalletService ledger;
     @Autowired CurrentUserProvider owner;

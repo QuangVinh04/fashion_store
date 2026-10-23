@@ -25,7 +25,7 @@ import java.util.concurrent.*;
         includeFilters =
                 @ComponentScan.Filter(
                         type = FilterType.REGEX,
-                        pattern = "com.fashionstore.payment.wallet.service.WalletService"))
+                        pattern = "com.fashionstore.payment.wallet.service.Wallet(Service|Ledger)"))
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @TestPropertySource(
         properties = {

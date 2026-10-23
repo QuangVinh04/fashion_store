@@ -2,13 +2,10 @@ package com.fashionstore.payment.wallet.controller;
 
 import com.fashionstore.common.dto.ApiResponse;
 import com.fashionstore.common.security.CurrentUserProvider;
-import com.fashionstore.payment.wallet.dto.CreateWalletTopUpRequest;
 import com.fashionstore.payment.wallet.dto.WalletResponse;
-import com.fashionstore.payment.wallet.dto.WalletTopUpResponse;
 import com.fashionstore.payment.wallet.dto.WalletTransactionResponse;
 import com.fashionstore.payment.wallet.repository.WalletLedgerEntryRepository;
 import com.fashionstore.payment.wallet.service.WalletService;
-import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
@@ -37,13 +34,5 @@ public class WalletController {
                 .findByUserIdOrderByCreatedAtDescIdDesc(currentUser.getCurrentUserId(),
                         PageRequest.of(Math.max(0,page),Math.max(1,Math.min(100,size))))
                 .map(WalletTransactionResponse::from)).build();
-    }
-    @PostMapping("/top-ups")
-    public ApiResponse<WalletTopUpResponse> create(@Valid @RequestBody CreateWalletTopUpRequest request) {
-        return ApiResponse.<WalletTopUpResponse>builder().data(walletService.createTopUp(request)).build();
-    }
-    @GetMapping("/top-ups/{id}")
-    public ApiResponse<WalletTopUpResponse> topUp(@PathVariable String id) {
-        return ApiResponse.<WalletTopUpResponse>builder().data(walletService.getTopUp(id)).build();
     }
 }

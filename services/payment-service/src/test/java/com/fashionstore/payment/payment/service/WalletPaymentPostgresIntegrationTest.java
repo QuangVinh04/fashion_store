@@ -1,4 +1,4 @@
-package com.fashionstore.payment.wallet.service;
+package com.fashionstore.payment.payment.service;
 
 import org.junit.jupiter.api.AfterAll;
 import org.springframework.test.context.DynamicPropertyRegistry;

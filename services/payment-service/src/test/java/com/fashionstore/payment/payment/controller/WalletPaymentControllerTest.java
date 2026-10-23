@@ -1,12 +1,12 @@
-package com.fashionstore.payment.wallet.controller;
+package com.fashionstore.payment.payment.controller;
 
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 import com.fashionstore.payment.shared.config.security.SecurityConfig;
-import com.fashionstore.payment.wallet.dto.WalletPaymentSession;
-import com.fashionstore.payment.wallet.service.WalletService;
+import com.fashionstore.payment.payment.dto.WalletPaymentSession;
+import com.fashionstore.payment.payment.service.WalletPaymentService;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -30,7 +30,7 @@ import org.springframework.test.web.servlet.MockMvc;
         com.fashionstore.common.autoconfigure.CommonSecurityAutoConfiguration.class)
 class WalletPaymentControllerTest {
     @Autowired MockMvc mvc;
-    @MockitoBean WalletService service;
+    @MockitoBean WalletPaymentService service;
     @MockitoBean JwtDecoder decoder;
 
     @BeforeEach

@@ -6,7 +6,7 @@ import com.fashionstore.contracts.payment.command.AuthorizePaymentCommand;
 import com.fashionstore.contracts.payment.command.CancelPaymentCommand;
 import com.fashionstore.contracts.payment.command.RefundWalletSagaCommand;
 import com.fashionstore.payment.payment.service.PaymentService;
-import com.fashionstore.payment.wallet.service.WalletService;
+import com.fashionstore.payment.payment.service.OrderFundsRefundService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -27,7 +27,7 @@ class PaymentRequestedEventListenerTest {
     private PaymentService paymentService;
 
     @Mock
-    private WalletService walletService;
+    private OrderFundsRefundService refundService;
 
     private ObjectMapper objectMapper;
     private PaymentRequestedEventListener listener;
@@ -38,7 +38,7 @@ class PaymentRequestedEventListenerTest {
         listener = new PaymentRequestedEventListener(
                 objectMapper,
                 paymentService,
-                walletService
+                refundService
         );
     }
 
@@ -47,7 +47,7 @@ class PaymentRequestedEventListenerTest {
         var command = new com.fashionstore.contracts.payment.command.RefundOrderFundsCommand(
                 "cancel:case-1", "ord-1", "pay-1", new BigDecimal("100000"), "VND", "PAID_CANCELLATION", "case-1");
         listener.handle(EventEnvelope.v1(EventTypes.ORDER_FUNDS_REFUND_REQUESTED, "ord-1", "case-1", command), "msg-refund");
-        verify(walletService).refundOrderFunds(command, "msg-refund", "case-1");
+        verify(refundService).refundOrderFunds(command, "msg-refund", "case-1");
     }
 
     @Test
@@ -75,7 +75,7 @@ class PaymentRequestedEventListenerTest {
 
         listener.handle(envelope, "msg-1");
 
-        verify(walletService).compensate(any(RefundWalletSagaCommand.class), eq("msg-1"), eq("corr-1"));
+        verify(refundService).compensate(any(RefundWalletSagaCommand.class), eq("msg-1"), eq("corr-1"));
     }
 
     @Test

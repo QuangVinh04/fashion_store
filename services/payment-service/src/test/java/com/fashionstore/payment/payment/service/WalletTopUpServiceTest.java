@@ -1,12 +1,11 @@
-package com.fashionstore.payment.wallet.service;
+package com.fashionstore.payment.payment.service;
 
 import com.fashionstore.common.exception.AppException;
 import com.fashionstore.common.security.CurrentUserProvider;
-import com.fashionstore.payment.wallet.dto.CreateWalletTopUpRequest;
-import com.fashionstore.payment.wallet.dto.WalletTopUpResponse;
+import com.fashionstore.payment.payment.dto.CreateWalletTopUpRequest;
+import com.fashionstore.payment.payment.dto.WalletTopUpResponse;
 import com.fashionstore.payment.payment.entity.Payment;
 import com.fashionstore.payment.payment.repository.PaymentRepository;
-import com.fashionstore.payment.wallet.repository.WalletAccountRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -32,19 +31,15 @@ class WalletTopUpServiceTest {
     private PayOS payOSClient = mock(PayOS.class);
     private PaymentRequestsService paymentRequests = mock(PaymentRequestsService.class);
 
-    private WalletService service;
+    private WalletTopUpService service;
     private org.springframework.transaction.PlatformTransactionManager transactionManager = mock(org.springframework.transaction.PlatformTransactionManager.class);
     private Payment storedPayment;
 
     @BeforeEach
     void setUp() {
-        service = new WalletService(
-                mock(WalletAccountRepository.class),
-                mock(com.fashionstore.payment.wallet.repository.WalletLedgerEntryRepository.class),
+        service = new WalletTopUpService(
                 paymentRepository,
-                mock(com.fashionstore.payment.payment.repository.PaymentRefundRepository.class),
                 currentUserProvider,
-                mock(com.fashionstore.payment.shared.outbox.OutboxEventRecorder.class),
                 jdbcTemplate,
                 payOSClient,
                 transactionManager
@@ -66,13 +61,13 @@ class WalletTopUpServiceTest {
     void create_whenDisabled_throwsException() {
         ReflectionTestUtils.setField(service, "topUpEnabled", false);
 
-        assertThatThrownBy(() -> service.create(new CreateWalletTopUpRequest(new BigDecimal("50000"), "op-1")))
+        assertThatThrownBy(() -> service.createTopUp(new CreateWalletTopUpRequest(new BigDecimal("50000"), "op-1")))
                 .isInstanceOf(AppException.class);
     }
 
     @Test
     void create_whenAmountLessThanMin_throwsException() {
-        assertThatThrownBy(() -> service.create(new CreateWalletTopUpRequest(new BigDecimal("5000"), "op-1")))
+        assertThatThrownBy(() -> service.createTopUp(new CreateWalletTopUpRequest(new BigDecimal("5000"), "op-1")))
                 .isInstanceOf(AppException.class);
     }
 
@@ -91,7 +86,7 @@ class WalletTopUpServiceTest {
         when(linkResponse.getCheckoutUrl()).thenReturn("https://pay.payos.vn/web/123");
         when(paymentRequests.create(any())).thenReturn(linkResponse);
 
-        WalletTopUpResponse response = service.create(new CreateWalletTopUpRequest(new BigDecimal("100000"), "op-1"));
+        WalletTopUpResponse response = service.createTopUp(new CreateWalletTopUpRequest(new BigDecimal("100000"), "op-1"));
 
         assertThat(response).isNotNull();
         assertThat(response.id()).isEqualTo("pay-1");
@@ -110,7 +105,7 @@ class WalletTopUpServiceTest {
         });
         when(paymentRequests.create(any())).thenThrow(new IllegalStateException("provider timeout"));
 
-        assertThatThrownBy(() -> service.create(new CreateWalletTopUpRequest(100000L, "op-timeout")))
+        assertThatThrownBy(() -> service.createTopUp(new CreateWalletTopUpRequest(100000L, "op-timeout")))
                 .isInstanceOf(AppException.class);
     }
 
@@ -126,7 +121,7 @@ class WalletTopUpServiceTest {
 
         when(paymentRepository.findByIdAndUserId("pay-1", "user-1")).thenReturn(Optional.of(p));
 
-        WalletTopUpResponse response = service.get("pay-1");
+        WalletTopUpResponse response = service.getTopUp("pay-1");
         assertThat(response).isNotNull();
         assertThat(response.id()).isEqualTo("pay-1");
     }

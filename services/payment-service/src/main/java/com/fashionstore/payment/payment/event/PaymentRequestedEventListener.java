@@ -10,7 +10,7 @@ import com.fashionstore.contracts.payment.command.RefundWalletSagaCommand;
 import com.fashionstore.contracts.payment.command.RefundOrderFundsCommand;
 import com.fashionstore.payment.shared.config.messaging.RabbitMQNames;
 import com.fashionstore.payment.payment.service.PaymentService;
-import com.fashionstore.payment.wallet.service.WalletService;
+import com.fashionstore.payment.payment.service.OrderFundsRefundService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
@@ -24,7 +24,7 @@ public class PaymentRequestedEventListener {
 
     private final ObjectMapper objectMapper;
     private final PaymentService paymentService;
-    private final WalletService walletService;
+    private final OrderFundsRefundService refundService;
 
     @RabbitListener(queues = RabbitMQNames.PAYMENT_SAGA_COMMAND_QUEUE)
     public void handle(
@@ -38,12 +38,12 @@ public class PaymentRequestedEventListener {
         }
         if (EventTypes.WALLET_SAGA_COMPENSATION_REQUESTED.equals(envelope.eventType())) {
             RefundWalletSagaCommand command = objectMapper.convertValue(envelope.payload(), RefundWalletSagaCommand.class);
-            walletService.compensate(command, messageId, envelope.correlationId());
+            refundService.compensate(command, messageId, envelope.correlationId());
             return;
         }
         if (EventTypes.ORDER_FUNDS_REFUND_REQUESTED.equals(envelope.eventType())) {
             RefundOrderFundsCommand command = objectMapper.convertValue(envelope.payload(), RefundOrderFundsCommand.class);
-            walletService.refundOrderFunds(command, messageId, envelope.correlationId());
+            refundService.refundOrderFunds(command, messageId, envelope.correlationId());
             return;
         }
         if (EventTypes.PAYMENT_CANCELLATION_REQUESTED.equals(envelope.eventType())) {

@@ -1,4 +1,4 @@
-package com.fashionstore.payment.wallet.dto;
+package com.fashionstore.payment.payment.dto;
 
 import java.time.Instant;
 

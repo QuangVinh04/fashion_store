@@ -8,9 +8,10 @@ Follow [the Backend structure](../../docs/backend-code-structure.md): feature mo
 
 - PaymentServiceImpl and CallbackPaymentServiceImpl coordinate payment initiation and callbacks. PaymentTransactionService owns short database transactions around provider calls; PaymentStateServiceImpl applies verified order-payment results.
 - PaymentHandler, its registry and VNPay/payOS adapters live in client alongside VnPayFeignClient. The provider interface represents genuinely different integrations.
-- WalletService consolidates store-balance payments, top-ups (via Payment type=TOP_UP), refund validations/credits, and atomic account ledger updates.
+- `wallet` is the ledger only: `WalletService` (transactional credit/debit/balance) and `WalletLedger` (same operations inside a caller's transaction, never marking it rollback-only).
+- Payment flows that use the wallet live in `payment/service`: `WalletPaymentService` (pay an order from the wallet), `WalletTopUpService` (payOS top-up), `OrderFundsRefundService` (order refunds and wallet-saga compensation credited to the wallet).
 - Outbox (OutboxEvent, repository, recorder, relay) lives in `shared/outbox`; queue/routing/consumer identities remain unchanged.
-- `ModularityTest` + `src/test/resources/modulith-known-violations.txt` freeze the payment ↔ wallet coupling; new violations fail the build.
+- `ModularityTest` verifies `payment` → `wallet` only through `wallet.service`/`entity`/`exception` (`@NamedInterface`); the known-violations file is empty.
 - Tests follow their component package: provider tests in client, relay/consumer tests in event, business tests in service. PostgreSQL and RabbitMQ tests require Docker.
 
 ## Local dependencies

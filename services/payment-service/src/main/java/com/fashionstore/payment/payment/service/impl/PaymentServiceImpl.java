@@ -48,7 +48,7 @@ public class PaymentServiceImpl implements PaymentService {
     CurrentUserProvider currentUserProvider;
     PaymentTransactionService paymentTransactionService;
     CallbackPaymentService callbackPaymentService;
-    com.fashionstore.payment.wallet.service.WalletService walletService;
+    com.fashionstore.payment.payment.service.WalletPaymentService walletPaymentService;
 
     @NonFinal
     @Value("${payment.reconciliation.enabled:true}")
@@ -122,7 +122,7 @@ public class PaymentServiceImpl implements PaymentService {
         Payment payment =
                 paymentTransactionService.lockForInitiation(
                         paymentId, currentUserProvider.getCurrentUserId());
-        if (payment.getMethod() == PaymentMethod.WALLET) return walletService.prepare(payment);
+        if (payment.getMethod() == PaymentMethod.WALLET) return walletPaymentService.prepare(payment);
         if (payment.getPaymentUrl() != null) {
             return PaymentInitiationResult.builder()
                     .paymentUrl(payment.getPaymentUrl())
@@ -161,7 +161,7 @@ public class PaymentServiceImpl implements PaymentService {
         if (payment != null
                 && payment.getMethod() == PaymentMethod.WALLET
                 && payment.getStatus() == PaymentStatus.PENDING) {
-            walletService.prepare(payment);
+            walletPaymentService.prepare(payment);
         }
     }
 

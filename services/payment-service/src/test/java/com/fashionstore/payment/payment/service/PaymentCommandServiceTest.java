@@ -57,7 +57,7 @@ class PaymentCommandServiceTest {
     PaymentHandler paymentHandler;
 
     @Mock
-    WalletService walletService;
+    WalletPaymentService walletPaymentService;
 
     PaymentService service;
     Payment storedPayment;
@@ -75,11 +75,12 @@ class PaymentCommandServiceTest {
         var jdbcTemplate = org.mockito.Mockito.mock(org.springframework.jdbc.core.JdbcTemplate.class);
         org.mockito.Mockito.lenient().when(jdbcTemplate.queryForObject(anyString(), eq(Long.class))).thenReturn(5000000000000000L);
         PaymentTransactionService database = new PaymentTransactionService(paymentRepository, jdbcTemplate,
-                processedMessageService, outboxEventRecorder, org.mockito.Mockito.mock(PaymentStateService.class), org.mockito.Mockito.mock(WalletService.class));
+                processedMessageService, outboxEventRecorder, org.mockito.Mockito.mock(PaymentStateService.class), org.mockito.Mockito.mock(WalletService.class),
+                org.mockito.Mockito.mock(WalletPaymentService.class));
         service = new com.fashionstore.payment.payment.service.impl.PaymentServiceImpl(paymentRepository, paymentHandlerRegistry,
                 org.mockito.Mockito.mock(com.fashionstore.payment.payment.mapper.PaymentResponseMapper.class),
                 org.mockito.Mockito.mock(com.fashionstore.common.security.CurrentUserProvider.class),
-                database, org.mockito.Mockito.mock(CallbackPaymentService.class), walletService);
+                database, org.mockito.Mockito.mock(CallbackPaymentService.class), walletPaymentService);
         // proxy = new org.springframework.aop.framework.ProxyFactory(listener);
         // proxy
         // proxy(new org.springframework.transaction.interceptor.TransactionInterceptor(new InMemoryTransactionManager(),
@@ -153,7 +154,7 @@ class PaymentCommandServiceTest {
 
         service.authorize(envelope.payload(), "message-1", envelope.correlationId());
 
-        verify(walletService).prepare(storedPayment);
+        verify(walletPaymentService).prepare(storedPayment);
         verifyNoInteractions(paymentHandlerRegistry);
     }
 

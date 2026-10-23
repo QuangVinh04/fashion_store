@@ -2,10 +2,8 @@ package com.fashionstore.payment.wallet.controller;
 import com.fashionstore.payment.shared.util.AdminPaging;
 import com.fashionstore.common.dto.ApiResponse;
 import com.fashionstore.common.exception.*;
-import com.fashionstore.payment.wallet.dto.WalletTopUpResponse;
 import com.fashionstore.payment.wallet.dto.WalletTransactionResponse;
 import com.fashionstore.payment.wallet.entity.WalletAccount;
-import com.fashionstore.payment.payment.repository.PaymentRepository;
 import com.fashionstore.payment.wallet.repository.WalletAccountRepository;
 import com.fashionstore.payment.wallet.repository.WalletLedgerEntryRepository;
 import lombok.RequiredArgsConstructor;
@@ -19,7 +17,6 @@ import org.springframework.web.bind.annotation.*;
 public class AdminWalletController {
     private final WalletAccountRepository wallets;
     private final WalletLedgerEntryRepository entries;
-    private final PaymentRepository payments;
     public record Account(String userId,String currency,String balance) {
         static Account from(WalletAccount row) { return new Account(row.getUserId(),row.getCurrency(),Long.toString(row.getBalance())); }
     }
@@ -41,12 +38,6 @@ public class AdminWalletController {
             @RequestParam(defaultValue="0") int page,@RequestParam(defaultValue="20") int size) {
         return ApiResponse.<Page<WalletTransactionResponse>>builder().data(entries.findByUserIdOrderByCreatedAtDescIdDesc(
                 userId,AdminPaging.of(page,size)).map(WalletTransactionResponse::from)).build();
-    }
-    @GetMapping("/{userId}/top-ups")
-    public ApiResponse<Page<WalletTopUpResponse>> topUps(@PathVariable String userId,
-            @RequestParam(defaultValue="0") int page,@RequestParam(defaultValue="20") int size) {
-        return ApiResponse.<Page<WalletTopUpResponse>>builder().data(payments.findByUserIdAndTypeOrderByCreatedAtDesc(
-                userId, com.fashionstore.common.payment.PaymentType.TOP_UP, AdminPaging.of(page,size)).map(WalletTopUpResponse::from)).build();
     }
     @GetMapping("/{userId}/transactions/{entryId}")
     public ApiResponse<WalletTransactionResponse> transaction(@PathVariable String userId,@PathVariable String entryId) {

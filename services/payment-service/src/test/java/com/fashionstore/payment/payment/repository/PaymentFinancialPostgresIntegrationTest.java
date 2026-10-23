@@ -14,7 +14,7 @@ import com.fashionstore.common.security.CurrentUserProvider;
 import com.fashionstore.payment.payment.client.PaymentHandler;
 import com.fashionstore.payment.payment.client.PaymentHandlerRegistry;
 import com.fashionstore.payment.payment.dto.CallbackOutcome;
-import com.fashionstore.payment.wallet.dto.CreateWalletTopUpRequest;
+import com.fashionstore.payment.payment.dto.CreateWalletTopUpRequest;
 import com.fashionstore.payment.payment.dto.PaymentCallbackResult;
 import com.fashionstore.payment.payment.entity.Payment;
 import com.fashionstore.payment.payment.entity.PaymentStatus;
@@ -51,6 +51,10 @@ import java.util.concurrent.TimeUnit;
     PaymentTransactionService.class,
     CallbackPaymentServiceImpl.class,
     WalletService.class,
+    com.fashionstore.payment.wallet.service.WalletLedger.class,
+    com.fashionstore.payment.payment.service.WalletPaymentService.class,
+    com.fashionstore.payment.payment.service.WalletTopUpService.class,
+    com.fashionstore.payment.payment.service.OrderFundsRefundService.class,
     com.fashionstore.payment.payment.event.OrderDeliveredEventListener.class,
     com.fashionstore.payment.payment.service.impl.PaymentStateServiceImpl.class,
     PaymentFinancialPostgresIntegrationTest.Configuration.class
@@ -74,7 +78,8 @@ class PaymentFinancialPostgresIntegrationTest {
     @Autowired PaymentRepository payments;
     @Autowired JdbcTemplate jdbc;
     @Autowired CallbackPaymentServiceImpl callbacks;
-    @Autowired WalletService walletService;
+    @Autowired com.fashionstore.payment.payment.service.OrderFundsRefundService refundService;
+    @Autowired com.fashionstore.payment.payment.service.WalletTopUpService topUpService;
     @Autowired PaymentTransactionService database;
     @Autowired org.springframework.transaction.PlatformTransactionManager transactionManager;
     @MockitoBean CurrentUserProvider currentUser;
@@ -89,7 +94,7 @@ class PaymentFinancialPostgresIntegrationTest {
     private static final String REFUND_REJECTED =
             com.fashionstore.contracts.common.EventTypes.ORDER_FUNDS_REFUND_REJECTED;
 
-    /** Đường hoàn ví thật: RefundOrderFundsCommand -> WalletService; từ chối nghiệp vụ ra event rejected. */
+    /** Đường hoàn ví thật: RefundOrderFundsCommand -> OrderFundsRefundService; từ chối nghiệp vụ ra event rejected. */
     private void refund(String orderId, BigDecimal amount, String returnId) {
         String paymentId =
                 payments.findByOrderId(orderId).map(Payment::getId).orElse("missing-payment");
@@ -102,7 +107,7 @@ class PaymentFinancialPostgresIntegrationTest {
                         "VND",
                         "RETURN_REFUND",
                         returnId);
-        walletService.refundOrderFunds(command, UUID.randomUUID().toString(), returnId);
+        refundService.refundOrderFunds(command, UUID.randomUUID().toString(), returnId);
     }
 
     private java.util.List<org.mockito.invocation.Invocation> refundInvocations() {
@@ -230,7 +235,7 @@ class PaymentFinancialPostgresIntegrationTest {
                         "VND",
                         "SAGA_COMPENSATION",
                         sagaId);
-        walletService.refundOrderFunds(command, UUID.randomUUID().toString(), sagaId);
+        refundService.refundOrderFunds(command, UUID.randomUUID().toString(), sagaId);
         assertThat(balance(payment)).isEqualTo(100000);
         assertThat(payments.findById(payment.getId()).orElseThrow().getStatus())
                 .isEqualTo(PaymentStatus.REFUNDED);
@@ -406,8 +411,8 @@ class PaymentFinancialPostgresIntegrationTest {
                         "VND",
                         "PAID_CANCELLATION",
                         cancellationId);
-        walletService.refundOrderFunds(command, "message-one", "cancellation");
-        walletService.refundOrderFunds(command, "message-two", "cancellation");
+        refundService.refundOrderFunds(command, "message-one", "cancellation");
+        refundService.refundOrderFunds(command, "message-two", "cancellation");
         assertThat(balance(payment)).isEqualTo(100000);
         assertThat(
                         jdbc.queryForObject(
@@ -507,7 +512,7 @@ class PaymentFinancialPostgresIntegrationTest {
         when(payos.paymentRequests()).thenReturn(provider);
         when(provider.create(any())).thenThrow(new IllegalStateException("timeout"));
 
-        assertThatThrownBy(() -> walletService.createTopUp(new CreateWalletTopUpRequest(100000, operationId)))
+        assertThatThrownBy(() -> topUpService.createTopUp(new CreateWalletTopUpRequest(100000, operationId)))
                 .isInstanceOf(com.fashionstore.common.exception.AppException.class);
         Payment saved = payments.findByUserIdAndOperationId(userId, operationId).orElseThrow();
         assertThat(saved.getStatus()).isEqualTo(PaymentStatus.INITIATION_UNKNOWN);
@@ -520,7 +525,7 @@ class PaymentFinancialPostgresIntegrationTest {
                 .thenReturn(vn.payos.model.v2.paymentRequests.PaymentLinkStatus.PENDING);
         when(provider.get(Long.parseLong(saved.getMerchantReference()))).thenReturn(link);
 
-        var result = walletService.createTopUp(new CreateWalletTopUpRequest(100000, operationId));
+        var result = topUpService.createTopUp(new CreateWalletTopUpRequest(100000, operationId));
         assertThat(result.id()).isEqualTo(saved.getId());
         assertThat(result.status()).isEqualTo("PENDING");
         assertThat(result.paymentUrl()).endsWith("/recovered-link");

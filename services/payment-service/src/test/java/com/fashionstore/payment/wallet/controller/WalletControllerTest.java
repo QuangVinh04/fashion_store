@@ -52,10 +52,4 @@ class WalletControllerTest {
                 .header("Authorization","Bearer owner-token")).andExpect(status().isOk());
         verify(entries).findByUserIdOrderByCreatedAtDescIdDesc(eq("owner-1"),argThat(page -> page.getPageSize()==100));
     }
-    @Test void invalidTopUpRequestDoesNotCallProvider() throws Exception {
-        mvc.perform(post("/api/v1/wallet/top-ups").header("Authorization","Bearer owner-token")
-                .contentType("application/json").content("{\"amount\":-1,\"operationId\":\"\"}"))
-                .andExpect(status().isBadRequest());
-        verifyNoInteractions(walletService);
-    }
 }

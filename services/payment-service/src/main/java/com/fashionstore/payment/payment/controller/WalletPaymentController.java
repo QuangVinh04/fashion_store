@@ -1,16 +1,16 @@
-package com.fashionstore.payment.wallet.controller;
+package com.fashionstore.payment.payment.controller;
 
 import com.fashionstore.common.dto.ApiResponse;
-import com.fashionstore.payment.wallet.dto.ConfirmWalletPaymentRequest;
-import com.fashionstore.payment.wallet.dto.WalletPaymentSession;
-import com.fashionstore.payment.wallet.service.WalletService;
+import com.fashionstore.payment.payment.dto.ConfirmWalletPaymentRequest;
+import com.fashionstore.payment.payment.dto.WalletPaymentSession;
+import com.fashionstore.payment.payment.service.WalletPaymentService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
 @RestController @RequestMapping("/api/v1/payments") @RequiredArgsConstructor
 public class WalletPaymentController {
-    private final WalletService service;
+    private final WalletPaymentService service;
     @GetMapping("/{id}/wallet-session")
     public ApiResponse<WalletPaymentSession> session(@PathVariable String id) {
         return ApiResponse.<WalletPaymentSession>builder().data(service.getSession(id)).build();
