@@ -1,0 +1,38 @@
+package com.fashionstore.catalog.product.dto;
+
+
+import com.fasterxml.jackson.annotation.JsonInclude;
+import lombok.*;
+import lombok.experimental.FieldDefaults;
+
+import java.time.LocalDateTime;
+import java.util.List;
+
+@Getter
+@Setter
+@Builder
+@AllArgsConstructor
+@NoArgsConstructor
+@FieldDefaults(level = AccessLevel.PRIVATE)
+@JsonInclude(JsonInclude.Include.NON_NULL)
+public class CategoryResponse {
+    String id;
+
+    String name;
+
+    String slug;
+
+    String description;
+
+    String parentId;
+    Boolean active;
+    Integer displayOrder;
+    Long productCount;
+
+    List<CategoryResponse> children;
+
+    LocalDateTime createdAt;
+
+    LocalDateTime updatedAt;
+}
+

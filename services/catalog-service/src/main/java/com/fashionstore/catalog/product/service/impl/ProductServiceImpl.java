@@ -1,0 +1,1146 @@
+package com.fashionstore.catalog.product.service.impl;
+
+import com.fashionstore.common.dto.PageResponse;
+import com.fashionstore.common.exception.AppException;
+import com.fashionstore.catalog.product.dto.AdminProductFilter;
+import com.fashionstore.catalog.product.dto.AssignProductAttributeRequest;
+import com.fashionstore.catalog.product.dto.ProductAdvanceSearchRequest;
+import com.fashionstore.catalog.product.dto.ProductAttributeValueRequest;
+import com.fashionstore.catalog.product.dto.ProductImageItem;
+import com.fashionstore.catalog.product.dto.ProductRequest;
+import com.fashionstore.catalog.product.dto.ProductResponse;
+import com.fashionstore.catalog.product.dto.ProductSummaryResponse;
+import com.fashionstore.catalog.product.dto.ProductUpdateRequest;
+import com.fashionstore.catalog.product.dto.ProductVariantBatchRequest;
+import com.fashionstore.catalog.product.dto.ProductVariantRequest;
+import com.fashionstore.catalog.product.dto.ProductVariantResponse;
+import com.fashionstore.catalog.product.dto.ProductVariantSnapshotResponse;
+import com.fashionstore.catalog.product.exception.ProductErrorCode;
+import com.fashionstore.catalog.inventory.exception.InventoryErrorCode;
+import com.fashionstore.catalog.product.mapper.ProductMapper;
+import com.fashionstore.catalog.product.entity.Brand;
+import com.fashionstore.catalog.product.entity.Category;
+import com.fashionstore.catalog.product.entity.Product;
+import com.fashionstore.catalog.product.entity.ProductCategory;
+import com.fashionstore.catalog.product.entity.ProductImage;
+import com.fashionstore.catalog.product.entity.ProductVariant;
+import com.fashionstore.catalog.product.entity.ProductAttribute;
+import com.fashionstore.catalog.product.entity.ProductAttributeValue;
+import com.fashionstore.catalog.media.entity.MediaStatus;
+import com.fashionstore.catalog.product.entity.ProductStatus;
+import com.fashionstore.catalog.product.entity.ColorOption;
+import com.fashionstore.catalog.product.entity.SizeOption;
+import com.fashionstore.catalog.product.repository.AdminProductSpecifications;
+import com.fashionstore.catalog.product.repository.BrandRepository;
+import com.fashionstore.catalog.product.repository.CategoryRepository;
+import com.fashionstore.catalog.product.repository.ColorOptionRepository;
+import com.fashionstore.catalog.media.repository.MediaFileRepository;
+import com.fashionstore.catalog.product.repository.ProductAttributeRepository;
+import com.fashionstore.catalog.product.repository.ProductRepository;
+import com.fashionstore.catalog.product.repository.ProductSpecificationsBuilder;
+import com.fashionstore.catalog.product.repository.ProductVariantRepository;
+import com.fashionstore.catalog.product.repository.SizeChartRepository;
+import com.fashionstore.catalog.product.repository.SizeOptionRepository;
+import com.fashionstore.catalog.product.repository.ProductSpecificationsBuilder;
+import com.fashionstore.catalog.inventory.service.InventoryService;
+import com.fashionstore.catalog.product.service.ProductService;
+import com.fashionstore.catalog.shared.util.StringUtils;
+import lombok.AccessLevel;
+import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.*;
+import java.util.stream.Collectors;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+
+@Slf4j
+/**
+ * Implements product aggregate lifecycle, validation, search and internal snapshots.
+ */
+@Service
+@RequiredArgsConstructor
+@FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
+public class ProductServiceImpl implements ProductService {
+
+    private static final Set<String> SEARCHABLE_FIELDS =
+            Set.of("name", "description", "price", "basePrice", "category", "categoryId", "priceRange", "color", "size",
+                    "minPrice", "maxPrice", "brand", "brandId", "gender", "material");
+    private static final Pattern SEARCH_PATTERN =
+            Pattern.compile("(\\w+?)([<:>~!])(\\p{Punct}?)(.*)(\\p{Punct}?)");
+
+    /**
+     * Advanced search is served under {@code /api/v1/products/**}, which SecurityConfig
+     * opens with {@code permitAll()}. Every path through it has to carry this restriction;
+     * the backoffice listing is a separate ADMIN-only method.
+     */
+    private static final Specification<Product> PUBLISHED_ONLY = (root, query, cb) ->
+            cb.equal(root.get("status"), ProductStatus.PUBLISHED);
+
+    /** GTIN-8/12/13/14 — the only barcode shapes a variant may carry. */
+    private static final Pattern GTIN_PATTERN = Pattern.compile("\\d{8}|\\d{12}|\\d{13}|\\d{14}");
+
+    ProductRepository productRepository;
+    CategoryRepository categoryRepository;
+    BrandRepository brandRepository;
+    ProductVariantRepository productVariantRepository;
+    ProductAttributeRepository productAttributeRepository;
+    SizeChartRepository sizeChartRepository;
+    ColorOptionRepository colorOptionRepository;
+    SizeOptionRepository sizeOptionRepository;
+    MediaFileRepository mediaFileRepository;
+    ProductMapper productMapper;
+    InventoryService inventoryService;
+
+
+    @Override
+    public PageResponse<List<ProductSummaryResponse>> getAllProducts(Pageable pageable) {
+        Page<Product> page = productRepository.findAllByStatus(ProductStatus.PUBLISHED, pageable);
+
+        return getPageResponse(pageable, page);
+    }
+
+    @Override
+    public PageResponse<List<ProductSummaryResponse>> getAllProductsForBackoffice(Pageable pageable) {
+        Page<Product> page = productRepository.findAll(pageable);
+
+        return getPageResponse(pageable, page);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<List<ProductSummaryResponse>> getAllProductsForBackoffice(Pageable pageable, AdminProductFilter filter) {
+        if (filter.getMinPrice() != null && filter.getMaxPrice() != null
+                && filter.getMinPrice().compareTo(filter.getMaxPrice()) > 0) {
+            throw new AppException(ProductErrorCode.INVALID_SEARCH_CRITERIA);
+        }
+        return getPageResponse(pageable, productRepository.findAll(AdminProductSpecifications.from(filter), pageable));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ProductResponse getProductById(String id) {
+        Product product = productRepository.findDetailProductById(id)
+                .filter(value -> value.getStatus() == ProductStatus.PUBLISHED)
+                .orElseThrow(() -> new AppException(ProductErrorCode.PRODUCT_NOT_FOUND));
+
+        return productMapper.toProductResponse(product);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMIN')")
+    public ProductResponse getProductByIdForBackoffice(String id) {
+        Product product = productRepository.findDetailProductById(id)
+                .orElseThrow(() -> new AppException(ProductErrorCode.PRODUCT_NOT_FOUND));
+        return productMapper.toProductResponse(product);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ProductResponse getProductBySlug(String slug) {
+        Product product = productRepository.findBySlugAndStatus(slug, ProductStatus.PUBLISHED)
+                .orElseThrow(() -> new AppException(ProductErrorCode.PRODUCT_NOT_FOUND));
+        return productMapper.toProductResponse(product);
+    }
+
+    @Override
+    public PageResponse<List<ProductSummaryResponse>> searchProducts(Pageable pageable, String keyword) {
+        Page<Product> page = productRepository.findAllByNameContainingAndStatus(keyword, ProductStatus.PUBLISHED, pageable);
+        return getPageResponse(pageable, page);
+    }
+
+    @Override
+    public PageResponse<List<ProductSummaryResponse>> getAllProductsByCategory(Pageable pageable, String categoryId) {
+        Category category = categoryRepository.findById(categoryId)
+                .orElseThrow(() -> new AppException(ProductErrorCode.CATEGORY_NOT_FOUND));
+
+        Page<Product> page = productRepository.findAllByCategorySlugAndStatus(category.getSlug(), ProductStatus.PUBLISHED, pageable);
+        return getPageResponse(pageable, page);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<List<ProductSummaryResponse>> getAllProductsByCategorySlug(Pageable pageable, String categorySlug) {
+        return getPageResponse(pageable, productRepository.findAllByCategorySlugAndStatus(categorySlug, ProductStatus.PUBLISHED, pageable));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<List<ProductSummaryResponse>> getAllProductsByBrandSlug(Pageable pageable, String brandSlug) {
+        return getPageResponse(pageable, productRepository.findAllByBrandSlugAndStatus(brandSlug, ProductStatus.PUBLISHED, pageable));
+    }
+
+    @Override
+    @Transactional
+    public ProductResponse createProduct(ProductRequest request) {
+        ProductValidation validation = validateProduct(request);
+
+        Product product = buildProduct(request);
+        product.setSlug(validation.slug());
+        product.setBasePrice(validation.basePrice());
+        product.setBrand(validateBrand(request.getBrandId()));
+        product.setSizeChartId(resolveSizeChartId(request.getSizeChartId()));
+        assignCategories(product, validation.categories());
+        synchronizeVariants(product, request.getVariants(), validation.variantOptions());
+        assignImages(product, request.getImages());
+        applyThumbnailFallbacks(product);
+        assignAttributes(product, request.getAttributes(), validation.attributesById());
+
+        if (validation.publishImmediately()) {
+            publish(product);
+        }
+
+        Product savedProduct = productRepository.save(product);
+        seedInventoryForVariants(savedProduct);
+        applyInitialStock(savedProduct, request.getVariants(), Set.of());
+        return productMapper.toProductResponse(savedProduct);
+    }
+
+    private ProductValidation validateProduct(ProductRequest request) {
+        // validate slug
+        String slug = StringUtils.normalizeSlug(request.getSlug(), request.getName());
+        if (productRepository.existsBySlug(slug)) {
+            throw new AppException(ProductErrorCode.SLUG_ALREADY_EXISTED_OR_DUPLICATED);
+        }
+
+        // validate price
+        BigDecimal basePrice = request.getBasePrice() != null ? request.getBasePrice() : request.getPrice();
+        validatePrices(basePrice, request.getSalePrice());
+
+        // validate category
+        List<Category> categories = validateRequiredCategoryIds(
+                request.getCategoryIds() == null ? List.of() : request.getCategoryIds());
+
+        // validate variant
+        List<ProductVariantRequest> variants =
+                request.getVariants() == null ? List.of() : request.getVariants();
+        validateVariantRequestDuplicates(variants);
+        validateVariantPrices(variants, basePrice);
+        VariantOptionsValidation variantOptions = validateVariantOptions(variants, null);
+
+        // validate attribute
+        Map<String, ProductAttribute> attributesById = validateAttributes(request.getAttributes());
+
+        boolean publishImmediately = request.getStatus() == ProductStatus.PUBLISHED
+                || Boolean.TRUE.equals(request.getPublished());
+
+        return new ProductValidation(slug, basePrice, categories, variantOptions, attributesById, publishImmediately);
+    }
+
+    private Brand validateBrand(String brandId) {
+        if (brandId == null || brandId.isBlank()) {
+            return null;
+        }
+        return brandRepository.findById(brandId)
+                .orElseThrow(() -> new AppException(ProductErrorCode.BRAND_NOT_FOUND));
+    }
+
+    private List<Category> validateRequiredCategoryIds(List<String> categoryIds) {
+        List<Category> categories = categoryRepository.findAllById(categoryIds);
+        if (categories.isEmpty() || categories.size() != categoryIds.size()) {
+            throw new AppException(ProductErrorCode.CATEGORY_NOT_FOUND);
+        }
+        return categories;
+    }
+
+    private String resolveSizeChartId(String sizeChartId) {
+        if (sizeChartId == null || sizeChartId.isBlank()) {
+            return null;
+        }
+        if (!sizeChartRepository.existsById(sizeChartId)) {
+            throw new AppException(ProductErrorCode.SIZE_CHART_NOT_FOUND);
+        }
+        return sizeChartId;
+    }
+
+    private void assignCategories(Product product, List<Category> categories) {
+        Set<String> targetCategoryIds = categories.stream()
+                .map(Category::getId)
+                .collect(Collectors.toSet());
+        product.getProductCategories().removeIf(pc -> !targetCategoryIds.contains(pc.getCategory().getId()));
+        Set<String> existingCategoryIds = product.getProductCategories().stream()
+                .map(pc -> pc.getCategory().getId())
+                .collect(Collectors.toSet());
+        for (Category category : categories) {
+            if (!existingCategoryIds.contains(category.getId())) {
+                product.getProductCategories().add(ProductCategory.builder()
+                        .product(product)
+                        .category(category)
+                        .build());
+            }
+        }
+    }
+
+    @Override
+    @Transactional
+    public ProductResponse updateProduct(String productId, ProductUpdateRequest request) {
+        Product product = productRepository.findDetailProductById(productId)
+                .orElseThrow(() -> new AppException(ProductErrorCode.PRODUCT_NOT_FOUND));
+        Set<String> existingVariantIds = product.getVariants().stream()
+                .map(ProductVariant::getId).filter(Objects::nonNull).collect(Collectors.toSet());
+        validateUpdateProductRequest(request, product);
+
+        String slug = StringUtils.normalizeSlug(request.getSlug(), request.getName());
+        if (product.getStatus() == ProductStatus.PUBLISHED && !slug.equals(product.getSlug())) {
+            throw new AppException(ProductErrorCode.CANNOT_CHANGE_SLUG_WHEN_PUBLISHED);
+        }
+        if (productRepository.existsBySlug(slug) && !slug.equals(product.getSlug())) {
+            throw new AppException(ProductErrorCode.PRODUCT_ALREADY_EXIST);
+        }
+
+        Brand brand = validateBrand(request.getBrandId());
+
+        List<Category> categories = validateRequiredCategoryIds(request.getCategoryIds());
+
+        BigDecimal basePrice = request.getBasePrice() != null ? request.getBasePrice() : request.getPrice();
+        validatePrices(basePrice, request.getSalePrice());
+        if (request.getVariants() != null) {
+            validateVariantPrices(request.getVariants(), basePrice);
+        }
+
+        product.setName(request.getName());
+        product.setSlug(slug);
+        product.setDescription(request.getDescription());
+        product.setFeatured(Boolean.TRUE.equals(request.getFeatured()));
+        product.setGender(request.getGender());
+        product.setBasePrice(basePrice);
+        product.setSalePrice(request.getSalePrice());
+        product.setShortDescription(request.getShortDescription());
+        product.setProductType(request.getProductType());
+        product.setWeight(request.getWeight());
+        product.setLength(request.getLength());
+        product.setWidth(request.getWidth());
+        product.setHeight(request.getHeight());
+        product.setSizeChartId(resolveSizeChartId(request.getSizeChartId()));
+        product.setMetaTitle(request.getMetaTitle());
+        product.setMetaKeyword(request.getMetaKeyword());
+        product.setMetaDescription(request.getMetaDescription());
+        product.setBrand(brand);
+
+        // Validate and apply the complete FE-generated variant list before saving
+        // the aggregate. Omitted existing variants are deactivated by this method.
+        if (request.getVariants() != null) {
+            synchronizeVariants(product, request.getVariants());
+        }
+        assignCategories(product, categories);
+        assignImages(product, request.getImages());
+        assignAttributes(product, request.getAttributes());
+        applyThumbnailFallbacks(product);
+
+        Product saved = productRepository.save(product);
+        seedInventoryForVariants(saved);
+        applyInitialStock(saved, request.getVariants(), existingVariantIds);
+        return productMapper.toProductResponse(saved);
+    }
+
+    @Override
+    @Transactional
+    public ProductResponse updateProductVariants(String productId, ProductVariantBatchRequest request) {
+        Product product = productRepository.findDetailProductById(productId)
+                .orElseThrow(() -> new AppException(ProductErrorCode.PRODUCT_NOT_FOUND));
+        Set<String> existingVariantIds = product.getVariants().stream()
+                .map(ProductVariant::getId).filter(Objects::nonNull).collect(Collectors.toSet());
+
+        List<ProductVariantRequest> variantRequests =
+                request == null || request.getVariants() == null
+                        ? List.of()
+                        : request.getVariants();
+
+        synchronizeVariants(product, variantRequests);
+        applyThumbnailFallbacks(product);
+        Product saved = productRepository.save(product);
+        seedInventoryForVariants(saved);
+        applyInitialStock(saved, variantRequests, existingVariantIds);
+        return productMapper.toProductResponse(saved);
+    }
+
+    @Override
+    @Transactional
+    public ProductResponse updateProductAttributes(String productId, AssignProductAttributeRequest request) {
+        Product product = productRepository.findDetailProductById(productId)
+                .orElseThrow(() -> new AppException(ProductErrorCode.PRODUCT_NOT_FOUND));
+
+        List<ProductAttributeValueRequest> attributeRequests =
+                request == null || request.getAttributes() == null
+                        ? List.of()
+                        : request.getAttributes();
+
+        assignAttributes(product, attributeRequests);
+        return productMapper.toProductResponse(productRepository.save(product));
+    }
+
+    @Override
+    @Transactional
+    public void deleteProduct(String productId) {
+        Product product = productRepository.findById(productId)
+                .orElseThrow(() -> new AppException(ProductErrorCode.PRODUCT_NOT_FOUND));
+        if (product.getStatus() == ProductStatus.ARCHIVED) {
+            throw new AppException(ProductErrorCode.PRODUCT_PUBLISH_INVALID, "Product is already archived");
+        }
+        product.setStatus(ProductStatus.ARCHIVED);
+        product.setPublished(false);
+        product.setDeletedAt(LocalDateTime.now());
+        productRepository.save(product);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ProductVariantResponse> getProductVariants(String productId) {
+        if (!productRepository.existsById(productId)) {
+            throw new AppException(ProductErrorCode.PRODUCT_NOT_FOUND);
+        }
+        return productVariantRepository.findByProductId(productId).stream()
+                .map(productMapper::toProductVariantResponse)
+                .toList();
+    }
+
+    @Override
+    @Transactional
+    public ProductResponse publishProduct(String productId) {
+        Product product = productRepository.findDetailProductById(productId)
+                .orElseThrow(() -> new AppException(ProductErrorCode.PRODUCT_NOT_FOUND));
+        if (product.getStatus() == ProductStatus.PUBLISHED) {
+            throw new AppException(ProductErrorCode.PRODUCT_PUBLISH_INVALID, "Product is already published");
+        }
+        if (product.getStatus() == ProductStatus.ARCHIVED) {
+            throw new AppException(ProductErrorCode.PRODUCT_PUBLISH_INVALID, "Archived products cannot be published");
+        }
+        publish(product);
+        return productMapper.toProductResponse(productRepository.save(product));
+    }
+
+    @Override
+    @Transactional
+    public ProductResponse unpublishProduct(String productId) {
+        Product product = productRepository.findDetailProductById(productId)
+                .orElseThrow(() -> new AppException(ProductErrorCode.PRODUCT_NOT_FOUND));
+        if (product.getStatus() != ProductStatus.PUBLISHED) {
+            throw new AppException(ProductErrorCode.PRODUCT_NOT_PUBLISHED);
+        }
+        product.setStatus(ProductStatus.DRAFT);
+        product.setPublished(false);
+        product.setPublishedAt(null);
+        return productMapper.toProductResponse(productRepository.save(product));
+    }
+
+    @Override
+    @Transactional
+    public ProductResponse archiveProduct(String productId) {
+        Product product = productRepository.findDetailProductById(productId)
+                .orElseThrow(() -> new AppException(ProductErrorCode.PRODUCT_NOT_FOUND));
+        if (product.getStatus() == ProductStatus.ARCHIVED) {
+            throw new AppException(ProductErrorCode.PRODUCT_PUBLISH_INVALID, "Product is already archived");
+        }
+        product.setStatus(ProductStatus.ARCHIVED);
+        product.setPublished(false);
+        product.setDeletedAt(LocalDateTime.now());
+        return productMapper.toProductResponse(productRepository.save(product));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ProductVariantSnapshotResponse getProductVariantSnapshot(String variantId) {
+        ProductVariant variant = productVariantRepository.findById(variantId)
+                .orElseThrow(() -> new AppException(ProductErrorCode.PRODUCT_VARIANT_NOT_FOUND));
+        return toVariantSnapshot(variant);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ProductVariantSnapshotResponse> getProductVariantSnapshots(List<String> variantIds) {
+        return productVariantRepository.findAllById(variantIds).stream()
+                .map(this::toVariantSnapshot)
+                .toList();
+    }
+
+    private ProductVariantSnapshotResponse toVariantSnapshot(ProductVariant variant) {
+        Product product = variant.getProduct();
+        return ProductVariantSnapshotResponse.builder()
+                .variantId(variant.getId())
+                .productId(product.getId())
+                .productName(product.getName())
+                .sku(variant.getSku())
+                .barcode(variant.getBarcode())
+                .size(variant.getSizeDisplay())
+                .color(variant.getColorDisplay())
+                .colorHex(variant.getColorHex())
+                .price(variant.getPrice())
+                .salePrice(variant.getSalePrice())
+                .active(variant.getActive())
+                .weight(resolveLogisticsValue(variant.getWeight(), product.getWeight()))
+                .length(resolveLogisticsValue(variant.getLength(), product.getLength()))
+                .width(resolveLogisticsValue(variant.getWidth(), product.getWidth()))
+                .height(resolveLogisticsValue(variant.getHeight(), product.getHeight()))
+                .weightGram(resolveLogisticsValue(variant.getWeightGram(), product.getWeightGram()))
+                .lengthMm(resolveLogisticsValue(variant.getLengthMm(), product.getLengthMm()))
+                .widthMm(resolveLogisticsValue(variant.getWidthMm(), product.getWidthMm()))
+                .heightMm(resolveLogisticsValue(variant.getHeightMm(), product.getHeightMm()))
+                .optionSignature(variant.getOptionSignature())
+                .displayName(variant.getDisplayName())
+                .build();
+    }
+
+
+    @Override
+    public PageResponse<List<ProductSummaryResponse>> advanceSearchWithSpecifications (Pageable pageable, String[] product) {
+        return advanceSearchWithRequest(pageable, com.fashionstore.catalog.product.dto.ProductAdvanceSearchRequest.builder().search(product).build());
+    }
+
+    @Override
+    public PageResponse<List<ProductSummaryResponse>> advanceSearchWithRequest(Pageable pageable, com.fashionstore.catalog.product.dto.ProductAdvanceSearchRequest request) {
+        log.info("Search product by specifications");
+
+        if (request == null || isEmptyRequest(request)) {
+            return getPageResponse(pageable, productRepository.findAllByStatus(ProductStatus.PUBLISHED, pageable));
+        }
+
+        ProductSpecificationsBuilder builder = new ProductSpecificationsBuilder();
+
+        if (request != null && request.getSearch() != null) {
+            for (String s : request.getSearch()) {
+                if (s == null || s.isBlank()) continue;
+                Matcher matcher = SEARCH_PATTERN.matcher(s);
+                if (!matcher.matches() || !SEARCHABLE_FIELDS.contains(matcher.group(1))) {
+                    throw new AppException(ProductErrorCode.INVALID_SEARCH_CRITERIA);
+                }
+                validateSearchValue(matcher.group(1), matcher.group(4));
+                builder.with(matcher.group(1), matcher.group(2), matcher.group(4), matcher.group(3), matcher.group(5));
+            }
+        }
+
+        if (request != null) {
+            if (request.getProductType() != null) {
+                builder.with("productType", ":", request.getProductType(), null, null);
+            }
+            if (request.getMinRating() != null) {
+                if (request.getMinRating() < 1 || request.getMinRating() > 5) {
+                    throw new AppException(ProductErrorCode.INVALID_SEARCH_CRITERIA, "minRating must be between 1 and 5");
+                }
+                builder.with("minRating", ":", request.getMinRating(), null, null);
+            }
+            if (request.getMinPrice() != null && request.getMaxPrice() != null
+                    && request.getMinPrice().compareTo(request.getMaxPrice()) > 0) {
+                throw new AppException(ProductErrorCode.INVALID_SEARCH_CRITERIA, "minPrice cannot be greater than maxPrice");
+            }
+            if (request.getMinPrice() != null) {
+                builder.with("minPrice", ">", request.getMinPrice(), null, null);
+            }
+            if (request.getMaxPrice() != null) {
+                builder.with("maxPrice", "<", request.getMaxPrice(), null, null);
+            }
+            if (request.getSize() != null && !request.getSize().isBlank()) {
+                builder.with("size", ":", request.getSize().trim(), null, null);
+            }
+            if (request.getColor() != null && !request.getColor().isBlank()) {
+                builder.with("color", ":", request.getColor().trim(), null, null);
+            }
+            if (request.getBrandId() != null && !request.getBrandId().isBlank()) {
+                builder.with("brandId", ":", request.getBrandId().trim(), null, null);
+            }
+            if (request.getGender() != null && !request.getGender().isBlank()) {
+                try {
+                    com.fashionstore.catalog.product.entity.Gender.valueOf(request.getGender().trim().toUpperCase());
+                } catch (IllegalArgumentException ex) {
+                    throw new AppException(ProductErrorCode.INVALID_SEARCH_CRITERIA, "Invalid gender: " + request.getGender());
+                }
+                builder.with("gender", ":", request.getGender().trim(), null, null);
+            }
+            if (request.getMaterial() != null && !request.getMaterial().isBlank()) {
+                builder.with("material", ":", request.getMaterial().trim(), null, null);
+            }
+            if (request.getCategoryId() != null && !request.getCategoryId().isBlank()) {
+                builder.with("categoryId", ":", request.getCategoryId().trim(), null, null);
+            }
+            if (request.getKeyword() != null && !request.getKeyword().isBlank()) {
+                builder.with("name", ":", "*" + request.getKeyword().trim() + "*", null, null);
+            }
+        }
+
+        // build() is null when no criterion survived parsing; the visibility filter still applies.
+        Specification<Product> criteria = builder.build();
+        Page<Product> products = productRepository.findAll(
+                criteria == null ? PUBLISHED_ONLY : criteria.and(PUBLISHED_ONLY), pageable);
+        return getPageResponse(pageable, products);
+    }
+
+
+    private String buildOptionSignature(ColorOption colorOption, SizeOption sizeOption) {
+        return "COLOR:" + colorOption.getId() + "|SIZE:" + sizeOption.getId();
+    }
+
+
+    private Product buildProduct(ProductRequest request) {
+        return Product.builder()
+                .name(request.getName())
+                .slug(request.getSlug())
+                .shortDescription(request.getShortDescription())
+                .productType(request.getProductType())
+                .metaTitle(request.getMetaTitle())
+                .metaKeyword(request.getMetaKeyword())
+                .metaDescription(request.getMetaDescription())
+                .description(request.getDescription())
+                .status(ProductStatus.DRAFT)
+                .featured(Boolean.TRUE.equals(request.getFeatured()))
+                .gender(request.getGender())
+                .basePrice(request.getBasePrice())
+                .salePrice(request.getSalePrice())
+                .weight(request.getWeight())
+                .length(request.getLength())
+                .width(request.getWidth())
+                .height(request.getHeight())
+                .build();
+    }
+
+    private Integer resolveLogisticsValue(Integer variantValue, Integer productDefault) {
+        return variantValue != null && variantValue > 0 ? variantValue : productDefault;
+    }
+
+    private void validateUpdateProductRequest(ProductUpdateRequest request, Product product) {
+        if (request == null || request.getName() == null || request.getName().isBlank()) {
+            throw new AppException(ProductErrorCode.PRODUCT_OPTION_INVALID, "Product name is required");
+        }
+        if (request.getVariants() != null) {
+            validateVariantRequestDuplicates(request.getVariants());
+            Set<String> productVariantIds = product.getVariants().stream()
+                    .map(ProductVariant::getId)
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toSet());
+            for (ProductVariantRequest variant : request.getVariants()) {
+                String id = StringUtils.cleanText(variant.getId());
+                if (id != null && !productVariantIds.contains(id)) {
+                    throw new AppException(ProductErrorCode.PRODUCT_VARIANT_NOT_FOUND);
+                }
+            }
+        }
+    }
+
+    /**
+     * Rejects duplicate SKU values and duplicate color-size combinations in one request.
+     *
+     * @param requests variant requests to validate
+     */
+    private void validateVariantRequestDuplicates(List<ProductVariantRequest> requests) {
+        Set<String> skus = new HashSet<>();
+        Set<String> optionCombinations = new HashSet<>();
+        for (ProductVariantRequest request : requests == null ? List.<ProductVariantRequest>of() : requests) {
+            if (request == null
+                    || StringUtils.cleanText(request.getColorOptionId()) == null
+                    || StringUtils.cleanText(request.getSizeOptionId()) == null) {
+                throw new AppException(ProductErrorCode.PRODUCT_OPTION_INVALID);
+            }
+
+            String sku = StringUtils.cleanText(request.getSku());
+            if (sku != null && !skus.add(sku)) {
+                throw new AppException(ProductErrorCode.SKU_ALREADY_EXISTED_OR_DUPLICATED);
+            }
+
+            String optionCombination = StringUtils.cleanText(request.getColorOptionId())
+                    + "\u0000" + StringUtils.cleanText(request.getSizeOptionId());
+            if (!optionCombinations.add(optionCombination)) {
+                throw new AppException(ProductErrorCode.DUPLICATE_VARIANT_COMBINATION);
+            }
+        }
+    }
+
+    /**
+     * Validates a variant's sale price against its explicit or inherited effective price.
+     *
+     * @param requests variant requests to validate
+     * @param productBasePrice price inherited when a variant has no explicit price
+     */
+    private void validateVariantPrices(List<ProductVariantRequest> requests, BigDecimal productBasePrice) {
+        for (ProductVariantRequest request : requests == null ? List.<ProductVariantRequest>of() : requests) {
+            BigDecimal effectivePrice = request.getPrice() == null ? productBasePrice : request.getPrice();
+            if (request.getSalePrice() != null && effectivePrice == null) {
+                throw new AppException(ProductErrorCode.INVALID_PRICE);
+            }
+            validatePrices(effectivePrice, request.getSalePrice());
+        }
+    }
+
+    private void assignImages(Product product, List<ProductImageItem> images) {
+        if (images == null) {
+            return;
+        }
+
+        Map<String, ColorOption> productColorsById = product.getVariants().stream()
+                .map(ProductVariant::getColorOption)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toMap(ColorOption::getId, option -> option, (left, right) -> left));
+
+        for (ProductImageItem item : images) {
+            // PENDING = da cap presigned URL nhung chua upload xong, chua duoc gan vao san pham.
+            if (item.getMediaId() != null
+                    && !mediaFileRepository.existsByIdAndStatus(item.getMediaId(), MediaStatus.ACTIVE)) {
+                throw new AppException(ProductErrorCode.MEDIA_FILE_NOT_FOUND);
+            }
+            String colorOptionId = StringUtils.cleanText(item.getColorOptionId());
+            if (colorOptionId != null && !productColorsById.containsKey(colorOptionId)) {
+                throw new AppException(ProductErrorCode.IMAGE_COLOR_INVALID);
+            }
+        }
+
+        boolean hasExplicitPrimary = images.stream().anyMatch(item -> Boolean.TRUE.equals(item.getIsPrimary()));
+
+        product.getImages().clear();
+        for (int i = 0; i < images.size(); i++) {
+            ProductImageItem item = images.get(i);
+            ColorOption colorOption = productColorsById.get(StringUtils.cleanText(item.getColorOptionId()));
+            boolean isPrimary = Boolean.TRUE.equals(item.getIsPrimary()) || (!hasExplicitPrimary && i == 0);
+            product.getImages().add(ProductImage.builder()
+                    .product(product)
+                    .mediaId(item.getMediaId())
+                    .url(item.getUrl())
+                    .color(colorOption == null ? StringUtils.cleanText(item.getColor()) : colorOption.getName())
+                    .colorOption(colorOption)
+                    .altText(StringUtils.cleanText(item.getAltText()))
+                    .sortOrder(item.getSortOrder() != null ? item.getSortOrder() : i)
+                    .isPrimary(isPrimary)
+                    .build());
+        }
+    }
+
+    private void applyThumbnailFallbacks(Product product) {
+        ProductImage primaryImage = product.getImages().stream()
+                .filter(img -> Boolean.TRUE.equals(img.getIsPrimary()))
+                .findFirst()
+                .orElse(product.getImages().isEmpty() ? null : product.getImages().get(0));
+
+        if (primaryImage != null) {
+            product.setThumbnailMediaId(primaryImage.getMediaId());
+            product.setThumbnailUrl(primaryImage.getUrl());
+        } else {
+            product.setThumbnailMediaId(null);
+            product.setThumbnailUrl(null);
+        }
+
+        Map<String, ProductImage> colorImageMap = new HashMap<>();
+        for (ProductImage image : product.getImages()) {
+            if (image.getColorOption() != null && image.getColorOption().getId() != null) {
+                colorImageMap.putIfAbsent(image.getColorOption().getId(), image);
+            }
+        }
+
+        for (ProductVariant variant : product.getVariants()) {
+            boolean hasMediaId = StringUtils.cleanText(variant.getThumbnailMediaId()) != null;
+            boolean hasUrl = StringUtils.cleanText(variant.getThumbnailUrl()) != null;
+            if (!hasMediaId && !hasUrl) {
+                String colorId = variant.getColorOption() != null ? variant.getColorOption().getId() : null;
+                ProductImage colorImage = colorId != null ? colorImageMap.get(colorId) : null;
+                if (colorImage != null) {
+                    variant.setThumbnailMediaId(colorImage.getMediaId());
+                    variant.setThumbnailUrl(colorImage.getUrl());
+                } else if (primaryImage != null) {
+                    variant.setThumbnailMediaId(primaryImage.getMediaId());
+                    variant.setThumbnailUrl(primaryImage.getUrl());
+                }
+            }
+        }
+    }
+
+    private void synchronizeVariants(Product product, List<ProductVariantRequest> variantRequests) {
+        validateVariantRequestDuplicates(variantRequests);
+        validateVariantPrices(variantRequests, product.getBasePrice());
+        synchronizeVariants(product, variantRequests, validateVariantOptions(variantRequests, product));
+    }
+
+    /**
+     * Tra ve san cac option da tra cuu de buoc ghi khong phai query lai.
+     * {@code product} la null khi tao moi; khi sua thi SKU cua chinh san pham do khong tinh la trung.
+     */
+    private VariantOptionsValidation validateVariantOptions(
+            List<ProductVariantRequest> variantRequests,
+            Product product) {
+        List<ProductVariantRequest> requests = variantRequests == null ? List.of() : variantRequests;
+        Set<String> ownVariantIds = product == null
+                ? Set.of()
+                : product.getVariants().stream()
+                        .map(ProductVariant::getId)
+                        .filter(Objects::nonNull)
+                        .collect(Collectors.toSet());
+
+        // validate price and sku
+        Set<String> barcodesInRequest = new HashSet<>();
+        for (ProductVariantRequest request : requests) {
+            String sku = StringUtils.cleanText(request.getSku());
+            // uk_product_variant_sku ap dung cho moi dong, ke ca variant da tat,
+            // nen phai tra theo sku thay vi chi tim trong cac variant dang active.
+            if (sku != null) {
+                Optional<ProductVariant> holder = productVariantRepository.findBySku(sku);
+                if (holder.isPresent() && !ownVariantIds.contains(holder.get().getId())) {
+                    throw new AppException(ProductErrorCode.SKU_ALREADY_EXISTED_OR_DUPLICATED);
+                }
+            }
+            // Barcode doi xung voi sku: cung mot unique index, cung mot cach kiem tra truoc khi ghi.
+            String barcode = StringUtils.cleanText(request.getBarcode());
+            if (barcode != null) {
+                if (!GTIN_PATTERN.matcher(barcode).matches()) {
+                    throw new AppException(ProductErrorCode.BARCODE_INVALID);
+                }
+                if (!barcodesInRequest.add(barcode)) {
+                    throw new AppException(ProductErrorCode.BARCODE_ALREADY_EXISTED_OR_DUPLICATED);
+                }
+                Optional<ProductVariant> holder = productVariantRepository.findByBarcode(barcode);
+                if (holder.isPresent() && !ownVariantIds.contains(holder.get().getId())) {
+                    throw new AppException(ProductErrorCode.BARCODE_ALREADY_EXISTED_OR_DUPLICATED);
+                }
+            }
+            // validate mediaId if provided
+            String mediaId = StringUtils.cleanText(request.getThumbnailMediaId());
+            if (mediaId == null) {
+                mediaId = StringUtils.cleanText(request.getMediaId());
+            }
+            if (mediaId != null && !mediaFileRepository.existsByIdAndStatus(mediaId, MediaStatus.ACTIVE)) {
+                throw new AppException(ProductErrorCode.MEDIA_FILE_NOT_FOUND);
+            }
+        }
+        // validate colorOption and sizeOption
+        List<String> colorOptionIds = requests.stream()
+                .map(ProductVariantRequest::getColorOptionId)
+                .map(StringUtils::cleanText)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        List<String> sizeOptionIds = requests.stream()
+                .map(ProductVariantRequest::getSizeOptionId)
+                .map(StringUtils::cleanText)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+
+        Map<String, ColorOption> colorsById = colorOptionRepository.findAllById(colorOptionIds).stream()
+                .collect(Collectors.toMap(ColorOption::getId, option -> option));
+        Map<String, SizeOption> sizesById = sizeOptionRepository.findAllById(sizeOptionIds).stream()
+                .collect(Collectors.toMap(SizeOption::getId, option -> option));
+        if (colorsById.size() != colorOptionIds.size() || sizesById.size() != sizeOptionIds.size()) {
+            throw new AppException(ProductErrorCode.OPTION_NOT_FOUND);
+        }
+
+        // Hai request cung mau+size se sinh ra cung mot option_signature. synchronizeVariants
+        // giu existingBySignature nhu mot snapshot truoc vong lap nen ca hai deu duoc them moi,
+        // va uk_product_variant_product_signature chi no tung flush — phai chan truoc o day.
+        Set<String> signatures = new HashSet<>();
+        for (ProductVariantRequest request : requests) {
+            String signature = buildOptionSignature(
+                    colorsById.get(StringUtils.cleanText(request.getColorOptionId())),
+                    sizesById.get(StringUtils.cleanText(request.getSizeOptionId())));
+            if (!signatures.add(signature)) {
+                throw new AppException(ProductErrorCode.PRODUCT_VARIANT_ALREADY_EXIST);
+            }
+        }
+        return new VariantOptionsValidation(colorsById, sizesById);
+    }
+
+    private void synchronizeVariants(
+            Product product,
+            List<ProductVariantRequest> variantRequests,
+            VariantOptionsValidation validation
+    ) {
+        List<ProductVariantRequest> requests = variantRequests == null ? List.of() : variantRequests;
+        Map<String, ProductVariant> existingById = product.getVariants().stream()
+                .filter(variant -> variant.getId() != null)
+                .collect(Collectors.toMap(ProductVariant::getId, variant -> variant));
+        Map<String, ProductVariant> existingBySignature = product.getVariants().stream()
+                .filter(variant -> variant.getOptionSignature() != null)
+                .collect(Collectors.toMap(ProductVariant::getOptionSignature, variant -> variant, (left, right) -> left));
+        Set<ProductVariant> requestedVariants = Collections.newSetFromMap(new IdentityHashMap<>());
+
+        for (ProductVariantRequest request : requests) {
+            ColorOption colorOption = validation.colorsById().get(StringUtils.cleanText(request.getColorOptionId()));
+            SizeOption sizeOption = validation.sizesById().get(StringUtils.cleanText(request.getSizeOptionId()));
+            String signature = buildOptionSignature(colorOption, sizeOption);
+            String requestedId = StringUtils.cleanText(request.getId());
+            ProductVariant variant = requestedId == null
+                    ? existingBySignature.get(signature)
+                    : existingById.get(requestedId);
+
+            boolean newVariant = variant == null;
+            if (newVariant) {
+                variant = ProductVariant.builder()
+                        .product(product)
+                        .active(false)
+                        .build();
+                product.getVariants().add(variant);
+            }
+            requestedVariants.add(variant);
+
+            variant.setProduct(product);
+            variant.setColorOption(colorOption);
+            variant.setSizeOption(sizeOption);
+            variant.setColor(colorOption.getName());
+            variant.setSize(sizeOption.getName());
+            variant.setColorHex(colorOption.getColorHex());
+            variant.setOptionSignature(signature);
+            variant.setDisplayName(colorOption.getName() + " / " + sizeOption.getName());
+            variant.setSku(StringUtils.cleanText(request.getSku()));
+            variant.setBarcode(StringUtils.cleanText(request.getBarcode()));
+            variant.setPrice(request.getPrice() == null ? product.getBasePrice() : request.getPrice());
+            variant.setSalePrice(request.getSalePrice());
+            variant.setWeightGram(request.getWeightGram());
+            variant.setLengthMm(request.getLengthMm());
+            variant.setWidthMm(request.getWidthMm());
+            variant.setHeightMm(request.getHeightMm());
+            if (request.getActive() != null || newVariant) {
+                variant.setActive(Boolean.TRUE.equals(request.getActive()));
+            }
+            variant.setThumbnailUrl(StringUtils.cleanText(request.getThumbnailUrl()));
+            variant.setThumbnailMediaId(firstNonBlank(request.getThumbnailMediaId(), request.getMediaId()));
+        }
+
+        product.getVariants().stream()
+                .filter(variant -> !requestedVariants.contains(variant))
+                .forEach(variant -> variant.setActive(false));
+    }
+
+    private String firstNonBlank(String first, String second) {
+        String cleanedFirst = StringUtils.cleanText(first);
+        return cleanedFirst != null ? cleanedFirst : StringUtils.cleanText(second);
+    }
+
+    private void seedInventoryForVariants(Product product) {
+        for (ProductVariant variant : product.getVariants()) {
+            if (variant.getId() == null) {
+                continue;
+            }
+            inventoryService.ensureStock(variant.getId(), product.getId());
+        }
+    }
+
+    private void applyInitialStock(Product product, List<ProductVariantRequest> requests,
+                                   Set<String> existingVariantIds) {
+        if (requests == null) {
+            return;
+        }
+        for (ProductVariantRequest request : requests) {
+            Integer quantity = request.getInitialQuantity();
+            if (quantity == null || quantity == 0) {
+                continue;
+            }
+            if (quantity < 0) {
+                throw new AppException(InventoryErrorCode.INVALID_STOCK_QUANTITY);
+            }
+            ProductVariant variant = product.getVariants().stream()
+                    .filter(v -> v.getColorOption() != null && v.getSizeOption() != null
+                            && v.getColorOption().getId().equals(StringUtils.cleanText(request.getColorOptionId()))
+                            && v.getSizeOption().getId().equals(StringUtils.cleanText(request.getSizeOptionId())))
+                    .findFirst()
+                    .orElseThrow(() -> new AppException(ProductErrorCode.PRODUCT_VARIANT_ALREADY_EXIST));
+            if (existingVariantIds.contains(variant.getId())) {
+                throw new AppException(InventoryErrorCode.INITIAL_STOCK_NOT_ALLOWED);
+            }
+            inventoryService.initializeStock(variant.getId(), quantity);
+        }
+    }
+
+    private void assignAttributes(Product product, List<ProductAttributeValueRequest> requests) {
+        assignAttributes(product, requests, validateAttributes(requests));
+    }
+
+    private Map<String, ProductAttribute> validateAttributes(List<ProductAttributeValueRequest> rawRequests) {
+        List<ProductAttributeValueRequest> requests = rawRequests == null ? List.of() : rawRequests;
+
+        for (ProductAttributeValueRequest request : requests) {
+            if (request == null
+                    || StringUtils.cleanText(request.getAttributeId()) == null
+                    || StringUtils.cleanText(request.getValue()) == null) {
+                throw new AppException(ProductErrorCode.PRODUCT_OPTION_INVALID);
+            }
+        }
+
+        List<String> attributeIds = requests.stream()
+                .map(ProductAttributeValueRequest::getAttributeId)
+                .map(StringUtils::cleanText)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        Map<String, ProductAttribute> attributesById = productAttributeRepository.findAllById(attributeIds)
+                .stream()
+                .collect(Collectors.toMap(ProductAttribute::getId, attribute -> attribute));
+        if (attributesById.size() != attributeIds.size()) {
+            throw new AppException(ProductErrorCode.PRODUCT_ATTRIBUTE_NOT_FOUND);
+        }
+        return attributesById;
+    }
+
+    private void assignAttributes(
+            Product product,
+            List<ProductAttributeValueRequest> requests,
+            Map<String, ProductAttribute> attributesById
+    ) {
+        if (requests == null) {
+            return;
+        }
+
+        product.getAttributeValues().clear();
+        for (ProductAttributeValueRequest request : requests) {
+            String attributeId = StringUtils.cleanText(request.getAttributeId());
+            String value = StringUtils.cleanText(request.getValue());
+            product.getAttributeValues().add(ProductAttributeValue.builder()
+                    .product(product)
+                    .attribute(attributesById.get(attributeId))
+                    .value(value)
+                    .normalizedValue(StringUtils.normalizeCode(value))
+                    .build());
+        }
+    }
+
+
+
+
+    private void publish(Product product) {
+        List<String> errors = validateProductBeforePublish(product);
+        if (!errors.isEmpty()) {
+            throw new AppException(ProductErrorCode.PRODUCT_PUBLISH_INVALID, errors.getFirst());
+        }
+        product.setStatus(ProductStatus.PUBLISHED);
+        product.setPublished(true);
+        product.setPublishedAt(LocalDateTime.now());
+        product.setDeletedAt(null);
+    }
+
+    private List<String> validateProductBeforePublish(Product product) {
+        List<String> errors = new ArrayList<>();
+        if (product.getBasePrice() == null || product.getBasePrice().compareTo(BigDecimal.ZERO) <= 0) {
+            errors.add("Product base price must be greater than zero");
+        }
+        if (product.getProductCategories() == null || product.getProductCategories().isEmpty()) {
+            errors.add("Product must have at least one category");
+        }
+        if (product.getVariants() == null || product.getVariants().stream().noneMatch(variant -> Boolean.TRUE.equals(variant.getActive()))) {
+            errors.add("Product must have at least one active variant");
+        }
+        Set<String> skus = new HashSet<>();
+        Set<String> signatures = new HashSet<>();
+        for (ProductVariant variant : product.getVariants() == null ? List.<ProductVariant>of() : product.getVariants()) {
+            if (!Boolean.TRUE.equals(variant.getActive())) {
+                continue;
+            }
+            if (variant.getSku() == null || variant.getSku().isBlank()) {
+                errors.add("Active variant SKU is required");
+            } else if (!skus.add(variant.getSku())) {
+                errors.add("Variant SKU must be unique: " + variant.getSku());
+            }
+            validateVariantPrice(variant, errors);
+            if (variant.getOptionSignature() == null || variant.getOptionSignature().isBlank()) {
+                errors.add("Variant option signature is required for SKU: " + variant.getSku());
+            } else if (!signatures.add(variant.getOptionSignature())) {
+                errors.add("Duplicate variant option combination: " + variant.getOptionSignature());
+            }
+        }
+        return errors;
+    }
+
+    private void validateVariantPrice(ProductVariant variant, List<String> errors) {
+        if (variant.getPrice() == null) {
+            errors.add("Variant price is required for SKU: " + variant.getSku());
+            return;
+        }
+        if (variant.getPrice().compareTo(BigDecimal.ZERO) < 0
+                || variant.getSalePrice() != null && variant.getSalePrice().compareTo(BigDecimal.ZERO) < 0
+                || variant.getSalePrice() != null && variant.getSalePrice().compareTo(variant.getPrice()) > 0) {
+            errors.add("Variant price is invalid for SKU: " + variant.getSku());
+        }
+    }
+
+
+
+
+
+    private void validatePrices(BigDecimal basePrice, BigDecimal salePrice) {
+        if (basePrice != null && basePrice.compareTo(BigDecimal.ZERO) < 0) {
+            throw new AppException(ProductErrorCode.INVALID_PRICE);
+        }
+        if (salePrice != null && salePrice.compareTo(BigDecimal.ZERO) < 0) {
+            throw new AppException(ProductErrorCode.INVALID_PRICE);
+        }
+        if (basePrice != null && salePrice != null && salePrice.compareTo(basePrice) > 0) {
+            throw new AppException(ProductErrorCode.INVALID_PRICE);
+        }
+    }
+
+    private PageResponse<List<ProductSummaryResponse>> getPageResponse(Pageable pageable, Page<Product> products) {
+        List<ProductSummaryResponse> responses = products.stream()
+                .map(productMapper::toProductSummaryResponse)
+                .toList();
+
+        return PageResponse.<List<ProductSummaryResponse>>builder()
+                .pageNo(pageable.getPageNumber())
+                .pageSize(pageable.getPageSize())
+                .totalPage(products.getTotalPages())
+                .totalElements(products.getTotalElements())
+                .items(responses)
+                .build();
+    }
+
+    private void validateSearchValue(String field, String value) {
+        if (value == null || value.isBlank()) {
+            throw new AppException(ProductErrorCode.INVALID_SEARCH_CRITERIA);
+        }
+
+        try {
+            if ("price".equals(field) || "basePrice".equals(field) || "minPrice".equals(field) || "maxPrice".equals(field)) {
+                new BigDecimal(value);
+            } else if ("gender".equals(field)) {
+                com.fashionstore.catalog.product.entity.Gender.valueOf(value.toUpperCase());
+            } else if ("priceRange".equals(field)) {
+                if (value.endsWith("+")) {
+                    new BigDecimal(value.substring(0, value.length() - 1));
+                } else {
+                    String[] bounds = value.split("-", -1);
+                    if (bounds.length != 2) {
+                        throw new NumberFormatException();
+                    }
+                    BigDecimal minimum = new BigDecimal(bounds[0]);
+                    BigDecimal maximum = new BigDecimal(bounds[1]);
+                    if (minimum.compareTo(maximum) > 0) {
+                        throw new NumberFormatException();
+                    }
+                }
+            }
+        } catch (IllegalArgumentException exception) {
+            throw new AppException(ProductErrorCode.INVALID_SEARCH_CRITERIA);
+        }
+    }
+
+    /** Option cua variant da tra cuu mot lan, dung lai o buoc ghi. */
+    private record VariantOptionsValidation(
+            Map<String, ColorOption> colorsById,
+            Map<String, SizeOption> sizesById) {
+    }
+
+    /** Gom toan bo ket qua validate cua createProduct de buoc dung aggregate khong query lai. */
+    private record ProductValidation(
+            String slug,
+            BigDecimal basePrice,
+            List<Category> categories,
+            VariantOptionsValidation variantOptions,
+            Map<String, ProductAttribute> attributesById,
+            boolean publishImmediately) {
+    }
+
+    private boolean isEmptyRequest(com.fashionstore.catalog.product.dto.ProductAdvanceSearchRequest request) {
+        return (request.getSearch() == null || request.getSearch().length == 0)
+                && request.getProductType() == null
+                && request.getMinRating() == null
+                && request.getMinPrice() == null
+                && request.getMaxPrice() == null
+                && (request.getSize() == null || request.getSize().isBlank())
+                && (request.getColor() == null || request.getColor().isBlank())
+                && (request.getBrandId() == null || request.getBrandId().isBlank())
+                && (request.getGender() == null || request.getGender().isBlank())
+                && (request.getMaterial() == null || request.getMaterial().isBlank())
+                && (request.getCategoryId() == null || request.getCategoryId().isBlank())
+                && (request.getKeyword() == null || request.getKeyword().isBlank());
+    }
+}

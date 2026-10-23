@@ -61,7 +61,7 @@ scripts/         build.ps1, test.ps1
 - **`packages/api-contracts` holds only wire DTOs** for cross-service messages. Entities, repositories, business services, mappers and controllers stay in their owning service, always.
 - **`packages/common-library` holds only framework-level plumbing** (below). No domain logic.
 - Merged services — treat as one deployable each, no re-splitting:
-  - `catalog-service` ⊃ product + inventory + file
+  - `catalog-service` ⊃ product + inventory + media (file)
   - `order-service` ⊃ cart
 
 ## Shared code — reuse, do not re-implement
@@ -81,20 +81,19 @@ scripts/         build.ps1, test.ps1
 
 ## Package convention inside a service
 
-Layer packages, flat — one package per layer, no per-feature sub-packages:
+Feature-first (Spring Modulith), flat layers inside each feature — full rules in `docs/backend-code-structure.md`:
 
 ```text
 com.fashionstore.<service>
-  controller/  dto/  model|entity/  repository/  service/ + service/impl/
-  mapper/  client/  messaging|event/  cache/  exception/  config/  util/
+  <feature>/   controller/  dto/  entity/  repository/  service/ + service/impl/
+               mapper/  client/  event/  exception/  config/
+  shared/      OPEN module — outbox, Rabbit config, security, OpenAPI, util; never depends on a feature
   <Service>Application.java
 ```
 
-- Domain sub-dividing is allowed inside `model`/`entity` (e.g. `entity/enumeration`, `entity/attribute`, `entity/option`). Existing technical `config/security` and `config/messaging` remain; keep business DTOs flat.
-- `client/`, `cache/`, `messaging/`, `event/` exist only where a service actually needs them — do not create empty ones.
-- Entity package name differs by service: `model/` in catalog, `entity/` in order + identity + payment. Follow whatever the service you are editing already uses; do not rename a service's package wholesale unless asked.
-- `catalog-service` is the reference implementation of this layout (`services/catalog-service/README.md`). Order/payment now use the same layers: outbox entity/repository in their owning layers, listeners/relays in `event`, saga logic in `service`, and payment provider adapters in `client`. See `docs/backend-code-structure.md`.
-- Split by layer, not by domain: e.g. outbox lives as `model/OutboxEvent` + `repository/OutboxEventRepository` + `event/OutboxEventRecorder|OutboxEventRelay`.
+- **Migrated:** `catalog-service` (reference — `product`, `inventory`, `media`, `review`, `wishlist`, `shared`). **Not yet:** `order-service`, `payment-service` still use the flat layer layout (`entity/`, `event/`, `client/`…); keep that layout when editing them until their migration PR. identity/notification stay layer-first.
+- Inside a feature, one package per layer; create only layers the feature needs. Listeners and outbox relays go in `event/`, never `messaging/` or `outbox/`.
+- A feature uses another feature only via its exposed API. `ModularityTest` + `src/test/resources/modulith-known-violations.txt` freeze existing violations — never add a line to that file to make a build pass; delete lines you fix.
 
 ## Constraints & Gotchas
 

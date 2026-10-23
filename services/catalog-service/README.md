@@ -112,32 +112,31 @@ Response bọc trong `ApiResponse` / `PageResponse` của `common-library`; lỗ
 
 ## Package layout
 
-Chia theo tầng, không chia theo domain con. Sản phẩm, tồn kho và media dùng chung một
-`controller` / `service` / `repository` / `model`, nên đọc một tầng là thấy hết những gì
-service này có ở tầng đó.
+Chia theo feature (Spring Modulith): mỗi package con trực tiếp của `com.fashionstore.catalog` là
+một module; bên trong module vẫn chia theo tầng quen thuộc. Quy ước chung xem
+`docs/backend-code-structure.md`.
 
 ```text
 com.fashionstore.catalog
-|-- config            # SecurityConfig, CustomJwtDecoder, RabbitMQConfig/Names, MinioConfig/Properties
-|-- controller        # sản phẩm, danh mục, brand, thuộc tính, color/size, size chart, tồn kho, media
-|-- dto
-|-- exception         # ProductErrorCode, InventoryErrorCode, FileErrorCode
-|-- mapper            # MapStruct (componentModel=spring)
-|-- messaging         # InventoryCommandListener
-|-- model             # entity của cả ba domain
-|   |-- attribute     # ProductAttribute / Option / Value
-|   |-- enumeration   # ProductStatus, InventoryStatus, MediaStatus, Gender, ...
-|   `-- option        # ColorOption, SizeOption
-|-- outbox            # OutboxEvent + Repository + OutboxService + OutboxPublisher
-|-- repository        # repository + specification (ProductSpecification, MediaFileSpecifications)
-|-- service
-|   `-- impl
-|-- util
+|-- product      # product, variant, image, attribute, brand, category, color/size option, size chart
+|-- inventory    # tồn kho, reservation, ledger, listener lệnh tồn kho, topology huỷ đơn
+|-- media        # MediaFile, Minio storage, presigned upload, avatar, evidence
+|-- review       # review + client Identity/Order dùng để xác minh người mua
+|-- wishlist
+|-- shared       # OPEN module: outbox, RabbitMQConfig/Names, security, OpenAPI, util
 `-- CatalogServiceApplication
 ```
 
+Mỗi module: `controller/ dto/ entity/ repository/ service/ service/impl/ mapper/ client/ event/
+exception/ config/` — chỉ tạo tầng nào thực sự cần.
+
+`ModularityTest` kiểm tra ranh giới module. Coupling hiện có (product ↔ inventory, product ↔ review,
+review/wishlist/inventory dùng thẳng entity/repository của product) được đóng băng trong
+`src/test/resources/modulith-known-violations.txt`: vi phạm mới làm test fail, vi phạm đã sửa thì
+phải xoá khỏi file.
+
 Deviation còn lại: `BrandService` và `SizeChartService` là class cụ thể, chưa tách cặp
-interface + `impl` như các service khác. `outbox/**` chưa flatten theo tầng.
+interface + `impl` như các service khác.
 
 ## Flyway
 

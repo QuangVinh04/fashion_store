@@ -1,11 +1,9 @@
 package com.fashionstore.catalog;
 
-import com.fashionstore.catalog.config.FileStorageProperties;
-import com.fashionstore.catalog.config.MinioProperties;
 import com.fashionstore.common.messaging.processed.EnableProcessedMessages;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 import org.springframework.data.jpa.repository.config.EnableJpaAuditing;
 import org.springframework.cloud.openfeign.EnableFeignClients;
 import org.springframework.scheduling.annotation.EnableAsync;
@@ -18,7 +16,7 @@ import java.util.TimeZone;
 @EnableAsync
 @EnableJpaAuditing
 @EnableProcessedMessages
-@EnableConfigurationProperties({FileStorageProperties.class, MinioProperties.class})
+@ConfigurationPropertiesScan
 @SpringBootApplication
 public class CatalogServiceApplication {
 

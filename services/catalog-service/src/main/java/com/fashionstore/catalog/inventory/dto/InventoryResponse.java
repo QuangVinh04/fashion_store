@@ -1,0 +1,20 @@
+package com.fashionstore.catalog.inventory.dto;
+
+import lombok.Builder;
+import lombok.Data;
+
+import java.time.LocalDateTime;
+
+@Data
+@Builder
+public class InventoryResponse {
+
+    private String        id;
+    private String        variantId;
+    private String        productId;
+    private int           quantity;
+    private int           quantityReserved;
+    private int           quantityAvailable;
+    private int           minThreshold;
+    private LocalDateTime updatedAt;
+}

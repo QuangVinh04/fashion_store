@@ -1,0 +1,24 @@
+# Known Spring Modulith violations (Phase 3 debt). ModularityTest fails on any NEW violation,
+# and on any line here that no longer occurs — delete it once fixed.
+Cycle detected: Slice inventory -> Slice product -> Slice inventory
+Cycle detected: Slice product -> Slice review -> Slice product
+Module 'inventory' depends on non-exposed type product.entity.ProductStatus within module 'product'!
+Module 'inventory' depends on non-exposed type product.entity.ProductVariant within module 'product'!
+Module 'inventory' depends on non-exposed type product.entity.Product within module 'product'!
+Module 'inventory' depends on non-exposed type product.repository.ProductRepository within module 'product'!
+Module 'inventory' depends on non-exposed type product.repository.ProductVariantRepository within module 'product'!
+Module 'product' depends on non-exposed type inventory.exception.InventoryErrorCode within module 'inventory'!
+Module 'product' depends on non-exposed type inventory.service.InventoryService within module 'inventory'!
+Module 'product' depends on non-exposed type media.entity.MediaStatus within module 'media'!
+Module 'product' depends on non-exposed type media.repository.MediaFileRepository within module 'media'!
+Module 'product' depends on non-exposed type review.entity.ReviewStatus within module 'review'!
+Module 'product' depends on non-exposed type review.entity.Review within module 'review'!
+Module 'review' depends on non-exposed type product.entity.Product within module 'product'!
+Module 'review' depends on non-exposed type product.exception.ProductErrorCode within module 'product'!
+Module 'review' depends on non-exposed type product.repository.ProductRepository within module 'product'!
+Module 'review' depends on non-exposed type product.repository.ProductVariantRepository within module 'product'!
+Module 'wishlist' depends on non-exposed type product.entity.Brand within module 'product'!
+Module 'wishlist' depends on non-exposed type product.entity.ProductStatus within module 'product'!
+Module 'wishlist' depends on non-exposed type product.entity.Product within module 'product'!
+Module 'wishlist' depends on non-exposed type product.exception.ProductErrorCode within module 'product'!
+Module 'wishlist' depends on non-exposed type product.repository.ProductRepository within module 'product'!
