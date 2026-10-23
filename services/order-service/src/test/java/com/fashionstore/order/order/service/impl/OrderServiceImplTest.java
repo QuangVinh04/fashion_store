@@ -1,0 +1,947 @@
+package com.fashionstore.order.order.service.impl;
+
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import com.fashionstore.common.dto.PageResponse;
+import com.fashionstore.common.exception.AppException;
+import com.fashionstore.common.payment.PaymentMethod;
+import com.fashionstore.common.payment.PaymentProvider;
+import com.fashionstore.common.security.CurrentUserProvider;
+import com.fashionstore.contracts.common.EventTypes;
+import com.fashionstore.contracts.order.dto.VerifyPurchaseRequest;
+import com.fashionstore.contracts.order.dto.VerifyPurchaseResponse;
+import com.fashionstore.order.saga.dto.CancelOrderRequest;
+import com.fashionstore.order.order.dto.OrderResponse;
+import com.fashionstore.order.saga.dto.OrderSagaResponse;
+import com.fashionstore.order.order.dto.OrderStatusHistoryResponse;
+import com.fashionstore.order.order.dto.OrderSummaryResponse;
+import com.fashionstore.order.saga.dto.SagaCommand;
+import com.fashionstore.order.order.dto.UpdateOrderStatusRequest;
+import com.fashionstore.order.checkout.entity.Checkout;
+import com.fashionstore.order.checkout.entity.CheckoutItem;
+import com.fashionstore.order.order.entity.Order;
+import com.fashionstore.order.saga.entity.OrderSaga;
+import com.fashionstore.order.order.entity.OrderStatusHistory;
+import com.fashionstore.order.shipment.entity.Shipment;
+import com.fashionstore.order.order.entity.ShippingAddress;
+import com.fashionstore.order.checkout.entity.CheckoutStatus;
+import com.fashionstore.order.saga.entity.OrderSagaStatus;
+import com.fashionstore.order.saga.entity.OrderSagaStep;
+import com.fashionstore.order.order.entity.OrderStatus;
+import com.fashionstore.order.shared.outbox.OutboxEventRecorder;
+import com.fashionstore.order.saga.event.SagaOutbox;
+import com.fashionstore.order.shared.exception.OrderErrorCode;
+import com.fashionstore.order.checkout.repository.CheckoutRepository;
+import com.fashionstore.order.order.repository.OrderRepository;
+import com.fashionstore.order.saga.repository.OrderSagaRepository;
+import com.fashionstore.order.order.repository.OrderStatusHistoryRepository;
+import com.fashionstore.order.shipment.repository.ShipmentRepository;
+import com.fashionstore.order.saga.service.SagaCancellationService;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
+class OrderServiceImplTest {
+
+    @Mock private OrderRepository orderRepository;
+
+    @Mock private CheckoutRepository checkoutRepository;
+
+    @Mock private OrderSagaRepository orderSagaRepository;
+
+    @Mock private OutboxEventRecorder outboxEventRecorder;
+
+    @Mock private SagaOutbox sagaOutbox;
+
+    @Mock private CurrentUserProvider currentUserProvider;
+
+    @Mock private com.fashionstore.order.promotion.service.PromotionService promotionService;
+
+    @Mock private OrderStatusHistoryRepository orderStatusHistoryRepository;
+
+    @Mock private ShipmentRepository shipmentRepository;
+
+    @Mock private com.fashionstore.order.order.service.OrderNotificationService orderNotificationService;
+
+    private OrderServiceImpl service;
+
+    @BeforeEach
+    void setUp() {
+        // Dùng SagaCancellationService thật để test đúng luật hủy theo bước, chỉ mock hạ tầng.
+        SagaCancellationService cancellationService =
+                new SagaCancellationService(orderSagaRepository, orderRepository, sagaOutbox);
+        var receipts =
+                org.mockito.Mockito.mock(com.fashionstore.order.order.service.OrderReceiptService.class);
+        var cancellationProjection =
+                org.mockito.Mockito.mock(
+                        com.fashionstore.order.saga.service.OrderCancellationViewService.class);
+        org.mockito.Mockito.lenient()
+                .when(cancellationProjection.enrich(any(), any()))
+                .thenAnswer(call -> call.getArgument(1));
+        org.mockito.Mockito.lenient()
+                .when(receipts.enrich(any(), any()))
+                .thenAnswer(call -> call.getArgument(1));
+        org.mockito.Mockito.lenient().when(receipts.now()).thenReturn(java.time.Instant.now());
+        org.mockito.Mockito.lenient()
+                .when(orderRepository.findByIdForUpdate(org.mockito.ArgumentMatchers.anyString()))
+                .thenAnswer(call -> orderRepository.findWithItemsById(call.getArgument(0)));
+        service =
+                new OrderServiceImpl(
+                        orderRepository,
+                        checkoutRepository,
+                        orderSagaRepository,
+                        outboxEventRecorder,
+                        sagaOutbox,
+                        cancellationService,
+                        currentUserProvider,
+                        promotionService,
+                        orderStatusHistoryRepository,
+                        shipmentRepository,
+                        orderNotificationService,
+                        receipts,
+                        cancellationProjection);
+        when(currentUserProvider.getCurrentUserId()).thenReturn("user-1");
+        when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
+    }
+
+    @Test
+    void adminLastPageReturnsOneItemAndExactTotal21() {
+        Pageable pageable = PageRequest.of(1, 20);
+        when(orderRepository.findAll(pageable))
+                .thenReturn(new PageImpl<>(List.of(order(OrderStatus.CONFIRMED)), pageable, 21));
+        var result = service.searchOrders(null, null, pageable);
+        assertEquals(21L, result.getTotalElements());
+        assertEquals(2L, result.getTotalPage());
+        assertEquals(1, result.getItems().size());
+    }
+
+    // ----- idempotency của POST /orders -----
+
+    @Test
+    void returnsExistingOrderWhenDefaultCheckoutIdempotencyKeyWasAlreadyUsed() {
+        Order existing = order(OrderStatus.PENDING);
+        when(orderRepository.findByUserIdAndIdempotencyKey("user-1", "checkout-1"))
+                .thenReturn(Optional.of(existing));
+
+        OrderResponse response = service.createOrder("checkout-1", null, "127.0.0.1");
+
+        assertEquals("order-1", response.getId());
+        assertEquals("checkout-1", response.getCheckoutId());
+        assertEquals(OrderStatus.PENDING, response.getStatus());
+        assertEquals(PaymentMethod.ONLINE, response.getPaymentMethod());
+        verify(checkoutRepository, never()).findForUpdateByIdAndUserId("checkout-1", "user-1");
+        verify(orderSagaRepository, never()).save(any());
+        verify(outboxEventRecorder, never()).saveMessage(anyString(), anyString(), any());
+        verify(promotionService, never()).reserve(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void createOrder_withCoupon_reservesPromotion() {
+        Checkout checkout = submittedCheckout(snapshot());
+        checkout.setCouponCode("WELCOME10");
+        checkout.setDiscountAmount(new BigDecimal("10000"));
+        checkout.setTotalAmount(new BigDecimal("90000"));
+        stubCreateOrder(checkout);
+
+        OrderResponse response = service.createOrder("checkout-1", null, "127.0.0.1");
+
+        assertEquals("order-1", response.getId());
+        ArgumentCaptor<List<com.fashionstore.order.promotion.dto.PromotionItemDto>> itemsCaptor =
+                ArgumentCaptor.forClass(List.class);
+        verify(promotionService)
+                .reserve(
+                        eq("WELCOME10"),
+                        eq("user-1"),
+                        eq("order-1"),
+                        eq(new BigDecimal("100000")),
+                        itemsCaptor.capture());
+        assertEquals("product-1", itemsCaptor.getValue().get(0).getProductId());
+    }
+
+    // ----- snapshot địa chỉ: đơn chỉ chép bản chụp của checkout -----
+
+    @Test
+    void createOrder_copiesCheckoutAddressSnapshotIntoOrder() {
+        stubCreateOrder(submittedCheckout(snapshot()));
+
+        service.createOrder("checkout-1", null, "127.0.0.1");
+
+        ArgumentCaptor<Order> orderCaptor = ArgumentCaptor.forClass(Order.class);
+        verify(orderRepository).save(orderCaptor.capture());
+        Order saved = orderCaptor.getValue();
+        ShippingAddress address = saved.getAddress();
+        assertEquals("Nguyen Van A", address.getRecipientName());
+        assertEquals("0987654321", address.getRecipientPhone());
+        assertEquals("Ho Chi Minh", address.getProvince());
+        assertEquals("Quan 1", address.getDistrict());
+        assertEquals("Ben Nghe", address.getWard());
+        assertEquals("123 Le Loi", address.getDetailAddress());
+        assertEquals(1444, address.getDistrictId());
+        assertEquals("20308", address.getWardCode());
+        assertEquals("123 Le Loi, Ben Nghe, Quan 1, Ho Chi Minh", saved.getShippingAddress());
+    }
+
+    /** Đơn và checkout giữ hai bản riêng: sửa bản của checkout sau khi đặt không chạm tới đơn. */
+    @Test
+    void createOrder_orderAddressIsACopyNotTheCheckoutSnapshotItself() {
+        Checkout checkout = submittedCheckout(snapshot());
+        stubCreateOrder(checkout);
+
+        service.createOrder("checkout-1", null, "127.0.0.1");
+        checkout.getShippingAddress().setDetailAddress("changed");
+
+        ArgumentCaptor<Order> orderCaptor = ArgumentCaptor.forClass(Order.class);
+        verify(orderRepository).save(orderCaptor.capture());
+        org.junit.jupiter.api.Assertions.assertNotSame(
+                checkout.getShippingAddress(), orderCaptor.getValue().getAddress());
+        assertEquals("123 Le Loi", orderCaptor.getValue().getAddress().getDetailAddress());
+    }
+
+    /** Checkout không có địa chỉ (hoặc mở trước khi có snapshot) thì không đặt được đơn. */
+    @Test
+    void createOrder_whenCheckoutHasNoAddressSnapshot_rejects() {
+        stubCreateOrder(submittedCheckout(null));
+
+        AppException ex =
+                assertThrows(
+                        AppException.class,
+                        () -> service.createOrder("checkout-1", null, "127.0.0.1"));
+
+        assertEquals(OrderErrorCode.SHIPPING_ADDRESS_INVALID, ex.getErrorCode());
+        verify(orderRepository, never()).save(any(Order.class));
+        verify(outboxEventRecorder, never()).saveMessage(anyString(), anyString(), any());
+    }
+
+    // ----- luồng đặt đơn: chép từ checkout, mở saga -----
+
+    @Test
+    void createOrder_copiesAmountsAndItemsFromCheckoutAndStartsSaga() {
+        Checkout checkout = submittedCheckout(snapshot());
+        checkout.setShippingFee(new BigDecimal("32000"));
+        checkout.setTotalAmount(new BigDecimal("132000"));
+        stubCreateOrder(checkout);
+
+        OrderResponse response = service.createOrder("checkout-1", null, "10.0.0.1");
+
+        assertEquals(OrderStatus.PENDING, response.getStatus());
+        ArgumentCaptor<Order> orderCaptor = ArgumentCaptor.forClass(Order.class);
+        verify(orderRepository).save(orderCaptor.capture());
+        Order saved = orderCaptor.getValue();
+        assertEquals("checkout-1", saved.getCheckoutId());
+        assertEquals("checkout-1", saved.getIdempotencyKey());
+        assertEquals("10.0.0.1", saved.getClientIp());
+        assertEquals(PaymentMethod.COD, saved.getPaymentMethod());
+        assertEquals(0, saved.getSubtotalAmount().compareTo(new BigDecimal("100000")));
+        assertEquals(0, saved.getDiscountAmount().compareTo(BigDecimal.ZERO));
+        assertEquals(0, saved.getShippingFee().compareTo(new BigDecimal("32000")));
+        assertEquals(0, saved.getTotalAmount().compareTo(new BigDecimal("132000")));
+        assertEquals(1, saved.getItems().size());
+        assertEquals("variant-1", saved.getItems().getFirst().getVariantId());
+        assertEquals(
+                0, saved.getItems().getFirst().getUnitPrice().compareTo(new BigDecimal("100000")));
+
+        assertEquals(CheckoutStatus.COMPLETED, checkout.getStatus());
+        assertEquals(saved, checkout.getOrder());
+        verify(orderSagaRepository).save(any(OrderSaga.class));
+        verify(outboxEventRecorder)
+                .saveMessage(eq("order-1"), eq(EventTypes.INVENTORY_RESERVATION_REQUESTED), any());
+        ArgumentCaptor<OrderStatusHistory> historyCaptor =
+                ArgumentCaptor.forClass(OrderStatusHistory.class);
+        verify(orderStatusHistoryRepository).save(historyCaptor.capture());
+        assertEquals(OrderStatus.PENDING, historyCaptor.getValue().getToStatus());
+        assertEquals("ORDER_CREATED", historyCaptor.getValue().getAction());
+    }
+
+    @Test
+    void createOrder_withExplicitIdempotencyKey_returnsTheOrderAlreadyCreatedWithThatKey() {
+        Order existing = order(OrderStatus.PENDING);
+        when(orderRepository.findByUserIdAndIdempotencyKey("user-1", "key-1"))
+                .thenReturn(Optional.of(existing));
+
+        OrderResponse response = service.createOrder("checkout-1", " key-1 ", "127.0.0.1");
+
+        assertEquals("order-1", response.getId());
+        verify(checkoutRepository, never()).findForUpdateByIdAndUserId(anyString(), anyString());
+    }
+
+    /**
+     * Hai request đặt đơn song song: request sau lấy được khoá checkout thì thấy đơn đã có, trả lại
+     * đơn đó.
+     */
+    @Test
+    void createOrder_whenCheckoutAlreadyProducedAnOrder_returnsItWithoutCreatingAnother() {
+        Checkout checkout = submittedCheckout(snapshot());
+        checkout.setOrder(order(OrderStatus.PENDING));
+        checkout.setStatus(CheckoutStatus.COMPLETED);
+        stubCreateOrder(checkout);
+
+        OrderResponse response = service.createOrder("checkout-1", "another-key", "127.0.0.1");
+
+        assertEquals("order-1", response.getId());
+        verify(orderRepository, never()).save(any(Order.class));
+        verify(outboxEventRecorder, never()).saveMessage(anyString(), anyString(), any());
+    }
+
+    @Test
+    void createOrder_fromCancelledOrExpiredCheckout_rejects() {
+        for (CheckoutStatus status : List.of(CheckoutStatus.CANCELLED, CheckoutStatus.EXPIRED)) {
+            Checkout checkout = submittedCheckout(snapshot());
+            checkout.setStatus(status);
+            stubCreateOrder(checkout);
+
+            AppException ex =
+                    assertThrows(
+                            AppException.class,
+                            () -> service.createOrder("checkout-1", null, "127.0.0.1"));
+
+            assertEquals(OrderErrorCode.CHECKOUT_STATUS_INVALID, ex.getErrorCode(), status.name());
+        }
+        verify(orderRepository, never()).save(any(Order.class));
+    }
+
+    /** Checkout của user khác cũng không tìm thấy — repository lọc theo userId. */
+    @Test
+    void createOrder_whenCheckoutNotFoundForCurrentUser_throwsCheckoutNotFound() {
+        when(orderRepository.findByUserIdAndIdempotencyKey("user-1", "checkout-of-b"))
+                .thenReturn(Optional.empty());
+        when(checkoutRepository.findForUpdateByIdAndUserId("checkout-of-b", "user-1"))
+                .thenReturn(Optional.empty());
+
+        AppException ex =
+                assertThrows(
+                        AppException.class,
+                        () -> service.createOrder("checkout-of-b", null, "127.0.0.1"));
+
+        assertEquals(OrderErrorCode.CHECKOUT_NOT_FOUND, ex.getErrorCode());
+        verify(orderRepository, never()).save(any(Order.class));
+    }
+
+    @Test
+    void createOrder_whenCheckoutHasNoItems_rejects() {
+        Checkout checkout = submittedCheckout(snapshot());
+        checkout.setItems(new ArrayList<>());
+        stubCreateOrder(checkout);
+
+        AppException ex =
+                assertThrows(
+                        AppException.class,
+                        () -> service.createOrder("checkout-1", null, "127.0.0.1"));
+
+        assertEquals(OrderErrorCode.CHECKOUT_NOT_FOUND, ex.getErrorCode());
+        verify(orderRepository, never()).save(any(Order.class));
+    }
+
+    private Checkout submittedCheckout(ShippingAddress shippingAddress) {
+        CheckoutItem item =
+                CheckoutItem.builder()
+                        .variantId("variant-1")
+                        .productId("product-1")
+                        .productName("Tee")
+                        .quantity(1)
+                        .unitPrice(new BigDecimal("100000"))
+                        .lineTotal(new BigDecimal("100000"))
+                        .build();
+        Checkout checkout =
+                Checkout.builder()
+                        .userId("user-1")
+                        .status(CheckoutStatus.SUBMITTED)
+                        .paymentMethod(PaymentMethod.COD)
+                        .paymentProvider(PaymentProvider.COD)
+                        .subtotalAmount(new BigDecimal("100000"))
+                        .discountAmount(BigDecimal.ZERO)
+                        .shippingFee(BigDecimal.ZERO)
+                        .totalAmount(new BigDecimal("100000"))
+                        .addressId(shippingAddress == null ? null : "addr-1")
+                        .shippingAddress(shippingAddress)
+                        .items(List.of(item))
+                        .build();
+        checkout.setId("checkout-1");
+        return checkout;
+    }
+
+    private void stubCreateOrder(Checkout checkout) {
+        when(orderRepository.findByUserIdAndIdempotencyKey("user-1", "checkout-1"))
+                .thenReturn(Optional.empty());
+        when(checkoutRepository.findForUpdateByIdAndUserId("checkout-1", "user-1"))
+                .thenReturn(Optional.of(checkout));
+        when(orderRepository.save(any(Order.class)))
+                .thenAnswer(
+                        inv -> {
+                            Order o = inv.getArgument(0);
+                            o.setId("order-1");
+                            return o;
+                        });
+    }
+
+    private ShippingAddress snapshot() {
+        return ShippingAddress.builder()
+                .recipientName("Nguyen Van A")
+                .recipientPhone("0987654321")
+                .province("Ho Chi Minh")
+                .district("Quan 1")
+                .ward("Ben Nghe")
+                .detailAddress("123 Le Loi")
+                .districtId(1444)
+                .wardCode("20308")
+                .build();
+    }
+
+    // ----- GET /orders -----
+
+    @Test
+    void customerListIncludesProductSnapshotsAndReturnLinkWithoutLoadingEachOrder() {
+        Pageable pageable = PageRequest.of(0, 10);
+        Order order = order(OrderStatus.DELIVERED);
+        order.getItems().add(com.fashionstore.order.order.entity.OrderItem.builder().productName("Áo polo")
+                .variantId("variant-1").quantity(2).unitPrice(new BigDecimal("100000"))
+                .lineTotal(new BigDecimal("200000")).build());
+        when(orderRepository.findByUserId("user-1", pageable))
+                .thenReturn(new PageImpl<>(List.of(order), pageable, 1));
+        when(orderRepository.findWithItemsByIdIn(List.of(order.getId()))).thenReturn(List.of(order));
+        when(orderRepository.findReturnReferences(List.of(order.getId())))
+                .thenReturn(List.of(new com.fashionstore.order.returns.dto.OrderReturnReference(order.getId(), "return-1",
+                        com.fashionstore.order.returns.entity.ReturnRequestStatus.REFUNDED,
+                        com.fashionstore.order.returns.entity.ReturnRequestKind.CUSTOMER_RETURN,
+                        new BigDecimal("180000"), "ledger-1", null, null, null)));
+
+        var result = service.getMyOrders(null, pageable).getItems().getFirst();
+
+        assertEquals("Áo polo", result.getItems().getFirst().getProductName());
+        assertEquals(2, result.getItems().getFirst().getQuantity());
+        assertEquals("return-1", result.getReturnRequestId());
+        assertEquals(com.fashionstore.order.returns.dto.ReturnRefundStatus.COMPLETED, result.getReturnRefundStatus());
+        assertEquals(new BigDecimal("180000"), result.getActualRefundAmount());
+        assertEquals(new BigDecimal("180000"), result.getExpectedRefundAmount());
+        verify(orderRepository, never()).findWithItemsById(any());
+    }
+
+    @Test
+    void listsMyOrdersAsSummariesWithPageMetadata() {
+        Pageable pageable = PageRequest.of(0, 10);
+        when(orderRepository.findByUserId("user-1", pageable))
+                .thenReturn(new PageImpl<>(List.of(order(OrderStatus.CONFIRMED)), pageable, 1));
+
+        PageResponse<List<OrderSummaryResponse>> page = service.getMyOrders(null, pageable);
+
+        assertEquals(1, page.getItems().size());
+        assertEquals("ORD-2026-0001", page.getItems().getFirst().getOrderCode());
+        assertEquals(1, page.getTotalPage());
+        assertEquals(10, page.getPageSize());
+    }
+
+    @Test
+    void filtersMyOrdersByStatusWhenRequested() {
+        Pageable pageable = PageRequest.of(0, 10);
+        when(orderRepository.findByUserIdAndStatus("user-1", OrderStatus.CANCELLED, pageable))
+                .thenReturn(new PageImpl<>(List.of(), pageable, 0));
+
+        service.getMyOrders(OrderStatus.CANCELLED, pageable);
+
+        verify(orderRepository).findByUserIdAndStatus("user-1", OrderStatus.CANCELLED, pageable);
+        verify(orderRepository, never()).findByUserId(anyString(), any(Pageable.class));
+    }
+
+    // ----- POST /orders/{id}/cancel -----
+
+    @Test
+    void cancellingAnOrderAwaitingPaymentStartsPaymentCancellation() {
+        Order order = order(OrderStatus.PENDING);
+        OrderSaga saga = OrderSaga.start("order-1");
+        saga.inventoryReserved("reservation-1");
+        registerOrderAndSaga(order, saga);
+
+        OrderResponse response =
+                service.cancelMyOrder("order-1", new CancelOrderRequest("Đổi ý"));
+
+        // Đơn chỉ về CANCELLED khi payment xác nhận huỷ và kho được nhả.
+        assertEquals(OrderStatus.PENDING, response.getStatus());
+        assertEquals(com.fashionstore.order.saga.entity.OrderSagaStatus.COMPENSATING, saga.getStatus());
+        assertEquals(OrderSagaStep.CANCEL_PAYMENT, saga.getCurrentStep());
+        verify(sagaOutbox).emit(org.mockito.ArgumentMatchers.eq(saga), any());
+    }
+
+    @Test
+    void cancellingAnOrderBeforeInventoryIsReservedClosesItImmediately() {
+        Order order = order(OrderStatus.PENDING);
+        registerOrderAndSaga(order, OrderSaga.start("order-1"));
+
+        OrderResponse response =
+                service.cancelMyOrder("order-1", new CancelOrderRequest("Đổi ý"));
+
+        assertEquals(OrderStatus.CANCELLED, response.getStatus());
+    }
+
+    @Test
+    void cancellingAPendingOrderAfterPaymentIsRejected() {
+        Order order = order(OrderStatus.PENDING);
+        OrderSaga saga = OrderSaga.start("order-1");
+        saga.inventoryReserved("reservation-1");
+        saga.paymentAuthorized("payment-1");
+        registerOrderAndSaga(order, saga);
+
+        AppException exception =
+                assertThrows(
+                        AppException.class,
+                        () -> service.cancelMyOrder("order-1", new CancelOrderRequest("Đổi ý")));
+
+        assertEquals(OrderErrorCode.ORDER_CANNOT_BE_CANCELLED, exception.getErrorCode());
+        verify(sagaOutbox, never()).emit(any(), any());
+    }
+
+    @Test
+    void cancellingAConfirmedOrderIsRejectedBecauseThatIsARefund() {
+        Order order = order(OrderStatus.CONFIRMED);
+        when(orderRepository.findWithItemsById("order-1")).thenReturn(Optional.of(order));
+
+        AppException exception =
+                assertThrows(AppException.class, () -> service.cancelMyOrder("order-1", null));
+
+        assertEquals(OrderErrorCode.ORDER_CANNOT_BE_CANCELLED, exception.getErrorCode());
+    }
+
+    @Test
+    void cancellingTwiceReturnsTheSameResultWithoutTouchingTheSaga() {
+        Order order = order(OrderStatus.CANCELLED);
+        order.setCancelReason("Đổi ý");
+        when(orderRepository.findWithItemsById("order-1")).thenReturn(Optional.of(order));
+
+        OrderResponse response =
+                service.cancelMyOrder("order-1", new CancelOrderRequest("Lý do khác"));
+
+        assertEquals(OrderStatus.CANCELLED, response.getStatus());
+        assertEquals("Đổi ý", response.getCancelReason());
+        verify(orderSagaRepository, never()).findByOrderIdAndTypeForUpdate(anyString(), any());
+    }
+
+    @Test
+    void cannotCancelSomebodyElsesOrder() {
+        Order order = order(OrderStatus.PENDING);
+        order.setUserId("another-user");
+        when(orderRepository.findWithItemsById("order-1")).thenReturn(Optional.of(order));
+
+        AppException exception =
+                assertThrows(AppException.class, () -> service.cancelMyOrder("order-1", null));
+
+        assertEquals(OrderErrorCode.ORDER_NOT_FOUND, exception.getErrorCode());
+    }
+
+    // ----- admin -----
+
+    @Test
+    void exposesSagaStateForDiagnostics() {
+        OrderSaga saga = OrderSaga.start("order-1");
+        saga.fail("STEP_RETRY_EXHAUSTED", "Cạn 5 lần thử ở bước RELEASE_INVENTORY");
+        when(orderSagaRepository.findByOrderIdAndType(
+                        "order-1",
+                        com.fashionstore.order.saga.entity.OrderSagaType.CHECKOUT))
+                .thenReturn(Optional.of(saga));
+
+        OrderSagaResponse response = service.getOrderSaga("order-1");
+
+        assertEquals(OrderSagaStatus.FAILED, response.getStatus());
+        assertEquals("STEP_RETRY_EXHAUSTED", response.getFailureCode());
+        assertEquals(saga.getId(), response.getSagaId());
+    }
+
+    @Test
+    void reportsMissingSagaSeparatelyFromMissingOrder() {
+        when(orderSagaRepository.findByOrderIdAndType(
+                        "order-1",
+                        com.fashionstore.order.saga.entity.OrderSagaType.CHECKOUT))
+                .thenReturn(Optional.empty());
+
+        AppException exception =
+                assertThrows(AppException.class, () -> service.getOrderSaga("order-1"));
+
+        assertEquals(OrderErrorCode.ORDER_SAGA_NOT_FOUND, exception.getErrorCode());
+    }
+
+    @Test
+    void diagnosticQuerySelectsCancellationSeparatelyFromCheckout() {
+        var saga = OrderSaga.startCancellation("order-1", "op", "payment-1", "reservation-1");
+        when(orderSagaRepository.findByOrderIdAndType(
+                        "order-1",
+                        com.fashionstore.order.saga.entity.OrderSagaType.CANCELLATION))
+                .thenReturn(Optional.of(saga));
+        var response =
+                service.getOrderSaga(
+                        "order-1",
+                        com.fashionstore.order.saga.entity.OrderSagaType.CANCELLATION);
+        assertEquals(saga.getId(), response.getSagaId());
+        assertEquals(
+                com.fashionstore.order.saga.entity.OrderSagaType.CANCELLATION,
+                response.getType());
+    }
+
+    // ----- updateOrderStatus & order history -----
+
+    @Test
+    void updateOrderStatus_toShipping_withoutShipmentOrTrackingCode_throwsShipmentRequired() {
+        Order order = order(OrderStatus.PACKED);
+        when(orderRepository.findWithItemsById("order-1")).thenReturn(Optional.of(order));
+        when(shipmentRepository.findByOrderId("order-1")).thenReturn(Optional.empty());
+
+        UpdateOrderStatusRequest request = new UpdateOrderStatusRequest();
+        request.setStatus(OrderStatus.SHIPPING);
+
+        AppException ex =
+                assertThrows(
+                        AppException.class, () -> service.updateOrderStatus("order-1", request));
+        assertEquals(OrderErrorCode.SHIPMENT_REQUIRED, ex.getErrorCode());
+    }
+
+    @Test
+    void updateOrderStatus_toShipping_withOnlyCancelledShipment_throwsShipmentRequired() {
+        Order order = order(OrderStatus.PACKED);
+        when(orderRepository.findWithItemsById("order-1")).thenReturn(Optional.of(order));
+        when(shipmentRepository.findByOrderId("order-1"))
+                .thenReturn(
+                        Optional.of(
+                                Shipment.builder()
+                                        .order(order)
+                                        .trackingCode("OLD1")
+                                        .status(com.fashionstore.order.shipment.entity.ShipmentStatus.CANCELLED)
+                                        .build()));
+
+        UpdateOrderStatusRequest request = new UpdateOrderStatusRequest();
+        request.setStatus(OrderStatus.SHIPPING);
+
+        AppException ex =
+                assertThrows(
+                        AppException.class, () -> service.updateOrderStatus("order-1", request));
+        assertEquals(OrderErrorCode.SHIPMENT_REQUIRED, ex.getErrorCode());
+    }
+
+    @Test
+    void
+            updateOrderStatus_toShipping_whenClientSendsTrackingCodeWithoutShipment_throwsShipmentRequired() {
+        Order order = order(OrderStatus.PACKED);
+        when(orderRepository.findWithItemsById("order-1")).thenReturn(Optional.of(order));
+        when(shipmentRepository.findByOrderId("order-1")).thenReturn(Optional.empty());
+
+        UpdateOrderStatusRequest request = new UpdateOrderStatusRequest();
+        request.setStatus(OrderStatus.SHIPPING);
+        request.setTrackingCode("FAKE_TRACK_123");
+
+        AppException ex =
+                assertThrows(
+                        AppException.class, () -> service.updateOrderStatus("order-1", request));
+        assertEquals(OrderErrorCode.SHIPMENT_REQUIRED, ex.getErrorCode());
+    }
+
+    @Test
+    void updateOrderStatus_sameStatus_returnsEarlyWithoutDuplicateHistory() {
+        Order order = order(OrderStatus.PROCESSING);
+        when(orderRepository.findWithItemsById("order-1")).thenReturn(Optional.of(order));
+
+        UpdateOrderStatusRequest request = new UpdateOrderStatusRequest();
+        request.setStatus(OrderStatus.PROCESSING);
+
+        OrderResponse response = service.updateOrderStatus("order-1", request);
+        assertEquals(OrderStatus.PROCESSING, response.getStatus());
+
+        verify(orderStatusHistoryRepository, never()).save(any());
+        verify(orderRepository, never()).save(any());
+    }
+
+    @Test
+    void updateOrderStatus_invalidTransitions_throwsOrderStatusInvalid() {
+        // CONFIRMED -> DELIVERED
+        Order o1 = order(OrderStatus.CONFIRMED);
+        when(orderRepository.findWithItemsById("order-1")).thenReturn(Optional.of(o1));
+        UpdateOrderStatusRequest r1 = new UpdateOrderStatusRequest();
+        r1.setStatus(OrderStatus.DELIVERED);
+        assertEquals(
+                OrderErrorCode.ORDER_STATUS_INVALID,
+                assertThrows(AppException.class, () -> service.updateOrderStatus("order-1", r1))
+                        .getErrorCode());
+
+        // CANCELLED -> SHIPPING
+        Order o2 = order(OrderStatus.CANCELLED);
+        when(orderRepository.findWithItemsById("order-2")).thenReturn(Optional.of(o2));
+        UpdateOrderStatusRequest r2 = new UpdateOrderStatusRequest();
+        r2.setStatus(OrderStatus.SHIPPING);
+        assertEquals(
+                OrderErrorCode.ORDER_STATUS_INVALID,
+                assertThrows(AppException.class, () -> service.updateOrderStatus("order-2", r2))
+                        .getErrorCode());
+
+        // PENDING -> PROCESSING
+        Order o3 = order(OrderStatus.PENDING);
+        when(orderRepository.findWithItemsById("order-3")).thenReturn(Optional.of(o3));
+        UpdateOrderStatusRequest r3 = new UpdateOrderStatusRequest();
+        r3.setStatus(OrderStatus.PROCESSING);
+        assertEquals(
+                OrderErrorCode.ORDER_STATUS_INVALID,
+                assertThrows(AppException.class, () -> service.updateOrderStatus("order-3", r3))
+                        .getErrorCode());
+    }
+
+    @Test
+    void genericAdminStatusCannotBypassReceiptReturnOrRefundWorkflow() {
+        Order delivered = order(OrderStatus.DELIVERED);
+        when(orderRepository.findByIdForUpdate("order-1")).thenReturn(Optional.of(delivered));
+        for (var status :
+                List.of(OrderStatus.COMPLETED, OrderStatus.RETURNED, OrderStatus.REFUNDED)) {
+            var request = new UpdateOrderStatusRequest();
+            request.setStatus(status);
+            assertEquals(
+                    OrderErrorCode.ORDER_STATUS_INVALID,
+                    assertThrows(
+                                    AppException.class,
+                                    () -> service.updateOrderStatus("order-1", request))
+                            .getErrorCode());
+        }
+        verify(sagaOutbox, never()).emit(any(), any(), any());
+        verify(orderRepository, never()).save(any());
+    }
+
+    @Test
+    void updateOrderStatus_preservesExistingTrackingCodeWhenRequestTrackingCodeIsNull() {
+        Order order = order(OrderStatus.PACKED);
+        order.setTrackingCode("GHN_ORIGINAL_123");
+        when(orderRepository.findWithItemsById("order-1")).thenReturn(Optional.of(order));
+        Shipment shipment = Shipment.builder().trackingCode("GHN_ORIGINAL_123").build();
+        when(shipmentRepository.findByOrderId("order-1")).thenReturn(Optional.of(shipment));
+
+        UpdateOrderStatusRequest request = new UpdateOrderStatusRequest();
+        request.setStatus(OrderStatus.SHIPPING);
+        request.setTrackingCode(null); // Request không gửi trackingCode
+
+        OrderResponse response = service.updateOrderStatus("order-1", request);
+        assertEquals(OrderStatus.SHIPPING, response.getStatus());
+        assertEquals("GHN_ORIGINAL_123", order.getTrackingCode());
+    }
+
+    @Test
+    void updateOrderStatus_toShipping_withShipment_succeedsAndRecordsHistory() {
+        Order order = order(OrderStatus.PACKED);
+        when(orderRepository.findWithItemsById("order-1")).thenReturn(Optional.of(order));
+        Shipment shipment = Shipment.builder().trackingCode("GHN123").build();
+        when(shipmentRepository.findByOrderId("order-1")).thenReturn(Optional.of(shipment));
+
+        UpdateOrderStatusRequest request = new UpdateOrderStatusRequest();
+        request.setStatus(OrderStatus.SHIPPING);
+        request.setReason("Shipped via GHN");
+
+        OrderResponse response = service.updateOrderStatus("order-1", request);
+        assertEquals(OrderStatus.SHIPPING, response.getStatus());
+
+        ArgumentCaptor<OrderStatusHistory> historyCaptor =
+                ArgumentCaptor.forClass(OrderStatusHistory.class);
+        verify(orderStatusHistoryRepository, org.mockito.Mockito.times(1))
+                .save(historyCaptor.capture());
+        OrderStatusHistory captured = historyCaptor.getValue();
+        assertEquals(OrderStatus.PACKED, captured.getFromStatus());
+        assertEquals(OrderStatus.SHIPPING, captured.getToStatus());
+        assertEquals("ADMIN_UPDATE", captured.getAction());
+        assertEquals("Shipped via GHN", captured.getReason());
+    }
+
+    @Test
+    void updateOrderStatus_fromConfirmedToProcessing_succeedsAndRecordsHistory() {
+        Order order = order(OrderStatus.CONFIRMED);
+        when(orderRepository.findWithItemsById("order-1")).thenReturn(Optional.of(order));
+
+        UpdateOrderStatusRequest request = new UpdateOrderStatusRequest();
+        request.setStatus(OrderStatus.PROCESSING);
+        request.setReason("Preparing items");
+
+        OrderResponse response = service.updateOrderStatus("order-1", request);
+        assertEquals(OrderStatus.PROCESSING, response.getStatus());
+
+        ArgumentCaptor<OrderStatusHistory> historyCaptor =
+                ArgumentCaptor.forClass(OrderStatusHistory.class);
+        verify(orderStatusHistoryRepository, org.mockito.Mockito.times(1))
+                .save(historyCaptor.capture());
+        OrderStatusHistory captured = historyCaptor.getValue();
+        assertEquals(OrderStatus.CONFIRMED, captured.getFromStatus());
+        assertEquals(OrderStatus.PROCESSING, captured.getToStatus());
+    }
+
+    @Test
+    void cancellationBlocksAdministrativePacking() {
+        var order = order(OrderStatus.CONFIRMED);
+        order.setStatus(OrderStatus.CANCELLING);
+        when(orderRepository.findByIdForUpdate("order-1")).thenReturn(Optional.of(order));
+        assertThrows(
+                AppException.class,
+                () ->
+                        service.updateOrderStatus(
+                                "order-1",
+                                UpdateOrderStatusRequest.builder()
+                                        .status(OrderStatus.PROCESSING)
+                                        .build()));
+        verify(orderRepository, never()).save(any());
+    }
+
+    @Test
+    void getOrderHistory_returnsHistoryList() {
+        Order order = order(OrderStatus.DELIVERED);
+        when(orderRepository.findById("order-1")).thenReturn(Optional.of(order));
+        OrderStatusHistory h1 =
+                OrderStatusHistory.builder()
+                        .order(order)
+                        .fromStatus(OrderStatus.CONFIRMED)
+                        .toStatus(OrderStatus.PACKED)
+                        .action("SHIPMENT_CREATED")
+                        .changedBy("admin")
+                        .reason("Packed")
+                        .build();
+        when(orderStatusHistoryRepository.findByOrderIdOrderByCreatedAtDescIdDesc("order-1"))
+                .thenReturn(List.of(h1));
+
+        List<OrderStatusHistoryResponse> result = service.getOrderHistory("order-1");
+        assertEquals(1, result.size());
+        assertEquals("SHIPMENT_CREATED", result.getFirst().getAction());
+    }
+
+    @Test
+    void getMyOrderHistory_whenForbiddenUser_throwsOrderNotFound() {
+        Order order = order(OrderStatus.DELIVERED);
+        order.setUserId("other-user");
+        when(orderRepository.findById("order-1")).thenReturn(Optional.of(order));
+
+        AppException ex =
+                assertThrows(AppException.class, () -> service.getMyOrderHistory("order-1"));
+        assertEquals(OrderErrorCode.ORDER_NOT_FOUND, ex.getErrorCode());
+    }
+
+    @Test
+    void getMyOrderHistory_whenOwner_returnsHistoryList() {
+        Order order = order(OrderStatus.DELIVERED);
+        when(orderRepository.findById("order-1")).thenReturn(Optional.of(order));
+        OrderStatusHistory h1 =
+                OrderStatusHistory.builder()
+                        .order(order)
+                        .fromStatus(OrderStatus.PENDING)
+                        .toStatus(OrderStatus.CONFIRMED)
+                        .action("ORDER_CONFIRMED")
+                        .changedBy("SYSTEM")
+                        .build();
+        when(orderStatusHistoryRepository.findByOrderIdOrderByCreatedAtDescIdDesc("order-1"))
+                .thenReturn(List.of(h1));
+
+        List<OrderStatusHistoryResponse> result = service.getMyOrderHistory("order-1");
+        assertEquals(1, result.size());
+        assertEquals("ORDER_CONFIRMED", result.getFirst().getAction());
+    }
+
+    // ----- helpers -----
+
+    private void registerOrderAndSaga(Order order, OrderSaga saga) {
+        when(orderRepository.findWithItemsById("order-1")).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdForUpdate("order-1")).thenReturn(Optional.of(order));
+        when(orderSagaRepository.findByOrderIdAndTypeForUpdate(
+                        "order-1",
+                        com.fashionstore.order.saga.entity.OrderSagaType.CHECKOUT))
+                .thenReturn(Optional.of(saga));
+    }
+
+    private List<SagaCommand> emitted() {
+        ArgumentCaptor<SagaCommand> captor = ArgumentCaptor.forClass(SagaCommand.class);
+        verify(sagaOutbox, org.mockito.Mockito.atLeastOnce())
+                .emit(any(OrderSaga.class), captor.capture());
+        return captor.getAllValues();
+    }
+
+    private Order order(OrderStatus status) {
+        Order order =
+                Order.builder()
+                        .orderCode("ORD-2026-0001")
+                        .userId("user-1")
+                        .idempotencyKey("checkout-1")
+                        .checkoutId("checkout-1")
+                        .paymentMethod(PaymentMethod.ONLINE)
+                        .paymentProvider(PaymentProvider.VNPAY)
+                        .status(status)
+                        .address(
+                                ShippingAddress.builder()
+                                        .recipientName("Customer")
+                                        .recipientPhone("0900000000")
+                                        .build())
+                        .shippingAddress("Address")
+                        .subtotalAmount(BigDecimal.TEN)
+                        .discountAmount(BigDecimal.ZERO)
+                        .shippingFee(BigDecimal.ZERO)
+                        .totalAmount(BigDecimal.TEN)
+                        .items(new ArrayList<>())
+                        .build();
+        order.setId("order-1");
+        return order;
+    }
+
+    @Test
+    void verifyPurchase_whenEligibleOrderExists_returnsPurchasedTrue() {
+        Order deliveredOrder = order(OrderStatus.DELIVERED);
+        when(orderRepository.findEligibleOrdersForReview(
+                        eq("user-1"),
+                        eq(List.of("var-1", "var-2")),
+                        eq(List.of(OrderStatus.DELIVERED, OrderStatus.COMPLETED))))
+                .thenReturn(List.of(deliveredOrder));
+
+        VerifyPurchaseRequest request =
+                new VerifyPurchaseRequest("user-1", null, List.of("var-1", "var-2"));
+        VerifyPurchaseResponse response = service.verifyPurchase(request);
+
+        assertEquals(true, response.purchased());
+        assertEquals("order-1", response.orderId());
+    }
+
+    @Test
+    void verifyPurchase_whenSpecificOrderIdEligible_returnsPurchasedTrue() {
+        Order deliveredOrder = order(OrderStatus.DELIVERED);
+        when(orderRepository.findEligibleOrderForReviewById(
+                        eq("order-1"),
+                        eq("user-1"),
+                        eq(List.of("var-1")),
+                        eq(List.of(OrderStatus.DELIVERED, OrderStatus.COMPLETED))))
+                .thenReturn(Optional.of(deliveredOrder));
+
+        VerifyPurchaseRequest request =
+                new VerifyPurchaseRequest("user-1", "order-1", List.of("var-1"));
+        VerifyPurchaseResponse response = service.verifyPurchase(request);
+
+        assertEquals(true, response.purchased());
+        assertEquals("order-1", response.orderId());
+    }
+
+    @Test
+    void verifyPurchase_whenNoOrderEligible_returnsPurchasedFalse() {
+        when(orderRepository.findEligibleOrdersForReview(
+                        eq("user-1"),
+                        eq(List.of("var-1")),
+                        eq(List.of(OrderStatus.DELIVERED, OrderStatus.COMPLETED))))
+                .thenReturn(List.of());
+
+        VerifyPurchaseRequest request = new VerifyPurchaseRequest("user-1", null, List.of("var-1"));
+        VerifyPurchaseResponse response = service.verifyPurchase(request);
+
+        assertEquals(false, response.purchased());
+        assertEquals(null, response.orderId());
+    }
+}

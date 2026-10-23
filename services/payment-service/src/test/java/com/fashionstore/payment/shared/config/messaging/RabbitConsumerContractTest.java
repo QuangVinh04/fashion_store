@@ -1,0 +1,20 @@
+package com.fashionstore.payment.shared.config.messaging;
+
+import com.fashionstore.test.messaging.RabbitListenerContract;
+
+import java.util.List;
+
+@org.junit.jupiter.api.Tag("external-infrastructure")
+class RabbitConsumerContractTest extends RabbitListenerContract {
+    protected Class<?> rabbitConfiguration() {
+        return RabbitMQConfig.class;
+    }
+
+    protected String deadLetterQueue() {
+        return "payment.dlq";
+    }
+
+    protected List<String> sourceQueues() {
+        return List.of("payment.saga-command-v1", "payment.order-delivered-v1");
+    }
+}

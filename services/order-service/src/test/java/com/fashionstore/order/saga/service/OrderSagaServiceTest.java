@@ -1,0 +1,596 @@
+package com.fashionstore.order.saga.service;
+
+import com.fashionstore.order.order.service.OrderNotificationService;
+import com.fashionstore.order.promotion.service.PromotionService;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import com.fashionstore.common.messaging.processed.ProcessedMessageService;
+import com.fashionstore.common.payment.PaymentMethod;
+import com.fashionstore.common.payment.PaymentProvider;
+import com.fashionstore.contracts.common.EventEnvelope;
+import com.fashionstore.contracts.common.EventTypes;
+import com.fashionstore.contracts.inventory.event.InventoryConfirmedEvent;
+import com.fashionstore.contracts.inventory.event.InventoryReleasedEvent;
+import com.fashionstore.contracts.inventory.event.InventoryReservationEvent;
+import com.fashionstore.contracts.payment.event.PaymentCancellationRejectedEvent;
+import com.fashionstore.contracts.payment.event.PaymentFailedEvent;
+import com.fashionstore.contracts.payment.event.PaymentInitiatedEvent;
+import com.fashionstore.contracts.payment.event.PaymentSuccessEvent;
+import com.fashionstore.order.saga.dto.SagaCommand;
+import com.fashionstore.order.cart.entity.Cart;
+import com.fashionstore.order.cart.entity.CartItem;
+import com.fashionstore.order.order.entity.Order;
+import com.fashionstore.order.order.entity.OrderItem;
+import com.fashionstore.order.saga.entity.OrderSaga;
+import com.fashionstore.order.order.entity.OrderStatusHistory;
+import com.fashionstore.order.order.entity.ShippingAddress;
+import com.fashionstore.order.cart.entity.CartStatus;
+import com.fashionstore.order.saga.entity.OrderSagaStatus;
+import com.fashionstore.order.saga.entity.OrderSagaStep;
+import com.fashionstore.order.order.entity.OrderStatus;
+import com.fashionstore.order.saga.event.SagaOutbox;
+import com.fashionstore.order.cart.repository.CartRepository;
+import com.fashionstore.order.order.repository.OrderRepository;
+import com.fashionstore.order.saga.repository.OrderSagaRepository;
+import com.fashionstore.order.order.repository.OrderStatusHistoryRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
+
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+
+/**
+ * Test đi qua handler thật của {@link OrderSagaService}, chỉ mock hạ tầng. Nhờ vậy mỗi test kiểm
+ * tra được cả guard lẫn transition, không phải kiểm tra riêng từng mảnh.
+ */
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
+class OrderSagaServiceTest {
+
+    @Mock private ProcessedMessageService processedMessageService;
+
+    @Mock private OrderSagaRepository sagaRepository;
+
+    @Mock private OrderRepository orderRepository;
+
+    @Mock private SagaOutbox sagaOutbox;
+
+    @Mock private CartRepository cartRepository;
+
+    @Mock private PromotionService promotionService;
+
+    @Mock private OrderStatusHistoryRepository orderStatusHistoryRepository;
+
+    @Mock private com.fashionstore.order.order.service.OrderNotificationService orderNotificationService;
+
+    private OrderSagaService listener;
+
+    @BeforeEach
+    void setUp() {
+        doAnswer(
+                        invocation -> {
+                            invocation.getArgument(2, Runnable.class).run();
+                            return null;
+                        })
+                .when(processedMessageService)
+                .processOnce(anyString(), anyString(), any(Runnable.class));
+
+        listener =
+                new OrderSagaService(
+                        processedMessageService,
+                        sagaRepository,
+                        orderRepository,
+                        sagaOutbox,
+                        new ObjectMapper(),
+                        cartRepository,
+                        promotionService,
+                        orderStatusHistoryRepository,
+                        orderNotificationService,
+                        new io.micrometer.core.instrument.simple.SimpleMeterRegistry());
+        when(cartRepository.findByUserIdAndStatus(anyString(), any())).thenReturn(Optional.empty());
+    }
+
+    @Test
+    void checkoutReplyCannotAdvanceCancellationSaga() {
+        OrderSaga saga = OrderSaga.startCancellation("order-1", "cancel-op", "pay-1", "res-1");
+        saga.setCurrentStep(OrderSagaStep.RESERVE_INVENTORY);
+        registerSaga(saga, order());
+
+        listener.inventoryReserved(
+                envelope(
+                        saga,
+                        EventTypes.INVENTORY_RESERVED,
+                        new InventoryReservationEvent("order-1", "res-2")),
+                "wrong-type-reply");
+
+        assertEquals(OrderSagaStep.RESERVE_INVENTORY, saga.getCurrentStep());
+        assertEquals("res-1", saga.getInventoryReservationId());
+        verify(sagaOutbox, never()).emit(any(), any());
+    }
+
+    @Test
+    void reservedInventoryMovesSagaToPaymentAndEmitsAuthorizeCommand() {
+        OrderSaga saga = runningSaga();
+        Order order = order();
+        registerSaga(saga, order);
+
+        listener.inventoryReserved(
+                envelope(
+                        saga,
+                        EventTypes.INVENTORY_RESERVED,
+                        new InventoryReservationEvent("order-1", "res-1")),
+                "message-1");
+
+        assertEquals(OrderSagaStep.AUTHORIZE_PAYMENT, saga.getCurrentStep());
+        assertEquals("res-1", saga.getInventoryReservationId());
+        assertEquals(EventTypes.PAYMENT_REQUESTED, emittedCommands().getFirst().eventType());
+        // Bảng orders không bị saga chạm tới giữa chừng.
+        assertEquals(OrderStatus.PENDING, order.getStatus());
+    }
+
+    @Test
+    void paymentInitiatedStoresUrlWithoutAdvancingTheSagaStep() {
+        OrderSaga saga = runningSaga();
+        saga.inventoryReserved("res-1"); // saga đứng ở AUTHORIZE_PAYMENT, đúng bước chờ payment
+        Order order = order();
+        registerSaga(saga, order);
+
+        listener.paymentInitiated(
+                envelope(
+                        saga,
+                        EventTypes.PAYMENT_INITIATED,
+                        new PaymentInitiatedEvent(
+                                "order-1", "payment-1", "https://sandbox.vnpayment.vn/pay?...")),
+                "message-initiated-1");
+
+        assertEquals("https://sandbox.vnpayment.vn/pay?...", order.getPaymentUrl());
+        // Chỉ ghi chú thông tin, không đổi bước saga — vẫn chờ PAYMENT_COMPLETED thật.
+        assertEquals(OrderSagaStep.AUTHORIZE_PAYMENT, saga.getCurrentStep());
+        verify(sagaOutbox, never()).emit(any(), any());
+    }
+
+    @Test
+    void lateOrDuplicatePaymentInitiatedReplyIsIgnoredWhenSagaAlreadyMovedOn() {
+        OrderSaga saga = runningSaga();
+        saga.inventoryReserved("res-1");
+        saga.paymentAuthorized("pay-1"); // đã sang CONFIRM_INVENTORY — reply initiated tới trễ
+        Order order = order();
+        registerSaga(saga, order);
+
+        listener.paymentInitiated(
+                envelope(
+                        saga,
+                        EventTypes.PAYMENT_INITIATED,
+                        new PaymentInitiatedEvent(
+                                "order-1", "payment-1", "https://sandbox.vnpayment.vn/pay?...")),
+                "message-initiated-2");
+
+        assertNull(order.getPaymentUrl());
+        verify(orderRepository, never()).save(any());
+    }
+
+    @Test
+    void replyForAnotherStepIsIgnoredSilently() {
+        OrderSaga saga = runningSaga();
+        saga.inventoryReserved("res-1"); // saga đã ở AUTHORIZE_PAYMENT
+        registerSaga(saga, order());
+
+        listener.inventoryReserved(
+                envelope(
+                        saga,
+                        EventTypes.INVENTORY_RESERVED,
+                        new InventoryReservationEvent("order-1", "res-9")),
+                "message-2");
+
+        assertEquals(OrderSagaStep.AUTHORIZE_PAYMENT, saga.getCurrentStep());
+        assertEquals("res-1", saga.getInventoryReservationId());
+        verify(sagaOutbox, never()).emit(any(), any());
+    }
+
+    @Test
+    void replyCarryingAnotherOrderIdIsRejected() {
+        OrderSaga saga = runningSaga();
+        registerSaga(saga, order());
+
+        listener.inventoryReserved(
+                envelope(
+                        saga,
+                        EventTypes.INVENTORY_RESERVED,
+                        new InventoryReservationEvent("order-999", "res-1")),
+                "message-3");
+
+        assertEquals(OrderSagaStep.RESERVE_INVENTORY, saga.getCurrentStep());
+        assertNull(saga.getInventoryReservationId());
+        verify(sagaOutbox, never()).emit(any(), any());
+    }
+
+    @Test
+    void lateReservationOnClosedSagaReleasesInventoryWithoutReopeningTheSaga() {
+        OrderSaga saga = runningSaga();
+        saga.compensated("INVENTORY_TIMEOUT", "Quá hạn chờ giữ kho");
+        registerSaga(saga, order());
+
+        listener.inventoryReserved(
+                envelope(
+                        saga,
+                        EventTypes.INVENTORY_RESERVED,
+                        new InventoryReservationEvent("order-1", "res-late")),
+                "message-4");
+
+        assertEquals(OrderSagaStatus.COMPENSATED, saga.getStatus());
+        assertEquals(OrderSagaStep.DONE, saga.getCurrentStep());
+        assertEquals("res-late", saga.getInventoryReservationId());
+        assertEquals(
+                EventTypes.INVENTORY_RELEASE_REQUESTED, emittedCommands().getFirst().eventType());
+    }
+
+    @Test
+    void confirmedInventoryCompletesSagaAndConfirmsOrder() {
+        OrderSaga saga = runningSaga();
+        saga.inventoryReserved("res-1");
+        saga.paymentAuthorized("pay-1");
+        Order order = order();
+        // Sau P4 gio hang nam cung DB, buoc xac nhan don xoa thang cac dong gio hang
+        // da dat -> can mot item co cartItemId de kiem chung.
+        order.getItems()
+                .add(
+                        OrderItem.builder()
+                                .order(order)
+                                .cartItemId("cart-item-1")
+                                .variantId("variant-1")
+                                .quantity(1)
+                                .unitPrice(BigDecimal.TEN)
+                                .lineTotal(BigDecimal.TEN)
+                                .build());
+        registerSaga(saga, order);
+
+        listener.inventoryConfirmed(
+                envelope(
+                        saga,
+                        EventTypes.INVENTORY_CONFIRMED,
+                        new InventoryConfirmedEvent("order-1", "res-1")),
+                "message-5");
+
+        assertEquals(OrderSagaStatus.COMPLETED, saga.getStatus());
+        assertEquals(OrderStatus.CONFIRMED, order.getStatus());
+        assertEquals("pay-1", order.getPaymentId());
+
+        List<String> emitted = emittedCommands().stream().map(SagaCommand::eventType).toList();
+        assertEquals(List.of(EventTypes.ORDER_CONFIRMED), emitted);
+
+        ArgumentCaptor<OrderStatusHistory> historyCaptor =
+                ArgumentCaptor.forClass(OrderStatusHistory.class);
+        verify(orderStatusHistoryRepository, org.mockito.Mockito.times(1))
+                .save(historyCaptor.capture());
+        assertEquals(OrderStatus.PENDING, historyCaptor.getValue().getFromStatus());
+        assertEquals(OrderStatus.CONFIRMED, historyCaptor.getValue().getToStatus());
+        assertEquals("ORDER_CONFIRMED", historyCaptor.getValue().getAction());
+        assertEquals("SYSTEM", historyCaptor.getValue().getChangedBy());
+    }
+
+    /**
+     * Xoá giỏ theo (giỏ đang hoạt động, variantId, số lượng đã đặt) thay vì theo cartItemId đã
+     * snapshot: khách xoá rồi thêm lại một sản phẩm là id đổi, mà id đổi thì cách cũ bỏ sót dòng đó
+     * vĩnh viễn.
+     */
+    @Test
+    void confirmedOrderRemovesOnlyTheOrderedQuantityAndMatchesByVariant() {
+        OrderSaga saga = runningSaga();
+        saga.inventoryReserved("res-1");
+        saga.paymentAuthorized("pay-1");
+        Order order = order();
+        order.getItems().add(orderItem("cart-item-1", "variant-1", 2));
+        registerSaga(saga, order);
+
+        Cart cart =
+                cart(
+                        cartItem(
+                                "cart-item-9",
+                                "variant-1",
+                                5), // khách tăng số lượng sau khi checkout
+                        cartItem("cart-item-2", "variant-2", 1) // sản phẩm không nằm trong đơn
+                        );
+        when(cartRepository.findByUserIdAndStatus("user-1", CartStatus.ACTIVE))
+                .thenReturn(Optional.of(cart));
+
+        listener.inventoryConfirmed(
+                envelope(
+                        saga,
+                        EventTypes.INVENTORY_CONFIRMED,
+                        new InventoryConfirmedEvent("order-1", "res-1")),
+                "message-5b");
+
+        assertEquals(2, cart.getItems().size());
+        assertEquals(3, cart.getItems().get(0).getQuantity()); // 5 - 2 đã mua
+        assertEquals("variant-2", cart.getItems().get(1).getVariantId());
+        verify(cartRepository).save(cart);
+    }
+
+    @Test
+    void confirmedOrderDropsTheCartLineWhenTheWholeQuantityWasOrdered() {
+        OrderSaga saga = runningSaga();
+        saga.inventoryReserved("res-1");
+        saga.paymentAuthorized("pay-1");
+        Order order = order();
+        order.getItems().add(orderItem("cart-item-1", "variant-1", 2));
+        registerSaga(saga, order);
+
+        Cart cart = cart(cartItem("cart-item-1", "variant-1", 2));
+        when(cartRepository.findByUserIdAndStatus("user-1", CartStatus.ACTIVE))
+                .thenReturn(Optional.of(cart));
+
+        listener.inventoryConfirmed(
+                envelope(
+                        saga,
+                        EventTypes.INVENTORY_CONFIRMED,
+                        new InventoryConfirmedEvent("order-1", "res-1")),
+                "message-5c");
+
+        assertTrue(cart.getItems().isEmpty());
+        verify(cartRepository).save(cart);
+    }
+
+    private Cart cart(CartItem... items) {
+        Cart cart =
+                Cart.builder()
+                        .userId("user-1")
+                        .status(CartStatus.ACTIVE)
+                        .items(new ArrayList<>(List.of(items)))
+                        .build();
+        cart.setId("cart-1");
+        cart.getItems().forEach(item -> item.setCart(cart));
+        return cart;
+    }
+
+    private CartItem cartItem(String id, String variantId, int quantity) {
+        CartItem item =
+                CartItem.builder()
+                        .variantId(variantId)
+                        .productId("product-1")
+                        .productName("Basic Tee")
+                        .quantity(quantity)
+                        .unitPrice(BigDecimal.TEN)
+                        .build();
+        item.setId(id);
+        return item;
+    }
+
+    private OrderItem orderItem(String cartItemId, String variantId, int quantity) {
+        return OrderItem.builder()
+                .cartItemId(cartItemId)
+                .variantId(variantId)
+                .productName("Basic Tee")
+                .quantity(quantity)
+                .unitPrice(BigDecimal.TEN)
+                .lineTotal(BigDecimal.TEN.multiply(BigDecimal.valueOf(quantity)))
+                .build();
+    }
+
+    @Test
+    void failedPaymentStartsCompensationByReleasingInventory() {
+        OrderSaga saga = runningSaga();
+        saga.inventoryReserved("res-1");
+        registerSaga(saga, order());
+
+        listener.paymentFailed(
+                envelope(
+                        saga,
+                        EventTypes.PAYMENT_FAILED,
+                        new PaymentFailedEvent("order-1", null, "Thẻ bị từ chối")),
+                "message-6");
+
+        assertEquals(OrderSagaStatus.COMPENSATING, saga.getStatus());
+        assertEquals(OrderSagaStep.RELEASE_INVENTORY, saga.getCurrentStep());
+        assertEquals(
+                EventTypes.INVENTORY_RELEASE_REQUESTED, emittedCommands().getFirst().eventType());
+    }
+
+    @Test
+    void rejectedCancellationDrivesSagaForwardInsteadOfBackward() {
+        OrderSaga saga = runningSaga();
+        saga.inventoryReserved("res-1");
+        saga.startCompensation(
+                OrderSagaStep.CANCEL_PAYMENT, "PAYMENT_TIMEOUT", "Quá hạn chờ thanh toán");
+        registerSaga(saga, order());
+
+        listener.paymentCancellationRejected(
+                envelope(
+                        saga,
+                        EventTypes.PAYMENT_CANCELLATION_REJECTED,
+                        new PaymentCancellationRejectedEvent(
+                                "order-1", null, "ALREADY_CAPTURED", "Tiền đã thu")),
+                "message-7");
+
+        assertEquals(OrderSagaStatus.RUNNING, saga.getStatus());
+        assertEquals(OrderSagaStep.CONFIRM_INVENTORY, saga.getCurrentStep());
+        assertNull(saga.getFailureCode());
+        assertEquals(
+                EventTypes.INVENTORY_CONFIRMATION_REQUESTED,
+                emittedCommands().getFirst().eventType());
+    }
+
+    /**
+     * Tiền đã thu đúng lúc hết hạn: reply "không huỷ được" đến trước payment.completed. Saga phải
+     * lấy paymentId từ chính reply đó, nếu không đơn được xác nhận với paymentId = null và sau này
+     * không hoàn được tiền.
+     */
+    @Test
+    void rejectedCancellationRecordsThePaymentSoTheConfirmedOrderCanBeRefunded() {
+        OrderSaga saga = runningSaga();
+        saga.inventoryReserved("res-1");
+        saga.startCompensation(
+                OrderSagaStep.CANCEL_PAYMENT, "PAYMENT_TIMEOUT", "Quá hạn chờ thanh toán");
+        Order order = order();
+        registerSaga(saga, order);
+
+        listener.paymentCancellationRejected(
+                envelope(
+                        saga,
+                        EventTypes.PAYMENT_CANCELLATION_REJECTED,
+                        new PaymentCancellationRejectedEvent(
+                                "order-1", "pay-1", "PAYMENT_ALREADY_CAPTURED", "Tiền đã thu")),
+                "message-7a");
+        listener.inventoryConfirmed(
+                envelope(
+                        saga,
+                        EventTypes.INVENTORY_CONFIRMED,
+                        new InventoryConfirmedEvent("order-1", "res-1")),
+                "message-7b");
+
+        assertEquals("pay-1", saga.getPaymentId());
+        assertEquals(OrderStatus.CONFIRMED, order.getStatus());
+        assertEquals("pay-1", order.getPaymentId());
+    }
+
+    @Test
+    void paymentSuccessArrivingWhileInventoryIsBeingConfirmedRecordsThePaymentId() {
+        OrderSaga saga = runningSaga();
+        saga.inventoryReserved("res-1");
+        saga.startCompensation(
+                OrderSagaStep.CANCEL_PAYMENT, "PAYMENT_TIMEOUT", "Quá hạn chờ thanh toán");
+        saga.resumeAfterCancellationRejected();
+        registerSaga(saga, order());
+
+        listener.paymentCompleted(
+                envelope(
+                        saga,
+                        EventTypes.PAYMENT_COMPLETED,
+                        new PaymentSuccessEvent("order-1", "pay-1")),
+                "message-8a");
+
+        assertEquals("pay-1", saga.getPaymentId());
+        assertEquals(OrderSagaStep.CONFIRM_INVENTORY, saga.getCurrentStep());
+        verify(sagaOutbox, org.mockito.Mockito.never()).emit(any(OrderSaga.class), any());
+    }
+
+    @Test
+    void paymentSuccessArrivingAfterTheOrderWasConfirmedBackfillsItsPaymentId() {
+        OrderSaga saga = runningSaga();
+        saga.inventoryReserved("res-1");
+        saga.startCompensation(
+                OrderSagaStep.CANCEL_PAYMENT, "PAYMENT_TIMEOUT", "Quá hạn chờ thanh toán");
+        saga.resumeAfterCancellationRejected();
+        saga.complete();
+        Order order = order();
+        order.confirm(null);
+        registerSaga(saga, order);
+
+        listener.paymentCompleted(
+                envelope(
+                        saga,
+                        EventTypes.PAYMENT_COMPLETED,
+                        new PaymentSuccessEvent("order-1", "pay-1")),
+                "message-8b");
+
+        assertEquals("pay-1", order.getPaymentId());
+        assertEquals("pay-1", saga.getPaymentId());
+        assertEquals(OrderStatus.CONFIRMED, order.getStatus());
+        verify(sagaOutbox, org.mockito.Mockito.never()).emit(any(OrderSaga.class), any());
+    }
+
+    @Test
+    void paymentSuccessMovesSagaToInventoryConfirmation() {
+        OrderSaga saga = runningSaga();
+        saga.inventoryReserved("res-1");
+        registerSaga(saga, order());
+
+        listener.paymentCompleted(
+                envelope(
+                        saga,
+                        EventTypes.PAYMENT_COMPLETED,
+                        new PaymentSuccessEvent("order-1", "pay-1")),
+                "message-8");
+
+        assertEquals(OrderSagaStep.CONFIRM_INVENTORY, saga.getCurrentStep());
+        assertEquals("pay-1", saga.getPaymentId());
+        assertTrue(saga.getStepDeadline() != null);
+        assertEquals(
+                EventTypes.INVENTORY_CONFIRMATION_REQUESTED,
+                emittedCommands().getFirst().eventType());
+    }
+
+    @Test
+    void finishedCompensationCancelsOrderAndEmailsTheCustomer() {
+        OrderSaga saga = runningSaga();
+        saga.inventoryReserved("res-1");
+        saga.startCompensation(OrderSagaStep.RELEASE_INVENTORY, "PAYMENT_FAILED", "Thẻ bị từ chối");
+        Order order = order();
+        registerSaga(saga, order);
+
+        listener.inventoryReleased(
+                envelope(
+                        saga,
+                        EventTypes.INVENTORY_RELEASED,
+                        new InventoryReleasedEvent("order-1", "res-1")),
+                "message-cancel");
+
+        assertEquals(OrderStatus.CANCELLED, order.getStatus());
+        verify(orderNotificationService).sendOrderCancelledNotification(order, "Thẻ bị từ chối");
+    }
+
+    // ----- helpers -----
+
+    private OrderSaga runningSaga() {
+        return OrderSaga.start("order-1");
+    }
+
+    private void registerSaga(OrderSaga saga, Order order) {
+        when(sagaRepository.findByIdForUpdate(saga.getId())).thenReturn(Optional.of(saga));
+        when(orderRepository.findByIdForUpdate("order-1")).thenReturn(Optional.of(order));
+    }
+
+    private List<SagaCommand> emittedCommands() {
+        ArgumentCaptor<SagaCommand> captor = ArgumentCaptor.forClass(SagaCommand.class);
+        verify(sagaOutbox, org.mockito.Mockito.atLeastOnce())
+                .emit(any(OrderSaga.class), captor.capture());
+        return captor.getAllValues();
+    }
+
+    private EventEnvelope<Object> envelope(OrderSaga saga, String eventType, Object payload) {
+        return EventEnvelope.v1(eventType, saga.getOrderId(), saga.getId(), payload);
+    }
+
+    private Order order() {
+        Order order =
+                Order.builder()
+                        .orderCode("ORD-2026-0001")
+                        .userId("user-1")
+                        .idempotencyKey("checkout-1")
+                        .checkoutId("checkout-1")
+                        .paymentMethod(PaymentMethod.ONLINE)
+                        .paymentProvider(PaymentProvider.VNPAY)
+                        .status(OrderStatus.PENDING)
+                        .address(
+                                ShippingAddress.builder()
+                                        .recipientName("Customer")
+                                        .recipientPhone("0900000000")
+                                        .build())
+                        .shippingAddress("Address")
+                        .subtotalAmount(BigDecimal.TEN)
+                        .discountAmount(BigDecimal.ZERO)
+                        .shippingFee(BigDecimal.ZERO)
+                        .totalAmount(BigDecimal.TEN)
+                        .items(new ArrayList<>())
+                        .build();
+        order.setId("order-1");
+        return order;
+    }
+}

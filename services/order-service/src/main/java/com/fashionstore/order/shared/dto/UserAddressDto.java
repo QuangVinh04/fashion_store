@@ -1,0 +1,28 @@
+package com.fashionstore.order.shared.dto;
+
+
+import lombok.*;
+
+import java.math.BigDecimal;
+
+@Getter
+@Setter
+@Builder
+@AllArgsConstructor
+@NoArgsConstructor
+public class UserAddressDto {
+    String id;
+    String userId;
+    String recipientName;
+    String phone;
+    String province;
+    String district;
+    String ward;
+    String detailAddress;
+    Integer provinceId;
+    Integer wardId;
+    Integer districtId;
+    String wardCode;
+    Boolean isDefault;
+    String fullAddress;
+}

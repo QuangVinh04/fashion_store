@@ -1,0 +1,276 @@
+package com.fashionstore.payment.payment.client;
+
+import com.fashionstore.common.exception.AppException;
+import com.fashionstore.common.payment.PaymentProvider;
+import com.fashionstore.payment.payment.config.VnPayConfig;
+import com.fashionstore.payment.payment.dto.PaymentCallbackResult;
+import com.fashionstore.payment.payment.dto.PaymentInitiationResult;
+import com.fashionstore.payment.payment.entity.Payment;
+import com.fashionstore.payment.payment.entity.PaymentStatus;
+import com.fashionstore.payment.payment.exception.PaymentErrorCode;
+import com.fasterxml.jackson.databind.JsonNode;
+
+
+import lombok.RequiredArgsConstructor;
+
+import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
+
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.UUID;
+import java.util.stream.Collectors;
+
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
+
+@Component
+@RequiredArgsConstructor
+public class VnPayPaymentHandler implements PaymentHandler {
+    private static final DateTimeFormatter DATE_FORMATTER =
+            DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
+    private static final ZoneId VN_TIME_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
+
+    private final VnPayConfig properties;
+    private final VnPayApi vnPayApi;
+
+    @Override
+    public PaymentProvider provider() {
+        return PaymentProvider.VNPAY;
+    }
+
+    @Override
+    public PaymentInitiationResult initiate(Payment payment, String clientIp) {
+        // Dùng lại ngày request đã commit để URL retry và QueryDr cùng trỏ một giao dịch.
+        LocalDateTime now =
+                payment.getProviderTransactionDate() == null
+                        ? LocalDateTime.now(VN_TIME_ZONE)
+                        : LocalDateTime.parse(payment.getProviderTransactionDate(), DATE_FORMATTER);
+
+        Map<String, String> params = new LinkedHashMap<>();
+        params.put("vnp_Version", properties.getVersion());
+        params.put("vnp_Command", properties.getCommand());
+        params.put("vnp_TmnCode", properties.getTmnCode());
+        params.put("vnp_Amount", toVnPayAmount(payment.getAmount()));
+        params.put("vnp_CurrCode", properties.getCurrency());
+        params.put("vnp_TxnRef", payment.getMerchantReference());
+        params.put("vnp_OrderInfo", "Thanh toan don hang " + payment.getOrderId());
+        params.put("vnp_OrderType", properties.getOrderType());
+        params.put("vnp_Locale", properties.getLocale());
+        params.put("vnp_ReturnUrl", properties.getReturnUrl());
+        params.put("vnp_IpAddr", StringUtils.hasText(clientIp) ? clientIp : "127.0.0.1");
+        params.put("vnp_CreateDate", now.format(DATE_FORMATTER));
+        // Link hết hạn đúng deadline của saga, để sau khi saga huỷ thì khách không trả tiền được nữa.
+        LocalDateTime expiresAt =
+                payment.getAuthorizationExpiresAt() == null
+                        ? now.plusMinutes(properties.getExpirationMinutes())
+                        : LocalDateTime.ofInstant(payment.getAuthorizationExpiresAt(), VN_TIME_ZONE);
+        params.put("vnp_ExpireDate", expiresAt.format(DATE_FORMATTER));
+
+        String query = toQueryString(params);
+        return PaymentInitiationResult.builder()
+                .paymentUrl(
+                        properties.getPayUrl()
+                                + "?"
+                                + query
+                                + "&vnp_SecureHash="
+                                + hmacSha512(query))
+                .merchantReference(payment.getMerchantReference())
+                .providerAmount(payment.getAmount())
+                .providerCurrency(properties.getCurrency())
+                .providerTransactionDate(now.format(DATE_FORMATTER))
+                .build();
+    }
+
+    @Override
+    public PaymentCallbackResult verifyCallback(Map<String, String> queryParams, String rawBody) {
+        Map<String, String> payload = queryParams == null ? Map.of() : queryParams;
+        String secureHash = payload.get("vnp_SecureHash");
+        Map<String, String> signedParams =
+                payload.entrySet().stream()
+                        .filter(entry -> entry.getKey().startsWith("vnp_"))
+                        .filter(entry -> !"vnp_SecureHash".equals(entry.getKey()))
+                        .filter(entry -> !"vnp_SecureHashType".equals(entry.getKey()))
+                        .filter(entry -> StringUtils.hasText(entry.getValue()))
+                        .sorted(Map.Entry.comparingByKey())
+                        .collect(
+                                Collectors.toMap(
+                                        Map.Entry::getKey,
+                                        Map.Entry::getValue,
+                                        (left, right) -> left,
+                                        LinkedHashMap::new));
+
+        boolean signatureValid =
+                StringUtils.hasText(secureHash)
+                        && MessageDigest.isEqual(
+                                hmacSha512(toQueryString(signedParams))
+                                        .getBytes(StandardCharsets.UTF_8),
+                                secureHash.getBytes(StandardCharsets.UTF_8));
+        boolean successful =
+                "00".equals(payload.get("vnp_ResponseCode"))
+                        && "00".equals(payload.get("vnp_TransactionStatus"));
+
+        return PaymentCallbackResult.builder()
+                .merchantReference(payload.get("vnp_TxnRef"))
+                .providerTransactionId(payload.get("vnp_TransactionNo"))
+                .amount(fromVnPayAmount(payload.get("vnp_Amount")))
+                .currency(properties.getCurrency())
+                .status(successful ? PaymentStatus.COMPLETED : PaymentStatus.FAILED)
+                .failureReason(
+                        successful
+                                ? null
+                                : "VNPay response code: " + payload.get("vnp_ResponseCode"))
+                .signatureValid(signatureValid)
+                .build();
+    }
+
+    @Override
+    public PaymentCallbackResult queryPayment(Payment payment) {
+        if (!StringUtils.hasText(payment.getProviderTransactionDate())) {
+            throw new AppException(PaymentErrorCode.PAYMENT_STATUS_INVALID);
+        }
+        String requestId = UUID.randomUUID().toString().replace("-", "");
+        String createDate = LocalDateTime.now(VN_TIME_ZONE).format(DATE_FORMATTER);
+        String orderInfo = "Thanh toan don hang " + payment.getOrderId();
+        Map<String, String> request = new LinkedHashMap<>();
+        request.put("vnp_RequestId", requestId);
+        request.put("vnp_Version", properties.getVersion());
+        request.put("vnp_Command", "querydr");
+        request.put("vnp_TmnCode", properties.getTmnCode());
+        request.put("vnp_TxnRef", payment.getMerchantReference());
+        request.put("vnp_TransactionDate", payment.getProviderTransactionDate());
+        request.put("vnp_CreateDate", createDate);
+        request.put("vnp_IpAddr", properties.getServerIp());
+        request.put("vnp_OrderInfo", orderInfo);
+        request.put(
+                "vnp_SecureHash",
+                hmacSha512(
+                        String.join(
+                                "|",
+                                requestId,
+                                properties.getVersion(),
+                                "querydr",
+                                properties.getTmnCode(),
+                                payment.getMerchantReference(),
+                                payment.getProviderTransactionDate(),
+                                createDate,
+                                properties.getServerIp(),
+                                orderInfo)));
+
+        JsonNode response = vnPayApi.query(request);
+        // QueryDr dùng checksum chuỗi có dấu |, khác checksum query-string của IPN/return.
+        String signedData =
+                java.util.List.of(
+                                "vnp_ResponseId",
+                                "vnp_Command",
+                                "vnp_ResponseCode",
+                                "vnp_Message",
+                                "vnp_TmnCode",
+                                "vnp_TxnRef",
+                                "vnp_Amount",
+                                "vnp_BankCode",
+                                "vnp_PayDate",
+                                "vnp_TransactionNo",
+                                "vnp_TransactionType",
+                                "vnp_TransactionStatus",
+                                "vnp_OrderInfo",
+                                "vnp_PromotionCode",
+                                "vnp_PromotionAmount")
+                        .stream()
+                        .map(field -> response.path(field).asText(""))
+                        .collect(Collectors.joining("|"));
+        String secureHash = response.path("vnp_SecureHash").asText("");
+        if (!MessageDigest.isEqual(
+                hmacSha512(signedData).getBytes(StandardCharsets.UTF_8),
+                secureHash.toLowerCase(java.util.Locale.ROOT).getBytes(StandardCharsets.UTF_8))) {
+            throw new AppException(PaymentErrorCode.PAYMENT_SIGNATURE_INVALID);
+        }
+        if (!"00".equals(response.path("vnp_ResponseCode").asText())
+                || !properties.getTmnCode().equals(response.path("vnp_TmnCode").asText())
+                || !payment.getMerchantReference().equals(response.path("vnp_TxnRef").asText())) {
+            // Lỗi API / chưa tìm thấy giao dịch không có nghĩa thanh toán thất bại.
+            throw new AppException(PaymentErrorCode.PAYMENT_PROVIDER_ERROR);
+        }
+        String status = response.path("vnp_TransactionStatus").asText();
+        PaymentStatus paymentStatus =
+                "00".equals(status)
+                        ? PaymentStatus.COMPLETED
+                        : java.util.Set.of("02", "03", "04", "07", "09").contains(status)
+                                ? PaymentStatus.FAILED
+                                : PaymentStatus.PENDING;
+        return PaymentCallbackResult.builder()
+                .signatureValid(true)
+                .merchantReference(payment.getMerchantReference())
+                .providerTransactionId(response.path("vnp_TransactionNo").asText(null))
+                .amount(fromVnPayAmount(response.path("vnp_Amount").asText(null)))
+                .currency(properties.getCurrency())
+                .status(paymentStatus)
+                .failureReason(
+                        paymentStatus == PaymentStatus.FAILED
+                                ? "VNPay transaction status: " + status
+                                : null)
+                .build();
+    }
+
+    private String toVnPayAmount(BigDecimal amount) {
+        return amount.movePointRight(2).setScale(0, RoundingMode.UNNECESSARY).toPlainString();
+    }
+
+    private BigDecimal fromVnPayAmount(String amount) {
+        if (!StringUtils.hasText(amount)) {
+            return null;
+        }
+        try {
+            return new BigDecimal(amount).movePointLeft(2);
+        } catch (NumberFormatException exception) {
+            return null;
+        }
+    }
+
+    private String toQueryString(Map<String, String> params) {
+        return params.entrySet().stream()
+                .filter(entry -> StringUtils.hasText(entry.getValue()))
+                .sorted(Comparator.comparing(Map.Entry::getKey))
+                .map(entry -> encode(entry.getKey()) + "=" + encode(entry.getValue()))
+                .collect(Collectors.joining("&"));
+    }
+
+    private String hmacSha512(String data) {
+        try {
+            Mac hmac = Mac.getInstance("HmacSHA512");
+            hmac.init(
+                    new SecretKeySpec(
+                            properties.getHashSecret().getBytes(StandardCharsets.UTF_8),
+                            "HmacSHA512"));
+            return toHex(hmac.doFinal(data.getBytes(StandardCharsets.UTF_8)));
+        } catch (Exception exception) {
+            throw new IllegalStateException("Cannot generate VNPay secure hash", exception);
+        }
+    }
+
+    private String encode(String value) {
+        return URLEncoder.encode(value, StandardCharsets.UTF_8);
+    }
+
+    private String toHex(byte[] bytes) {
+        StringBuilder result = new StringBuilder(bytes.length * 2);
+        for (byte value : bytes) {
+            result.append(String.format("%02x", value));
+        }
+        return result.toString();
+    }
+
+    private String vnPayRequestId(String idempotencyKey) {
+        String normalized = idempotencyKey.replace("-", "");
+        return normalized.substring(0, Math.min(normalized.length(), 32));
+    }
+}

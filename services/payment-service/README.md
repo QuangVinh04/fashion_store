@@ -4,12 +4,13 @@ Owns payment records, provider integration, callbacks, and payment status events
 
 ## Code structure
 
-Follow [the Backend structure](../../docs/backend-code-structure.md): controllers accept HTTP, services own business flows, repositories/entities own persistence, clients adapt external/internal HTTP, and event classes own message entry points and outbox delivery.
+Follow [the Backend structure](../../docs/backend-code-structure.md): feature modules `payment` (payments, refunds, VNPay/payOS handlers, callbacks), `wallet` (accounts, ledger, top-up, wallet payments) and `shared` (outbox, Rabbit config, security, `AdminPaging`). Inside each feature, controllers accept HTTP, services own business flows, repositories/entities own persistence, clients adapt external/internal HTTP, and event classes own message entry points and outbox delivery.
 
 - PaymentServiceImpl and CallbackPaymentServiceImpl coordinate payment initiation and callbacks. PaymentTransactionService owns short database transactions around provider calls; PaymentStateServiceImpl applies verified order-payment results.
 - PaymentHandler, its registry and VNPay/payOS adapters live in client alongside VnPayFeignClient. The provider interface represents genuinely different integrations.
 - WalletService consolidates store-balance payments, top-ups (via Payment type=TOP_UP), refund validations/credits, and atomic account ledger updates.
-- OutboxEvent and OutboxEventRepository live in entity/repository. OutboxEventRecorder and OutboxEventRelay live in event; queue/routing/consumer identities remain unchanged.
+- Outbox (OutboxEvent, repository, recorder, relay) lives in `shared/outbox`; queue/routing/consumer identities remain unchanged.
+- `ModularityTest` + `src/test/resources/modulith-known-violations.txt` freeze the payment ↔ wallet coupling; new violations fail the build.
 - Tests follow their component package: provider tests in client, relay/consumer tests in event, business tests in service. PostgreSQL and RabbitMQ tests require Docker.
 
 ## Local dependencies

@@ -1,0 +1,47 @@
+package com.fashionstore.order.shared.outbox;
+
+import com.fashionstore.common.messaging.outbox.OutboxEventStatus;
+
+import jakarta.persistence.LockModeType;
+import jakarta.persistence.QueryHint;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.QueryHints;
+import org.springframework.data.repository.query.Param;
+
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Optional;
+
+public interface OutboxEventRepository extends JpaRepository<OutboxEvent, String> {
+
+    /**
+     * Lưới an toàn cho message bị đọng do app crash hoặc Rabbit chết lúc gửi. {@code skip locked}
+     * để nhiều instance quét song song không tranh nhau cùng một dòng.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @QueryHints(@QueryHint(name = "jakarta.persistence.lock.timeout", value = "-2"))
+    @Query(
+            """
+            select e from OutboxEvent e
+             where e.status = :status
+               and e.nextAttemptAt <= :now
+             order by e.nextAttemptAt asc
+             limit 50
+            """)
+    List<OutboxEvent> findBatchToPublish(
+            @Param("status") OutboxEventStatus status, @Param("now") LocalDateTime now);
+
+    /**
+     * Đường nhanh khoá đúng dòng vừa ghi. {@code skip locked}: nếu scanner đang giữ dòng thì trả về
+     * rỗng ngay thay vì chờ, tránh hai luồng cùng gửi một message.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @QueryHints(@QueryHint(name = "jakarta.persistence.lock.timeout", value = "-2"))
+    @Query("select e from OutboxEvent e where e.id = :id")
+    Optional<OutboxEvent> findByIdForPublish(@Param("id") String id);
+
+    void deleteByStatusAndPublishedAtBefore(OutboxEventStatus status, LocalDateTime publishedAt);
+}

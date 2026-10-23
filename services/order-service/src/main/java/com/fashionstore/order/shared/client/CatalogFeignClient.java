@@ -1,0 +1,51 @@
+package com.fashionstore.order.shared.client;
+
+import com.fashionstore.common.config.feign.FeignGlobalConfig;
+import com.fashionstore.common.dto.ApiResponse;
+import com.fashionstore.order.shared.dto.ProductVariantDto;
+import com.fashionstore.order.shared.dto.StockCheckRequest;
+import com.fashionstore.order.shared.dto.StockCheckResult;
+import org.springframework.cloud.openfeign.FeignClient;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
+
+import java.util.List;
+
+/**
+ * product + inventory đã gộp thành catalog-service, chung một base URL và chung một vòng đời — nên cũng
+ * chung một client thay vì hai client trỏ cùng chỗ với tên của hai service không còn tồn tại.
+ */
+@FeignClient(
+        name = "catalog-service",
+        url = "${app.clients.catalog-base-url}",
+        configuration = {FeignGlobalConfig.class, CatalogFeignClientConfig.class}
+)
+public interface CatalogFeignClient {
+
+    @GetMapping("/internal/v1/media/{mediaId}")
+    ApiResponse<com.fashionstore.order.shared.dto.ReturnEvidenceMetadata> getReturnEvidence(@PathVariable String mediaId,@RequestParam String ownerId);
+
+    @GetMapping("/internal/v1/media/{mediaId}/evidence-url")
+    ApiResponse<String> getEvidenceReadUrl(@PathVariable String mediaId,@RequestParam String ownerId);
+
+    @GetMapping("/api/v1/products/variants/{id}")
+    ApiResponse<ProductVariantDto> getVariant(@PathVariable("id") String variantId);
+
+    @GetMapping("/api/v1/products/variants/batch")
+    ApiResponse<List<ProductVariantDto>> getVariantsBatch(@RequestParam List<String> variantIds);
+
+    /** Read-only, không có side effect — đúng như catalog-service tài liệu hóa cho phần giỏ hàng. */
+    @PostMapping("/api/v1/inventory/check")
+    ApiResponse<StockCheckResult> checkStock(@RequestBody StockCheckRequest request);
+
+    /** Hoàn trả tồn kho khi duyệt trả hàng (RETURN_APPROVED). */
+    @PostMapping("/api/v1/inventory/restock/{orderId}")
+    ApiResponse<Void> restock(@PathVariable("orderId") String orderId);
+
+    /** Đếm số lượng variant sắp hết hàng phục vụ Dashboard */
+    @GetMapping("/internal/inventory/low-stock/count")
+    ApiResponse<Long> countLowStock(@RequestParam(value = "threshold", defaultValue = "10") int threshold);
+}

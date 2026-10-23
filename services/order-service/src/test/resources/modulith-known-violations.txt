@@ -1,0 +1,134 @@
+# Known Spring Modulith violations (Phase 3 debt). ModularityTest fails on any NEW violation,
+# and on any line here that no longer occurs — delete it once fixed.
+Cycle detected: Slice checkout -> Slice order -> Slice checkout
+Cycle detected: Slice checkout -> Slice shipment -> Slice order -> Slice checkout
+Cycle detected: Slice checkout -> Slice shipment -> Slice returns -> Slice order -> Slice checkout
+Cycle detected: Slice checkout -> Slice shipment -> Slice saga -> Slice order -> Slice checkout
+Cycle detected: Slice checkout -> Slice shipment -> Slice saga -> Slice returns -> Slice order -> Slice checkout
+Cycle detected: Slice order -> Slice returns -> Slice order
+Cycle detected: Slice order -> Slice returns -> Slice shipment -> Slice order
+Cycle detected: Slice order -> Slice returns -> Slice shipment -> Slice saga -> Slice order
+Cycle detected: Slice order -> Slice saga -> Slice order
+Cycle detected: Slice order -> Slice saga -> Slice returns -> Slice order
+Cycle detected: Slice order -> Slice saga -> Slice returns -> Slice shipment -> Slice order
+Cycle detected: Slice order -> Slice saga -> Slice shipment -> Slice order
+Cycle detected: Slice order -> Slice saga -> Slice shipment -> Slice returns -> Slice order
+Cycle detected: Slice order -> Slice shipment -> Slice order
+Cycle detected: Slice order -> Slice shipment -> Slice returns -> Slice order
+Cycle detected: Slice order -> Slice shipment -> Slice saga -> Slice order
+Cycle detected: Slice order -> Slice shipment -> Slice saga -> Slice returns -> Slice order
+Cycle detected: Slice returns -> Slice shipment -> Slice returns
+Cycle detected: Slice returns -> Slice shipment -> Slice saga -> Slice returns
+Cycle detected: Slice saga -> Slice shipment -> Slice saga
+Module 'checkout' depends on non-exposed type cart.entity.Cart within module 'cart'!
+Module 'checkout' depends on non-exposed type cart.entity.CartItem within module 'cart'!
+Module 'checkout' depends on non-exposed type cart.service.CartService within module 'cart'!
+Module 'checkout' depends on non-exposed type order.entity.Order within module 'order'!
+Module 'checkout' depends on non-exposed type order.entity.ShippingAddress within module 'order'!
+Module 'checkout' depends on non-exposed type order.entity.ShippingAddress$ShippingAddressBuilder within module 'order'!
+Module 'checkout' depends on non-exposed type order.entity.ShippingMethod within module 'order'!
+Module 'checkout' depends on non-exposed type promotion.dto.PromotionItemDto within module 'promotion'!
+Module 'checkout' depends on non-exposed type promotion.dto.PromotionItemDto$PromotionItemDtoBuilder within module 'promotion'!
+Module 'checkout' depends on non-exposed type promotion.service.PromotionService within module 'promotion'!
+Module 'checkout' depends on non-exposed type shipment.client.GhnClient within module 'shipment'!
+Module 'dashboard' depends on non-exposed type order.dto.OrderStatusCountResponse within module 'order'!
+Module 'dashboard' depends on non-exposed type order.dto.TopProductResponse within module 'order'!
+Module 'dashboard' depends on non-exposed type order.entity.OrderStatus within module 'order'!
+Module 'dashboard' depends on non-exposed type order.repository.OrderItemRepository within module 'order'!
+Module 'dashboard' depends on non-exposed type order.repository.OrderRepository within module 'order'!
+Module 'order' depends on non-exposed type checkout.entity.Checkout within module 'checkout'!
+Module 'order' depends on non-exposed type checkout.entity.CheckoutItem within module 'checkout'!
+Module 'order' depends on non-exposed type checkout.entity.CheckoutStatus within module 'checkout'!
+Module 'order' depends on non-exposed type checkout.repository.CheckoutRepository within module 'checkout'!
+Module 'order' depends on non-exposed type promotion.dto.PromotionItemDto within module 'promotion'!
+Module 'order' depends on non-exposed type promotion.dto.PromotionItemDto$PromotionItemDtoBuilder within module 'promotion'!
+Module 'order' depends on non-exposed type promotion.service.PromotionService within module 'promotion'!
+Module 'order' depends on non-exposed type returns.dto.OrderReturnReference within module 'returns'!
+Module 'order' depends on non-exposed type returns.dto.ReturnOrderRequest within module 'returns'!
+Module 'order' depends on non-exposed type returns.dto.ReturnRefundStatus within module 'returns'!
+Module 'order' depends on non-exposed type returns.dto.ReturnRequestResponse within module 'returns'!
+Module 'order' depends on non-exposed type returns.entity.ReturnRequest within module 'returns'!
+Module 'order' depends on non-exposed type returns.entity.ReturnRequestKind within module 'returns'!
+Module 'order' depends on non-exposed type returns.entity.ReturnRequestStatus within module 'returns'!
+Module 'order' depends on non-exposed type returns.repository.ReturnRequestRepository within module 'returns'!
+Module 'order' depends on non-exposed type returns.service.ReturnPickupService within module 'returns'!
+Module 'order' depends on non-exposed type returns.service.ReturnService within module 'returns'!
+Module 'order' depends on non-exposed type saga.dto.CancelOrderRequest within module 'saga'!
+Module 'order' depends on non-exposed type saga.dto.OrderCancellationResponse within module 'saga'!
+Module 'order' depends on non-exposed type saga.dto.OrderSagaResponse within module 'saga'!
+Module 'order' depends on non-exposed type saga.dto.OrderSagaResponse$OrderSagaResponseBuilder within module 'saga'!
+Module 'order' depends on non-exposed type saga.dto.VerifyCancellationCarrierRequest within module 'saga'!
+Module 'order' depends on non-exposed type saga.entity.OrderSaga within module 'saga'!
+Module 'order' depends on non-exposed type saga.entity.OrderSagaType within module 'saga'!
+Module 'order' depends on non-exposed type saga.event.SagaOutbox within module 'saga'!
+Module 'order' depends on non-exposed type saga.repository.OrderSagaRepository within module 'saga'!
+Module 'order' depends on non-exposed type saga.service.OrderCancellationService within module 'saga'!
+Module 'order' depends on non-exposed type saga.service.OrderCancellationViewService within module 'saga'!
+Module 'order' depends on non-exposed type saga.service.OrderSagaTimeoutService within module 'saga'!
+Module 'order' depends on non-exposed type saga.service.SagaCancellationService within module 'saga'!
+Module 'order' depends on non-exposed type saga.service.SagaCancellationService$Outcome within module 'saga'!
+Module 'order' depends on non-exposed type shipment.dto.ShipmentResponse within module 'shipment'!
+Module 'order' depends on non-exposed type shipment.entity.Shipment within module 'shipment'!
+Module 'order' depends on non-exposed type shipment.entity.ShipmentProvider within module 'shipment'!
+Module 'order' depends on non-exposed type shipment.entity.ShipmentStatus within module 'shipment'!
+Module 'order' depends on non-exposed type shipment.repository.ShipmentRepository within module 'shipment'!
+Module 'order' depends on non-exposed type shipment.service.ShipmentService within module 'shipment'!
+Module 'returns' depends on non-exposed type order.entity.Order within module 'order'!
+Module 'returns' depends on non-exposed type order.entity.OrderItem within module 'order'!
+Module 'returns' depends on non-exposed type order.entity.OrderStatus within module 'order'!
+Module 'returns' depends on non-exposed type order.entity.OrderStatusHistory within module 'order'!
+Module 'returns' depends on non-exposed type order.entity.OrderStatusHistory$OrderStatusHistoryBuilder within module 'order'!
+Module 'returns' depends on non-exposed type order.entity.ShippingAddress within module 'order'!
+Module 'returns' depends on non-exposed type order.repository.OrderRepository within module 'order'!
+Module 'returns' depends on non-exposed type order.repository.OrderStatusHistoryRepository within module 'order'!
+Module 'returns' depends on non-exposed type order.service.OrderNotificationService within module 'order'!
+Module 'returns' depends on non-exposed type order.service.OrderReceiptService within module 'order'!
+Module 'returns' depends on non-exposed type shipment.client.GhnClient within module 'shipment'!
+Module 'returns' depends on non-exposed type shipment.config.GhnProperties within module 'shipment'!
+Module 'returns' depends on non-exposed type shipment.dto.GhnWebhookPayload within module 'shipment'!
+Module 'returns' depends on non-exposed type shipment.dto.ShipmentCancellationResult within module 'shipment'!
+Module 'returns' depends on non-exposed type shipment.dto.VerifiedGhnShipment within module 'shipment'!
+Module 'returns' depends on non-exposed type shipment.entity.Shipment within module 'shipment'!
+Module 'returns' depends on non-exposed type shipment.entity.ShipmentStatus within module 'shipment'!
+Module 'returns' depends on non-exposed type shipment.repository.ShipmentRepository within module 'shipment'!
+Module 'saga' depends on non-exposed type cart.entity.Cart within module 'cart'!
+Module 'saga' depends on non-exposed type cart.entity.CartItem within module 'cart'!
+Module 'saga' depends on non-exposed type cart.entity.CartStatus within module 'cart'!
+Module 'saga' depends on non-exposed type cart.repository.CartRepository within module 'cart'!
+Module 'saga' depends on non-exposed type order.dto.OrderResponse within module 'order'!
+Module 'saga' depends on non-exposed type order.entity.Order within module 'order'!
+Module 'saga' depends on non-exposed type order.entity.OrderItem within module 'order'!
+Module 'saga' depends on non-exposed type order.entity.OrderStatus within module 'order'!
+Module 'saga' depends on non-exposed type order.entity.OrderStatusHistory within module 'order'!
+Module 'saga' depends on non-exposed type order.entity.OrderStatusHistory$OrderStatusHistoryBuilder within module 'order'!
+Module 'saga' depends on non-exposed type order.repository.OrderRepository within module 'order'!
+Module 'saga' depends on non-exposed type order.repository.OrderStatusHistoryRepository within module 'order'!
+Module 'saga' depends on non-exposed type order.service.OrderNotificationService within module 'order'!
+Module 'saga' depends on non-exposed type order.service.OrderService within module 'order'!
+Module 'saga' depends on non-exposed type promotion.service.PromotionService within module 'promotion'!
+Module 'saga' depends on non-exposed type returns.service.ReturnService within module 'returns'!
+Module 'saga' depends on non-exposed type shipment.client.GhnClient within module 'shipment'!
+Module 'saga' depends on non-exposed type shipment.dto.ShipmentCancellationResult within module 'shipment'!
+Module 'saga' depends on non-exposed type shipment.entity.Shipment within module 'shipment'!
+Module 'saga' depends on non-exposed type shipment.entity.ShipmentStatus within module 'shipment'!
+Module 'saga' depends on non-exposed type shipment.repository.ShipmentRepository within module 'shipment'!
+Module 'shipment' depends on non-exposed type order.entity.Order within module 'order'!
+Module 'shipment' depends on non-exposed type order.entity.OrderItem within module 'order'!
+Module 'shipment' depends on non-exposed type order.entity.OrderStatus within module 'order'!
+Module 'shipment' depends on non-exposed type order.entity.OrderStatusHistory within module 'order'!
+Module 'shipment' depends on non-exposed type order.entity.OrderStatusHistory$OrderStatusHistoryBuilder within module 'order'!
+Module 'shipment' depends on non-exposed type order.entity.ShippingAddress within module 'order'!
+Module 'shipment' depends on non-exposed type order.entity.ShippingMethod within module 'order'!
+Module 'shipment' depends on non-exposed type order.repository.OrderRepository within module 'order'!
+Module 'shipment' depends on non-exposed type order.repository.OrderStatusHistoryRepository within module 'order'!
+Module 'shipment' depends on non-exposed type order.service.OrderNotificationService within module 'order'!
+Module 'shipment' depends on non-exposed type order.service.OrderReceiptService within module 'order'!
+Module 'shipment' depends on non-exposed type returns.dto.ReturnPickup within module 'returns'!
+Module 'shipment' depends on non-exposed type returns.dto.ReturnPickup$Item within module 'returns'!
+Module 'shipment' depends on non-exposed type returns.service.ReturnPickupService within module 'returns'!
+Module 'shipment' depends on non-exposed type saga.entity.OrderSaga within module 'saga'!
+Module 'shipment' depends on non-exposed type saga.entity.OrderSagaStatus within module 'saga'!
+Module 'shipment' depends on non-exposed type saga.entity.OrderSagaStep within module 'saga'!
+Module 'shipment' depends on non-exposed type saga.entity.OrderSagaType within module 'saga'!
+Module 'shipment' depends on non-exposed type saga.repository.OrderSagaRepository within module 'saga'!
+Module 'shipment' depends on non-exposed type saga.service.OrderCancellationSagaService within module 'saga'!

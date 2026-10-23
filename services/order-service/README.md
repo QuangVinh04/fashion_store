@@ -4,14 +4,15 @@ Sở hữu giỏ hàng, checkout, đơn hàng, khuyến mãi, vận chuyển và
 
 ## Cấu trúc code
 
-Tuân theo [cấu trúc Backend](../../docs/backend-code-structure.md). Entity/repository giữ dữ liệu; service giữ nghiệp vụ; mapper chuyển đổi dữ liệu; client gọi Catalog/Identity/Payment/GHN; event giữ các điểm vào message và lịch chạy.
+Tuân theo [cấu trúc Backend](../../docs/backend-code-structure.md): chia theo feature (Spring Modulith) — `cart`, `checkout`, `order`, `saga` (đặt hàng + hủy), `returns`, `shipment` (GHN), `promotion`, `dashboard`, và `shared` (outbox, Rabbit config, security, client Catalog/Identity, `OrderErrorCode`). Trong mỗi feature: entity/repository giữ dữ liệu; service giữ nghiệp vụ; mapper chuyển đổi dữ liệu; client gọi Catalog/Identity/Payment/GHN; event giữ các điểm vào message và lịch chạy.
 
 - CartServiceImpl/CheckoutServiceImpl điều phối, CartTransactionService/CheckoutTransactionService giữ transaction ngắn quanh phần dữ liệu.
 - OrderSagaEventListener nhận RabbitMQ; OrderSagaService xử lý nghiệp vụ; SagaReplyProcessor/SagaOutbox dùng lại cơ chế inbox/outbox hiện có.
 - OrderCancellationService điều phối hủy; OrderCancellationSagaService ghi tiến trình trong OrderSaga(type=CANCELLATION); OrderCancellationViewService bổ sung quyền thao tác và dữ liệu hủy cho response.
 - ReturnServiceImpl giữ flow yêu cầu → duyệt → nhận/QC → hoàn ví hoặc từ chối. ReturnRequestMapper chỉ ánh xạ response và danh sách ảnh đã lưu. Hoàn ví ghi intent và command vào outbox cùng transaction; OrderFundsRefundEventListener nhận kết quả Payment để đóng REFUNDED. Xem [flow hoàn ví qua queue](../../docs/return-refund-queue.md).
 - ShipmentServiceImpl điều phối vận đơn/webhook; ShipmentCreationTransactionService quản lý các transaction tạo vận đơn; GhnClient gọi và xác minh dữ liệu nhà vận chuyển.
-- OutboxEvent nằm trong entity, repository tương ứng trong repository; OutboxEventRecorder/OutboxEventRelay nằm trong event.
+- Outbox (OutboxEvent, repository, recorder, relay) nằm trong `shared/outbox`; SagaOutbox nằm trong `saga/event`.
+- `ModularityTest` + `src/test/resources/modulith-known-violations.txt` đóng băng coupling hiện có giữa order/saga/returns/shipment/checkout; vi phạm mới làm test fail.
 
 ## Dữ liệu chi tiết trả hàng và hoàn tiền
 

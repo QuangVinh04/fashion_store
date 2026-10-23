@@ -1,0 +1,351 @@
+package com.fashionstore.order.shipment.client;
+
+import com.fashionstore.common.exception.AppException;
+import com.fashionstore.common.exception.ErrorCode;
+import com.fashionstore.common.payment.PaymentMethod;
+import com.fashionstore.order.shipment.config.GhnProperties;
+import com.fashionstore.order.shared.dto.UserAddressDto;
+import com.fashionstore.order.shipment.dto.GhnCreateOrderRequest;
+import com.fashionstore.order.returns.dto.ReturnPickup;
+import com.fashionstore.order.shipment.dto.GhnCreateOrderResponse;
+import com.fashionstore.order.shipment.dto.VerifiedGhnShipment;
+import java.time.Instant;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+import com.fashionstore.order.order.entity.Order;
+import com.fashionstore.order.order.entity.ShippingAddress;
+import com.fashionstore.order.order.entity.ShippingMethod;
+import com.fashionstore.order.shared.exception.OrderErrorCode;
+import feign.FeignException;
+
+import lombok.AccessLevel;
+import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Component;
+
+import java.math.BigDecimal;
+import java.util.List;
+
+@Slf4j
+@Component
+@RequiredArgsConstructor
+@FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
+public class GhnClient {
+
+    private static final com.fasterxml.jackson.databind.ObjectMapper JSON =
+            new com.fasterxml.jackson.databind.ObjectMapper();
+
+    GhnApi ghnApi;
+    GhnProperties ghnProperties;
+
+    @Transactional(propagation = Propagation.NEVER)
+    public VerifiedGhnShipment getVerifiedShipment(String orderCode) {
+        if (!Boolean.TRUE.equals(ghnProperties.getEnabled()) || ghnProperties.getToken() == null
+                || ghnProperties.getToken().isBlank() || ghnProperties.getShopId() == null
+                || !ghnProperties.getShopId().matches("[1-9][0-9]*")
+                || orderCode == null || orderCode.isBlank() || orderCode.startsWith("GHN_MOCK_")) {
+            throw new AppException(ErrorCode.UPSTREAM_SERVICE_ERROR);
+        }
+        try {
+            var response = ghnApi.getOrderDetail(ghnProperties.getToken(), ghnProperties.getShopId(), orderCode);
+            var data = response == null ? null : response.path("data");
+            if (response == null || response.path("code").asInt() != 200 || data == null || !data.isObject()
+                    || !orderCode.equals(data.path("order_code").asText())
+                    || !ghnProperties.getShopId().equals(data.path("shop_id").asText())
+                    || !data.path("cod_amount").isIntegralNumber() || data.path("cod_amount").decimalValue().signum() < 0
+                    || data.path("status").asText().isBlank()) {
+                throw new AppException(ErrorCode.UPSTREAM_SERVICE_ERROR);
+            }
+            Instant collectedAt = data.path("cod_collect_date").isNull() || data.path("cod_collect_date").isMissingNode()
+                    ? null : Instant.parse(data.path("cod_collect_date").asText());
+            Instant transferredAt = data.path("cod_transfer_date").isNull() || data.path("cod_transfer_date").isMissingNode()
+                    ? null : Instant.parse(data.path("cod_transfer_date").asText());
+            return new VerifiedGhnShipment(orderCode, data.path("shop_id").asText(), data.path("client_order_code").asText(),
+                    data.path("status").asText(), data.path("cod_amount").decimalValue(),
+                    data.path("is_cod_collected").isBoolean() && data.path("is_cod_collected").booleanValue(), collectedAt,
+                    data.path("is_cod_transferred").isBoolean() && data.path("is_cod_transferred").booleanValue(), transferredAt);
+        } catch (AppException invalid) {
+            throw invalid;
+        } catch (RuntimeException unavailable) {
+            throw new AppException(ErrorCode.UPSTREAM_SERVICE_ERROR, unavailable);
+        }
+    }
+
+    @org.springframework.transaction.annotation.Transactional(propagation=org.springframework.transaction.annotation.Propagation.NEVER)
+    public com.fashionstore.order.shipment.dto.ShipmentCancellationResult cancelPendingShipment(String trackingCode) {
+        if(trackingCode==null || trackingCode.isBlank() || trackingCode.startsWith("GHN_MOCK_")
+                || !Boolean.TRUE.equals(ghnProperties.getEnabled()) || ghnProperties.getToken()==null || ghnProperties.getToken().isBlank()
+                || ghnProperties.getShopId()==null || ghnProperties.getShopId().isBlank())
+            return com.fashionstore.order.shipment.dto.ShipmentCancellationResult.unknown(trackingCode,"Carrier verification is not configured");
+        try {
+            var detail=ghnApi.getOrderDetail(ghnProperties.getToken(),ghnProperties.getShopId(),trackingCode);
+            if(detail==null || detail.path("code").asInt()!=200 || !detail.path("data").isObject()
+                    || !trackingCode.equals(detail.path("data").path("order_code").asText())
+                    || !ghnProperties.getShopId().equals(detail.path("data").path("shop_id").asText()))
+                return com.fashionstore.order.shipment.dto.ShipmentCancellationResult.unknown(trackingCode,"Carrier shipment ownership is unverified");
+            String status=detail.path("data").path("status").asText();
+            if(java.util.Set.of("picked","storing","transporting","sorting","delivering","delivered","return","return_transporting","return_sorting","returning","returned").contains(status))
+                return new com.fashionstore.order.shipment.dto.ShipmentCancellationResult(trackingCode,"HANDED_OFF","Carrier status: "+status);
+            if("cancel".equals(status)) return new com.fashionstore.order.shipment.dto.ShipmentCancellationResult(trackingCode,"CANCELLED","Carrier confirmed cancellation");
+            if(!"ready_to_pick".equals(status)) return com.fashionstore.order.shipment.dto.ShipmentCancellationResult.unknown(trackingCode,"Carrier status requires verification: "+status);
+            var response=ghnApi.cancelOrder(ghnProperties.getToken(),ghnProperties.getShopId(),java.util.Map.of("order_codes",java.util.List.of(trackingCode)));
+            if(response!=null && response.path("code").asInt()==200 && response.path("data").isArray()) {
+                for(var row:response.path("data")) if(trackingCode.equals(row.path("order_code").asText())
+                        && row.path("result").isBoolean() && row.path("result").booleanValue())
+                    return new com.fashionstore.order.shipment.dto.ShipmentCancellationResult(trackingCode,"CANCELLED","Carrier accepted cancellation");
+            }
+            return com.fashionstore.order.shipment.dto.ShipmentCancellationResult.unknown(trackingCode,"Carrier did not confirm cancellation");
+        } catch(RuntimeException error) {
+            return com.fashionstore.order.shipment.dto.ShipmentCancellationResult.unknown(trackingCode,"Carrier response is uncertain; reconciliation is required");
+        }
+    }
+
+    /**
+     * Tính phí vận chuyển qua GHN API.
+     * Nếu token không cấu hình hoặc disable:
+     * - allowMock == true: fallback phí ước tính chuẩn (dev/test offline).
+     * - allowMock == false: ném UPSTREAM_SERVICE_ERROR (502).
+     */
+    public BigDecimal calculateFee(ShippingAddress address, int weightGram, ShippingMethod shippingMethod) {
+        if (address == null || address.getProvinceId() == null || address.getWardId() == null
+                || address.getProvince() == null || address.getProvince().isBlank()
+                || address.getWard() == null || address.getWard().isBlank()) {
+            throw new AppException(OrderErrorCode.SHIPPING_ADDRESS_INVALID);
+        }
+
+        int effectiveWeight = weightGram <= 0 ? 200 : weightGram;
+        int serviceTypeId = effectiveWeight >= 20_000 ? 5 : 2;
+
+        String token = ghnProperties.getToken();
+        boolean isMockAllowed = Boolean.TRUE.equals(ghnProperties.getAllowMock());
+        boolean isGhnConfigured = Boolean.TRUE.equals(ghnProperties.getEnabled()) && token != null && !token.isBlank();
+
+        if (!isGhnConfigured) {
+            if (isMockAllowed) {
+                log.info("[GHN] Token not configured or disabled; using standard estimation fallback (mock allowed)");
+                return estimateFeeFallback(effectiveWeight, shippingMethod);
+            }
+            log.error("[GHN] GHN integration is not configured/disabled and mock is not allowed");
+            throw new AppException(ErrorCode.UPSTREAM_SERVICE_ERROR);
+        }
+
+        GhnCreateOrderRequest request = GhnCreateOrderRequest.builder()
+                .paymentTypeId(1)
+                .toName(address.getRecipientName())
+                .toPhone(address.getRecipientPhone())
+                .toAddress(String.join(", ", address.getDetailAddress(), address.getWard(), address.getProvince()))
+                .toWardName(address.getWard())
+                .toProvinceName(address.getProvince())
+                .isNewToAddress(true)
+                .content("Fashion store order")
+                .serviceTypeId(serviceTypeId)
+                .weight(effectiveWeight)
+                .length(20)
+                .width(20)
+                .height(10)
+                .build();
+
+        try {
+            GhnCreateOrderResponse response = ghnApi.previewOrder(token, ghnProperties.getShopId(), request);
+            if (response != null && response.getData() != null && response.getData().getTotalFee() != null) {
+                return response.getData().getTotalFee();
+            }
+            log.warn("[GHN] Calculate fee response empty: {}", response);
+            throw new AppException(ErrorCode.UPSTREAM_SERVICE_ERROR);
+        } catch (FeignException e) {
+            log.error("[GHN] Feign error while calculating fee: status={}, message={}", e.status(), e.getMessage());
+            throw new AppException(ErrorCode.UPSTREAM_SERVICE_ERROR);
+        } catch (AppException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("[GHN] Unexpected error while calculating fee: {}", e.getMessage(), e);
+            throw new AppException(ErrorCode.UPSTREAM_SERVICE_ERROR);
+        }
+    }
+
+    /**
+     * Tạo vận đơn bên GHN.
+     */
+    public String createOrder(Order order, UserAddressDto address, int weightGram, String clientOrderCode) {
+        if (address == null || address.getProvinceId() == null || address.getWardId() == null
+                || address.getProvince() == null || address.getProvince().isBlank()
+                || address.getWard() == null || address.getWard().isBlank()) {
+            throw new AppException(OrderErrorCode.SHIPPING_ADDRESS_INVALID);
+        }
+
+        int effectiveWeight = weightGram <= 0 ? 200 : weightGram;
+        String token = ghnProperties.getToken();
+        boolean isMockAllowed = Boolean.TRUE.equals(ghnProperties.getAllowMock());
+        boolean isGhnConfigured = Boolean.TRUE.equals(ghnProperties.getEnabled()) && token != null && !token.isBlank();
+
+        if (!isGhnConfigured) {
+            if (isMockAllowed) {
+                String mockTracking = "GHN_MOCK_" + clientOrderCode;
+                log.info("[GHN] Token not configured or disabled; returning mock tracking code: {} (mock allowed)", mockTracking);
+                return mockTracking;
+            }
+            log.error("[GHN] GHN integration is not configured/disabled and mock is not allowed");
+            throw new AppException(ErrorCode.UPSTREAM_SERVICE_ERROR);
+        }
+
+        List<GhnCreateOrderRequest.GhnItem> items = order.getItems().stream()
+                .map(item -> GhnCreateOrderRequest.GhnItem.builder()
+                        .name(item.getProductName())
+                        .code(item.getVariantId())
+                        .quantity(item.getQuantity())
+                        .price(item.getUnitPrice())
+                        .weight(effectiveWeight / Math.max(1, order.getItems().size()))
+                        .build())
+                .toList();
+
+        BigDecimal codAmount = order.getPaymentMethod() == PaymentMethod.COD ? order.getTotalAmount() : BigDecimal.ZERO;
+
+        GhnCreateOrderRequest request = GhnCreateOrderRequest.builder()
+                .paymentTypeId(1) // Shop trả cước vận chuyển
+                .clientOrderCode(clientOrderCode)
+                .toName(order.getAddress().getRecipientName())
+                .toPhone(order.getAddress().getRecipientPhone())
+                .toAddress(order.getShippingAddress())
+                .toWardName(address.getWard())
+                .toProvinceName(address.getProvince())
+                .isNewToAddress(true)
+                .codAmount(codAmount)
+                .weight(effectiveWeight)
+                .length(20)
+                .width(20)
+                .height(10)
+                .serviceTypeId(effectiveWeight >= 20_000 ? 5 : 2)
+                .items(items)
+                .build();
+
+        try {
+            GhnCreateOrderResponse response = ghnApi.createOrder(token, ghnProperties.getShopId(), request);
+            if (response != null && response.getData() != null && response.getData().getOrderCode() != null) {
+                return response.getData().getOrderCode();
+            }
+            log.warn("[GHN] Create order response empty: {}", response);
+            throw new AppException(ErrorCode.UPSTREAM_SERVICE_ERROR);
+        } catch (FeignException e) {
+            log.error("[GHN] Feign error while creating order: status={}, message={}", e.status(), e.getMessage());
+            throw creationFailure(e);
+        } catch (AppException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("[GHN] Unexpected error while creating order: {}", e.getMessage(), e);
+            throw new AppException(ErrorCode.UPSTREAM_SERVICE_ERROR);
+        }
+    }
+
+    /**
+     * Tạo đơn trả hàng bên GHN: lấy tại địa chỉ khách ({@code from_*}), giao về kho nhận hàng trả
+     * ({@code to_*}), shop trả cước, không thu COD. {@code client_order_code} duy nhất theo shop và
+     * GHN trả lại mã cũ khi gửi lại cùng mã, nên gọi lại sau lỗi/timeout không tạo đơn trùng.
+     */
+    public String createReturnOrder(ReturnPickup pickup, String clientOrderCode) {
+        if (pickup.senderProvince() == null || pickup.senderProvince().isBlank()
+                || pickup.senderWard() == null || pickup.senderWard().isBlank()) {
+            throw new AppException(OrderErrorCode.SHIPPING_ADDRESS_INVALID);
+        }
+
+        String token = ghnProperties.getToken();
+        boolean isMockAllowed = Boolean.TRUE.equals(ghnProperties.getAllowMock());
+        boolean isGhnConfigured = Boolean.TRUE.equals(ghnProperties.getEnabled()) && token != null && !token.isBlank();
+        if (!isGhnConfigured) {
+            if (isMockAllowed) {
+                String mockTracking = "GHN_MOCK_" + clientOrderCode;
+                log.info("[GHN] Not configured; returning mock return tracking code: {} (mock allowed)", mockTracking);
+                return mockTracking;
+            }
+            log.error("[GHN] GHN integration is not configured/disabled and mock is not allowed");
+            throw new AppException(ErrorCode.UPSTREAM_SERVICE_ERROR);
+        }
+
+        var warehouse = ghnProperties.getReturnWarehouse();
+        if (!warehouse.isComplete()) {
+            log.error("[GHN] app.ghn.return-warehouse.* is not fully configured");
+            throw new AppException(OrderErrorCode.RETURN_WAREHOUSE_NOT_CONFIGURED);
+        }
+
+        int effectiveWeight = pickup.weightGram() <= 0 ? 200 : pickup.weightGram();
+        List<GhnCreateOrderRequest.GhnItem> items = pickup.items().stream()
+                .map(item -> GhnCreateOrderRequest.GhnItem.builder()
+                        .name(item.name())
+                        .code(item.code())
+                        .quantity(item.quantity())
+                        .price(item.price())
+                        .weight(effectiveWeight / Math.max(1, pickup.items().size()))
+                        .build())
+                .toList();
+
+        GhnCreateOrderRequest request = GhnCreateOrderRequest.builder()
+                .paymentTypeId(1) // Shop trả cước chiều về
+                .clientOrderCode(clientOrderCode)
+                .fromName(pickup.senderName())
+                .fromPhone(pickup.senderPhone())
+                .fromAddress(pickup.senderAddress())
+                .fromWardName(pickup.senderWard())
+                .fromProvinceName(pickup.senderProvince())
+                .isNewFromAddress(true)
+                .toName(warehouse.getName())
+                .toPhone(warehouse.getPhone())
+                .toAddress(warehouse.getAddress())
+                .toWardName(warehouse.getWardName())
+                .toProvinceName(warehouse.getProvinceName())
+                .isNewToAddress(true)
+                .content("Return order " + pickup.orderCode())
+                .codAmount(BigDecimal.ZERO)
+                .weight(effectiveWeight)
+                .length(20)
+                .width(20)
+                .height(10)
+                .serviceTypeId(effectiveWeight >= 20_000 ? 5 : 2)
+                .items(items)
+                .build();
+
+        try {
+            GhnCreateOrderResponse response = ghnApi.createOrder(token, ghnProperties.getShopId(), request);
+            if (response != null && response.getData() != null && response.getData().getOrderCode() != null) {
+                return response.getData().getOrderCode();
+            }
+            log.warn("[GHN] Create return order response empty: {}", response);
+            throw new AppException(ErrorCode.UPSTREAM_SERVICE_ERROR);
+        } catch (FeignException e) {
+            log.error("[GHN] Feign error while creating return order: status={}, message={}", e.status(), e.getMessage());
+            throw creationFailure(e);
+        } catch (AppException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("[GHN] Unexpected error while creating return order: {}", e.getMessage(), e);
+            throw new AppException(ErrorCode.UPSTREAM_SERVICE_ERROR);
+        }
+    }
+
+    /** GHN trả 4xx là từ chối dữ liệu: giữ nguyên lời GHN cho admin. Còn lại là GHN không phục vụ được. */
+    private static AppException creationFailure(FeignException e) {
+        if (e.status() < 400 || e.status() >= 500) {
+            return new AppException(ErrorCode.UPSTREAM_SERVICE_ERROR);
+        }
+        try {
+            String message = JSON.readTree(e.contentUTF8()).path("message").asText("");
+            if (!message.isBlank()) {
+                return new AppException(OrderErrorCode.CARRIER_REJECTED, message);
+            }
+        } catch (Exception unreadable) {
+            log.warn("[GHN] Could not read the rejection body: {}", unreadable.getMessage());
+        }
+        return new AppException(OrderErrorCode.CARRIER_REJECTED);
+    }
+
+    private BigDecimal estimateFeeFallback(int weightGram, ShippingMethod shippingMethod) {
+        BigDecimal base = (shippingMethod == ShippingMethod.EXPRESS)
+                ? BigDecimal.valueOf(40000)
+                : BigDecimal.valueOf(25000);
+        if (weightGram > 1000) {
+            int extraKg = (weightGram - 1000 + 999) / 1000;
+            base = base.add(BigDecimal.valueOf(extraKg * 5000L));
+        }
+        return base;
+    }
+}
+

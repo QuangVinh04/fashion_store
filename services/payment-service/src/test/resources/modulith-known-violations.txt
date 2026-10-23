@@ -1,0 +1,16 @@
+# Known Spring Modulith violations (Phase 3 debt). ModularityTest fails on any NEW violation,
+# and on any line here that no longer occurs — delete it once fixed.
+Cycle detected: Slice payment -> Slice wallet -> Slice payment
+Module 'payment' depends on non-exposed type wallet.exception.WalletErrorCode within module 'wallet'!
+Module 'payment' depends on non-exposed type wallet.service.WalletService within module 'wallet'!
+Module 'wallet' depends on non-exposed type payment.dto.PaymentInitiationResult within module 'payment'!
+Module 'wallet' depends on non-exposed type payment.dto.PaymentInitiationResult$PaymentInitiationResultBuilder within module 'payment'!
+Module 'wallet' depends on non-exposed type payment.entity.Payment within module 'payment'!
+Module 'wallet' depends on non-exposed type payment.entity.Payment$PaymentBuilder within module 'payment'!
+Module 'wallet' depends on non-exposed type payment.entity.PaymentRefund within module 'payment'!
+Module 'wallet' depends on non-exposed type payment.entity.PaymentRefund$PaymentRefundBuilder within module 'payment'!
+Module 'wallet' depends on non-exposed type payment.entity.PaymentRefundStatus within module 'payment'!
+Module 'wallet' depends on non-exposed type payment.entity.PaymentStatus within module 'payment'!
+Module 'wallet' depends on non-exposed type payment.exception.PaymentErrorCode within module 'payment'!
+Module 'wallet' depends on non-exposed type payment.repository.PaymentRefundRepository within module 'payment'!
+Module 'wallet' depends on non-exposed type payment.repository.PaymentRepository within module 'payment'!

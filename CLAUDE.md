@@ -91,8 +91,8 @@ com.fashionstore.<service>
   <Service>Application.java
 ```
 
-- **Migrated:** `catalog-service` (reference — `product`, `inventory`, `media`, `review`, `wishlist`, `shared`). **Not yet:** `order-service`, `payment-service` still use the flat layer layout (`entity/`, `event/`, `client/`…); keep that layout when editing them until their migration PR. identity/notification stay layer-first.
-- Inside a feature, one package per layer; create only layers the feature needs. Listeners and outbox relays go in `event/`, never `messaging/` or `outbox/`.
+- **Migrated:** `catalog-service` (reference — `product`, `inventory`, `media`, `review`, `wishlist`), `order-service` (`cart`, `checkout`, `order`, `saga`, `returns`, `shipment`, `promotion`, `dashboard`), `payment-service` (`payment`, `wallet`); each has `shared`. identity/notification stay layer-first (flat `controller/ dto/ entity/ …`).
+- Inside a feature, one package per layer; create only layers the feature needs. Listeners/schedulers go in `<feature>/event/`; the outbox lives in `shared/outbox/`.
 - A feature uses another feature only via its exposed API. `ModularityTest` + `src/test/resources/modulith-known-violations.txt` freeze existing violations — never add a line to that file to make a build pass; delete lines you fix.
 
 ## Constraints & Gotchas

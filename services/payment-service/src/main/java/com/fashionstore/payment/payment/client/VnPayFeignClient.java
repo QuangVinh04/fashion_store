@@ -1,0 +1,20 @@
+package com.fashionstore.payment.payment.client;
+
+import com.fasterxml.jackson.databind.JsonNode;
+
+import org.springframework.cloud.openfeign.FeignClient;
+import org.springframework.http.MediaType;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+
+import java.util.Map;
+
+/** HTTP client for VNPay query operations. */
+@FeignClient(name = "vnpay-api", url = "${payment.vnpay.api-url}")
+public interface VnPayFeignClient {
+
+    @PostMapping(
+            value = "/merchant_webapi/api/transaction",
+            consumes = MediaType.APPLICATION_JSON_VALUE)
+    JsonNode query(@RequestBody Map<String, String> request);
+}
