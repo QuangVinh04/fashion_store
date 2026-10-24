@@ -160,6 +160,13 @@ export default function ProductDetail() {
     );
   }, [activeVariants, selectedColor, selectedSize]);
 
+  const allVariantsSoldOut = useMemo(
+    () => activeVariants.length > 0 && activeVariants.every((v) => v.available === false),
+    [activeVariants],
+  );
+  const selectedVariantSoldOut = selectedVariant?.available === false;
+  const purchaseDisabled = busy || selectedVariantSoldOut || allVariantsSoldOut;
+
   // Images filtered by color or default
   const filteredImages = useMemo(() => {
     const list = [...(p?.images || [])];
@@ -195,6 +202,10 @@ export default function ProductDetail() {
         type: "error",
         message: "Vui lòng chọn đầy đủ màu sắc và kích cỡ sản phẩm.",
       });
+      return;
+    }
+    if (selectedVariant.available === false || allVariantsSoldOut) {
+      setFeedback({ type: "error", message: "Sản phẩm đã hết hàng." });
       return;
     }
 
@@ -272,11 +283,15 @@ export default function ProductDetail() {
               <span>{reviewsLoad.data ? `${reviewsLoad.data.averageRating.toFixed(1)} (${reviewsLoad.data.totalReviews} đánh giá)` : "Xem đánh giá"}</span>
             </Link>
             <div className="pd-price"><strong>{money(displayPrice)}</strong>{isSale && <del>{money(p.basePrice)}</del>}</div>
+            {(allVariantsSoldOut || selectedVariantSoldOut) && <p className="pd-meta" style={{ color: "var(--destructive)", fontWeight: 600 }}>Hết hàng</p>}
             {!!colorOptions.length && <div className={`pd-field ${variantPrompt && !selectedColor ? "pd-invalid" : ""}`}>
               <p className="pd-label">Màu sắc: <strong>{colorOptions.find(c => (c.colorOptionId || c.color) === selectedColor)?.color || "Chưa chọn"}</strong></p>
               <div className="pd-choices">{colorOptions.map(v => {
                 const key = v.colorOptionId || v.color || "";
-                return <button key={key} type="button" className="pd-swatch" aria-label={v.color || "Màu"} title={v.color} aria-pressed={selectedColor === key}
+                const colorSoldOut = activeVariants
+                  .filter((variant) => (variant.colorOptionId || variant.color) === key)
+                  .every((variant) => variant.available === false);
+                return <button key={key} type="button" className="pd-swatch" aria-label={v.color || "Màu"} title={colorSoldOut ? "Hết hàng" : v.color} aria-pressed={selectedColor === key} disabled={colorSoldOut}
                   onClick={() => { setSelectedColor(key); setSelectedSize(""); setFeedback(null); setVariantPrompt(false); }}>
                   <span style={{ background: v.colorHex || "#bbb" }} />
                 </button>;
@@ -286,19 +301,19 @@ export default function ProductDetail() {
               <div className="pd-label-row"><p className="pd-label">Kích cỡ: <strong>{sizeOptions.find(s => (s.sizeOptionId || s.size) === selectedSize)?.size || "Chưa chọn"}</strong></p><button type="button" id="pd-size-trigger" className="pd-text-link" onClick={() => setSizeOpen(true)}>Bảng kích cỡ</button></div>
               <div className="pd-choices">{sizeOptions.map(v => {
                 const key = v.sizeOptionId || v.size || "";
-                return <button key={key} type="button" className="pd-size-choice" aria-pressed={selectedSize === key} onClick={() => { setSelectedSize(key); setFeedback(null); setVariantPrompt(false); }}>{v.size || "Size"}</button>;
+                return <button key={key} type="button" className="pd-size-choice" aria-pressed={selectedSize === key} disabled={v.available === false} title={v.available === false ? "Hết hàng" : undefined} onClick={() => { setSelectedSize(key); setFeedback(null); setVariantPrompt(false); }}>{v.size || "Size"}</button>;
               })}</div>
             </div>
             <div className="pd-field"><label className="pd-label" htmlFor="pd-qty">Số lượng</label>
-              <div className="pd-quantity"><button type="button" aria-label="Giảm số lượng" disabled={qty <= 1} onClick={() => setQty(q => Math.max(1, q - 1))}>−</button>
-                <input id="pd-qty" aria-label="Số lượng sản phẩm" type="number" min="1" max="99" value={qty} onChange={e => setQty(Math.max(1, Math.min(99, Math.trunc(Number(e.target.value)) || 1)))} />
-                <button type="button" aria-label="Tăng số lượng" disabled={qty >= 99} onClick={() => setQty(q => Math.min(99, q + 1))}>+</button></div>
+              <div className="pd-quantity"><button type="button" aria-label="Giảm số lượng" disabled={purchaseDisabled || qty <= 1} onClick={() => setQty(q => Math.max(1, q - 1))}>−</button>
+                <input id="pd-qty" aria-label="Số lượng sản phẩm" type="number" min="1" max="99" value={qty} disabled={purchaseDisabled} onChange={e => setQty(Math.max(1, Math.min(99, Math.trunc(Number(e.target.value)) || 1)))} />
+                <button type="button" aria-label="Tăng số lượng" disabled={purchaseDisabled || qty >= 99} onClick={() => setQty(q => Math.min(99, q + 1))}>+</button></div>
             </div>
             <div className="pd-feedback" role={feedback?.type === "error" ? "alert" : "status"} aria-live="polite" data-tone={feedback?.type}>{feedback && <>{feedback.type === "success" ? <Check size={16} /> : <AlertCircle size={16} />}<span>{feedback.message}</span></>}</div>
             <div className="pd-actions">
-              <button type="button" className="pd-add" disabled={busy} onClick={() => void handleAddToCart(false)}>{busy ? "Đang xử lý…" : "Thêm vào giỏ hàng"}</button>
+              <button type="button" className="pd-add" disabled={purchaseDisabled} onClick={() => void handleAddToCart(false)}>{busy ? "Đang xử lý…" : selectedVariantSoldOut || allVariantsSoldOut ? "Hết hàng" : "Thêm vào giỏ hàng"}</button>
               <button type="button" className="pd-wish" aria-label={liked ? "Bỏ yêu thích" : "Yêu thích"} aria-pressed={liked} disabled={busy} onClick={() => void toggleWishlist()}><Heart size={20} fill={liked ? "currentColor" : "none"} /></button>
-              <button type="button" className="pd-buy" disabled={busy} onClick={() => void handleAddToCart(true)}>Mua ngay</button>
+              <button type="button" className="pd-buy" disabled={purchaseDisabled} onClick={() => void handleAddToCart(true)}>Mua ngay</button>
             </div>
             <div className="pd-services"><p><Truck size={17} />Miễn phí vận chuyển từ 500.000 ₫</p><p><RefreshCw size={17} />Đổi trả trong 7 ngày</p></div>
           </section>

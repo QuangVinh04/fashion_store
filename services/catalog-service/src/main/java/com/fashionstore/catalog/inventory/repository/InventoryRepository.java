@@ -9,6 +9,7 @@ import org.springframework.stereotype.Repository;
 import org.springframework.data.jpa.repository.Lock;
 import jakarta.persistence.LockModeType;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
@@ -24,6 +25,23 @@ public interface InventoryRepository extends JpaRepository<Inventory, String> {
     List<Inventory> findByVariantIdIn(List<String> variantIds);
 
     List<Inventory> findByProductId(String productId);
+
+    @Query("""
+            select i.productId as productId,
+                   coalesce(sum(i.quantity), 0) as totalQuantity,
+                   coalesce(sum(i.reservedQuantity), 0) as totalReserved,
+                   coalesce(sum(i.quantity - i.reservedQuantity), 0) as totalAvailable,
+                   count(i) as activeVariantCount,
+                   coalesce(sum(case when i.quantity - i.reservedQuantity <= 0 then 1 else 0 end), 0) as outOfStockVariantCount,
+                   coalesce(sum(case when i.quantity - i.reservedQuantity > 0
+                                      and i.quantity - i.reservedQuantity <= i.minThreshold then 1 else 0 end), 0) as lowStockVariantCount
+            from Inventory i, ProductVariant v
+            where v.id = i.variantId
+              and v.active = true
+              and i.productId in :productIds
+            group by i.productId
+            """)
+    List<ProductStockAggregate> summarizeByProductIds(@Param("productIds") Collection<String> productIds);
 
     /**
      * Pessimistic lock — dùng khi reserve/release để tránh race condition.

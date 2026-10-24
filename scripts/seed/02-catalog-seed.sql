@@ -1,6 +1,8 @@
 -- 02-catalog-seed.sql
 -- Seed dữ liệu cho catalog_database (Port: 5433 / Service: catalog-service)
--- Mỗi bảng có từ 10 đến 36 dòng dữ liệu chất lượng cao, URL ảnh Unsplash CDN chuẩn HTTPS.
+-- Bao phủ: PUBLISHED/DRAFT/ARCHIVED, IN_STOCK/LOW_STOCK/OUT_OF_STOCK,
+-- variant active/inactive, reserved stock, đa danh mục, thiếu brand/size chart/ảnh, SEO.
+-- URL ảnh Unsplash CDN chuẩn HTTPS.
 BEGIN;
 SET client_encoding = 'UTF8';
 
@@ -32,6 +34,13 @@ INSERT INTO category (id, name, slug, description, active, display_order, create
     ('cat-phu-kien', 'Phụ kiện thời trang', 'phu-kien-thoi-trang', 'Thắt lưng da, túi xách, mũ nón thời thượng', true, 10, now(), now())
 ON CONFLICT (slug) DO NOTHING;
 
+-- 2b. Category con (kiểm tra cây danh mục)
+INSERT INTO category (id, name, slug, description, parent_id, active, display_order, created_at, updated_at) VALUES
+    ('cat-ao-so-mi-nam', 'Áo sơ mi nam', 'ao-so-mi-nam', 'Danh mục con của áo sơ mi Oxford & Công sở', 'cat-ao-so-mi-oxford', true, 11, now(), now()),
+    ('cat-ao-so-mi-nu', 'Áo sơ mi nữ', 'ao-so-mi-nu', 'Danh mục con của áo sơ mi Oxford & Công sở', 'cat-ao-so-mi-oxford', true, 12, now(), now()),
+    ('cat-ao-thun-nam', 'Áo thun nam', 'ao-thun-nam', 'Danh mục con của áo thun cotton basic', 'cat-ao-thun-basic', true, 13, now(), now())
+ON CONFLICT (slug) DO NOTHING;
+
 -- 3. Color Option (Các màu sắc chuẩn và mở rộng)
 INSERT INTO color_option (id, name, normalized_name, color_hex, display_order, active, created_at, updated_at) VALUES
     ('lino-order-color-white', 'Trắng', 'TRANG', '#FFFFFF', 1, true, now(), now()),
@@ -44,7 +53,8 @@ INSERT INTO color_option (id, name, normalized_name, color_hex, display_order, a
     ('col-burgundy', 'Đỏ đô', 'DO_DO', '#7B1113', 8, true, now(), now()),
     ('col-olive', 'Xanh rêu', 'XANH_REU', '#4B5320', 9, true, now(), now()),
     ('col-yellow', 'Vàng bò', 'VANG_BO', '#E09F3E', 10, true, now(), now()),
-    ('col-charcoal', 'Xám than', 'XAM_THAN', '#333333', 11, true, now(), now())
+    ('col-charcoal', 'Xám than', 'XAM_THAN', '#333333', 11, true, now(), now()),
+    ('col-limited', 'Xám giới hạn', 'XAM_GIOI_HAN', '#777777', 12, false, now(), now())
 ON CONFLICT (normalized_name) DO NOTHING;
 
 -- 4. Size Option (Các kích cỡ chuẩn S, M, L, XL và mở rộng)
@@ -272,20 +282,192 @@ INSERT INTO inventory (id, product_id, variant_id, quantity, reserved_quantity, 
     ('inv-36', 'prod-12', 'var-12-l', 25, 0, 'ACTIVE', now(), now())
 ON CONFLICT (id) DO NOTHING;
 
--- 15. Inventory Ledger (12 bút toán nhập kho)
-INSERT INTO inventory_ledger (id, variant_id, type, quantity, ref_order_id, created_by, created_at) VALUES
-    ('ldg-01', 'var-01-m', 'INITIAL_STOCK', 45, null, 'SYSTEM', now() - interval '10 days'),
-    ('ldg-02', 'var-02-m', 'INITIAL_STOCK', 65, null, 'SYSTEM', now() - interval '10 days'),
-    ('ldg-03', 'var-03-m', 'INITIAL_STOCK', 120, null, 'SYSTEM', now() - interval '10 days'),
-    ('ldg-04', 'var-04-30', 'INITIAL_STOCK', 50, null, 'SYSTEM', now() - interval '10 days'),
-    ('ldg-05', 'var-05-l', 'INITIAL_STOCK', 30, null, 'SYSTEM', now() - interval '10 days'),
-    ('ldg-06', 'var-06-31', 'INITIAL_STOCK', 45, null, 'SYSTEM', now() - interval '10 days'),
-    ('ldg-07', 'var-07-l', 'INITIAL_STOCK', 50, null, 'SYSTEM', now() - interval '10 days'),
-    ('ldg-08', 'var-08-m', 'INITIAL_STOCK', 35, null, 'SYSTEM', now() - interval '10 days'),
-    ('ldg-09', 'var-09-l', 'INITIAL_STOCK', 45, null, 'SYSTEM', now() - interval '10 days'),
-    ('ldg-10', 'var-10-m', 'INITIAL_STOCK', 35, null, 'SYSTEM', now() - interval '10 days'),
-    ('ldg-11', 'var-11-l', 'INITIAL_STOCK', 30, null, 'SYSTEM', now() - interval '10 days'),
-    ('ldg-12', 'var-12-m', 'INITIAL_STOCK', 40, null, 'SYSTEM', now() - interval '10 days')
+-- 14b. Sản phẩm bổ sung cho các trường hợp nghiệp vụ
+-- prod-13: LOW_STOCK, có variant hết hàng và reserved stock
+-- prod-14: PUBLISHED nhưng toàn bộ variant hết hàng
+-- prod-15: mixed stock, có variant hết hàng
+-- prod-16: DRAFT còn hàng
+-- prod-17: ARCHIVED có deleted_at
+-- prod-18: PUBLISHED, một variant, không barcode, không brand, không size chart
+-- prod-19: PUBLISHED, không ảnh, không brand, không size chart
+-- prod-20: đa danh mục, SEO, featured, giá variant khác base
+-- prod-21: có variant inactive còn tồn kho
+-- prod-22: DRAFT, giá 0, hết hàng
+INSERT INTO product (
+    id, name, slug, short_description, description, brand_id, base_price, sale_price, status, published_at, featured, gender, product_type, weight, length, width, height, thumbnail_url, size_chart_id, created_at, updated_at
+) VALUES
+    ('prod-13', 'Áo Thun Oversize Low Stock', 'ao-thun-oversize-low-stock', 'Áo thun oversize cotton dày, phom rộng thoải mái.', 'Sản phẩm demo cho trường hợp tồn kho thấp, có variant hết hàng và hàng đang được giữ.', 'brand-uniqlo', 299000, 269000, 'PUBLISHED', now(), true, 'UNISEX', 'T_SHIRT', 260, 30, 24, 4, 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=800&auto=format&fit=crop&q=80', 'sc-tee-nam', now(), now()),
+    ('prod-14', 'Áo Khoác Gió Hết Hàng', 'ao-khoac-gio-het-hang', 'Áo khoác gió hai lớp, toàn bộ biến thể đã hết hàng.', 'Sản phẩm demo cho trường hợp PUBLISHED nhưng stock state là OUT_OF_STOCK.', 'brand-zara', 749000, null, 'PUBLISHED', now(), false, 'MEN', 'JACKET', 450, 38, 30, 7, 'https://images.unsplash.com/photo-1591047139829-d91aecb6caea?w=800&auto=format&fit=crop&q=80', 'sc-khoac-nam', now(), now()),
+    ('prod-15', 'Quần Jeans Mixed Stock', 'quan-jeans-mixed-stock', 'Quần jeans demo với một size còn hàng, một size sắp hết và một size hết hàng.', 'Sản phẩm demo cho trường hợp product còn bán được nhưng có variant unavailable.', 'brand-levis', 799000, 699000, 'PUBLISHED', now(), false, 'MEN', 'JEANS', 680, 35, 30, 6, 'https://images.unsplash.com/photo-1541099649105-f69ad21f3246?w=800&auto=format&fit=crop&q=80', 'sc-jeans-nam', now(), now()),
+    ('prod-16', 'Sơ Mi Nháp Chưa Xuất Bản', 'so-mi-nhap-chua-xuat-ban', 'Áo sơ mi nháp còn hàng, chưa xuất bản.', 'Sản phẩm demo cho trạng thái DRAFT có tồn kho nhưng không xuất hiện ở storefront.', 'brand-owen', 499000, null, 'DRAFT', null, false, 'MEN', 'SHIRT', 320, 30, 25, 4, 'https://images.unsplash.com/photo-1598033129183-c4f50c736f10?w=800&auto=format&fit=crop&q=80', 'sc-ao-nam', now(), now()),
+    ('prod-17', 'Đầm Lưu Trữ Demo', 'dam-luu-tru-demo', 'Đầm đã lưu trữ, còn tồn kho nhưng không bán.', 'Sản phẩm demo cho trạng thái ARCHIVED và deleted_at.', 'brand-mango', 899000, 799000, 'ARCHIVED', now() - interval '30 days', false, 'WOMEN', 'DRESS', 380, 32, 26, 4, 'https://images.unsplash.com/photo-1595777457583-95e059d581b8?w=800&auto=format&fit=crop&q=80', 'sc-dam-nu', now(), now()),
+    ('prod-18', 'Áo Polo Một Biến Thể', 'ao-polo-mot-bien-the', 'Áo polo một màu, một size, không barcode.', 'Sản phẩm demo cho trường hợp thiếu brand, size chart và barcode.', null, 399000, null, 'PUBLISHED', now(), false, 'MEN', 'POLO', 280, 28, 23, 4, 'https://images.unsplash.com/photo-1625910513404-4c7c6b0a1d0f?w=800&auto=format&fit=crop&q=80', null, now(), now()),
+    ('prod-19', 'Quần Short Không Ảnh', 'quan-short-khong-anh', 'Quần short chưa có ảnh và chưa gắn thương hiệu.', 'Sản phẩm demo cho trường hợp thiếu ảnh đại diện, brand và size chart.', null, 259000, null, 'PUBLISHED', now(), false, 'UNISEX', 'SHORTS', 240, 28, 22, 4, null, null, now(), now()),
+    ('prod-20', 'Áo Sơ Mi Nữ Đa Danh Mục', 'ao-so-mi-nu-da-danh-muc', 'Áo sơ mi nữ thuộc nhiều danh mục, có cấu hình SEO.', 'Sản phẩm demo cho đa danh mục, ảnh theo màu, giá variant khác giá base và SEO.', 'brand-anphuoc', 699000, 649000, 'PUBLISHED', now(), true, 'WOMEN', 'SHIRT', 300, 30, 25, 4, 'https://images.unsplash.com/photo-1602810318383-e386cc2a3ccf?w=800&auto=format&fit=crop&q=80', 'sc-ao-nu', now(), now()),
+    ('prod-21', 'Áo Hoodie Có Biến Thể Ngừng Dùng', 'ao-hoodie-co-bien-the-ngung-dung', 'Áo hoodie có một size đã ngừng dùng nhưng vẫn còn tồn kho.', 'Sản phẩm demo cho variant inactive không được tính vào stock aggregate.', 'brand-hm', 599000, null, 'PUBLISHED', now(), false, 'UNISEX', 'HOODIE', 620, 38, 32, 8, 'https://images.unsplash.com/photo-1556905055-8f358a7a47b2?w=800&auto=format&fit=crop&q=80', 'sc-unisex', now(), now()),
+    ('prod-22', 'Sản Phẩm Nháp Giá 0', 'san-pham-nhap-gia-0', 'Sản phẩm nháp chưa có giá, chưa thể xuất bản.', 'Sản phẩm demo cho DRAFT, giá 0 và tồn kho 0.', null, 0, null, 'DRAFT', null, false, 'UNISEX', 'T_SHIRT', 220, 26, 22, 3, null, null, now(), now())
+ON CONFLICT (id) DO NOTHING;
+
+UPDATE product SET deleted_at = now() - interval '2 days'
+WHERE id = 'prod-17' AND deleted_at IS NULL;
+
+UPDATE product SET
+    meta_title = 'Áo sơ mi nữ công sở cao cấp',
+    meta_keyword = 'áo sơ mi nữ, sơ mi công sở, áo sơ mi trắng',
+    meta_description = 'Áo sơ mi nữ phom chuẩn, chất liệu cotton poplin, phù hợp môi trường công sở.'
+WHERE id = 'prod-20';
+
+-- 14c. Product Category Mapping bổ sung
+INSERT INTO product_category (id, product_id, category_id, created_at, updated_at) VALUES
+    ('pc-13', 'prod-13', 'cat-ao-thun-basic', now(), now()),
+    ('pc-14', 'prod-14', 'cat-ao-khoac', now(), now()),
+    ('pc-15', 'prod-15', 'cat-quan-jeans-denim', now(), now()),
+    ('pc-16', 'prod-16', 'cat-ao-so-mi-oxford', now(), now()),
+    ('pc-17', 'prod-17', 'cat-vay-dam', now(), now()),
+    ('pc-18', 'prod-18', 'cat-ao-polo-sport', now(), now()),
+    ('pc-19', 'prod-19', 'cat-quan-short', now(), now()),
+    ('pc-20', 'prod-20', 'cat-ao-so-mi-oxford', now(), now()),
+    ('pc-21', 'prod-20', 'cat-ao-so-mi-nu', now(), now()),
+    ('pc-22', 'prod-20', 'cat-vay-dam', now(), now()),
+    ('pc-23', 'prod-21', 'cat-hoodie-len', now(), now()),
+    ('pc-24', 'prod-22', 'cat-ao-thun-basic', now(), now())
+ON CONFLICT (id) DO NOTHING;
+
+-- 14d. Product Variants bổ sung
+INSERT INTO product_variant (
+    id, product_id, option_signature, display_name,
+    color_option_id, size_option_id, color, size, color_hex,
+    sku, barcode, price, sale_price, active, weight_gram, length_mm, width_mm, height_mm,
+    thumbnail_url, created_at, updated_at
+) VALUES
+    ('var-13-blk-m', 'prod-13', 'COLOR:lino-order-color-black|SIZE:lino-order-size-m', 'Đen / M', 'lino-order-color-black', 'lino-order-size-m', 'Den', 'M', '#111111', 'UNI-OS-BLK-M', '893000000037', 299000, 269000, true, 260, 300, 240, 40, 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=800&auto=format&fit=crop&q=80', now(), now()),
+    ('var-13-blk-l', 'prod-13', 'COLOR:lino-order-color-black|SIZE:lino-order-size-l', 'Đen / L', 'lino-order-color-black', 'lino-order-size-l', 'Den', 'L', '#111111', 'UNI-OS-BLK-L', '893000000038', 299000, 269000, true, 270, 300, 240, 40, 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=800&auto=format&fit=crop&q=80', now(), now()),
+    ('var-13-wht-m', 'prod-13', 'COLOR:lino-order-color-white|SIZE:lino-order-size-m', 'Trắng / M', 'lino-order-color-white', 'lino-order-size-m', 'Trang', 'M', '#F5F5F5', 'UNI-OS-WHT-M', '893000000039', 299000, 269000, true, 260, 300, 240, 40, 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=800&auto=format&fit=crop&q=80', now(), now()),
+    ('var-13-wht-l', 'prod-13', 'COLOR:lino-order-color-white|SIZE:lino-order-size-l', 'Trắng / L', 'lino-order-color-white', 'lino-order-size-l', 'Trang', 'L', '#F5F5F5', 'UNI-OS-WHT-L', '893000000040', 299000, 269000, true, 270, 300, 240, 40, 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=800&auto=format&fit=crop&q=80', now(), now()),
+    ('var-14-blk-m', 'prod-14', 'COLOR:lino-order-color-black|SIZE:lino-order-size-m', 'Đen / M', 'lino-order-color-black', 'lino-order-size-m', 'Den', 'M', '#111111', 'ZAR-WIND-BLK-M', '893000000041', 749000, null, true, 450, 380, 300, 70, 'https://images.unsplash.com/photo-1591047139829-d91aecb6caea?w=800&auto=format&fit=crop&q=80', now(), now()),
+    ('var-14-blk-l', 'prod-14', 'COLOR:lino-order-color-black|SIZE:lino-order-size-l', 'Đen / L', 'lino-order-color-black', 'lino-order-size-l', 'Den', 'L', '#111111', 'ZAR-WIND-BLK-L', '893000000042', 749000, null, true, 460, 380, 300, 70, 'https://images.unsplash.com/photo-1591047139829-d91aecb6caea?w=800&auto=format&fit=crop&q=80', now(), now()),
+    ('var-15-29', 'prod-15', 'COLOR:lino-order-color-denim|SIZE:size-29', 'Xanh denim / 29', 'lino-order-color-denim', 'size-29', 'Xanh denim', '29', '#45678A', 'LEV-MIX-BLU-29', '893000000043', 799000, 699000, true, 660, 350, 300, 60, 'https://images.unsplash.com/photo-1541099649105-f69ad21f3246?w=800&auto=format&fit=crop&q=80', now(), now()),
+    ('var-15-30', 'prod-15', 'COLOR:lino-order-color-denim|SIZE:size-30', 'Xanh denim / 30', 'lino-order-color-denim', 'size-30', 'Xanh denim', '30', '#45678A', 'LEV-MIX-BLU-30', '893000000044', 799000, 699000, true, 680, 350, 300, 60, 'https://images.unsplash.com/photo-1541099649105-f69ad21f3246?w=800&auto=format&fit=crop&q=80', now(), now()),
+    ('var-15-31', 'prod-15', 'COLOR:lino-order-color-denim|SIZE:size-31', 'Xanh denim / 31', 'lino-order-color-denim', 'size-31', 'Xanh denim', '31', '#45678A', 'LEV-MIX-BLU-31', '893000000045', 799000, 699000, true, 700, 350, 300, 60, 'https://images.unsplash.com/photo-1541099649105-f69ad21f3246?w=800&auto=format&fit=crop&q=80', now(), now()),
+    ('var-16-wht-m', 'prod-16', 'COLOR:lino-order-color-white|SIZE:lino-order-size-m', 'Trắng / M', 'lino-order-color-white', 'lino-order-size-m', 'Trang', 'M', '#F5F5F5', 'OWE-DRAFT-WHT-M', '893000000046', 499000, null, true, 320, 300, 250, 40, 'https://images.unsplash.com/photo-1598033129183-c4f50c736f10?w=800&auto=format&fit=crop&q=80', now(), now()),
+    ('var-16-wht-l', 'prod-16', 'COLOR:lino-order-color-white|SIZE:lino-order-size-l', 'Trắng / L', 'lino-order-color-white', 'lino-order-size-l', 'Trang', 'L', '#F5F5F5', 'OWE-DRAFT-WHT-L', '893000000047', 499000, null, true, 330, 300, 250, 40, 'https://images.unsplash.com/photo-1598033129183-c4f50c736f10?w=800&auto=format&fit=crop&q=80', now(), now()),
+    ('var-17-blk-m', 'prod-17', 'COLOR:lino-order-color-black|SIZE:lino-order-size-m', 'Đen / M', 'lino-order-color-black', 'lino-order-size-m', 'Den', 'M', '#111111', 'MAN-ARCHIVE-BLK-M', '893000000048', 899000, 799000, true, 380, 320, 260, 40, 'https://images.unsplash.com/photo-1595777457583-95e059d581b8?w=800&auto=format&fit=crop&q=80', now(), now()),
+    ('var-18-navy-m', 'prod-18', 'COLOR:col-limited|SIZE:lino-order-size-m', 'Xám giới hạn / M', 'col-limited', 'lino-order-size-m', 'Xám giới hạn', 'M', '#777777', 'ROU-POLO-LTD-M', null, 399000, null, true, 280, 280, 230, 35, 'https://images.unsplash.com/photo-1625910513404-4c7c6b0a1d0f?w=800&auto=format&fit=crop&q=80', now(), now()),
+    ('var-19-beige-m', 'prod-19', 'COLOR:col-beige|SIZE:lino-order-size-m', 'Be / M', 'col-beige', 'lino-order-size-m', 'Be / Khaki', 'M', '#DDB892', 'ROU-NOIMG-BGE-M', '893000000049', 259000, null, true, 240, 280, 220, 35, null, now(), now()),
+    ('var-19-beige-l', 'prod-19', 'COLOR:col-beige|SIZE:lino-order-size-l', 'Be / L', 'col-beige', 'lino-order-size-l', 'Be / Khaki', 'L', '#DDB892', 'ROU-NOIMG-BGE-L', '893000000050', 259000, null, true, 250, 280, 220, 35, null, now(), now()),
+    ('var-20-wht-m', 'prod-20', 'COLOR:lino-order-color-white|SIZE:lino-order-size-m', 'Trắng / M', 'lino-order-color-white', 'lino-order-size-m', 'Trang', 'M', '#F5F5F5', 'ANP-MULTI-WHT-M', '893000000051', 699000, 649000, true, 300, 300, 250, 40, 'https://images.unsplash.com/photo-1602810318383-e386cc2a3ccf?w=800&auto=format&fit=crop&q=80', now(), now()),
+    ('var-20-wht-l', 'prod-20', 'COLOR:lino-order-color-white|SIZE:lino-order-size-l', 'Trắng / L', 'lino-order-color-white', 'lino-order-size-l', 'Trang', 'L', '#F5F5F5', 'ANP-MULTI-WHT-L', '893000000052', 709000, 659000, true, 310, 300, 250, 40, 'https://images.unsplash.com/photo-1602810318383-e386cc2a3ccf?w=800&auto=format&fit=crop&q=80', now(), now()),
+    ('var-20-navy-m', 'prod-20', 'COLOR:col-navy|SIZE:lino-order-size-m', 'Xanh navy / M', 'col-navy', 'lino-order-size-m', 'Xanh navy', 'M', '#1B263B', 'ANP-MULTI-NVY-M', '893000000053', 699000, 649000, true, 300, 300, 250, 40, 'https://images.unsplash.com/photo-1596755094514-f87e34085b2c?w=800&auto=format&fit=crop&q=80', now(), now()),
+    ('var-20-navy-l', 'prod-20', 'COLOR:col-navy|SIZE:lino-order-size-l', 'Xanh navy / L', 'col-navy', 'lino-order-size-l', 'Xanh navy', 'L', '#1B263B', 'ANP-MULTI-NVY-L', '893000000054', 709000, 659000, true, 310, 300, 250, 40, 'https://images.unsplash.com/photo-1596755094514-f87e34085b2c?w=800&auto=format&fit=crop&q=80', now(), now()),
+    ('var-21-gray-m', 'prod-21', 'COLOR:col-gray|SIZE:lino-order-size-m', 'Xám tiêu / M', 'col-gray', 'lino-order-size-m', 'Xám tiêu', 'M', '#8D99AE', 'HM-INACT-GRY-M', '893000000055', 599000, null, true, 620, 380, 320, 80, 'https://images.unsplash.com/photo-1556905055-8f358a7a47b2?w=800&auto=format&fit=crop&q=80', now(), now()),
+    ('var-21-gray-l', 'prod-21', 'COLOR:col-gray|SIZE:lino-order-size-l', 'Xám tiêu / L', 'col-gray', 'lino-order-size-l', 'Xám tiêu', 'L', '#8D99AE', 'HM-INACT-GRY-L', '893000000056', 599000, null, true, 630, 380, 320, 80, 'https://images.unsplash.com/photo-1556905055-8f358a7a47b2?w=800&auto=format&fit=crop&q=80', now(), now()),
+    ('var-21-gray-xl', 'prod-21', 'COLOR:col-gray|SIZE:lino-order-size-xl', 'Xám tiêu / XL', 'col-gray', 'lino-order-size-xl', 'Xám tiêu', 'XL', '#8D99AE', 'HM-INACT-GRY-XL', '893000000057', 599000, null, false, 640, 380, 320, 80, 'https://images.unsplash.com/photo-1556905055-8f358a7a47b2?w=800&auto=format&fit=crop&q=80', now(), now()),
+    ('var-22-wht-m', 'prod-22', 'COLOR:lino-order-color-white|SIZE:lino-order-size-m', 'Trắng / M', 'lino-order-color-white', 'lino-order-size-m', 'Trang', 'M', '#F5F5F5', 'UNI-DRAFT-ZERO-M', '893000000058', 0, null, true, 220, 260, 220, 30, null, now(), now())
+ON CONFLICT (id) DO NOTHING;
+
+-- 14e. Media files cho ảnh sản phẩm bổ sung
+INSERT INTO media_file (
+    id, owner_id, original_filename, display_name, stored_filename, storage_key,
+    content_type, extension, size_bytes, media_type, status, visibility, width, height, created_at, updated_at
+) VALUES
+    ('med-01-sub', 'system', 'shirt-oxford-white-detail.jpg', 'Sơ mi trắng Oxford chi tiết', 'stored-shirt-oxford-white-detail.jpg', 'products/shirt-oxford-white-detail.jpg', 'image/jpeg', 'jpg', 185000, 'IMAGE', 'ACTIVE', 'PUBLIC', 800, 1000, now(), now()),
+    ('med-13', 'system', 'tee-oversize.jpg', 'Áo thun oversize', 'stored-tee-oversize.jpg', 'products/tee-oversize.jpg', 'image/jpeg', 'jpg', 210000, 'IMAGE', 'ACTIVE', 'PUBLIC', 800, 1000, now(), now()),
+    ('med-14', 'system', 'wind-jacket.jpg', 'Áo khoác gió', 'stored-wind-jacket.jpg', 'products/wind-jacket.jpg', 'image/jpeg', 'jpg', 275000, 'IMAGE', 'ACTIVE', 'PUBLIC', 800, 1000, now(), now()),
+    ('med-15', 'system', 'jeans-mixed.jpg', 'Quần jeans mixed stock', 'stored-jeans-mixed.jpg', 'products/jeans-mixed.jpg', 'image/jpeg', 'jpg', 320000, 'IMAGE', 'ACTIVE', 'PUBLIC', 800, 1000, now(), now()),
+    ('med-16', 'system', 'draft-shirt.jpg', 'Sơ mi nháp', 'stored-draft-shirt.jpg', 'products/draft-shirt.jpg', 'image/jpeg', 'jpg', 240000, 'IMAGE', 'ACTIVE', 'PUBLIC', 800, 1000, now(), now()),
+    ('med-17', 'system', 'archived-dress.jpg', 'Đầm lưu trữ', 'stored-archived-dress.jpg', 'products/archived-dress.jpg', 'image/jpeg', 'jpg', 260000, 'IMAGE', 'ACTIVE', 'PUBLIC', 800, 1000, now(), now()),
+    ('med-18', 'system', 'polo-limited.jpg', 'Polo xám giới hạn', 'stored-polo-limited.jpg', 'products/polo-limited.jpg', 'image/jpeg', 'jpg', 225000, 'IMAGE', 'ACTIVE', 'PUBLIC', 800, 1000, now(), now()),
+    ('med-20-main', 'system', 'women-shirt-white.jpg', 'Sơ mi nữ trắng', 'stored-women-shirt-white.jpg', 'products/women-shirt-white.jpg', 'image/jpeg', 'jpg', 250000, 'IMAGE', 'ACTIVE', 'PUBLIC', 800, 1000, now(), now()),
+    ('med-20-navy', 'system', 'women-shirt-navy.jpg', 'Sơ mi nữ navy', 'stored-women-shirt-navy.jpg', 'products/women-shirt-navy.jpg', 'image/jpeg', 'jpg', 245000, 'IMAGE', 'ACTIVE', 'PUBLIC', 800, 1000, now(), now()),
+    ('med-20-detail', 'system', 'women-shirt-detail.jpg', 'Sơ mi nữ chi tiết', 'stored-women-shirt-detail.jpg', 'products/women-shirt-detail.jpg', 'image/jpeg', 'jpg', 190000, 'IMAGE', 'ACTIVE', 'PUBLIC', 800, 1000, now(), now()),
+    ('med-21', 'system', 'hoodie-inactive.jpg', 'Hoodie có biến thể ngừng dùng', 'stored-hoodie-inactive.jpg', 'products/hoodie-inactive.jpg', 'image/jpeg', 'jpg', 310000, 'IMAGE', 'ACTIVE', 'PUBLIC', 800, 1000, now(), now())
+ON CONFLICT (id) DO NOTHING;
+
+-- 14f. Product Images bổ sung (prod-19 và prod-22 cố ý không có ảnh)
+INSERT INTO product_image (
+    id, product_id, media_id, url, alt_text, display_order, sort_order, is_primary, created_at, updated_at
+) VALUES
+    ('img-13-main', 'prod-13', 'med-13', 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=800&auto=format&fit=crop&q=80', 'Áo thun oversize low stock', 1, 1, true, now(), now()),
+    ('img-14-main', 'prod-14', 'med-14', 'https://images.unsplash.com/photo-1591047139829-d91aecb6caea?w=800&auto=format&fit=crop&q=80', 'Áo khoác gió hết hàng', 1, 1, true, now(), now()),
+    ('img-15-main', 'prod-15', 'med-15', 'https://images.unsplash.com/photo-1541099649105-f69ad21f3246?w=800&auto=format&fit=crop&q=80', 'Quần jeans mixed stock', 1, 1, true, now(), now()),
+    ('img-16-main', 'prod-16', 'med-16', 'https://images.unsplash.com/photo-1598033129183-c4f50c736f10?w=800&auto=format&fit=crop&q=80', 'Sơ mi nháp chưa xuất bản', 1, 1, true, now(), now()),
+    ('img-17-main', 'prod-17', 'med-17', 'https://images.unsplash.com/photo-1595777457583-95e059d581b8?w=800&auto=format&fit=crop&q=80', 'Đầm lưu trữ', 1, 1, true, now(), now()),
+    ('img-18-main', 'prod-18', 'med-18', 'https://images.unsplash.com/photo-1625910513404-4c7c6b0a1d0f?w=800&auto=format&fit=crop&q=80', 'Polo một biến thể, màu ngừng dùng', 1, 1, true, now(), now()),
+    ('img-20-main', 'prod-20', 'med-20-main', 'https://images.unsplash.com/photo-1602810318383-e386cc2a3ccf?w=800&auto=format&fit=crop&q=80', 'Sơ mi nữ trắng', 1, 1, true, now(), now()),
+    ('img-20-navy', 'prod-20', 'med-20-navy', 'https://images.unsplash.com/photo-1596755094514-f87e34085b2c?w=800&auto=format&fit=crop&q=80', 'Sơ mi nữ navy', 2, 2, false, now(), now()),
+    ('img-20-detail', 'prod-20', 'med-20-detail', 'https://images.unsplash.com/photo-1603252109303-2751441dd157?w=800&auto=format&fit=crop&q=80', 'Sơ mi nữ chi tiết', 3, 3, false, now(), now()),
+    ('img-21-main', 'prod-21', 'med-21', 'https://images.unsplash.com/photo-1556905055-8f358a7a47b2?w=800&auto=format&fit=crop&q=80', 'Hoodie có biến thể ngừng dùng', 1, 1, true, now(), now())
+ON CONFLICT (id) DO NOTHING;
+
+UPDATE product_image
+SET color_option_id = 'col-navy', color = 'Xanh navy'
+WHERE id = 'img-20-navy';
+
+-- 14g. Inventory bổ sung
+INSERT INTO inventory (id, product_id, variant_id, quantity, reserved_quantity, status, min_threshold, created_at, updated_at) VALUES
+    ('inv-37', 'prod-13', 'var-13-blk-m', 15, 12, 'ACTIVE', 5, now(), now()),
+    ('inv-38', 'prod-13', 'var-13-blk-l', 9, 0, 'ACTIVE', 10, now(), now()),
+    ('inv-39', 'prod-13', 'var-13-wht-m', 2, 0, 'ACTIVE', 5, now(), now()),
+    ('inv-40', 'prod-13', 'var-13-wht-l', 0, 0, 'OUT_OF_STOCK', 5, now(), now()),
+    ('inv-41', 'prod-14', 'var-14-blk-m', 0, 0, 'OUT_OF_STOCK', 5, now(), now()),
+    ('inv-42', 'prod-14', 'var-14-blk-l', 0, 0, 'OUT_OF_STOCK', 5, now(), now()),
+    ('inv-43', 'prod-15', 'var-15-29', 30, 0, 'ACTIVE', 10, now(), now()),
+    ('inv-44', 'prod-15', 'var-15-30', 8, 0, 'ACTIVE', 10, now(), now()),
+    ('inv-45', 'prod-15', 'var-15-31', 0, 0, 'OUT_OF_STOCK', 0, now(), now()),
+    ('inv-46', 'prod-16', 'var-16-wht-m', 20, 0, 'ACTIVE', 10, now(), now()),
+    ('inv-47', 'prod-16', 'var-16-wht-l', 25, 0, 'ACTIVE', 10, now(), now()),
+    ('inv-48', 'prod-17', 'var-17-blk-m', 15, 0, 'ACTIVE', 5, now(), now()),
+    ('inv-49', 'prod-18', 'var-18-navy-m', 6, 0, 'ACTIVE', 5, now(), now()),
+    ('inv-50', 'prod-19', 'var-19-beige-m', 25, 0, 'ACTIVE', 10, now(), now()),
+    ('inv-51', 'prod-19', 'var-19-beige-l', 30, 0, 'ACTIVE', 10, now(), now()),
+    ('inv-52', 'prod-20', 'var-20-wht-m', 12, 0, 'ACTIVE', 5, now(), now()),
+    ('inv-53', 'prod-20', 'var-20-wht-l', 10, 0, 'ACTIVE', 5, now(), now()),
+    ('inv-54', 'prod-20', 'var-20-navy-m', 8, 0, 'ACTIVE', 5, now(), now()),
+    ('inv-55', 'prod-20', 'var-20-navy-l', 7, 0, 'ACTIVE', 5, now(), now()),
+    ('inv-56', 'prod-21', 'var-21-gray-m', 10, 0, 'ACTIVE', 10, now(), now()),
+    ('inv-57', 'prod-21', 'var-21-gray-l', 5, 0, 'ACTIVE', 10, now(), now()),
+    ('inv-58', 'prod-21', 'var-21-gray-xl', 50, 0, 'DISCONTINUED', 10, now(), now()),
+    ('inv-59', 'prod-22', 'var-22-wht-m', 0, 0, 'OUT_OF_STOCK', 5, now(), now())
+ON CONFLICT (id) DO NOTHING;
+
+-- 15. Inventory Ledger
+-- Kiểu ledger hợp lệ: IN/RESERVE/...; INITIAL_STOCK chỉ là reason.
+UPDATE inventory_ledger
+SET type = 'IN',
+    reason = COALESCE(reason, 'INITIAL_STOCK'),
+    quantity_before = COALESCE(quantity_before, 0),
+    quantity_after = COALESCE(quantity_after, quantity),
+    reserved_before = COALESCE(reserved_before, 0),
+    reserved_after = COALESCE(reserved_after, 0)
+WHERE type = 'INITIAL_STOCK';
+
+-- Mỗi inventory row có đúng một bút toán nhập kho ban đầu.
+INSERT INTO inventory_ledger (
+    id, variant_id, type, quantity, ref_order_id, created_by, created_at,
+    reason, quantity_before, quantity_after, reserved_before, reserved_after, operation_id
+)
+SELECT 'ldg-' || i.id, i.variant_id, 'IN', i.quantity, null, 'SYSTEM', now() - interval '10 days',
+       'INITIAL_STOCK', 0, i.quantity, 0, 0, 'seed-initial-' || i.id
+FROM inventory i
+WHERE NOT EXISTS (
+    SELECT 1 FROM inventory_ledger l
+    WHERE l.variant_id = i.variant_id AND l.type = 'IN' AND l.reason = 'INITIAL_STOCK'
+)
+ON CONFLICT (id) DO NOTHING;
+
+-- Bút toán giữ hàng cho các inventory row có reserved_quantity > 0.
+INSERT INTO inventory_ledger (
+    id, variant_id, type, quantity, ref_order_id, created_by, created_at,
+    reason, quantity_before, quantity_after, reserved_before, reserved_after, operation_id
+)
+SELECT 'ldg-res-' || i.id, i.variant_id, 'RESERVE', i.reserved_quantity, null, 'SYSTEM', now() - interval '9 days',
+       'SEED_RESERVED', i.quantity, i.quantity, 0, i.reserved_quantity, 'seed-reserve-' || i.id
+FROM inventory i
+WHERE i.reserved_quantity > 0
+  AND NOT EXISTS (
+      SELECT 1 FROM inventory_ledger l
+      WHERE l.variant_id = i.variant_id AND l.type = 'RESERVE' AND l.reason = 'SEED_RESERVED'
+  )
 ON CONFLICT (id) DO NOTHING;
 
 -- 16. Reviews (12 đánh giá thực tế)
@@ -368,7 +550,19 @@ INSERT INTO product_attribute_value (id, product_id, attribute_id, value, normal
     ('pav-09', 'prod-07', 'attr-chat-lieu', 'Đũi tự nhiên (Linen)', 'DUI_TU_NHIEN_LINEN', 1, true, now(), now()),
     ('pav-10', 'prod-08', 'attr-chat-lieu', 'Lụa Satin pha Spandex', 'LUA_SATIN_PHA_SPANDEX', 1, true, now(), now()),
     ('pav-11', 'prod-09', 'attr-chat-lieu', 'Nỉ chân cua lót bông', 'NI_CHAN_CUA_LOT_BONG', 1, true, now(), now()),
-    ('pav-12', 'prod-10', 'attr-chat-lieu', 'Len lông cừu Merino', 'LEN_LONG_CUU_MERINO', 1, true, now(), now())
+    ('pav-12', 'prod-10', 'attr-chat-lieu', 'Len lông cừu Merino', 'LEN_LONG_CUU_MERINO', 1, true, now(), now()),
+    ('pav-13', 'prod-13', 'attr-chat-lieu', 'Cotton dày 250gsm', 'COTTON_DAY_250GSM', 1, true, now(), now()),
+    ('pav-14', 'prod-13', 'attr-form-dang', 'Oversize', 'OVERSIZE', 2, true, now(), now()),
+    ('pav-15', 'prod-14', 'attr-chat-lieu', 'Polyester hai lớp', 'POLYESTER_HAI_LOP', 1, true, now(), now()),
+    ('pav-16', 'prod-15', 'attr-chat-lieu', 'Denim 100% Cotton', 'DENIM_100_COTTON', 1, true, now(), now()),
+    ('pav-17', 'prod-16', 'attr-chat-lieu', 'Cotton Oxford', 'COTTON_OXFORD', 1, true, now(), now()),
+    ('pav-18', 'prod-17', 'attr-chat-lieu', 'Lụa Satin', 'LUA_SATIN', 1, true, now(), now()),
+    ('pav-19', 'prod-18', 'attr-chat-lieu', 'Cotton Pima', 'COTTON_PIMA', 1, true, now(), now()),
+    ('pav-20', 'prod-19', 'attr-chat-lieu', 'Linen', 'LINEN', 1, true, now(), now()),
+    ('pav-21', 'prod-20', 'attr-chat-lieu', 'Cotton Poplin', 'COTTON_POPLIN', 1, true, now(), now()),
+    ('pav-22', 'prod-20', 'attr-phong-cach', 'Công sở', 'CONG_SO', 2, true, now(), now()),
+    ('pav-23', 'prod-21', 'attr-chat-lieu', 'Nỉ bông', 'NI_BONG', 1, true, now(), now()),
+    ('pav-24', 'prod-22', 'attr-chat-lieu', 'Cotton Compact', 'COTTON_COMPACT', 1, true, now(), now())
 ON CONFLICT (id) DO NOTHING;
 
 COMMIT;

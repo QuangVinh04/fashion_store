@@ -3,6 +3,8 @@ package com.fashionstore.catalog.inventory.service.impl;
 import com.fashionstore.catalog.inventory.dto.CheckStockRequest;
 import com.fashionstore.catalog.inventory.dto.CheckStockResponse;
 import com.fashionstore.catalog.inventory.dto.InventoryResponse;
+import com.fashionstore.catalog.inventory.dto.ProductStockState;
+import com.fashionstore.catalog.inventory.dto.ProductStockSummary;
 import com.fashionstore.catalog.inventory.dto.ReleaseStockRequest;
 import com.fashionstore.catalog.inventory.dto.ReserveStockRequest;
 import com.fashionstore.catalog.inventory.dto.ReserveStockResponse;
@@ -16,6 +18,7 @@ import com.fashionstore.catalog.inventory.entity.InventoryReservationStatus;
 import com.fashionstore.catalog.inventory.entity.InventoryStatus;
 import com.fashionstore.catalog.shared.outbox.OutboxService;
 import com.fashionstore.catalog.inventory.repository.InventoryRepository;
+import com.fashionstore.catalog.inventory.repository.ProductStockAggregate;
 import com.fashionstore.catalog.inventory.repository.InventoryReservationItemRepository;
 import com.fashionstore.catalog.inventory.repository.InventoryReservationRepository;
 import com.fashionstore.catalog.inventory.service.InventoryService;
@@ -536,6 +539,53 @@ public class InventoryServiceImpl implements InventoryService {
                 .stream()
                 .map(inventoryMapper::toResponse)
                 .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Map<String, ProductStockSummary> getProductStockSummaries(Collection<String> productIds) {
+        if (productIds == null || productIds.isEmpty()) {
+            return Map.of();
+        }
+        List<String> ids = productIds.stream().filter(Objects::nonNull).distinct().toList();
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<String, ProductStockSummary> summaries = new HashMap<>();
+        for (ProductStockAggregate row : inventoryRepository.summarizeByProductIds(ids)) {
+            long activeVariants = valueOrZero(row.getActiveVariantCount());
+            long available = valueOrZero(row.getTotalAvailable());
+            long lowStockVariants = valueOrZero(row.getLowStockVariantCount());
+            summaries.put(row.getProductId(), new ProductStockSummary(
+                    row.getProductId(),
+                    valueOrZero(row.getTotalQuantity()),
+                    valueOrZero(row.getTotalReserved()),
+                    available,
+                    activeVariants,
+                    valueOrZero(row.getOutOfStockVariantCount()),
+                    lowStockVariants,
+                    resolveStockState(activeVariants, available, lowStockVariants)));
+        }
+        for (String id : ids) {
+            summaries.putIfAbsent(id, new ProductStockSummary(
+                    id, 0, 0, 0, 0, 0, 0, ProductStockState.OUT_OF_STOCK));
+        }
+        return summaries;
+    }
+
+    private long valueOrZero(Long value) {
+        return value == null ? 0 : value;
+    }
+
+    private ProductStockState resolveStockState(long activeVariants, long available, long lowStockVariants) {
+        if (activeVariants == 0 || available <= 0) {
+            return ProductStockState.OUT_OF_STOCK;
+        }
+        if (lowStockVariants > 0) {
+            return ProductStockState.LOW_STOCK;
+        }
+        return ProductStockState.IN_STOCK;
     }
 
     @Override

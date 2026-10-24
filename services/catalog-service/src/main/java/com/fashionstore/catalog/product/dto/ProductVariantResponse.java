@@ -22,7 +22,6 @@ public class ProductVariantResponse {
     String id;
     String productId;
     String sku;
-    String barcode;
     BigDecimal price;
     BigDecimal salePrice;
 
@@ -47,4 +46,6 @@ public class ProductVariantResponse {
     String size;
     String color;
     String colorHex;
+    ProductVariantStockResponse stock;
+    Boolean available;
 }

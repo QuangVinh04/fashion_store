@@ -1,6 +1,5 @@
 package com.fashionstore.catalog.product.repository;
 
-
 import com.fashionstore.catalog.product.entity.ProductVariant;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.EntityGraph;
@@ -17,11 +16,5 @@ public interface ProductVariantRepository extends JpaRepository<ProductVariant, 
     @EntityGraph(attributePaths = {"product"})
     Optional<ProductVariant> findBySku(String sku);
 
-    Optional<ProductVariant> findByBarcode(String barcode);
-
-    
-
     List<ProductVariant> findByProductId(String productId);
-
 }
-

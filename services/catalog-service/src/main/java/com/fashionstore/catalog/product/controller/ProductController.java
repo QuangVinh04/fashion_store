@@ -301,6 +301,14 @@ public class ProductController {
                 .build();
     }
 
+    @PostMapping("/admin/products/{productId}/restore")
+    public ApiResponse<ProductResponse> restoreProduct(@PathVariable String productId) {
+        return ApiResponse.<ProductResponse>builder()
+                .message("Restore product successfully")
+                .data(productService.restoreProduct(productId))
+                .build();
+    }
+
     @DeleteMapping("/admin/products/{productId}")
     public ApiResponse<Void> deleteProduct(@PathVariable String productId) {
         productService.deleteProduct(productId);

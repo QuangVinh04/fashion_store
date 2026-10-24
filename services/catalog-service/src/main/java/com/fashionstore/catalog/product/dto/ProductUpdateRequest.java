@@ -103,12 +103,6 @@ public class ProductUpdateRequest {
 
     String sizeChartId;
 
-    String metaTitle;
-
-    String metaKeyword;
-
-    String metaDescription;
-
     String categoryId;
 
     @NotEmpty(message = "At least one category is required")

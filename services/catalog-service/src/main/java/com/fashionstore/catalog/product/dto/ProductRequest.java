@@ -97,12 +97,6 @@ public class ProductRequest {
 
     String sizeChartId;
 
-    String metaTitle;
-
-    String metaKeyword;
-
-    String metaDescription;
-
     @NotEmpty(message = "At least one category is required")
     List<String> categoryIds;
 

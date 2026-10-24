@@ -40,6 +40,7 @@ public interface ProductService {
     ProductResponse publishProduct(String productId);
     ProductResponse unpublishProduct(String productId);
     ProductResponse archiveProduct(String productId);
+    ProductResponse restoreProduct(String productId);
     PageResponse<List<ProductSummaryResponse>> advanceSearchWithSpecifications (Pageable pageable, String[] product);
     PageResponse<List<ProductSummaryResponse>> advanceSearchWithRequest(Pageable pageable, ProductAdvanceSearchRequest request);
     ProductVariantSnapshotResponse getProductVariantSnapshot(String variantId);

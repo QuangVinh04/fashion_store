@@ -104,6 +104,30 @@ class InventoryServiceImplTest {
     }
 
     @Test
+    void summarizesActiveVariantStockByProduct() {
+        com.fashionstore.catalog.inventory.repository.ProductStockAggregate low = org.mockito.Mockito.mock(
+                com.fashionstore.catalog.inventory.repository.ProductStockAggregate.class);
+        when(low.getProductId()).thenReturn("product-1");
+        when(low.getTotalQuantity()).thenReturn(15L);
+        when(low.getTotalReserved()).thenReturn(3L);
+        when(low.getTotalAvailable()).thenReturn(12L);
+        when(low.getActiveVariantCount()).thenReturn(4L);
+        when(low.getOutOfStockVariantCount()).thenReturn(0L);
+        when(low.getLowStockVariantCount()).thenReturn(2L);
+        when(inventoryRepository.summarizeByProductIds(List.of("product-1", "product-2")))
+                .thenReturn(List.of(low));
+
+        var summaries = service.getProductStockSummaries(List.of("product-1", "product-2"));
+
+        assertThat(summaries.get("product-1").state())
+                .isEqualTo(com.fashionstore.catalog.inventory.dto.ProductStockState.LOW_STOCK);
+        assertThat(summaries.get("product-1").totalAvailable()).isEqualTo(12);
+        assertThat(summaries.get("product-2").state())
+                .isEqualTo(com.fashionstore.catalog.inventory.dto.ProductStockState.OUT_OF_STOCK);
+        assertThat(summaries.get("product-2").activeVariantCount()).isZero();
+    }
+
+    @Test
     void receiveStockAddsQuantityAndRecordsAuditSnapshot() {
         Inventory inventory = Inventory.builder().variantId("var-1").quantity(10).reservedQuantity(2).build();
         when(inventoryRepository.findByVariantIdWithLock("var-1")).thenReturn(Optional.of(inventory));

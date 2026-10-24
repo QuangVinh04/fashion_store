@@ -42,7 +42,7 @@ class CatalogEntityPersistenceTest {
         var product = Product.builder().name("Shirt").slug("persisted-shirt")
                 .productType(ProductType.SHIRT).shortDescription("Cotton shirt")
                 .sizeChartId("chart-id").thumbnailMediaId("image-id")
-                .metaTitle("Title").metaKeyword("cotton").metaDescription("Description")
+                
                 .publishedAt(publishedAt).status(ProductStatus.PUBLISHED).build();
         em.persist(product); em.flush(); em.clear();
         var actual = em.find(Product.class, product.getId());
@@ -50,7 +50,6 @@ class CatalogEntityPersistenceTest {
         assertThat(actual.getSizeChartId()).isEqualTo("chart-id");
         assertThat(actual.getShortDescription()).isEqualTo("Cotton shirt");
         assertThat(actual.getThumbnailMediaId()).isEqualTo("image-id");
-        assertThat(actual.getMetaTitle()).isEqualTo("Title");
         assertThat(actual.getPublishedAt()).isEqualTo(publishedAt);
         assertThat(actual.getPublished()).isTrue();
     }

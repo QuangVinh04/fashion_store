@@ -3,6 +3,7 @@ package com.fashionstore.catalog.inventory.service;
 import com.fashionstore.catalog.inventory.dto.CheckStockRequest;
 import com.fashionstore.catalog.inventory.dto.CheckStockResponse;
 import com.fashionstore.catalog.inventory.dto.InventoryResponse;
+import com.fashionstore.catalog.inventory.dto.ProductStockSummary;
 import com.fashionstore.catalog.inventory.dto.ReleaseStockRequest;
 import com.fashionstore.catalog.inventory.dto.ReserveStockRequest;
 import com.fashionstore.catalog.inventory.dto.ReserveStockResponse;
@@ -11,7 +12,9 @@ import com.fashionstore.contracts.inventory.command.ConfirmInventoryCommand;
 import com.fashionstore.contracts.inventory.command.ReleaseInventoryCommand;
 import com.fashionstore.contracts.inventory.command.ReservationInventoryCommand;
 
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.time.LocalDateTime;
 import com.fashionstore.catalog.inventory.dto.InventoryLedgerResponse;
 import com.fashionstore.catalog.inventory.dto.InventoryListItemResponse;
@@ -32,6 +35,7 @@ public interface InventoryService {
     void restock(String orderId);
     InventoryResponse getByVariantId(String variantId);
     List<InventoryResponse> getByVariantIds(List<String> variantIds);
+    Map<String, ProductStockSummary> getProductStockSummaries(Collection<String> productIds);
     InventoryResponse updateStock(String variantId, UpdateStockRequest request);
     InventoryResponse receiveStock(String variantId, ReceiveStockRequest request);
     InventoryResponse updateThreshold(String variantId, int minThreshold);

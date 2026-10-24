@@ -38,6 +38,8 @@ public class ProductResponse {
     Boolean published;
     LocalDateTime publishedAt;
     LocalDateTime deletedAt;
+    LocalDateTime createdAt;
+    LocalDateTime updatedAt;
     Boolean featured;
     Gender gender;
     ProductType productType;
@@ -60,13 +62,11 @@ public class ProductResponse {
     String thumbnailMediaId;
     String thumbnailUrl;
     String sizeChartId;
-    String metaTitle;
-    String metaKeyword;
-    String metaDescription;
     String categoryId;
     String categoryName;
     List<CategoryResponse> categories;
     List<ProductImageResponse> images;
     List<ProductVariantResponse> variants;
     List<ProductAttributeValueResponse> attributes;
+    ProductStockSummaryResponse stock;
 }

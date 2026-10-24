@@ -21,7 +21,6 @@ public class ProductVariantSnapshotResponse {
     String productId;
     String productName;
     String sku;
-    String barcode;
     String size;
     String color;
     String colorHex;

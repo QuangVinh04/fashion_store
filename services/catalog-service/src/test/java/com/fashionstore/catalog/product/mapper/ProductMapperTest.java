@@ -26,10 +26,10 @@ class ProductMapperTest {
         ProductVariant variant = ProductVariant.builder().product(product).build();
         var response = productMapper.toProductVariantResponse(variant);
 
-        assertThat(response.getWeightGram()).isNull();
-        assertThat(response.getLengthMm()).isNull();
-        assertThat(response.getWidthMm()).isNull();
-        assertThat(response.getHeightMm()).isNull();
+        assertThat(response.getWeightGram()).isEqualTo(300);
+        assertThat(response.getLengthMm()).isEqualTo(200);
+        assertThat(response.getWidthMm()).isEqualTo(150);
+        assertThat(response.getHeightMm()).isEqualTo(30);
         assertThat(response.getWeight()).isEqualTo(300);
         assertThat(response.getLength()).isEqualTo(20);
         assertThat(variant.getWeightGram()).isEqualTo(300);

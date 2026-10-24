@@ -1,6 +1,12 @@
 {
   "version": 1,
   "skills": {
+    "animate-ui": {
+      "source": "imskyleen/animate-ui",
+      "sourceType": "github",
+      "skillPath": "skills/animate-ui/SKILL.md",
+      "computedHash": "614928b678d059d7f9906f235e72e7aa1227ed3628d1fc2d9f9ad2d33faea55d"
+    },
     "ui-ux": {
       "source": "evondev/evondevKit",
       "sourceType": "github",

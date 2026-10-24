@@ -34,8 +34,6 @@ public class ProductVariantRequest {
     @Min(value = 0, message = "Initial quantity cannot be negative")
     Integer initialQuantity;
 
-    String barcode;
-
     @DecimalMin(value = "0.0", inclusive = true, message = "Price cannot be negative")
     BigDecimal price;
 

@@ -22,6 +22,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -108,6 +109,18 @@ class ProductControllerTest {
                 .andExpect(jsonPath("$.data.id").value("draft-1"));
         verify(productService).getProductByIdForBackoffice("draft-1");
         org.mockito.Mockito.verify(productService, org.mockito.Mockito.never()).getProductById("draft-1");
+    }
+
+    @Test
+    void restoreEndpointDelegatesToService() throws Exception {
+        when(productService.restoreProduct("archived-1"))
+                .thenReturn(ProductResponse.builder().id("archived-1").build());
+
+        mockMvc.perform(post("/admin/products/archived-1/restore"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.id").value("archived-1"));
+
+        verify(productService).restoreProduct("archived-1");
     }
 
     @Test

@@ -9,12 +9,16 @@ import com.fashionstore.catalog.product.entity.Gender;
 import com.fashionstore.catalog.product.entity.ProductStatus;
 import com.fashionstore.catalog.product.entity.ProductType;
 import com.fashionstore.catalog.product.dto.AdminProductFilter;
+import com.fashionstore.catalog.inventory.entity.Inventory;
+import com.fashionstore.catalog.inventory.entity.InventoryStatus;
+import com.fashionstore.catalog.inventory.repository.InventoryRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.data.domain.PageRequest;
 import java.math.BigDecimal;
+import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 
 @DataJpaTest(properties = {
@@ -28,6 +32,37 @@ class BackofficeProductFiltersTest {
     @Autowired ProductRepository products;
     @Autowired BrandRepository brands;
     @Autowired CategoryRepository categories;
+    @Autowired InventoryRepository inventories;
+
+    @Test void summarizesStockOverActiveVariantsOnly() {
+        Product product = Product.builder().name("Stocked Tee").slug("stocked-tee").build();
+        ProductVariant healthy = ProductVariant.builder().product(product).sku("ST-1").active(true)
+                .displayName("Healthy").optionSignature("one").build();
+        ProductVariant low = ProductVariant.builder().product(product).sku("ST-2").active(true)
+                .displayName("Low").optionSignature("two").build();
+        ProductVariant inactive = ProductVariant.builder().product(product).sku("ST-3").active(false)
+                .displayName("Inactive").optionSignature("three").build();
+        product.getVariants().add(healthy);
+        product.getVariants().add(low);
+        product.getVariants().add(inactive);
+        products.saveAndFlush(product);
+
+        inventories.saveAndFlush(Inventory.builder().productId(product.getId()).variantId(healthy.getId())
+                .quantity(10).reservedQuantity(2).minThreshold(5).status(InventoryStatus.ACTIVE).build());
+        inventories.saveAndFlush(Inventory.builder().productId(product.getId()).variantId(low.getId())
+                .quantity(3).reservedQuantity(0).minThreshold(5).status(InventoryStatus.ACTIVE).build());
+        inventories.saveAndFlush(Inventory.builder().productId(product.getId()).variantId(inactive.getId())
+                .quantity(100).reservedQuantity(0).minThreshold(5).status(InventoryStatus.ACTIVE).build());
+
+        var aggregate = inventories.summarizeByProductIds(List.of(product.getId())).getFirst();
+
+        assertThat(aggregate.getActiveVariantCount()).isEqualTo(2);
+        assertThat(aggregate.getTotalQuantity()).isEqualTo(13);
+        assertThat(aggregate.getTotalReserved()).isEqualTo(2);
+        assertThat(aggregate.getTotalAvailable()).isEqualTo(11);
+        assertThat(aggregate.getLowStockVariantCount()).isEqualTo(1);
+        assertThat(aggregate.getOutOfStockVariantCount()).isZero();
+    }
 
     @Test void combinesFiltersAndCountsProductsOnceAcrossCategories() {
         Brand brand = brands.saveAndFlush(Brand.builder().name("Brand").slug("brand").build());

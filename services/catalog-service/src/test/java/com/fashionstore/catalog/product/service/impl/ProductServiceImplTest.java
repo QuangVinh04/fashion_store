@@ -3,7 +3,10 @@ package com.fashionstore.catalog.product.service.impl;
 import com.fashionstore.catalog.product.dto.ProductAttributeValueRequest;
 import com.fashionstore.catalog.product.dto.ProductImageItem;
 import com.fashionstore.catalog.product.dto.ProductRequest;
+import com.fashionstore.catalog.product.dto.ProductResponse;
+import com.fashionstore.catalog.product.dto.ProductSummaryResponse;
 import com.fashionstore.catalog.product.dto.ProductUpdateRequest;
+import com.fashionstore.catalog.product.dto.ProductVariantResponse;
 import com.fashionstore.catalog.product.dto.ProductVariantBatchRequest;
 import com.fashionstore.catalog.product.dto.ProductVariantRequest;
 import com.fashionstore.catalog.product.dto.ProductVariantSnapshotResponse;
@@ -49,6 +52,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -154,6 +158,86 @@ class ProductServiceImplTest {
 
             assertThat(productService.getProductByIdForBackoffice(status.name())).isSameAs(response);
         }
+    }
+
+    @Test
+    void publicProductDetailMarksEachVariantAvailabilityWithoutExposingQuantity() {
+        Product product = Product.builder().name("Basic Tee").status(ProductStatus.PUBLISHED).build();
+        product.setId("product-1");
+        ProductVariantResponse inStock = ProductVariantResponse.builder().id("variant-1").active(true).build();
+        ProductVariantResponse soldOut = ProductVariantResponse.builder().id("variant-2").active(true).build();
+        ProductVariantResponse inactive = ProductVariantResponse.builder().id("variant-3").active(false).build();
+        ProductResponse response = ProductResponse.builder().id("product-1")
+                .variants(List.of(inStock, soldOut, inactive)).build();
+
+        when(productRepository.findDetailProductById("product-1")).thenReturn(Optional.of(product));
+        when(productMapper.toProductResponse(product)).thenReturn(response);
+        when(inventoryService.getByVariantIds(List.of("variant-1", "variant-2", "variant-3")))
+                .thenReturn(List.of(
+                        com.fashionstore.catalog.inventory.dto.InventoryResponse.builder()
+                                .variantId("variant-1").quantity(5).quantityReserved(0).quantityAvailable(5).build(),
+                        com.fashionstore.catalog.inventory.dto.InventoryResponse.builder()
+                                .variantId("variant-2").quantity(0).quantityReserved(0).quantityAvailable(0).build(),
+                        com.fashionstore.catalog.inventory.dto.InventoryResponse.builder()
+                                .variantId("variant-3").quantity(5).quantityReserved(0).quantityAvailable(5).build()));
+
+        ProductResponse result = productService.getProductById("product-1");
+
+        assertThat(result.getVariants().get(0).getAvailable()).isTrue();
+        assertThat(result.getVariants().get(1).getAvailable()).isFalse();
+        assertThat(result.getVariants().get(2).getAvailable()).isFalse();
+    }
+
+    @Test
+    void backofficeListIncludesReadOnlyStockSummary() {
+        Product product = Product.builder().name("Basic Tee").build();
+        product.setId("product-1");
+        ProductSummaryResponse summary = ProductSummaryResponse.builder().id("product-1").name("Basic Tee").build();
+        Pageable pageable = PageRequest.of(0, 20);
+
+        when(productRepository.findAll(any(Specification.class), eq(pageable)))
+                .thenReturn(new PageImpl<>(List.of(product)));
+        when(productMapper.toProductSummaryResponse(product)).thenReturn(summary);
+        when(inventoryService.getProductStockSummaries(List.of("product-1")))
+                .thenReturn(java.util.Map.of("product-1", new com.fashionstore.catalog.inventory.dto.ProductStockSummary(
+                        "product-1", 15, 3, 12, 4, 0, 2,
+                        com.fashionstore.catalog.inventory.dto.ProductStockState.LOW_STOCK)));
+
+        var result = productService.getAllProductsForBackoffice(
+                pageable, com.fashionstore.catalog.product.dto.AdminProductFilter.builder().build());
+
+        assertThat(result.getItems()).hasSize(1);
+        assertThat(result.getItems().getFirst().getStock().totalAvailable()).isEqualTo(12);
+        assertThat(result.getItems().getFirst().getStock().state()).isEqualTo("LOW_STOCK");
+    }
+
+    @Test
+    void backofficeDetailIncludesStockForEveryVariant() {
+        Product product = Product.builder().name("Basic Tee").build();
+        product.setId("product-1");
+        ProductVariant variant = ProductVariant.builder().product(product).sku("TEE-M").build();
+        variant.setId("variant-1");
+        product.getVariants().add(variant);
+        ProductVariantResponse variantResponse = ProductVariantResponse.builder().id("variant-1").sku("TEE-M").build();
+        ProductResponse response = ProductResponse.builder().id("product-1")
+                .variants(List.of(variantResponse)).build();
+
+        when(productRepository.findDetailProductById("product-1")).thenReturn(Optional.of(product));
+        when(productMapper.toProductResponse(product)).thenReturn(response);
+        when(inventoryService.getProductStockSummaries(List.of("product-1")))
+                .thenReturn(java.util.Map.of("product-1", new com.fashionstore.catalog.inventory.dto.ProductStockSummary(
+                        "product-1", 10, 2, 8, 1, 0, 0,
+                        com.fashionstore.catalog.inventory.dto.ProductStockState.IN_STOCK)));
+        when(inventoryService.getByVariantIds(List.of("variant-1")))
+                .thenReturn(List.of(com.fashionstore.catalog.inventory.dto.InventoryResponse.builder()
+                        .variantId("variant-1").quantity(10).quantityReserved(2).quantityAvailable(8).minThreshold(3)
+                        .build()));
+
+        ProductResponse result = productService.getProductByIdForBackoffice("product-1");
+
+        assertThat(result.getStock().totalAvailable()).isEqualTo(8);
+        assertThat(result.getVariants().getFirst().getStock().availableQuantity()).isEqualTo(8);
+        assertThat(result.getVariants().getFirst().getStock().minThreshold()).isEqualTo(3);
     }
 
     @Test
@@ -648,6 +732,51 @@ class ProductServiceImplTest {
     }
 
     @Test
+    void restoreArchivedProductReturnsItToDraft() {
+        Product product = Product.builder()
+                .name("Basic Tee")
+                .slug("basic-tee")
+                .status(ProductStatus.ARCHIVED)
+                .published(false)
+                .publishedAt(LocalDateTime.now())
+                .deletedAt(LocalDateTime.now())
+                .build();
+        product.setId("product-1");
+        ProductResponse response = ProductResponse.builder().id("product-1").status(ProductStatus.DRAFT).build();
+
+        when(productRepository.findDetailProductById("product-1")).thenReturn(Optional.of(product));
+        when(productRepository.save(any(Product.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(productMapper.toProductResponse(product)).thenReturn(response);
+
+        ProductResponse result = productService.restoreProduct("product-1");
+
+        assertThat(result).isSameAs(response);
+        assertThat(product.getStatus()).isEqualTo(ProductStatus.DRAFT);
+        assertThat(product.getPublished()).isFalse();
+        assertThat(product.getPublishedAt()).isNull();
+        assertThat(product.getDeletedAt()).isNull();
+        verify(productRepository).save(product);
+    }
+
+    @Test
+    void rejectsRestoreWhenProductIsNotArchived() {
+        Product product = Product.builder()
+                .name("Basic Tee")
+                .slug("basic-tee")
+                .status(ProductStatus.DRAFT)
+                .build();
+        product.setId("product-1");
+
+        when(productRepository.findDetailProductById("product-1")).thenReturn(Optional.of(product));
+
+        assertThatThrownBy(() -> productService.restoreProduct("product-1"))
+                .isInstanceOfSatisfying(AppException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ProductErrorCode.PRODUCT_PUBLISH_INVALID));
+        verify(productRepository, never()).save(any(Product.class));
+    }
+
+    @Test
     void rejectsUnknownAdvancedSearchField() {
         assertThatThrownBy(() -> productService.advanceSearchWithSpecifications(
                 PageRequest.of(0, 10),
@@ -869,96 +998,6 @@ class ProductServiceImplTest {
                 .isInstanceOfSatisfying(AppException.class,
                         exception -> assertThat(exception.getErrorCode())
                                 .isEqualTo(ProductErrorCode.IMAGE_COLOR_INVALID));
-
-        verify(productRepository, never()).save(any(Product.class));
-    }
-
-    @Test
-    void rejectsABarcodeThatIsNotAGtin() {
-        Category category = Category.builder().name("Tops").build();
-        category.setId("category-1");
-
-        ProductRequest request = ProductRequest.builder()
-                .name("Basic Tee")
-                .categoryIds(List.of("category-1"))
-                .basePrice(new BigDecimal("20.00"))
-                .variants(List.of(ProductVariantRequest.builder()
-                        .colorOptionId("color-black")
-                        .sizeOptionId("size-m")
-                        .barcode("not-a-gtin")
-                        .build()))
-                .build();
-
-        when(productRepository.existsBySlug("basic-tee")).thenReturn(false);
-        when(categoryRepository.findAllById(List.of("category-1"))).thenReturn(List.of(category));
-
-        assertThatThrownBy(() -> productService.createProduct(request))
-                .isInstanceOfSatisfying(AppException.class,
-                        exception -> assertThat(exception.getErrorCode())
-                                .isEqualTo(ProductErrorCode.BARCODE_INVALID));
-
-        verify(productRepository, never()).save(any(Product.class));
-    }
-
-    @Test
-    void rejectsTwoVariantsSharingTheSameBarcodeInOneRequest() {
-        Category category = Category.builder().name("Tops").build();
-        category.setId("category-1");
-
-        ProductRequest request = ProductRequest.builder()
-                .name("Basic Tee")
-                .categoryIds(List.of("category-1"))
-                .basePrice(new BigDecimal("20.00"))
-                .variants(List.of(
-                        ProductVariantRequest.builder()
-                                .colorOptionId("color-black")
-                                .sizeOptionId("size-m")
-                                .barcode("4006381333931")
-                                .build(),
-                        ProductVariantRequest.builder()
-                                .colorOptionId("color-black")
-                                .sizeOptionId("size-l")
-                                .barcode("4006381333931")
-                                .build()))
-                .build();
-
-        when(productRepository.existsBySlug("basic-tee")).thenReturn(false);
-        when(categoryRepository.findAllById(List.of("category-1"))).thenReturn(List.of(category));
-
-        assertThatThrownBy(() -> productService.createProduct(request))
-                .isInstanceOfSatisfying(AppException.class,
-                        exception -> assertThat(exception.getErrorCode())
-                                .isEqualTo(ProductErrorCode.BARCODE_ALREADY_EXISTED_OR_DUPLICATED));
-
-        verify(productRepository, never()).save(any(Product.class));
-    }
-
-    @Test
-    void rejectsABarcodeAlreadyUsedByAnotherVariant() {
-        Category category = Category.builder().name("Tops").build();
-        category.setId("category-1");
-        ProductVariant otherVariant = ProductVariant.builder().sku("OTHER-BLK-M").build();
-        otherVariant.setId("variant-other");
-
-        ProductRequest request = ProductRequest.builder()
-                .name("Basic Tee")
-                .categoryIds(List.of("category-1"))
-                .basePrice(new BigDecimal("20.00"))
-                .variants(List.of(ProductVariantRequest.builder()
-                        .colorOptionId("color-black")
-                        .sizeOptionId("size-m")
-                        .barcode("4006381333931")
-                        .build()))
-                .build();
-
-        when(productRepository.existsBySlug("basic-tee")).thenReturn(false);
-        when(categoryRepository.findAllById(List.of("category-1"))).thenReturn(List.of(category));
-        when(productVariantRepository.findByBarcode("4006381333931")).thenReturn(Optional.of(otherVariant));
-
-        assertThatThrownBy(() -> productService.createProduct(request))
-                .isInstanceOfSatisfying(AppException.class,
-                        exception -> assertThat(exception.getErrorCode())
-                                .isEqualTo(ProductErrorCode.BARCODE_ALREADY_EXISTED_OR_DUPLICATED));
 
         verify(productRepository, never()).save(any(Product.class));
     }

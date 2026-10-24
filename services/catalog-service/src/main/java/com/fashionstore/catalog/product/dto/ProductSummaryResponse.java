@@ -11,6 +11,7 @@ import lombok.Setter;
 import lombok.experimental.FieldDefaults;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 
 @Getter
 @Setter
@@ -28,8 +29,12 @@ public class ProductSummaryResponse {
     BigDecimal price;
     ProductStatus status;
     Boolean published;
+    Boolean featured;
     String thumbnailMediaId;
     String thumbnailUrl;
     String brandName;
     String categoryName;
+    LocalDateTime createdAt;
+    LocalDateTime updatedAt;
+    ProductStockSummaryResponse stock;
 }

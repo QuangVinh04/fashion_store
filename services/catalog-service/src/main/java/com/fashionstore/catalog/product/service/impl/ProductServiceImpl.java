@@ -8,8 +8,12 @@ import com.fashionstore.catalog.product.dto.ProductAdvanceSearchRequest;
 import com.fashionstore.catalog.product.dto.ProductAttributeValueRequest;
 import com.fashionstore.catalog.product.dto.ProductImageItem;
 import com.fashionstore.catalog.product.dto.ProductRequest;
+import com.fashionstore.catalog.inventory.dto.InventoryResponse;
+import com.fashionstore.catalog.inventory.dto.ProductStockSummary;
 import com.fashionstore.catalog.product.dto.ProductResponse;
+import com.fashionstore.catalog.product.dto.ProductStockSummaryResponse;
 import com.fashionstore.catalog.product.dto.ProductSummaryResponse;
+import com.fashionstore.catalog.product.dto.ProductVariantStockResponse;
 import com.fashionstore.catalog.product.dto.ProductUpdateRequest;
 import com.fashionstore.catalog.product.dto.ProductVariantBatchRequest;
 import com.fashionstore.catalog.product.dto.ProductVariantRequest;
@@ -59,6 +63,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -87,9 +92,6 @@ public class ProductServiceImpl implements ProductService {
     private static final Specification<Product> PUBLISHED_ONLY = (root, query, cb) ->
             cb.equal(root.get("status"), ProductStatus.PUBLISHED);
 
-    /** GTIN-8/12/13/14 — the only barcode shapes a variant may carry. */
-    private static final Pattern GTIN_PATTERN = Pattern.compile("\\d{8}|\\d{12}|\\d{13}|\\d{14}");
-
     ProductRepository productRepository;
     CategoryRepository categoryRepository;
     BrandRepository brandRepository;
@@ -113,8 +115,9 @@ public class ProductServiceImpl implements ProductService {
     @Override
     public PageResponse<List<ProductSummaryResponse>> getAllProductsForBackoffice(Pageable pageable) {
         Page<Product> page = productRepository.findAll(pageable);
-
-        return getPageResponse(pageable, page);
+        PageResponse<List<ProductSummaryResponse>> response = getPageResponse(pageable, page);
+        attachProductStock(response.getItems());
+        return response;
     }
 
     @Override
@@ -124,7 +127,10 @@ public class ProductServiceImpl implements ProductService {
                 && filter.getMinPrice().compareTo(filter.getMaxPrice()) > 0) {
             throw new AppException(ProductErrorCode.INVALID_SEARCH_CRITERIA);
         }
-        return getPageResponse(pageable, productRepository.findAll(AdminProductSpecifications.from(filter), pageable));
+        PageResponse<List<ProductSummaryResponse>> response =
+                getPageResponse(pageable, productRepository.findAll(AdminProductSpecifications.from(filter), pageable));
+        attachProductStock(response.getItems());
+        return response;
     }
 
     @Override
@@ -134,7 +140,9 @@ public class ProductServiceImpl implements ProductService {
                 .filter(value -> value.getStatus() == ProductStatus.PUBLISHED)
                 .orElseThrow(() -> new AppException(ProductErrorCode.PRODUCT_NOT_FOUND));
 
-        return productMapper.toProductResponse(product);
+        ProductResponse response = productMapper.toProductResponse(product);
+        attachVariantAvailability(response);
+        return response;
     }
 
     @Override
@@ -143,7 +151,9 @@ public class ProductServiceImpl implements ProductService {
     public ProductResponse getProductByIdForBackoffice(String id) {
         Product product = productRepository.findDetailProductById(id)
                 .orElseThrow(() -> new AppException(ProductErrorCode.PRODUCT_NOT_FOUND));
-        return productMapper.toProductResponse(product);
+        ProductResponse response = productMapper.toProductResponse(product);
+        attachProductStock(response);
+        return response;
     }
 
     @Override
@@ -151,7 +161,9 @@ public class ProductServiceImpl implements ProductService {
     public ProductResponse getProductBySlug(String slug) {
         Product product = productRepository.findBySlugAndStatus(slug, ProductStatus.PUBLISHED)
                 .orElseThrow(() -> new AppException(ProductErrorCode.PRODUCT_NOT_FOUND));
-        return productMapper.toProductResponse(product);
+        ProductResponse response = productMapper.toProductResponse(product);
+        attachVariantAvailability(response);
+        return response;
     }
 
     @Override
@@ -323,9 +335,6 @@ public class ProductServiceImpl implements ProductService {
         product.setWidth(request.getWidth());
         product.setHeight(request.getHeight());
         product.setSizeChartId(resolveSizeChartId(request.getSizeChartId()));
-        product.setMetaTitle(request.getMetaTitle());
-        product.setMetaKeyword(request.getMetaKeyword());
-        product.setMetaDescription(request.getMetaDescription());
         product.setBrand(brand);
 
         // Validate and apply the complete FE-generated variant list before saving
@@ -449,6 +458,21 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
+    @Transactional
+    public ProductResponse restoreProduct(String productId) {
+        Product product = productRepository.findDetailProductById(productId)
+                .orElseThrow(() -> new AppException(ProductErrorCode.PRODUCT_NOT_FOUND));
+        if (product.getStatus() != ProductStatus.ARCHIVED) {
+            throw new AppException(ProductErrorCode.PRODUCT_PUBLISH_INVALID, "Product is not archived");
+        }
+        product.setStatus(ProductStatus.DRAFT);
+        product.setPublished(false);
+        product.setPublishedAt(null);
+        product.setDeletedAt(null);
+        return productMapper.toProductResponse(productRepository.save(product));
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public ProductVariantSnapshotResponse getProductVariantSnapshot(String variantId) {
         ProductVariant variant = productVariantRepository.findById(variantId)
@@ -471,7 +495,6 @@ public class ProductServiceImpl implements ProductService {
                 .productId(product.getId())
                 .productName(product.getName())
                 .sku(variant.getSku())
-                .barcode(variant.getBarcode())
                 .size(variant.getSizeDisplay())
                 .color(variant.getColorDisplay())
                 .colorHex(variant.getColorHex())
@@ -586,9 +609,6 @@ public class ProductServiceImpl implements ProductService {
                 .slug(request.getSlug())
                 .shortDescription(request.getShortDescription())
                 .productType(request.getProductType())
-                .metaTitle(request.getMetaTitle())
-                .metaKeyword(request.getMetaKeyword())
-                .metaDescription(request.getMetaDescription())
                 .description(request.getDescription())
                 .status(ProductStatus.DRAFT)
                 .featured(Boolean.TRUE.equals(request.getFeatured()))
@@ -771,7 +791,6 @@ public class ProductServiceImpl implements ProductService {
                         .collect(Collectors.toSet());
 
         // validate price and sku
-        Set<String> barcodesInRequest = new HashSet<>();
         for (ProductVariantRequest request : requests) {
             String sku = StringUtils.cleanText(request.getSku());
             // uk_product_variant_sku ap dung cho moi dong, ke ca variant da tat,
@@ -780,20 +799,6 @@ public class ProductServiceImpl implements ProductService {
                 Optional<ProductVariant> holder = productVariantRepository.findBySku(sku);
                 if (holder.isPresent() && !ownVariantIds.contains(holder.get().getId())) {
                     throw new AppException(ProductErrorCode.SKU_ALREADY_EXISTED_OR_DUPLICATED);
-                }
-            }
-            // Barcode doi xung voi sku: cung mot unique index, cung mot cach kiem tra truoc khi ghi.
-            String barcode = StringUtils.cleanText(request.getBarcode());
-            if (barcode != null) {
-                if (!GTIN_PATTERN.matcher(barcode).matches()) {
-                    throw new AppException(ProductErrorCode.BARCODE_INVALID);
-                }
-                if (!barcodesInRequest.add(barcode)) {
-                    throw new AppException(ProductErrorCode.BARCODE_ALREADY_EXISTED_OR_DUPLICATED);
-                }
-                Optional<ProductVariant> holder = productVariantRepository.findByBarcode(barcode);
-                if (holder.isPresent() && !ownVariantIds.contains(holder.get().getId())) {
-                    throw new AppException(ProductErrorCode.BARCODE_ALREADY_EXISTED_OR_DUPLICATED);
                 }
             }
             // validate mediaId if provided
@@ -884,13 +889,12 @@ public class ProductServiceImpl implements ProductService {
             variant.setOptionSignature(signature);
             variant.setDisplayName(colorOption.getName() + " / " + sizeOption.getName());
             variant.setSku(StringUtils.cleanText(request.getSku()));
-            variant.setBarcode(StringUtils.cleanText(request.getBarcode()));
             variant.setPrice(request.getPrice() == null ? product.getBasePrice() : request.getPrice());
             variant.setSalePrice(request.getSalePrice());
-            variant.setWeightGram(request.getWeightGram());
-            variant.setLengthMm(request.getLengthMm());
-            variant.setWidthMm(request.getWidthMm());
-            variant.setHeightMm(request.getHeightMm());
+            variant.setWeightGram(product.getWeightGram());
+            variant.setLengthMm(product.getLengthMm());
+            variant.setWidthMm(product.getWidthMm());
+            variant.setHeightMm(product.getHeightMm());
             if (request.getActive() != null || newVariant) {
                 variant.setActive(Boolean.TRUE.equals(request.getActive()));
             }
@@ -1067,6 +1071,79 @@ public class ProductServiceImpl implements ProductService {
         if (basePrice != null && salePrice != null && salePrice.compareTo(basePrice) > 0) {
             throw new AppException(ProductErrorCode.INVALID_PRICE);
         }
+    }
+
+    private void attachProductStock(List<ProductSummaryResponse> items) {
+        if (items == null || items.isEmpty()) {
+            return;
+        }
+        List<String> productIds = items.stream().map(ProductSummaryResponse::getId).toList();
+        Map<String, ProductStockSummary> summaries = inventoryService.getProductStockSummaries(productIds);
+        items.forEach(item -> item.setStock(toStockSummary(summaries.get(item.getId()))));
+    }
+
+    private void attachProductStock(ProductResponse response) {
+        if (response == null || response.getId() == null) {
+            return;
+        }
+        ProductStockSummary summary =
+                inventoryService.getProductStockSummaries(List.of(response.getId())).get(response.getId());
+        response.setStock(toStockSummary(summary));
+
+        if (response.getVariants() == null || response.getVariants().isEmpty()) {
+            return;
+        }
+        List<String> variantIds = response.getVariants().stream()
+                .map(ProductVariantResponse::getId)
+                .filter(Objects::nonNull)
+                .toList();
+        Map<String, InventoryResponse> inventoryByVariant = inventoryService.getByVariantIds(variantIds).stream()
+                .collect(Collectors.toMap(InventoryResponse::getVariantId, Function.identity(), (left, right) -> left));
+        response.getVariants().forEach(variant ->
+                variant.setStock(toVariantStock(inventoryByVariant.get(variant.getId()))));
+    }
+
+    private ProductStockSummaryResponse toStockSummary(ProductStockSummary summary) {
+        if (summary == null) {
+            return null;
+        }
+        return new ProductStockSummaryResponse(
+                summary.totalQuantity(),
+                summary.totalReserved(),
+                summary.totalAvailable(),
+                summary.activeVariantCount(),
+                summary.outOfStockVariantCount(),
+                summary.lowStockVariantCount(),
+                summary.state().name());
+    }
+
+    private void attachVariantAvailability(ProductResponse response) {
+        if (response == null || response.getVariants() == null || response.getVariants().isEmpty()) {
+            return;
+        }
+        List<String> variantIds = response.getVariants().stream()
+                .map(ProductVariantResponse::getId)
+                .filter(Objects::nonNull)
+                .toList();
+        Map<String, InventoryResponse> inventoryByVariant = inventoryService.getByVariantIds(variantIds).stream()
+                .collect(Collectors.toMap(InventoryResponse::getVariantId, Function.identity(), (left, right) -> left));
+        response.getVariants().forEach(variant -> {
+            InventoryResponse inventory = inventoryByVariant.get(variant.getId());
+            variant.setAvailable(Boolean.TRUE.equals(variant.getActive())
+                    && inventory != null
+                    && inventory.getQuantityAvailable() > 0);
+        });
+    }
+
+    private ProductVariantStockResponse toVariantStock(InventoryResponse inventory) {
+        if (inventory == null) {
+            return null;
+        }
+        return new ProductVariantStockResponse(
+                inventory.getQuantity(),
+                inventory.getQuantityReserved(),
+                inventory.getQuantityAvailable(),
+                inventory.getMinThreshold());
     }
 
     private PageResponse<List<ProductSummaryResponse>> getPageResponse(Pageable pageable, Page<Product> products) {
