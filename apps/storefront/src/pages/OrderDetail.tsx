@@ -1,7 +1,7 @@
 import { customerError } from "../api/client";
 import { useState, useEffect } from "react";
 import { Link, useLocation, useParams } from "react-router";
-import { AlertCircle, ArrowLeft, Check, Copy, Star } from "lucide-react";
+import { AlertCircle, ArrowLeft, Check, Copy, Star, Clock, CreditCard } from "lucide-react";
 import { store } from "../api/store";
 import { walletCheckoutPath } from "../api/wallet-payment";
 import { canPayOnline, paymentDeadline, paymentLinkMessage, requestPaymentUrl } from "../api/payment-link";
@@ -200,7 +200,7 @@ export default function OrderDetail() {
   const cancelled = order?.status === "CANCELLED";
   const delivered = order && ["DELIVERED", "COMPLETED"].includes(order.status);
   const paymentLabel = order?.paymentMethod === "COD" ? "Thanh toán khi nhận hàng (COD)"
-    : order?.paymentMethod === "WALLET" ? "Ví Fashion Store" : order?.paymentProvider === "PAYOS" ? "PayOS" : "VNPay";
+    : order?.paymentMethod === "WALLET" ? "Ví LINO" : order?.paymentProvider === "PAYOS" ? "PayOS" : "VNPay";
   const paymentStatus = payment?.status ? ({ COD_PENDING: "Thanh toán khi nhận hàng", PENDING: "Chờ thanh toán", COMPLETED: "Đã thanh toán", FAILED: "Chưa thanh toán thành công", CANCELLED: "Đã hủy", REFUNDED: "Đã hoàn tiền", REFUND_PENDING: "Đang hoàn tiền", REFUND_FAILED: "Đang kiểm tra hoàn tiền" } as Record<string, string>)[payment.status] || "Đang cập nhật" : paymentLoading ? "Đang cập nhật…" : "Chưa có thông tin";
   return <ProfileLayout flush>
     <ConfirmReceiptDialog open={receiptOpen} busy={receiptBusy} blocked={!order?.canConfirmReceipt || !!order?.activeReturnId || orderLoad.loading} error={receiptError} onOpenChange={setReceiptOpen} onConfirm={()=>void handleConfirmReceipt()}/>
@@ -220,7 +220,7 @@ export default function OrderDetail() {
           </div>
           <div className="order-actions">
             <OrderCancellationActions key={order.id} order={order} onRefresh={orderLoad.refresh} onCancelRequested={()=>{setCancelRequested(true);setActionNotice(null);}}/>
-            {awaitingPayment && !deadline?.expired && <button disabled={busyAction} className="order-action order-action-primary" onClick={()=>void handleOnlinePayment()}>{busyAction ? 'Đang mở thanh toán…' : 'Thanh toán ngay'}</button>}
+            {awaitingPayment && !deadline?.expired && <button disabled={busyAction} className="order-action order-action-primary inline-flex items-center gap-1.5 shadow-xs" onClick={()=>void handleOnlinePayment()}><CreditCard size={15}/>{busyAction ? 'Đang mở thanh toán…' : 'Thanh toán ngay'}</button>}
             {order.paymentMethod === 'WALLET' && order.status === 'PENDING' && walletCheckoutPath(order) && <Link className="order-action order-action-primary" to={walletCheckoutPath(order)!}>Thanh toán bằng ví</Link>}
             {order.canConfirmReceipt && !order.activeReturnId && <button className="order-action order-action-primary" disabled={receiptBusy || orderLoad.loading} onClick={()=>{setReceiptError('');setReceiptOpen(true);}}>Đã nhận được hàng</button>}
             {(order.canRequestReturn || order.activeReturnId || returnRequest) && <Link className="order-action" to={`/profile/orders/${id}/return`}>{order.activeReturnId || returnRequest ? 'Xem yêu cầu trả hàng / hoàn tiền' : 'Yêu cầu trả hàng / hoàn tiền'}</Link>}
@@ -231,8 +231,32 @@ export default function OrderDetail() {
           {deadline && <p role="timer" className="px-6 pb-4 text-sm text-muted-foreground">{deadline.expired
             ? 'Đã quá hạn thanh toán. Đơn hàng đang được hủy tự động.'
             : <>Vui lòng thanh toán trong <strong className="text-foreground tabular-nums">{deadline.remaining}</strong> (trước {detailDate(payment!.authorizationExpiresAt!)}). Quá thời hạn, đơn hàng sẽ tự hủy.</>}</p>}
-          {actionNotice && <p role="status" className="px-6 pb-4 text-sm text-destructive">{actionNotice.text}</p>}
-          {returnError && <p role="alert" className="px-6 pb-4 text-sm text-destructive">{returnError}</p>}
+          {actionNotice && (
+            <div
+              role="status"
+              className={`mx-6 mb-4 p-3.5 rounded-xl text-xs sm:text-sm font-medium flex items-center gap-2.5 border ${
+                actionNotice.type === "error"
+                  ? "bg-destructive/10 text-destructive border-destructive/20"
+                  : "bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 border-emerald-500/20"
+              }`}
+            >
+              {actionNotice.type === "error" ? (
+                <AlertCircle size={16} className="shrink-0" />
+              ) : (
+                <Check size={16} className="shrink-0 text-emerald-600" />
+              )}
+              <span>{actionNotice.text}</span>
+            </div>
+          )}
+          {returnError && (
+            <div
+              role="alert"
+              className="mx-6 mb-4 p-3.5 rounded-xl text-xs sm:text-sm font-medium flex items-center gap-2.5 bg-destructive/10 text-destructive border border-destructive/20"
+            >
+              <AlertCircle size={16} className="shrink-0" />
+              <span>{returnError}</span>
+            </div>
+          )}
           {returnRequest && <Link to={`/profile/orders/${id}/return`} className="block border-t border-border px-6 py-4 text-sm">Yêu cầu trả hàng: <strong>{RETURN_LABEL[returnRequest.status] || 'Đang cập nhật'}</strong> →</Link>}
         </>}
       </section>
@@ -240,7 +264,23 @@ export default function OrderDetail() {
         {!cancelled && <section className="order-panel order-delivery">
           <div className="order-address"><h2>Địa chỉ nhận hàng</h2><strong>{order.recipientName}</strong><p>{order.recipientPhone}</p><p>{order.shippingAddress}</p></div>
           <div className="order-delivery-history">
-            <div className="order-tracking"><strong>{shipment?.provider || order.shippingProvider || 'Vận chuyển'}</strong>{(shipment?.trackingCode || order.trackingCode) && <button onClick={copyTracking} aria-label="Sao chép mã vận đơn">{shipment?.trackingCode || order.trackingCode}{copiedTracking ? <Check size={14}/> : <Copy size={14}/>}</button>}</div>
+            <div className="order-tracking"><strong>{shipment?.provider || order.shippingProvider || 'Vận chuyển'}</strong>{(shipment?.trackingCode || order.trackingCode) && (
+              <button
+                type="button"
+                onClick={copyTracking}
+                aria-label="Sao chép mã vận đơn"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-secondary/80 hover:bg-secondary border border-border text-xs font-mono text-foreground transition-all cursor-pointer shadow-2xs"
+              >
+                <span>{shipment?.trackingCode || order.trackingCode}</span>
+                {copiedTracking ? (
+                  <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-sans font-medium text-[11px]">
+                    <Check size={13} /> Đã chép
+                  </span>
+                ) : (
+                  <Copy size={13} className="text-muted-foreground hover:text-foreground" />
+                )}
+              </button>
+            )}</div>
             {shipmentError ? <p role="alert" className="mb-3 text-xs text-destructive">{shipmentError} <button onClick={retryResources} className="underline">Thử lại</button></p> : shipmentLoading ? <p className="mb-3 text-xs text-muted-foreground">Đang tải vận chuyển…</p> : !shipment && !order.trackingCode ? <p className="mb-3 text-xs text-muted-foreground">Chưa có thông tin vận đơn.</p> : null}
             <OrderActivityTimeline key={id} history={historyLoad.data} loading={historyLoad.loading} error={historyLoad.error} retry={()=>void historyLoad.refresh()}/>
           </div>

@@ -1,3 +1,4 @@
+import { motion } from "motion/react";
 import { customerError } from "../api/client";
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router";
@@ -76,25 +77,30 @@ export function Status({
 export function PageTitle({
   eyebrow,
   children,
+  action,
 }: {
   eyebrow?: string;
   children: React.ReactNode;
+  action?: React.ReactNode;
 }) {
   return (
-    <div className="mb-6">
-      {eyebrow && (
-        <p className="mb-2 text-xs text-muted-foreground font-medium">
-          {eyebrow}
-        </p>
-      )}
-      <h1
-        className="text-xl text-foreground font-semibold leading-snug text-balance"
-        style={{
-          fontFamily: "var(--app-font)",
-        }}
-      >
-        {children}
-      </h1>
+    <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div>
+        {eyebrow && (
+          <p className="mb-2 text-xs text-muted-foreground font-medium">
+            {eyebrow}
+          </p>
+        )}
+        <h1
+          className="text-xl text-foreground font-semibold leading-snug text-balance"
+          style={{
+            fontFamily: "var(--app-font)",
+          }}
+        >
+          {children}
+        </h1>
+      </div>
+      {action && <div className="shrink-0 self-start sm:self-auto">{action}</div>}
     </div>
   );
 }
@@ -186,20 +192,23 @@ export function ProductCard({
   const photoUrl = product.thumbnailUrl || media(product.thumbnailMediaId);
 
   return (
-    <article className="group min-w-0 flex flex-col overflow-hidden rounded-2xl border border-border bg-card">
-      <div className="relative aspect-[3/4] bg-background overflow-hidden">
-        <Link
-          to={`/products/${product.id}`}
-          aria-label={product.name}
-          className="block h-full w-full"
-        >
-          <ProductPhoto src={photoUrl} name={product.name} />
-        </Link>
+    <article className="group relative min-w-0 flex flex-col overflow-hidden rounded-2xl border border-border bg-card transition-all duration-200 hover:border-primary/40 hover:shadow-md">
+      {/* Click toàn bộ card vào trang chi tiết */}
+      <Link
+        to={`/products/${product.id}`}
+        aria-label={product.name}
+        className="absolute inset-0 z-0"
+      />
+
+      <div className="relative aspect-[3/4] bg-background overflow-hidden pointer-events-none">
+        <ProductPhoto src={photoUrl} name={product.name} />
 
         {/* Sale / Status Tag */}
         {isSale && (
-          <span className="absolute top-3 left-3 rounded-md bg-primary-light text-destructive text-xs font-medium px-2 py-1 pointer-events-none">
-            Sale
+          <span className="absolute top-3 left-3 rounded-lg bg-red-600 text-white text-[11px] font-bold px-2 py-0.5 shadow-sm tracking-wide z-10">
+            {product.basePrice && product.salePrice && product.salePrice < product.basePrice
+              ? `-${Math.round(((product.basePrice - product.salePrice) / product.basePrice) * 100)}%`
+              : "SALE"}
           </span>
         )}
 
@@ -210,20 +219,27 @@ export function ProductCard({
           onClick={toggleWish}
           aria-label={liked ? "Bỏ yêu thích" : "Yêu thích"}
           aria-pressed={liked}
-          className="absolute right-3 top-3 flex size-9 items-center justify-center rounded-lg bg-white text-foreground transition-colors hover:bg-primary-light disabled:opacity-45"
+          className="pointer-events-auto absolute right-3 top-3 z-10 flex size-9 items-center justify-center rounded-lg bg-white/90 backdrop-blur-xs text-foreground transition-all hover:bg-white hover:text-primary disabled:opacity-45 active:scale-90 shadow-xs"
         >
-          <Heart
-            size={16}
-            className={
-              liked ? "fill-primary stroke-primary" : "stroke-foreground"
-            }
-          />
+          <motion.div
+            key={liked ? "liked" : "unliked"}
+            initial={{ scale: 0.8 }}
+            animate={{ scale: [1.3, 0.9, 1] }}
+            transition={{ type: "spring", stiffness: 450, damping: 20 }}
+          >
+            <Heart
+              size={16}
+              className={
+                liked ? "fill-primary stroke-primary" : "stroke-foreground"
+              }
+            />
+          </motion.div>
         </button>
       </div>
 
-      <div className="flex flex-1 flex-col justify-between gap-3 p-4">
+      <div className="flex flex-1 flex-col justify-between gap-3 p-4 pointer-events-none">
         {wishError && (
-          <div role="alert" className="rounded-lg bg-primary-light p-3 text-sm text-destructive">
+          <div role="alert" className="pointer-events-auto rounded-lg bg-primary-light p-3 text-sm text-destructive">
             <p>{wishError}</p>
             <button type="button" disabled={busy} onClick={toggleWish} className="store-button underline">Thử lại</button>
           </div>
@@ -232,12 +248,9 @@ export function ProductCard({
           <p className="text-xs text-muted-foreground font-medium truncate">
             {product.categoryName || product.brandName || "LINO"}
           </p>
-          <Link
-            to={`/products/${product.id}`}
-            className="store-card-title mt-1 block text-base font-medium text-foreground leading-snug hover:text-primary transition-colors line-clamp-2"
-          >
+          <h3 className="store-card-title mt-1 block text-base font-medium text-foreground leading-snug group-hover:text-primary transition-colors line-clamp-2">
             {product.name}
-          </Link>
+          </h3>
         </div>
 
         <div className="flex flex-wrap items-baseline gap-2 tabular-nums">
@@ -250,12 +263,6 @@ export function ProductCard({
             </span>
           )}
         </div>
-        <Link
-          to={`/products/${product.id}`}
-          className="store-link text-xs text-muted-foreground"
-        >
-          Chọn Màu & Size
-        </Link>
       </div>
     </article>
   );

@@ -1,3 +1,6 @@
+import { QuickSearchModal } from "../components/QuickSearchModal";
+import { RotatingText } from "./components/ui/rotating-text";
+import { motion, AnimatePresence } from "motion/react";
 import { useEffect, useState } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router";
 import {
@@ -34,16 +37,28 @@ const NAV_LINKS = [
   { label: "Sản Phẩm", href: "/products" },
 ];
 const ACCOUNT_LINKS = [
-  { label: "Ví Cửa Hàng", href: "/profile/wallet" },
-  { label: "Hồ Sơ", href: "/profile" },
-  { label: "Đơn Hàng", href: "/profile/orders" },
-  { label: "Địa Chỉ", href: "/profile/addresses" },
-  { label: "Yêu Thích", href: "/wishlist" },
+  { label: "Ví LINO", href: "/profile/wallet" },
+  { label: "Hồ Sơ Cá Nhân", href: "/profile" },
+  { label: "Đơn Hàng Của Tôi", href: "/profile/orders" },
+  { label: "Sổ Địa Chỉ", href: "/profile/addresses" },
+  { label: "Sản Phẩm Yêu Thích", href: "/wishlist" },
 ];
 
 export default function Root() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [searchModalOpen, setSearchModalOpen] = useState(false);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setSearchModalOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
   const { count } = useCart();
   const { session, user, isLoggedIn, login, register, logout } = useAuth();
   const location = useLocation();
@@ -67,10 +82,17 @@ export default function Root() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <div className="bg-primary-light px-4 py-2 text-center text-xs font-medium text-destructive">
-        MIỄN PHÍ VẬN CHUYỂN CHO ĐƠN HÀNG TỪ 500.000 ₫
+      <div className="bg-primary-light px-4 py-2 text-center text-xs font-medium text-destructive flex items-center justify-center min-h-[36px]">
+        <RotatingText
+          texts={[
+            "MIỄN PHÍ VẬN CHUYỂN CHO ĐƠN HÀNG TỪ 500.000 ₫",
+            "BỘ SƯU TẬP THỜI TRANG LINO 2026 MỚI NHẤT ĐÃ CẬP BẾN",
+            "ĐỔI TRẢ HÀNG MIỄN PHÍ DỄ DÀNG TRONG VÒNG 7 NGÀY",
+          ]}
+          interval={4500}
+        />
       </div>
-      <header className="sticky top-0 z-40 border-b border-border bg-card">
+      <header className="sticky top-0 z-40 border-b border-border/70 bg-card/85 backdrop-blur-md transition-all">
         <div className="store-container flex h-18 items-center justify-between gap-4">
           <Link
             to="/"
@@ -95,13 +117,26 @@ export default function Root() {
             ))}
           </nav>
           <div className="flex items-center gap-1 sm:gap-2">
-            <Link
-              to="/products"
-              className="store-icon-button"
+            <button
+              type="button"
+              onClick={() => setSearchModalOpen(true)}
+              className="hidden md:flex items-center gap-2.5 rounded-full border border-border-strong bg-background/70 px-3.5 py-1.5 text-xs text-muted-foreground hover:border-primary/50 hover:bg-background hover:text-foreground transition-all duration-200 active:scale-95"
+              aria-label="Tìm kiếm sản phẩm"
+            >
+              <Search size={14} className="text-muted-foreground" />
+              <span>Tìm kiếm sản phẩm...</span>
+              <kbd className="ml-1 rounded border border-border bg-muted/80 px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                ⌘K
+              </kbd>
+            </button>
+            <button
+              type="button"
+              onClick={() => setSearchModalOpen(true)}
+              className="store-icon-button md:hidden"
               aria-label="Tìm kiếm"
             >
               <Search size={19} />
-            </Link>
+            </button>
             {isLoggedIn && <NotificationBell key={session?.userId || "session"} />}
             {isLoggedIn ? (
               <DropdownMenu open={userMenuOpen} onOpenChange={setUserMenuOpen}>
@@ -164,11 +199,20 @@ export default function Root() {
               aria-label="Giỏ hàng"
             >
               <ShoppingBag size={20} />
-              {count > 0 && (
-                <span className="absolute right-0 top-0 flex min-w-4 items-center justify-center rounded-full bg-primary-light px-1 text-xs font-medium text-destructive">
-                  {count}
-                </span>
-              )}
+              <AnimatePresence mode="wait">
+                {count > 0 && (
+                  <motion.span
+                    key={count}
+                    initial={{ scale: 0.6, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ scale: 0.6, opacity: 0 }}
+                    transition={{ type: "spring", stiffness: 500, damping: 25 }}
+                    className="absolute right-0 top-0 flex min-w-4 items-center justify-center rounded-full bg-primary-light px-1 text-xs font-medium text-destructive"
+                  >
+                    {count}
+                  </motion.span>
+                )}
+              </AnimatePresence>
             </Link>
             <button
               className="store-icon-button lg:hidden"
@@ -181,6 +225,7 @@ export default function Root() {
           </div>
         </div>
       </header>
+      <QuickSearchModal open={searchModalOpen} onOpenChange={setSearchModalOpen} />
       <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
         <SheetContent className="w-[min(360px,90vw)] gap-0 bg-card p-0">
           <div className="border-b border-border p-5">

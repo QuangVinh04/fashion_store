@@ -1,14 +1,20 @@
+import { motion, AnimatePresence } from "motion/react";
+import { StickyQuickBuyBar } from "../components/StickyQuickBuyBar";
 import { customerError } from "../api/client";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { Link, useParams, useNavigate } from "react-router";
 import {
   Heart,
+  ShoppingBag,
   ChevronDown,
   ChevronUp,
   Truck,
   RefreshCw,
   Check,
   AlertCircle,
+  Shirt,
+  Sparkles,
+  ShieldCheck,
 } from "lucide-react";
 import { store } from "../api/store";
 import { media, money } from "../api/client";
@@ -30,20 +36,52 @@ import { useAuth } from "../context/AuthContext";
 
 function AccordionItem({
   title,
+  icon,
   defaultOpen = false,
   children,
 }: {
   title: string;
+  icon?: React.ReactNode;
   defaultOpen?: boolean;
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(defaultOpen);
-  return <div className="pd-fold">
-    <button type="button" aria-expanded={open} onClick={() => setOpen(!open)}>
-      {title}{open ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-    </button>
-    <div className={`pd-fold-content ${open ? "is-open" : ""}`} aria-hidden={!open}><div>{children}</div></div>
-  </div>;
+  return (
+    <div className="border border-border/80 rounded-xl bg-card overflow-hidden transition-colors mb-2.5">
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen(!open)}
+        className="flex items-center justify-between w-full px-4 py-3 text-left text-xs font-semibold text-foreground hover:bg-secondary/40 transition-colors"
+      >
+        <span className="flex items-center gap-2">
+          {icon}
+          {title}
+        </span>
+        <motion.span
+          animate={{ rotate: open ? 180 : 0 }}
+          transition={{ duration: 0.2 }}
+        >
+          <ChevronDown size={14} className="text-muted-foreground" />
+        </motion.span>
+      </button>
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+            className="overflow-hidden"
+          >
+            <div className="px-4 pb-4 pt-1 text-xs text-muted-foreground leading-relaxed border-t border-border/40">
+              {children}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
 }
 
 export default function ProductDetail() {
@@ -62,13 +100,31 @@ export default function ProductDetail() {
   const [sizeOpen, setSizeOpen] = useState(false);
   const [liked, setLiked] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [justAdded, setJustAdded] = useState(false);
   const [variantPrompt, setVariantPrompt] = useState(false);
   const [feedback, setFeedback] = useState<{
     type: "success" | "error";
     message: string;
   } | null>(null);
 
-  const [relatedProducts, setRelatedProducts] = useState<ProductSummary[]>([]);
+    const [relatedProducts, setRelatedProducts] = useState<ProductSummary[]>([]);
+  const actionsRef = useRef<HTMLDivElement>(null);
+  const [showStickyBar, setShowStickyBar] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      if (!actionsRef.current) return;
+      const rect = actionsRef.current.getBoundingClientRect();
+      setShowStickyBar(rect.bottom < 0);
+    };
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  const scrollToOptions = () => {
+    actionsRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  };
 
   const p = productLoad.data?.id === id ? productLoad.data : null;
 
@@ -217,6 +273,8 @@ export default function ProductDetail() {
       if (buyNow) {
         navigate("/cart");
       } else {
+        setJustAdded(true);
+        setTimeout(() => setJustAdded(false), 2200);
         setFeedback({
           type: "success",
           message: "Đã thêm sản phẩm vào giỏ hàng thành công.",
@@ -268,11 +326,16 @@ export default function ProductDetail() {
             <ProductGallery key={`${id}:${selectedColor}`} photos={galleryPhotos} name={p.name} />
             <section className="pd-description">
               <h2>Mô tả sản phẩm</h2>
-              <AccordionItem title="Chi tiết sản phẩm" defaultOpen>
+              <AccordionItem title="Chi tiết sản phẩm & Chất liệu" icon={<Shirt size={14} className="text-primary" />} defaultOpen>
                 <p>{p.description || p.shortDescription || "Chưa có mô tả sản phẩm."}</p>
                 {!!p.attributes?.length && <dl className="pd-attributes">{p.attributes.map(attr => <div key={attr.id}><dt>{attr.name}</dt><dd>{attr.value || "—"}</dd></div>)}</dl>}
               </AccordionItem>
-              <AccordionItem title="Giao hàng / Đổi trả"><p>Giao hàng từ 2–4 ngày làm việc. Hỗ trợ trả hàng trong 7 ngày đối với sản phẩm còn nguyên tem mác, chưa qua sử dụng.</p></AccordionItem>
+              <AccordionItem title="Hướng dẫn bảo quản" icon={<Sparkles size={14} className="text-primary" />}>
+                <p>• Giặt máy ở chế độ nhẹ nhàng với nước lạnh dưới 30°C.<br />• Không sử dụng hóa chất tẩy rửa mạnh.<br />• Phơi nơi râm mát, tránh ánh nắng gắt trực tiếp.<br />• Ủi ở nhiệt độ thấp để bảo vệ sợi vải bền đẹp lâu dài.</p>
+              </AccordionItem>
+              <AccordionItem title="Giao hàng & Đổi trả tận tâm" icon={<ShieldCheck size={14} className="text-primary" />}>
+                <p>• Giao hàng hỏa tốc hoặc tiêu chuẩn từ 2–4 ngày làm việc.<br />• Hỗ trợ kiểm tra hàng trước khi nhận.<br />• Đổi size miễn phí hoặc trả hàng trong 7 ngày nếu sản phẩm còn nguyên tem mác.</p>
+              </AccordionItem>
             </section>
           </div>
           <section className="pd-info" aria-label="Chọn mua sản phẩm">
@@ -310,10 +373,54 @@ export default function ProductDetail() {
                 <button type="button" aria-label="Tăng số lượng" disabled={purchaseDisabled || qty >= 99} onClick={() => setQty(q => Math.min(99, q + 1))}>+</button></div>
             </div>
             <div className="pd-feedback" role={feedback?.type === "error" ? "alert" : "status"} aria-live="polite" data-tone={feedback?.type}>{feedback && <>{feedback.type === "success" ? <Check size={16} /> : <AlertCircle size={16} />}<span>{feedback.message}</span></>}</div>
-            <div className="pd-actions">
-              <button type="button" className="pd-add" disabled={purchaseDisabled} onClick={() => void handleAddToCart(false)}>{busy ? "Đang xử lý…" : selectedVariantSoldOut || allVariantsSoldOut ? "Hết hàng" : "Thêm vào giỏ hàng"}</button>
-              <button type="button" className="pd-wish" aria-label={liked ? "Bỏ yêu thích" : "Yêu thích"} aria-pressed={liked} disabled={busy} onClick={() => void toggleWishlist()}><Heart size={20} fill={liked ? "currentColor" : "none"} /></button>
-              <button type="button" className="pd-buy" disabled={purchaseDisabled} onClick={() => void handleAddToCart(true)}>Mua ngay</button>
+            <div className="pd-actions" ref={actionsRef}>
+              <button
+                type="button"
+                className={`pd-add transition-all duration-200 ${justAdded ? "bg-emerald-600 text-white border-emerald-600 hover:bg-emerald-700" : ""}`}
+                disabled={purchaseDisabled || busy}
+                onClick={() => void handleAddToCart(false)}
+              >
+                {busy ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <RefreshCw size={16} className="animate-spin" />
+                    Đang xử lý…
+                  </span>
+                ) : justAdded ? (
+                  <motion.span
+                    initial={{ scale: 0.8, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    className="flex items-center justify-center gap-2"
+                  >
+                    <Check size={18} />
+                    Đã thêm vào giỏ!
+                  </motion.span>
+                ) : selectedVariantSoldOut || allVariantsSoldOut ? (
+                  "Hết hàng"
+                ) : (
+                  <span className="flex items-center justify-center gap-2">
+                    <ShoppingBag size={18} />
+                    Thêm vào giỏ hàng
+                  </span>
+                )}
+              </button>
+              <button
+                type="button"
+                className="pd-wish active:scale-90 transition-transform"
+                aria-label={liked ? "Bỏ yêu thích" : "Yêu thích"}
+                aria-pressed={liked}
+                disabled={busy}
+                onClick={() => void toggleWishlist()}
+              >
+                <motion.div
+                  key={liked ? "liked" : "unliked"}
+                  initial={{ scale: 0.8 }}
+                  animate={{ scale: [1.3, 0.9, 1] }}
+                  transition={{ type: "spring", stiffness: 450, damping: 20 }}
+                >
+                  <Heart size={20} fill={liked ? "currentColor" : "none"} className={liked ? "text-primary" : ""} />
+                </motion.div>
+              </button>
+              <button type="button" className="pd-buy active:scale-[0.98] transition-transform" disabled={purchaseDisabled} onClick={() => void handleAddToCart(true)}>Mua ngay</button>
             </div>
             <div className="pd-services"><p><Truck size={17} />Miễn phí vận chuyển từ 500.000 ₫</p><p><RefreshCw size={17} />Đổi trả trong 7 ngày</p></div>
           </section>

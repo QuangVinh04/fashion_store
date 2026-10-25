@@ -29,7 +29,7 @@
   --success: #246344;
   --success-light: #eef8f1;
   --switch-background: #dbdce2;
-  --radius: 0.75rem;
+  --radius: 0.5rem;
   --font-weight-normal: 400;
   --font-weight-medium: 500;
   --sidebar: #ffffff;
@@ -70,10 +70,11 @@
   --color-input-background: var(--input-background);
   --color-switch-background: var(--switch-background);
   --color-ring: var(--ring);
-  --radius-sm: 0.5rem;
-  --radius-md: 0.75rem;
-  --radius-lg: 1rem;
-  --radius-xl: 1.25rem;
+  --radius-sm: 0.25rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+  --radius-2xl: 1rem;
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);

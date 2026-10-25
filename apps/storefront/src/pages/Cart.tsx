@@ -1,5 +1,8 @@
+import { motion, AnimatePresence } from "motion/react";
 import { customerError } from "../api/client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { store } from "../api/store";
+import { media } from "../api/client";
 import { Link, useNavigate } from "react-router";
 import {
   X,
@@ -12,6 +15,8 @@ import {
   ShieldCheck,
   AlertCircle,
   RefreshCw,
+  Check,
+  Sparkles,
 } from "lucide-react";
 import { useCart } from "../context/CartContext";
 import { money } from "../api/client";
@@ -35,6 +40,22 @@ export default function Cart() {
 
   const [busyId, setBusyId] = useState<string>("");
   const [actionError, setActionError] = useState<string>("");
+  const [thumbnails, setThumbnails] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (!cart?.items.length) return;
+    const pids = Array.from(new Set(cart.items.map((i) => i.productId)));
+    pids.forEach((pid) => {
+      if (!thumbnails[pid]) {
+        store.product(pid).then((p) => {
+          const img = p.thumbnailUrl || media(p.thumbnailMediaId) || p.images?.[0]?.url || media(p.images?.[0]?.mediaId);
+          if (img) {
+            setThumbnails((prev) => ({ ...prev, [pid]: img }));
+          }
+        }).catch(() => {});
+      }
+    });
+  }, [cart?.items]);
 
   async function handleQty(id: string, newQty: number) {
     if (newQty < 1) return;
@@ -202,35 +223,46 @@ export default function Cart() {
         </div>
 
         {/* Free Shipping Progress */}
-        <div className="mb-8 p-4 bg-background border border-border">
-          <div className="flex items-center gap-3 mb-2.5">
-            <Truck size={18} className="text-foreground shrink-0" />
-            <p className="text-xs text-foreground">
-              {total >= SHIPPING_THRESHOLD ? (
-                <span className="font-semibold text-success">
-                  Chúc mừng! Đơn hàng của bạn đủ điều kiện MIỄN PHÍ VẬN CHUYỂN
-                  toàn quốc.
-                </span>
-              ) : (
-                <>
-                  Mua thêm{" "}
-                  <strong className="text-primary font-semibold">
-                    {money(SHIPPING_THRESHOLD - total)}
-                  </strong>{" "}
-                  để được{" "}
-                  <strong className="text-foreground">
-                    MIỄN PHÍ VẬN CHUYỂN
-                  </strong>
-                </>
-              )}
-            </p>
+        <div className="mb-8 p-5 bg-card border border-border rounded-2xl shadow-2xs">
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <div className="flex items-center gap-2.5">
+              <div className={`size-8 rounded-full flex items-center justify-center shrink-0 ${
+                total >= SHIPPING_THRESHOLD ? "bg-emerald-100 text-emerald-700" : "bg-primary/10 text-primary"
+              }`}>
+                {total >= SHIPPING_THRESHOLD ? <Check size={16} /> : <Truck size={16} />}
+              </div>
+              <p className="text-xs text-foreground">
+                {total >= SHIPPING_THRESHOLD ? (
+                  <span className="font-semibold text-emerald-700">
+                    Tuyệt vời! Đơn hàng của bạn đã đạt điều kiện MIỄN PHÍ VẬN CHUYỂN toàn quốc!
+                  </span>
+                ) : (
+                  <>
+                    Mua thêm{" "}
+                    <strong className="text-primary font-bold">
+                      {money(SHIPPING_THRESHOLD - total)}
+                    </strong>{" "}
+                    để nhận ngay{" "}
+                    <strong className="text-foreground font-semibold">
+                      MIỄN PHÍ VẬN CHUYỂN
+                    </strong>
+                  </>
+                )}
+              </p>
+            </div>
+            <span className="text-xs font-semibold text-muted-foreground hidden sm:inline tabular-nums">
+              {Math.min(100, Math.round((total / SHIPPING_THRESHOLD) * 100))}%
+            </span>
           </div>
-          <div className="w-full bg-secondary h-1.5 overflow-hidden">
-            <div
-              className={`h-full transition-all duration-500 ${
-                total >= SHIPPING_THRESHOLD ? "bg-success" : "bg-foreground"
+
+          <div className="w-full bg-secondary h-2 rounded-full overflow-hidden relative">
+            <motion.div
+              initial={{ width: 0 }}
+              animate={{ width: `${Math.min(100, (total / SHIPPING_THRESHOLD) * 100)}%` }}
+              transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+              className={`h-full rounded-full transition-colors ${
+                total >= SHIPPING_THRESHOLD ? "bg-emerald-600" : "bg-primary"
               }`}
-              style={{ width: `${freeShippingProgress}%` }}
             />
           </div>
         </div>
@@ -247,20 +279,45 @@ export default function Cart() {
         {cart && (
           <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-6 items-start">
             {/* Items List */}
-            <div className="divide-y divide-border border-y border-border">
-              {cart.items.map((item) => {
-                const isBusy = busyId === item.id;
-                return (
-                  <div
-                    key={item.id}
-                    className="py-6 flex flex-col sm:flex-row gap-5 items-start"
-                  >
+            <div className="border-y border-border">
+              <AnimatePresence mode="popLayout" initial={false}>
+                {cart.items.map((item) => {
+                  const isBusy = busyId === item.id;
+                  return (
+                    <motion.div
+                      key={item.id}
+                      layout
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: "auto" }}
+                      exit={{
+                        opacity: 0,
+                        x: -30,
+                        height: 0,
+                        paddingTop: 0,
+                        paddingBottom: 0,
+                        transition: {
+                          opacity: { duration: 0.2 },
+                          height: { duration: 0.3, ease: [0.33, 0.17, 0.67, 0.5] },
+                          x: { duration: 0.25 },
+                        },
+                      }}
+                      transition={{ type: "spring", stiffness: 350, damping: 30 }}
+                      className="py-6 flex flex-col sm:flex-row gap-5 items-start border-b border-border last:border-b-0 overflow-hidden"
+                    >
                     <div className="flex-1 flex gap-4 min-w-0">
-                      <div className="w-20 h-26 bg-background shrink-0 overflow-hidden flex items-center justify-center">
-                        <ShoppingBag
-                          size={20}
-                          className="text-muted-foreground"
-                        />
+                      <div className="w-20 h-26 bg-background rounded-xl border border-border/70 shrink-0 overflow-hidden flex items-center justify-center">
+                        {thumbnails[item.productId] ? (
+                          <img
+                            src={thumbnails[item.productId]}
+                            alt={item.productName}
+                            className="w-full h-full object-cover transition-transform duration-300 hover:scale-105"
+                          />
+                        ) : (
+                          <div className="flex flex-col items-center justify-center gap-1 text-muted-foreground">
+                            <ShoppingBag size={18} />
+                            <span className="text-[10px] font-mono">LINO</span>
+                          </div>
+                        )}
                       </div>
 
                       <div className="min-w-0 flex-1">
@@ -343,9 +400,10 @@ export default function Cart() {
                         </button>
                       </div>
                     </div>
-                  </div>
-                );
-              })}
+                    </motion.div>
+                  );
+                })}
+              </AnimatePresence>
             </div>
 
             {/* Order Summary Card */}

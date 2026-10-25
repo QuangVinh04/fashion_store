@@ -499,7 +499,7 @@ export default function CheckoutPage() {
               <h2 className="text-xs font-semibold text-foreground mb-3 flex items-center gap-2 text-balance">
                 <Tag size={15} /> Mã Giảm Giá / Khuyến Mãi
               </h2>
-              <div className="flex gap-2">
+              <div className="flex gap-2 mb-3">
                 <input
                   type="text"
                   placeholder="Nhập mã ưu đãi (ví dụ: LINOMOI)"
@@ -509,8 +509,37 @@ export default function CheckoutPage() {
                     setCouponCode(e.target.value.toUpperCase());
                     invalidateCheckoutSnapshot();
                   }}
-                  className="flex-1 border border-border-strong px-4 py-3 text-xs outline-none focus:border-border-strong store-input"
+                  className="flex-1 border border-border-strong rounded-xl px-4 py-2.5 text-xs outline-none focus:border-border-strong store-input"
                 />
+              </div>
+
+              {/* 1-Click Coupon Chips */}
+              <div className="space-y-2 pt-2 border-t border-border/60">
+                <p className="text-[11px] text-muted-foreground font-medium">Gợi ý mã ưu đãi (bấm để chọn ngay):</p>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    { code: "LINOMOI", desc: "Giảm 50k cho thành viên" },
+                    { code: "FREESHIP", desc: "Freeship đơn từ 300k" },
+                  ].map((coupon) => (
+                    <button
+                      key={coupon.code}
+                      type="button"
+                      onClick={() => {
+                        setCouponCode(coupon.code);
+                        invalidateCheckoutSnapshot();
+                      }}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs transition-all active:scale-[0.97] ${
+                        couponCode === coupon.code
+                          ? "border-primary bg-primary/10 text-primary font-bold shadow-2xs"
+                          : "border-border bg-background text-foreground hover:border-border-strong hover:bg-secondary/40 font-medium"
+                      }`}
+                    >
+                      <span className="font-mono font-semibold">{coupon.code}</span>
+                      <span className="text-[11px] text-muted-foreground hidden sm:inline">• {coupon.desc}</span>
+                      {couponCode === coupon.code && <Check size={12} className="text-primary" />}
+                    </button>
+                  ))}
+                </div>
               </div>
             </section>
           </div>

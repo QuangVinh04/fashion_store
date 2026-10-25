@@ -3,6 +3,8 @@ import { useState, useEffect } from "react";
 import { Link } from "react-router";
 import { ArrowRight, Truck, ShieldCheck, RefreshCw } from "lucide-react";
 import { store } from "../api/store";
+import { motion } from "motion/react";
+import { spring } from "../app/components/ui/animate-tokens";
 import type { ProductSummary } from "../api/types";
 import {
   ProductCard,
@@ -56,63 +58,69 @@ export default function Home() {
   return (
     <div className="w-full">
       {/* Hero Section */}
-      <section className="store-container store-section">
-        <div className="grid lg:grid-cols-2 items-center gap-6 lg:gap-10">
+      <section className="store-container store-section py-6 lg:py-12">
+        <div className="grid lg:grid-cols-2 items-center gap-8 lg:gap-14">
           <div className="flex flex-col justify-center order-2 lg:order-1">
-            <p className="text-xs text-muted-foreground font-semibold mb-6">
-              LINO · Bộ Sưu Tập
-            </p>
-            <h1 className="store-hero mb-6 text-foreground font-semibold text-balance">
-              SỐNG ĐƠN <span className="text-primary">GIẢN</span>
+            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-border-strong bg-secondary/40 px-3.5 py-1 text-xs font-medium text-foreground self-start">
+              <span className="size-1.5 rounded-full bg-primary" />
+              Bộ Sưu Tập Thu - Đông 2026
+            </div>
+            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-foreground leading-[1.15] text-balance mb-5">
+              Sống Tối Giản, <br />
+              Mặc Tinh Tế.
             </h1>
-            <p className="text-base text-muted-foreground leading-relaxed max-w-md mb-6">
-              Trang phục tối giản thiết kế cho cuộc sống hiện đại — phom dáng
-              chuẩn xác, chất liệu tự nhiên được tinh tuyển kỹ lưỡng và hoàn
-              thiện tỉ mỉ.
+            <p className="text-sm sm:text-base text-muted-foreground leading-relaxed max-w-md mb-8">
+              Trang phục thiết kế hiện đại từ chất liệu Linen & Organic Cotton cao cấp — đường cắt chuẩn mực, tôn vinh phong thái tự tin mỗi ngày.
             </p>
-            <div className="flex items-center gap-5 flex-wrap">
+            <div className="flex items-center gap-3.5 flex-wrap">
               <Link
                 to="/products"
-                className="inline-flex items-center gap-3 bg-primary text-white px-8 py-4 text-xs font-semibold hover:bg-primary-hover active:scale-[0.98] transition-all duration-300 store-action"
+                className="inline-flex items-center gap-2.5 rounded-full bg-primary text-white px-7 py-3.5 text-xs font-semibold shadow-lg shadow-primary/20 hover:bg-primary-hover active:scale-[0.97] transition-all duration-200"
               >
-                Khám Phá Ngay <ArrowRight size={14} />
+                Khám Phá Ngay <ArrowRight size={15} />
               </Link>
               <Link
                 to="/products?gender=MEN"
-                className="inline-flex items-center gap-2 text-xs text-foreground font-semibold border-b border-border-strong pb-1 hover:border-primary hover:text-primary transition-colors store-action"
+                className="inline-flex items-center gap-1.5 rounded-full border border-border-strong bg-card px-5 py-3.5 text-xs font-medium text-foreground hover:bg-secondary/60 active:scale-[0.97] transition-all"
               >
                 Thời Trang Nam
               </Link>
               <Link
                 to="/products?gender=WOMEN"
-                className="inline-flex items-center gap-2 text-xs text-foreground font-semibold border-b border-border-strong pb-1 hover:border-primary hover:text-primary transition-colors store-action"
+                className="inline-flex items-center gap-1.5 rounded-full border border-border-strong bg-card px-5 py-3.5 text-xs font-medium text-foreground hover:bg-secondary/60 active:scale-[0.97] transition-all"
               >
                 Thời Trang Nữ
               </Link>
             </div>
           </div>
 
-          <div className="relative overflow-hidden rounded-2xl bg-background aspect-[4/5] max-h-[520px] order-1 lg:order-2 group">
+          <div className="relative overflow-hidden rounded-3xl bg-background aspect-[4/5] max-h-[540px] order-1 lg:order-2 group shadow-xl border border-border/60">
             <img
               src="https://images.unsplash.com/photo-1665832102316-9fd8e8f77c88?w=1000&h=1200&fit=crop&auto=format"
               alt="Bộ sưu tập thời trang LINO"
               className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-105"
             />
 
-            <div className="absolute bottom-4 left-4 right-4 flex flex-wrap items-center justify-between gap-2 bg-white p-4 rounded-xl">
+            {/* Floating Lookbook Card */}
+            <div className="absolute top-4 left-4 rounded-full border border-white/20 bg-black/40 backdrop-blur-md px-3.5 py-1.5 text-xs font-medium text-white shadow-lg">
+              Lookbook '26 · Tự Nhiên & Tinh Tế
+            </div>
+
+            {/* Bottom Glass Card */}
+            <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between gap-3 rounded-2xl border border-white/20 bg-card/90 backdrop-blur-md p-4 shadow-xl">
               <div>
-                <p className="text-xs text-muted-foreground font-medium">
-                  Thời Trang Tối Giản
+                <p className="text-[11px] font-semibold text-primary uppercase tracking-wider">
+                  Premium Essentials
                 </p>
                 <p className="text-sm font-semibold text-foreground mt-0.5">
-                  Bộ Sưu Tập LINO
+                  Bộ Sưu Tập LINO Autumn
                 </p>
               </div>
               <Link
                 to="/products"
-                className="text-xs font-semibold text-foreground hover:text-primary flex items-center gap-1 underline underline-offset-4 store-text-link"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3.5 py-2 text-xs font-semibold text-white shadow-xs hover:bg-primary-hover active:scale-95 transition-all"
               >
-                Xem Ngay <ArrowRight size={12} />
+                Xem Ngay <ArrowRight size={13} />
               </Link>
             </div>
           </div>
@@ -120,38 +128,46 @@ export default function Home() {
       </section>
 
       {/* Value Badges */}
-      <section className="border-y border-border bg-background">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="flex items-center gap-4">
-            <Truck size={24} className="text-foreground shrink-0" />
+      <section className="border-y border-border/80 bg-background/50 py-8">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-6">
+          <div className="flex items-center gap-4 rounded-2xl border border-border bg-card p-4 sm:p-5 shadow-xs hover:shadow-md transition-all">
+            <div className="size-12 rounded-2xl bg-primary-light flex items-center justify-center text-primary shrink-0">
+              <Truck size={22} />
+            </div>
             <div>
-              <p className="text-xs font-semibold text-foreground">
+              <p className="text-sm font-semibold text-foreground">
                 Miễn Phí Vận Chuyển
               </p>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Áp dụng cho mọi đơn hàng từ 500.000 ₫
+              <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+                Giao nhanh toàn quốc cho đơn hàng từ 500.000 ₫
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-4">
-            <RefreshCw size={24} className="text-foreground shrink-0" />
+
+          <div className="flex items-center gap-4 rounded-2xl border border-border bg-card p-4 sm:p-5 shadow-xs hover:shadow-md transition-all">
+            <div className="size-12 rounded-2xl bg-primary-light flex items-center justify-center text-primary shrink-0">
+              <RefreshCw size={22} />
+            </div>
             <div>
-              <p className="text-xs font-semibold text-foreground">
+              <p className="text-sm font-semibold text-foreground">
                 Đổi Trả Dễ Dàng
               </p>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Hỗ trợ yêu cầu trả hàng trong vòng 7 ngày
+              <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+                Đổi trả miễn phí tận nơi trong vòng 7 ngày
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-4">
-            <ShieldCheck size={24} className="text-foreground shrink-0" />
+
+          <div className="flex items-center gap-4 rounded-2xl border border-border bg-card p-4 sm:p-5 shadow-xs hover:shadow-md transition-all">
+            <div className="size-12 rounded-2xl bg-primary-light flex items-center justify-center text-primary shrink-0">
+              <ShieldCheck size={22} />
+            </div>
             <div>
-              <p className="text-xs font-semibold text-foreground">
-                Chất Lượng Đảm Bảo
+              <p className="text-sm font-semibold text-foreground">
+                Chất Lượng Chuẩn Mực
               </p>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                100% sản phẩm thiết kế & gia công chuẩn mực
+              <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+                100% thiết kế chuẩn phom, chất vải organic tinh tuyển
               </p>
             </div>
           </div>
@@ -177,57 +193,61 @@ export default function Home() {
           </Link>
         </div>
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
           {[
             {
-              label: "Nam",
+              label: "Thời Trang Nam",
               href: "/products?gender=MEN",
-              sub: "Áo sơ mi, polo & quần tây",
+              sub: "Áo sơ mi, polo & quần tây thanh lịch",
               img: "https://images.unsplash.com/photo-1617137984095-74e4e5e3613f?w=600&h=800&fit=crop&auto=format",
             },
             {
-              label: "Nữ",
+              label: "Thời Trang Nữ",
               href: "/products?gender=WOMEN",
-              sub: "Váy đầm, áo kiểu & blazer",
+              sub: "Váy đầm, áo kiểu & blazer sang trọng",
               img: "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=600&h=800&fit=crop&auto=format",
             },
             {
-              label: "Unisex",
+              label: "Thời Trang Unisex",
               href: "/products?gender=UNISEX",
-              sub: "T-shirt, hoodie & phong cách tự do",
+              sub: "T-shirt, hoodie & phong cách phóng khoáng",
               img: "https://images.unsplash.com/photo-1529139574466-a303027c1d8b?w=600&h=800&fit=crop&auto=format",
             },
             {
-              label: "Ưu Đãi",
+              label: "Bộ Sưu Tập Ưu Đãi",
               href: "/products",
-              sub: "Thiết kế mới & giá ưu đãi",
+              sub: "Thiết kế mới tinh tuyển & giá ưu đãi",
               img: "https://images.unsplash.com/photo-1490481651871-ab68de25d43d?w=600&h=800&fit=crop&auto=format",
             },
           ].map((cat) => (
             <Link
               key={cat.label}
               to={cat.href}
-              className="group overflow-hidden rounded-2xl border border-border bg-card block store-text-link"
+              className="group flex flex-col overflow-hidden rounded-2xl border border-border/80 bg-card hover:border-primary/40 hover:shadow-md transition-all duration-300"
             >
-              <div className="aspect-[3/4] overflow-hidden">
+              <div className="aspect-[4/5] overflow-hidden bg-secondary relative">
                 <img
                   src={cat.img}
                   alt={cat.label}
                   loading="lazy"
-                  className="size-full object-cover transition-transform duration-500 group-hover:scale-105"
+                  className="size-full object-cover transition-transform duration-700 ease-out group-hover:scale-105"
                 />
               </div>
-              <div className="flex items-start justify-between gap-2 p-4">
-                <div className="min-w-0">
-                  <p className="text-base font-medium">{cat.label}</p>
-                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                    {cat.sub}
+              <div className="p-4 sm:p-5 flex flex-col justify-between flex-1 gap-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-base font-semibold text-foreground group-hover:text-primary transition-colors">
+                    {cat.label}
                   </p>
+                  <div className="size-7 rounded-full bg-secondary flex items-center justify-center text-muted-foreground group-hover:bg-primary group-hover:text-white transition-all shrink-0">
+                    <ArrowRight
+                      size={13}
+                      className="group-hover:translate-x-0.5 transition-transform"
+                    />
+                  </div>
                 </div>
-                <ArrowRight
-                  size={16}
-                  className="mt-1 shrink-0 text-muted-foreground"
-                />
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  {cat.sub}
+                </p>
               </div>
             </Link>
           ))}
@@ -235,27 +255,29 @@ export default function Home() {
       </section>
 
       {/* Promo Banner */}
-      <section className="bg-primary-light text-foreground">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 md:py-10 grid lg:grid-cols-[1fr_auto] items-center gap-8">
-          <div>
-            <p className="text-xs text-muted-foreground font-medium mb-3">
-              Ưu Đãi Thành Viên Mới
-            </p>
-            <h2 className="text-lg font-semibold leading-snug text-balance">
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 py-6 md:py-8">
+        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-neutral-900 via-neutral-800 to-neutral-900 text-white p-6 sm:p-10 grid lg:grid-cols-[1fr_auto] items-center gap-6 shadow-xl border border-neutral-700/50">
+          <div className="space-y-2">
+            <span className="inline-block rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-white/90 backdrop-blur-xs">
+              Đặc Quyền Thành Viên Mới
+            </span>
+            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-white leading-snug">
               GIẢM 30% CHO ĐƠN HÀNG ĐẦU TIÊN
             </h2>
-          </div>
-          <div className="flex flex-col gap-4 max-w-sm">
-            <p className="text-sm text-muted-foreground leading-relaxed">
-              Sử dụng mã ưu đãi{" "}
-              <strong className="text-foreground font-semibold bg-white rounded px-2 py-0.5">
-                LINOMOI
-              </strong>{" "}
-              ở bước thanh toán để nhận giảm giá.
+            <p className="text-sm text-neutral-300 max-w-lg leading-relaxed">
+              Nhập mã ưu đãi ở bước thanh toán để nhận ngay đặc quyền chào đón từ LINO.
             </p>
+          </div>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+            <div className="flex items-center gap-2 rounded-xl border border-dashed border-white/30 bg-white/10 px-4 py-2.5 backdrop-blur-xs">
+              <span className="text-xs text-neutral-300">Mã voucher:</span>
+              <span className="font-mono text-base font-bold tracking-wider text-white">
+                LINOMOI
+              </span>
+            </div>
             <Link
               to="/products"
-              className="inline-flex items-center gap-3 bg-primary text-white px-5 py-2.5 text-sm font-medium hover:bg-primary-hover transition-colors duration-300 self-start store-action"
+              className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-3 text-xs font-semibold text-white shadow-lg shadow-primary/30 hover:bg-primary-hover active:scale-95 transition-all"
             >
               Mua Sắm Ngay <ArrowRight size={14} />
             </Link>
@@ -284,21 +306,32 @@ export default function Home() {
         </div>
 
         {/* Category Tabs */}
-        <div className="flex gap-1 mb-6 rounded-xl bg-secondary/60 p-1 overflow-x-auto">
-          {tabs.map((tab) => (
-            <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
-              aria-pressed={activeTab === tab.key}
-              className={`px-4 py-2 text-sm font-medium transition-colors whitespace-nowrap ${
-                activeTab === tab.key
-                  ? "bg-white text-foreground"
-                  : "text-muted-foreground hover:text-foreground"
-              } store-button`}
-            >
-              {tab.label}
-            </button>
-          ))}
+        <div className="flex gap-1 mb-6 rounded-xl bg-secondary/60 p-1 overflow-x-auto relative">
+          {tabs.map((tab) => {
+            const isActive = activeTab === tab.key;
+            return (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                aria-pressed={isActive}
+                className={`relative px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors rounded-lg store-button ${
+                  isActive
+                    ? "text-foreground font-semibold"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {isActive && (
+                  <motion.span
+                    layoutId="category-tab-active"
+                    transition={spring.selection}
+                    className="absolute inset-0 bg-white rounded-lg shadow-xs dark:bg-card"
+                    style={{ zIndex: 0 }}
+                  />
+                )}
+                <span className="relative z-10">{tab.label}</span>
+              </button>
+            );
+          })}
         </div>
 
         <Status
@@ -314,11 +347,41 @@ export default function Home() {
             ))}
           </div>
         ) : tabProducts.length > 0 ? (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+          <motion.div
+            key={activeTab}
+            initial="hidden"
+            animate="visible"
+            variants={{
+              hidden: { opacity: 0 },
+              visible: {
+                opacity: 1,
+                transition: {
+                  staggerChildren: 0.05,
+                },
+              },
+            }}
+            className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3"
+          >
             {tabProducts.map((p) => (
-              <ProductCard key={p.id} product={p} />
+              <motion.div
+                key={p.id}
+                variants={{
+                  hidden: { opacity: 0, y: 14 },
+                  visible: {
+                    opacity: 1,
+                    y: 0,
+                    transition: {
+                      type: "spring",
+                      stiffness: 300,
+                      damping: 24,
+                    },
+                  },
+                }}
+              >
+                <ProductCard product={p} />
+              </motion.div>
             ))}
-          </div>
+          </motion.div>
         ) : (
           !tabError && (
             <div className="py-8 md:py-10 text-center border border-dashed border-border-strong p-8">

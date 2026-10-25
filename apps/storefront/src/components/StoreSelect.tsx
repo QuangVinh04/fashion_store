@@ -30,6 +30,8 @@ type Props = {
   required?: boolean;
   disabled?: boolean;
   className?: string;
+  popoverClassName?: string;
+  align?: "start" | "end" | "center";
   "aria-label"?: string;
 };
 
@@ -43,6 +45,8 @@ export default function StoreSelect({
   required,
   disabled,
   className,
+  popoverClassName,
+  align = "start",
   "aria-label": label,
 }: Props) {
   const [open, setOpen] = useState(false);
@@ -89,7 +93,7 @@ export default function StoreSelect({
             aria-required={required}
             disabled={disabled}
             className={cn(
-              "flex h-11 w-full min-w-0 items-center justify-between gap-3 rounded-xl border border-border-strong bg-card px-3 text-left text-sm text-foreground disabled:cursor-not-allowed disabled:bg-background disabled:text-muted-foreground md:h-10",
+              "flex h-11 w-full min-w-0 items-center justify-between gap-3 rounded-lg border border-border-strong bg-card px-3 text-left text-sm text-foreground disabled:cursor-not-allowed disabled:bg-background disabled:text-muted-foreground md:h-10",
               className,
             )}
           >
@@ -101,14 +105,17 @@ export default function StoreSelect({
           </button>
         </PopoverTrigger>
         <PopoverContent
-          align="start"
+          align={align}
           onOpenAutoFocus={(event) => {
             if (options.length < 8) {
               event.preventDefault();
               listRef.current?.focus();
             }
           }}
-          className="w-[var(--radix-popover-trigger-width)] rounded-xl border-border p-1.5 shadow-lg"
+          className={cn(
+            "min-w-[var(--radix-popover-trigger-width)] min-w-[200px] w-auto max-w-xs rounded-xl border-border bg-card p-1.5 shadow-lg",
+            popoverClassName
+          )}
         >
           <Command
             label={label}
@@ -149,7 +156,7 @@ export default function StoreSelect({
                     setOpen(false);
                   }}
                 >
-                  <span className="flex-1">{option.label}</span>
+                  <span className="flex-1 whitespace-nowrap pr-2">{option.label}</span>
                   <Check
                     size={15}
                     className={

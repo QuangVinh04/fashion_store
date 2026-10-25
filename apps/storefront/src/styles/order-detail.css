@@ -21,7 +21,7 @@
 .order-banner[data-tone=cancelled] { background: var(--primary-light); }
 .order-banner[data-tone=cancelled] h1 { color: var(--destructive); }
 .order-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 12px; padding: 16px 24px; }
-.order-action { display: inline-flex; align-items: center; justify-content: center; min-height: 40px; padding: 9px 18px; border: 1px solid var(--border-strong); border-radius: 12px; font-weight: 500; background: var(--card); }
+.order-action { display: inline-flex; align-items: center; justify-content: center; min-height: 40px; padding: 9px 18px; border: 1px solid var(--border-strong); border-radius: 8px; font-weight: 500; background: var(--card); }
 .order-action:hover { background: var(--accent); }
 .order-action-primary { background: var(--primary); color: var(--primary-foreground); border-color: var(--primary); }
 .order-action-primary:hover { background: var(--primary-hover); }
@@ -33,7 +33,7 @@
 .order-tracking { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; font-size: 12px; color: var(--muted-foreground); }
 .order-tracking button { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; }
 .order-shop { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 18px 24px; border-bottom: 1px solid var(--border); }
-.order-small-link { font-size: 12px; border: 1px solid var(--border-strong); border-radius: 8px; min-height: 32px; padding: 6px 12px; }
+.order-small-link { font-size: 12px; border: 1px solid var(--border-strong); border-radius: 6px; min-height: 32px; padding: 6px 12px; }
 .order-small-link:hover { background: var(--accent); }
 .order-product { display: flex; align-items: flex-start; gap: 16px; padding: 22px 24px; border-bottom: 1px solid var(--border); }
 .order-product-photo { position: relative; width: 80px; height: 96px; display: grid; place-items: center; flex-shrink: 0; border: 1px solid var(--border-strong); background: var(--muted); color: var(--muted-foreground); }
