@@ -1,134 +1,19 @@
 # CLAUDE.md
 
-Fashion Store Platform — e-commerce microservices monorepo.
-Java 21 · Spring Boot 3.5 · Maven multi-module (`./mvnw`) · Postgres-per-service · RabbitMQ · Flyway · Docker Compose.
+@AGENTS.md
 
-## Commands
+Luật riêng cho Claude Code. Luật chung nằm trong `AGENTS.md` (import ở trên). Luật backend chi tiết nằm trong `.claude/rules/`:
 
-```powershell
-.\scripts\build.ps1      # mvnw -B -DskipTests compile   (pins JAVA_HOME to jdk-21)
-.\scripts\test.ps1       # mvnw -B test, all modules
-docker compose config    # validate first
-docker compose up -d
-```
-
-Targeted runs from bash — **must** pin JDK 21 (`java` on PATH is 1.8, `JAVA_HOME` defaults to jdk-17):
-
-```bash
-export JAVA_HOME="C:/Program Files/Java/jdk-21"          # Linux: /usr/lib/jvm/java-21-openjdk-amd64
-
-./mvnw -o -pl services/catalog-service -am clean test     # one service + its deps
-./mvnw -o -pl services/catalog-service clean test         # one service (deps installed)
-./mvnw -o -pl services/catalog-service test -Dtest=ProductServiceImplTest
-./mvnw -o -pl services/catalog-service test -Dtest='ProductServiceImplTest#createsVariant*'
-./mvnw -o -DskipTests clean install                       # whole reactor
-```
-
-- `-o` (offline) works, local repo is warm — drop it only if a dep is missing.
-- Browsers enter via `storefront-bff` `http://localhost:8083` / `backoffice-bff` `http://localhost:8084` (OAuth2 client, session cookie, `TokenRelay`). `api-gateway` `http://localhost:8080` is the only route to services (BFF traffic + Bearer for Swagger/dev). Do not call service ports from a client.
-- Auth: Keycloak realm `fashion-store` at `http://localhost:8180` (`platform/keycloak/README.md`) is the only token issuer. api-gateway and every service validate the relayed Keycloak JWT themselves (resource server, `aud=fashion-api`). identity-service no longer logs users in or issues tokens; it JIT-provisions its `users` row on the first authenticated request (`users.id` = Keycloak `sub`). `/internal/**` requires a service-account token with client role `internal-caller` (Feign: `InternalServiceTokenInterceptor`, `client_credentials`). Attach it only to internal Feign clients, never to external ones (GHN, VNPay…).
-
-| module | port | database | host port |
-|---|---|---|---|
-| `platform/storefront-bff` | 8083 | — (session in Redis) | — |
-| `platform/backoffice-bff` | 8084 | — (session in Redis) | — |
-| `platform/gateway` (`api-gateway`) | 8080 | — | — |
-| `keycloak` (image, `platform/keycloak`) | 8180→8080 | `keycloak_database` | — |
-| `identity-service` | 8082 | `identity_database` | 5438 |
-| `payment-service` | 8085 | `payment_database` | 5433 |
-| `catalog-service` | 8087 | `catalog_database` | 5435 |
-| `order-service` | 8089 | `order_database` | 5437 |
-| `notification-service` | 8090 | `notification_database` | 5439 |
-
-## Layout
-
-```text
-apps/            storefront, backoffice — README stubs only, no build yet
-services/        identity, catalog, order, payment, notification
-packages/
-  api-contracts  artifactId event-contracts, package com.fashionstore.contracts
-  common-library artifactId common-library,  package com.fashionstore.common
-  test-utils     artifactId test-utils (declared in reactor, unused by services)
-platform/        gateway/, storefront-bff/, backoffice-bff/ (Spring Cloud Gateway) + keycloak (realm export) + docker, helm, kubernetes, kafka, observability
-docs/            microservices-roadmap.md, refactor-plan.md
-scripts/         build.ps1, test.ps1
-```
-
-## Architecture boundaries
-
-- **Database-per-service.** Each service owns its schema and its own `src/main/resources/db/migration`. Never read or write another service's tables; never add a cross-service FK.
-- **Cross-service talk** = RabbitMQ events/commands (`com.fashionstore.contracts.*`) or an HTTP client behind the gateway. Nothing else.
-- **`packages/api-contracts` holds only wire DTOs** for cross-service messages. Entities, repositories, business services, mappers and controllers stay in their owning service, always.
-- **`packages/common-library` holds only framework-level plumbing** (below). No domain logic.
-- Merged services — treat as one deployable each, no re-splitting:
-  - `catalog-service` ⊃ product + inventory + media (file)
-  - `order-service` ⊃ cart
-
-## Shared code — reuse, do not re-implement
-
-`com.fashionstore.common.*` (common-library):
-
-| need | use |
+| file | nội dung |
 |---|---|
-| REST envelope / paging | `dto.ApiResponse`, `dto.PageResponse` |
-| errors | `exception.AppException`, `BaseErrorCode`, `ErrorCode`, `GlobalExceptionHandler` |
-| JPA base classes | `persistence.BaseEntity`, `persistence.AuditedEntity` |
-| security | `security.CurrentUserProvider`, `ApiAuthenticationEntryPoint`, `ApiAccessDeniedHandler`, `KeycloakJwtAuthoritiesConverter` (auto-configured `JwtAuthenticationConverter` bean — services just use `.oauth2ResourceServer(rs -> rs.jwt(withDefaults()))`) |
-| messaging infra | `messaging.RabbitTopology` (exchange/DLX/unrouted + quorum queue factory — every `RabbitMQConfig` declares through it), `messaging.outbox.ConfirmedRabbitSender` (publisher-confirm send for outbox relays), `messaging.outbox.OutboxEventStatus`, `messaging.processed.@EnableProcessedMessages` + `ProcessedMessageService` |
-| misc | `util.SlugUtils`, `web.CorrelationIdFilter`, `payment.PaymentMethod/PaymentProvider` |
+| `.claude/rules/backend-architecture.md` | ranh giới service, shared code, package convention, messaging |
+| `.claude/rules/database-migration.md` | Flyway, database-per-service |
+| `.claude/rules/security.md` | Keycloak JWT, `/internal/**`, SecurityConfig |
+| `.claude/rules/backend-workflow.md` | chạy Maven với JDK 21, Spec → Plan → TDD → Review, trap khi build |
 
-`com.fashionstore.contracts.*` (api-contracts): `common.EventEnvelope`, `common.EventTypes`, plus `inventory.*`, `order.*`, `payment.*`, `notification.*` commands/events. Add a new event **here** and reference `EventTypes` — never hardcode a routing key string in two services.
+## Vai trò
 
-## Package convention inside a service
-
-Feature-first (Spring Modulith), flat layers inside each feature — full rules in `docs/backend-code-structure.md`:
-
-```text
-com.fashionstore.<service>
-  <feature>/   controller/  dto/  entity/  repository/  service/ + service/impl/
-               mapper/  client/  event/  exception/  config/
-  shared/      OPEN module — outbox, Rabbit config, security, OpenAPI, util; never depends on a feature
-  <Service>Application.java
-```
-
-- **Migrated:** `catalog-service` (reference — `product`, `inventory`, `media`, `review`, `wishlist`), `order-service` (`cart`, `checkout`, `order`, `saga`, `returns`, `shipment`, `promotion`, `dashboard`), `payment-service` (`payment`, `wallet`); each has `shared`. identity/notification stay layer-first (flat `controller/ dto/ entity/ …`).
-- Inside a feature, one package per layer; create only layers the feature needs. Listeners/schedulers go in `<feature>/event/`; the outbox lives in `shared/outbox/`.
-- A feature uses another feature only via its exposed API. `ModularityTest` + `src/test/resources/modulith-known-violations.txt` freeze existing violations — never add a line to that file to make a build pass; delete lines you fix.
-
-## Constraints & Gotchas
-
-Never, without an explicit request:
-
-- ❌ Move an entity, repository, or business service into `packages/**`.
-- ❌ Put anything but cross-service wire DTOs in `api-contracts`; put domain logic in `common-library`.
-- ❌ Point one service's datasource at another service's database, or query across databases.
-- ❌ Re-create `product-service`, `inventory-service`, `file-service`, or `cart-service` — they are merged and deleted.
-- ❌ Add a module to the root `pom.xml` `<modules>` or a service to `docker-compose.yml` as a side effect of another task.
-- ❌ Edit or renumber an existing Flyway migration. Add a new `V<n>__*.sql`. Catalog reserves ranges: `V1–V19` product, `V20–V39` inventory, `V40+` file.
-- ❌ Bypass the gateway, or change a service's port / `SPRING_APPLICATION_NAME` / DB env var names.
-- ❌ Weaken security to make something pass — `SecurityConfig` chains, JWT decoding, `hasRole`/`hasAuthority` rules are behaviour, not boilerplate.
-- ❌ `git push`, force-push, reset --hard, or commit unless asked. The working tree currently carries a large uncommitted service-merge changeset.
-
-Traps:
-
-- `packages/api-contracts` builds artifactId **`event-contracts`** — the directory name and the artifact do not match.
-- Direct `./mvnw` without `JAVA_HOME=jdk-21` fails with `release version 21 not supported`. That is the JDK, not your code.
-- After moving/renaming packages, run with `clean`. Stale classes in `target/test-classes` produce a bogus `TestEngine with ID 'junit-jupiter' failed to discover tests`.
-- MapStruct + Lombok: mapper impls are generated into `target/generated-sources`. If a mapping looks missing, `clean` before debugging.
-- `apps/storefront` and `apps/backoffice` contain only a README. There is no frontend build to run.
-- RabbitMQ payloads carry no FQCN (`Jackson2JsonMessageConverter`, type inferred from the listener signature), so moving an event class is safe — but renaming an `EventTypes` value is a wire break for every consumer.
-
-## Working style
-
-**Output — terse.** No greeting, no preamble, no restating the request, no summary of what you are about to do. Lead with the diff or the command. Skip "great question", "you're right", and closing pleasantries. Reply in the user's language.
-
-**Coding — minimal first.** Read the surrounding code before writing. Pick the simplest thing that works. The established `service/` interface + `service/impl/` pair stays — but add nothing beyond it: no extra abstraction layer, no factory, no config knob, no defensive branch that nothing needs. Respect the layering (`controller → service/impl → repository → model`) and never widen scope past what was asked. Readability over cleverness.
-
-**Logic changes and refactors — Spec → Plan → TDD → Review.**
-
-1. Spec: state in 1–3 lines what changes and how it will be verified.
-2. Plan: list the files to touch; get sign-off before large or cross-service edits.
-3. TDD: write or update the test first, watch it fail, then implement until `./mvnw -o -pl services/<svc> clean test` is green.
-4. Review: re-read your own `git diff` before reporting. Report the real result — if a test fails or a step was skipped, say so with the output.
-
-Typo fixes, renames, and doc edits skip the workflow. Just do them.
+- Sở hữu backend: `services/**`, `packages/**`, `platform/**`, Flyway, `docker-compose.yml`, root `pom.xml`, `scripts/**`.
+- Không sửa `apps/**` nếu người dùng không yêu cầu trực tiếp. Đó là phần của Antigravity.
+- Xử lý các entry trong `docs/api-requests.md`.
+- Review diff frontend khi người dùng yêu cầu.
