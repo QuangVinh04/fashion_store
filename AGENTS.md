@@ -110,3 +110,14 @@ Không làm các việc sau nếu người dùng không yêu cầu rõ:
 - **Code tối thiểu.** Đọc code xung quanh trước khi viết. Chọn cách đơn giản nhất chạy được. Không thêm abstraction, config, nhánh phòng thủ không ai cần. Không mở rộng phạm vi ngoài yêu cầu.
 - **Báo kết quả thật.** Test hoặc build lỗi, hoặc có bước bị bỏ qua: nói rõ, kèm output.
 - **Không chắc thì hỏi.** Luật hoặc yêu cầu chưa rõ: hỏi người dùng, không tự thêm.
+
+## Code style
+
+Áp cho code mới và file đang sửa trong task. Không dọn lại file ngoài phạm vi task. Luật riêng theo ngôn ngữ: `.claude/rules/code-style.md` (Java), `.agents/rules/code-style.md` (TypeScript/React).
+
+- **Hàm ngắn.** Mục tiêu ≤ 40 dòng mỗi hàm, ≤ 400 dòng mỗi file. Thêm code vào file đã vượt ngưỡng: tách phần mình viết ra hàm hoặc class riêng.
+- **Lồng tối đa 2 tầng.** Dùng early return và guard clause thay cho `if` lồng nhau.
+- **Tên rõ nghĩa.** Viết đủ từ. Không viết tắt tự chế (`cfg`, `req`, `tmp`, `data2`). Boolean bắt đầu bằng `is`/`has`/`can`.
+- **Comment chỉ giải thích tại sao.** Không comment lại điều code đã nói. Không để code bị comment-out.
+- **Không magic number/string.** Dùng hằng số có tên hoặc enum.
+- **Formatter quyết định format.** Không căn chỉnh tay, không đổi format của dòng mình không sửa.
