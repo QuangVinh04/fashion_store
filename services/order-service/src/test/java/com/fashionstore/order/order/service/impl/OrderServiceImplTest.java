@@ -131,9 +131,12 @@ class OrderServiceImplTest {
     @Test
     void adminLastPageReturnsOneItemAndExactTotal21() {
         Pageable pageable = PageRequest.of(1, 20);
-        when(orderRepository.findAll(pageable))
+        when(orderRepository.findAll(
+                        any(org.springframework.data.jpa.domain.Specification.class), eq(pageable)))
                 .thenReturn(new PageImpl<>(List.of(order(OrderStatus.CONFIRMED)), pageable, 21));
-        var result = service.searchOrders(null, null, pageable);
+        var result =
+                service.searchOrders(
+                        com.fashionstore.order.order.dto.AdminOrderFilter.builder().build(), pageable);
         assertEquals(21L, result.getTotalElements());
         assertEquals(2L, result.getTotalPage());
         assertEquals(1, result.getItems().size());

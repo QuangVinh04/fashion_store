@@ -11,6 +11,7 @@ import com.fashionstore.contracts.order.dto.VerifyPurchaseRequest;
 import com.fashionstore.contracts.order.dto.VerifyPurchaseResponse;
 import com.fashionstore.order.saga.dto.CancelOrderRequest;
 import com.fashionstore.order.order.dto.OrderPurchaseTab;
+import com.fashionstore.order.order.dto.AdminOrderFilter;
 import com.fashionstore.order.order.dto.OrderResponse;
 import com.fashionstore.order.returns.dto.OrderReturnReference;
 import com.fashionstore.order.saga.dto.OrderSagaResponse;
@@ -37,6 +38,7 @@ import com.fashionstore.order.order.repository.OrderRepository;
 import com.fashionstore.order.saga.repository.OrderSagaRepository;
 import com.fashionstore.order.order.repository.OrderStatusHistoryRepository;
 import com.fashionstore.order.shipment.repository.ShipmentRepository;
+import com.fashionstore.order.order.service.OrderAdminSpecifications;
 import com.fashionstore.order.order.service.OrderNotificationService;
 import com.fashionstore.order.order.service.OrderService;
 import com.fashionstore.order.promotion.service.PromotionService;
@@ -313,17 +315,9 @@ public class OrderServiceImpl implements OrderService {
     @Transactional(readOnly = true)
     @PreAuthorize("hasRole('ADMIN')")
     public PageResponse<List<OrderSummaryResponse>> searchOrders(
-            String userId, OrderStatus status, Pageable pageable) {
-        Page<Order> orders;
-        if (userId != null && status != null) {
-            orders = orderRepository.findByUserIdAndStatus(userId, status, pageable);
-        } else if (userId != null) {
-            orders = orderRepository.findByUserId(userId, pageable);
-        } else if (status != null) {
-            orders = orderRepository.findByStatus(status, pageable);
-        } else {
-            orders = orderRepository.findAll(pageable);
-        }
+            AdminOrderFilter filter, Pageable pageable) {
+        Page<Order> orders =
+                orderRepository.findAll(OrderAdminSpecifications.matching(filter), pageable);
         return toPageResponse(orders, pageable);
     }
 

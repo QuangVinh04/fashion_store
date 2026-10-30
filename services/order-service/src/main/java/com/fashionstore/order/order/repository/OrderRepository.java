@@ -54,8 +54,6 @@ public interface OrderRepository extends JpaRepository<Order, String>, org.sprin
 
     Page<Order> findByUserIdAndStatus(String userId, OrderStatus status, Pageable pageable);
 
-    Page<Order> findByStatus(OrderStatus status, Pageable pageable);
-
     @Query("""
         select distinct o from Order o
         join o.items item

@@ -2,6 +2,7 @@ package com.fashionstore.order.order.service;
 
 import com.fashionstore.common.dto.PageResponse;
 import com.fashionstore.order.saga.dto.CancelOrderRequest;
+import com.fashionstore.order.order.dto.AdminOrderFilter;
 import com.fashionstore.order.order.dto.OrderResponse;
 import com.fashionstore.order.saga.dto.OrderSagaResponse;
 import com.fashionstore.order.order.dto.OrderSummaryResponse;
@@ -43,7 +44,7 @@ public interface OrderService {
     // ----- admin -----
 
     PageResponse<List<OrderSummaryResponse>> searchOrders(
-            String userId, OrderStatus status, Pageable pageable);
+            AdminOrderFilter filter, Pageable pageable);
 
     OrderResponse getOrderById(String orderId);
 

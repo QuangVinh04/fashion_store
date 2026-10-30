@@ -10,6 +10,7 @@ Luật riêng cho Claude Code. Luật chung nằm trong `AGENTS.md` (import ở 
 | `.claude/rules/database-migration.md` | Flyway, database-per-service |
 | `.claude/rules/security.md` | Keycloak JWT, `/internal/**`, SecurityConfig |
 | `.claude/rules/backend-workflow.md` | chạy Maven với JDK 21, Spec → Plan → TDD → Review, trap khi build |
+| `.claude/rules/code-style.md` | code style Java (bổ sung mục Code style của `AGENTS.md`) |
 
 ## Vai trò
 

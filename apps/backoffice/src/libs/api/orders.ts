@@ -6,7 +6,17 @@ import type { OrderDetail, OrderSummary, OrderStatus, OrderHistory, OrderSaga, S
 const path = (id: string) => `/api/v1/admin/orders/${encodeURIComponent(id)}`
 
 export const ordersApi = {
-  list: async (params: { page: number; size: number; status?: string; userId?: string; sort?: string }) => {
+  list: async (params: {
+    page: number
+    size: number
+    status?: string
+    userId?: string
+    search?: string
+    paymentMethod?: string
+    createdFrom?: string
+    createdTo?: string
+    sort?: string
+  }) => {
     const query = new URLSearchParams()
 
     Object.entries(params).forEach(([key, value]) => {

@@ -44,6 +44,8 @@ export default function OrderList() {
   const router = useRouter()
   const { page, size, filters, setPage, setSize, setFilters } = useListQueryState()
 
+  const [searchInput, setSearchInput] = useState(filters.search || '')
+
   const query = useQuery({
     queryKey: ['orders', page, size, filters],
     queryFn: () =>
@@ -51,49 +53,49 @@ export default function OrderList() {
         page,
         size,
         status: filters.status,
+        search: filters.search,
+        paymentMethod: filters.paymentMethod,
+        createdFrom: filters.createdFrom,
+        createdTo: filters.createdTo,
         userId: filters.userId,
         sort: filters.sort || 'createdAt,desc'
       })
   })
 
-  const [id, setId] = useState('')
-
-  const handleOpenOrder = (event?: React.FormEvent) => {
+  const handleApplySearch = (event?: React.FormEvent) => {
     if (event) event.preventDefault()
-    const target = id.trim()
-
-    if (!target) return
-
-    const matched = query.data?.items.find(
-      order => order.orderCode.toLowerCase() === target.toLowerCase() || order.id.toLowerCase() === target.toLowerCase()
-    )
-
-    router.push('/orders/' + encodeURIComponent(matched ? matched.id : target))
+    setFilters({ search: searchInput.trim() })
   }
 
-  const hasFilter = Boolean(filters.status) || Boolean(filters.userId) || Boolean(id.trim())
+  const hasFilter = Boolean(
+    filters.status ||
+    filters.search ||
+    filters.paymentMethod ||
+    filters.createdFrom ||
+    filters.createdTo ||
+    filters.userId ||
+    searchInput.trim()
+  )
 
   const clearFilters = () => {
-    setFilters({ status: '', userId: '' })
-    setId('')
-    setPage(0)
+    setSearchInput('')
+    setFilters({
+      status: '',
+      search: '',
+      paymentMethod: '',
+      createdFrom: '',
+      createdTo: '',
+      userId: ''
+    })
   }
 
-  const displayedOrders = (query.data?.items || []).filter(order => {
-    if (!id.trim()) return true
-    const term = id.trim().toLowerCase()
-
-    return order.orderCode.toLowerCase().includes(term) || order.id.toLowerCase().includes(term)
-  })
-
   const handleExportCsv = () => {
-    const rowsToExport = displayedOrders.length ? displayedOrders : (query.data?.items || [])
+    const rowsToExport = query.data?.items || []
 
     if (!rowsToExport.length) return
 
     const headers = [
       'Mã đơn',
-      'Mã đơn nội bộ (UUID)',
       'Trạng thái',
       'Phương thức thanh toán',
       'Cổng thanh toán',
@@ -104,7 +106,6 @@ export default function OrderList() {
 
     const rows = rowsToExport.map(order => [
       order.orderCode,
-      order.id,
       orderStatusLabels[order.status] || order.status,
       paymentMethodLabels[order.paymentMethod] || order.paymentMethod,
       paymentProviderLabels[order.paymentProvider || ''] || order.paymentProvider || '',
@@ -117,6 +118,8 @@ export default function OrderList() {
 
     exportToCsv(`danh-sach-don-hang-${dateStr}`, headers, rows)
   }
+
+  const orders = query.data?.items || []
 
   return (
     <>
@@ -134,18 +137,17 @@ export default function OrderList() {
         }
       />
       <Card>
-        <Box sx={{ p: { xs: 4, sm: 5 }, display: 'flex', gap: 3, flexWrap: 'wrap', alignItems: 'center' }}>
+        <Box
+          component='form'
+          onSubmit={handleApplySearch}
+          sx={{ p: { xs: 4, sm: 5 }, display: 'flex', gap: 3, flexWrap: 'wrap', alignItems: 'center' }}
+        >
           <TextField
             size='small'
-            placeholder='Tìm theo mã đơn (ORD-...) hoặc mã đơn nội bộ (UUID)...'
-            value={id}
-            onChange={event => setId(event.target.value)}
-            onKeyDown={event => {
-              if (event.key === 'Enter') {
-                event.preventDefault()
-                handleOpenOrder()
-              }
-            }}
+            label='Tìm kiếm đơn hàng'
+            placeholder='Mã đơn (ORD-...), tên, SĐT người nhận...'
+            value={searchInput}
+            onChange={event => setSearchInput(event.target.value)}
             sx={{ flexGrow: 1, minWidth: { xs: '100%', sm: 260 } }}
             InputProps={{
               startAdornment: (
@@ -153,9 +155,17 @@ export default function OrderList() {
                   <i className='ri-search-line text-lg text-textSecondary' />
                 </InputAdornment>
               ),
-              endAdornment: id ? (
+              endAdornment: searchInput ? (
                 <InputAdornment position='end'>
-                  <IconButton size='small' edge='end' onClick={() => setId('')} aria-label='Xóa tìm kiếm'>
+                  <IconButton
+                    size='small'
+                    edge='end'
+                    onClick={() => {
+                      setSearchInput('')
+                      setFilters({ search: '' })
+                    }}
+                    aria-label='Xóa tìm kiếm'
+                  >
                     <i className='ri-close-line text-lg' />
                   </IconButton>
                 </InputAdornment>
@@ -168,11 +178,8 @@ export default function OrderList() {
             size='small'
             label='Trạng thái'
             value={filters.status || ''}
-            onChange={event => {
-              setFilters({ status: event.target.value })
-              setPage(0)
-            }}
-            sx={{ minWidth: 190 }}
+            onChange={event => setFilters({ status: event.target.value })}
+            sx={{ minWidth: 180 }}
           >
             <MenuItem value=''>Tất cả trạng thái</MenuItem>
             {Object.entries(orderStatusLabels).map(([key, label]) => (
@@ -183,37 +190,37 @@ export default function OrderList() {
           </TextField>
 
           <TextField
-            label='Mã khách hàng (UUID)'
+            select
             size='small'
-            placeholder='Lọc theo UUID người dùng...'
-            value={filters.userId || ''}
-            onChange={event => {
-              setFilters({ userId: event.target.value.trim() })
-              setPage(0)
-            }}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position='start'>
-                  <i className='ri-user-search-line text-lg text-textSecondary' />
-                </InputAdornment>
-              ),
-              endAdornment: filters.userId ? (
-                <InputAdornment position='end'>
-                  <IconButton
-                    size='small'
-                    edge='end'
-                    onClick={() => {
-                      setFilters({ userId: '' })
-                      setPage(0)
-                    }}
-                    aria-label='Xóa lọc khách hàng'
-                  >
-                    <i className='ri-close-line text-lg' />
-                  </IconButton>
-                </InputAdornment>
-              ) : null
-            }}
-            sx={{ minWidth: 240 }}
+            label='Thanh toán'
+            value={filters.paymentMethod || ''}
+            onChange={event => setFilters({ paymentMethod: event.target.value })}
+            sx={{ minWidth: 190 }}
+          >
+            <MenuItem value=''>Tất cả phương thức</MenuItem>
+            <MenuItem value='COD'>Thu tiền khi nhận (COD)</MenuItem>
+            <MenuItem value='ONLINE'>Trực tuyến (PayOS)</MenuItem>
+            <MenuItem value='WALLET'>Ví khách hàng</MenuItem>
+          </TextField>
+
+          <TextField
+            size='small'
+            type='date'
+            label='Từ ngày'
+            value={filters.createdFrom || ''}
+            onChange={event => setFilters({ createdFrom: event.target.value })}
+            InputLabelProps={{ shrink: true }}
+            sx={{ minWidth: 150 }}
+          />
+
+          <TextField
+            size='small'
+            type='date'
+            label='Đến ngày'
+            value={filters.createdTo || ''}
+            onChange={event => setFilters({ createdTo: event.target.value })}
+            InputLabelProps={{ shrink: true }}
+            sx={{ minWidth: 150 }}
           />
 
           {hasFilter && (
@@ -245,20 +252,27 @@ export default function OrderList() {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {displayedOrders.map(order => (
-                  <TableRow key={order.id} hover>
+                {orders.map(order => (
+                  <TableRow
+                    key={order.id}
+                    hover
+                    onClick={() => router.push('/orders/' + order.id)}
+                    sx={{ cursor: 'pointer' }}
+                  >
                     <TableCell>
                       <Typography
                         variant='body2'
+                        component={Link}
+                        href={'/orders/' + order.id}
+                        onClick={event => event.stopPropagation()}
                         sx={{
                           fontWeight: 600,
-                          color: 'text.primary'
+                          color: 'primary.main',
+                          textDecoration: 'none',
+                          '&:hover': { textDecoration: 'underline' }
                         }}
                       >
                         {order.orderCode}
-                      </Typography>
-                      <Typography variant='caption' color='text.secondary' sx={{ display: 'block' }}>
-                        ID: {order.id.length > 18 ? `${order.id.slice(0, 16)}...` : order.id}
                       </Typography>
                     </TableCell>
                     <TableCell>
@@ -289,7 +303,11 @@ export default function OrderList() {
                       <Typography variant='body2' sx={{ fontVariantNumeric: 'tabular-nums' }}>
                         {new Date(order.createdAt).toLocaleDateString('vi-VN')}
                       </Typography>
-                      <Typography variant='caption' color='text.secondary' sx={{ display: 'block', fontSize: '0.75rem', fontVariantNumeric: 'tabular-nums' }}>
+                      <Typography
+                        variant='caption'
+                        color='text.secondary'
+                        sx={{ display: 'block', fontSize: '0.75rem', fontVariantNumeric: 'tabular-nums' }}
+                      >
                         {new Date(order.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
                       </Typography>
                     </TableCell>
@@ -298,8 +316,10 @@ export default function OrderList() {
                         <IconButton
                           size='small'
                           color='primary'
-                          component={Link}
-                          href={'/orders/' + order.id}
+                          onClick={event => {
+                            event.stopPropagation()
+                            router.push('/orders/' + order.id)
+                          }}
                           aria-label={'Chi tiết đơn ' + order.orderCode}
                         >
                           <i className='ri-arrow-right-line text-lg' />

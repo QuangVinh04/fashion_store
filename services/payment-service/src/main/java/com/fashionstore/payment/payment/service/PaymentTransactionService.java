@@ -65,6 +65,13 @@ public class PaymentTransactionService {
                             paymentRepository
                                     .findByOrderIdForUpdate(request.orderId())
                                     .orElse(null);
+                    // Lệnh hủy có thể đến trước lệnh tạo (redelivery/retry): đơn đã hủy thì không tạo payment.
+                    if (existing == null && isOrderCancelled(request.orderId())) {
+                        log.warn(
+                                "Bỏ qua payment.requested của order {}: lệnh hủy đã được xử lý trước",
+                                request.orderId());
+                        return;
+                    }
                     if (existing != null) {
                         if (existing.getStatus() == PaymentStatus.COMPLETED
                                 || existing.getStatus() == PaymentStatus.COD_PENDING) {
@@ -134,6 +141,14 @@ public class PaymentTransactionService {
         return paymentRef.get();
     }
 
+    private boolean isOrderCancelled(String orderId) {
+        return Boolean.TRUE.equals(
+                jdbcTemplate.queryForObject(
+                        "SELECT EXISTS (SELECT 1 FROM cancelled_payment_order WHERE order_id = ?)",
+                        Boolean.class,
+                        orderId));
+    }
+
     @Transactional
     public void cancelPaymentOnce(
             String messageId, CancelPaymentCommand request, String correlationId) {
@@ -147,6 +162,10 @@ public class PaymentTransactionService {
                                     .orElse(null);
 
                     if (payment == null) {
+                        jdbcTemplate.update(
+                                "INSERT INTO cancelled_payment_order (order_id) VALUES (?)"
+                                        + " ON CONFLICT (order_id) DO NOTHING",
+                                request.orderId());
                         log.warn(
                                 "Payment không tồn tại cho order {} khi nhận lệnh hủy, gửi"
                                     + " PAYMENT_CANCELLED để saga hoàn tất bù trừ",

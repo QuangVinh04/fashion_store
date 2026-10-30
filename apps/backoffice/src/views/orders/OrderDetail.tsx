@@ -18,17 +18,7 @@ import {
   CardContent,
   CardHeader,
   Chip,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
   Grid,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   TextField,
   Typography
 } from '@mui/material'
@@ -38,22 +28,30 @@ import QueryState from '@/components/backoffice/QueryState'
 import ConfirmActionDialog from '@/components/backoffice/ConfirmActionDialog'
 import { useOrder } from '@/hooks/useOrders'
 import { ordersApi } from '@/libs/api/orders'
-import { toVietnameseError } from '@/libs/api/errors'
 import { ApiError } from '@/libs/api/client'
 import type { OrderStatus } from '@/types/orders'
 import {
   allowedOrderActions,
   orderStatusLabels,
   orderStatusColors,
+  paymentMethodLabels,
+  paymentProviderLabels,
+  shipmentStatusLabels,
+  shipmentStatusColors,
+  ghnTrackingUrl,
   formatOrderMoney
 } from './order-actions'
+import OrderLifecycleStepper from './OrderLifecycleStepper'
+import { OrderItemsTable } from './OrderItemsTable'
+import CopyButton from './CopyButton'
 import OrderPaymentPanel from './OrderPaymentPanel'
 import OrderCancellationPanel from './OrderCancellationPanel'
+import { CreateShipmentDialog } from './CreateShipmentDialog'
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <Card sx={{ mb: 3, minWidth: 0 }}>
-      <CardHeader title={title} />
+      <CardHeader title={title} titleTypographyProps={{ variant: 'h6', fontWeight: 600 }} />
       <CardContent>{children}</CardContent>
     </Card>
   )
@@ -79,6 +77,13 @@ export default function OrderDetail({ id }: { id: string }) {
   const available = order && !shipment.isLoading && !shipment.error ? allowedOrderActions(order, shipment.data) : []
   const money = (value: number) => formatOrderMoney(value, order?.currency || '')
 
+  const trackingCode = shipment.data?.trackingCode || shipment.data?.ghnOrderCode || order?.trackingCode || ''
+  const trackingLink = ghnTrackingUrl(trackingCode)
+
+  const handleRefreshAll = async () => {
+    await Promise.all([query.refetch(), history.refetch(), shipment.refetch()])
+  }
+
   return (
     <>
       <PageHeader
@@ -86,16 +91,17 @@ export default function OrderDetail({ id }: { id: string }) {
         breadcrumbs={<Link href='/orders'>Đơn hàng</Link>}
         actions={
           order && (
-            <>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
               <Chip
                 variant='tonal'
                 label={orderStatusLabels[order.status]}
                 color={orderStatusColors[order.status] || 'secondary'}
+                sx={{ fontWeight: 600 }}
               />
-              {available.map(next => (
+              {available.map((next, index) => (
                 <Button
                   key={next}
-                  variant='contained'
+                  variant={index === 0 ? 'contained' : 'outlined'}
                   disabled={pending || query.isFetching}
                   onClick={() => {
                     status.reset()
@@ -106,109 +112,169 @@ export default function OrderDetail({ id }: { id: string }) {
                   {orderStatusLabels[next]}
                 </Button>
               ))}
-            </>
+            </Box>
           )
         }
       />
+
       {notice && (
         <Alert severity='success' onClose={() => setNotice('')} sx={{ mb: 3 }}>
           {notice}
         </Alert>
       )}
+
       <QueryState loading={query.isLoading} error={query.error} onRetry={() => query.refetch()}>
         {order && (
           <>
+            <OrderLifecycleStepper status={order.status} />
+
             {order.status === 'PENDING' && (
               <Alert severity='info' sx={{ mb: 3 }}>
                 Đơn đang được hệ thống xác nhận. Các thao tác đổi trạng thái sẽ có sau khi xác nhận xong.
               </Alert>
             )}
+
             {order.cancelReason && (
               <Alert severity='warning' sx={{ mb: 3 }}>
                 {order.cancelReason}
               </Alert>
             )}
+
             <Grid container spacing={3}>
               <Grid item xs={12} md={8} sx={{ minWidth: 0 }}>
-                <OrderCancellationPanel key={id} order={order} onRefresh={async()=>{await Promise.all([query.refetch(),history.refetch(),shipment.refetch()])}}/>
-                <OrderPaymentPanel orderId={id}/>
+                {/* 1. Sản phẩm trong đơn đặt lên vị trí ưu tiên số 1 */}
                 <Section title='Sản phẩm trong đơn'>
-                  <TableContainer>
-                    <Table size='small' sx={{ minWidth: 600 }}>
-                      <TableHead>
-                        <TableRow>
-                          {['Sản phẩm', 'Màu / Size', 'Đơn giá', 'Số lượng', 'Thành tiền'].map(label => (
-                            <TableCell key={label}>{label}</TableCell>
-                          ))}
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {order.items.map((item, index) => (
-                          <TableRow key={item.variantId + '-' + index}>
-                            <TableCell>{item.productName}</TableCell>
-                            <TableCell>
-                              {item.color || '—'} / {item.size || '—'}
-                            </TableCell>
-                            <TableCell>{money(item.unitPrice)}</TableCell>
-                            <TableCell>{item.quantity}</TableCell>
-                            <TableCell>{money(item.lineTotal)}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
+                  <OrderItemsTable items={order.items} currency={order.currency} />
                 </Section>
+
+                {/* 2. Giá trị đơn hàng với cấu trúc định dạng rõ ràng */}
                 <Section title='Giá trị đơn hàng'>
                   <Box sx={{ display: 'grid', gap: 2 }}>
                     {[
-                      ['Tạm tính', order.subtotalAmount],
-                      ['Giảm giá', order.discountAmount],
-                      ['Phí giao hàng', order.shippingFee],
-                      ['Tổng tiền', order.totalAmount]
-                    ].map(([label, value]) => (
-                      <Box key={String(label)} sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
-                        <Typography>{label}</Typography>
-                        <Typography>{money(Number(value))}</Typography>
+                      { label: 'Tạm tính', value: money(order.subtotalAmount), isBold: false },
+                      {
+                        label: 'Giảm giá',
+                        value: order.discountAmount > 0 ? `- ${money(order.discountAmount)}` : '0 ₫',
+                        isBold: false
+                      },
+                      { label: 'Phí giao hàng', value: money(order.shippingFee), isBold: false },
+                      { label: 'Tổng thanh toán', value: money(order.totalAmount), isBold: true }
+                    ].map(row => (
+                      <Box
+                        key={row.label}
+                        sx={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          gap: 2,
+                          py: 0.5,
+                          borderBottom: row.isBold ? 'none' : '1px dashed var(--mui-palette-divider)'
+                        }}
+                      >
+                        <Typography sx={{ fontWeight: row.isBold ? 700 : 400 }}>{row.label}</Typography>
+                        <Typography
+                          sx={{
+                            fontWeight: row.isBold ? 700 : 500,
+                            color: row.isBold ? 'primary.main' : 'text.primary',
+                            fontVariantNumeric: 'tabular-nums'
+                          }}
+                        >
+                          {row.value}
+                        </Typography>
                       </Box>
                     ))}
-                    <Typography color='text.secondary'>
-                      {order.paymentMethod} · {order.paymentProvider} · {order.currency}
+                    <Typography variant='caption' color='text.secondary' sx={{ mt: 1 }}>
+                      Phương thức:{' '}
+                      <strong>{paymentMethodLabels[order.paymentMethod] || order.paymentMethod}</strong>
+                      {order.paymentProvider && (
+                        <> · Cổng: {paymentProviderLabels[order.paymentProvider] || order.paymentProvider}</>
+                      )}{' '}
+                      · Tiền tệ: {order.currency}
                     </Typography>
                   </Box>
                 </Section>
+
+                {/* 3. Vận chuyển */}
                 <Section title='Vận chuyển'>
-                  {order.shipmentCreationPending && <Alert severity='warning' sx={{mb:2}}>Kết quả tạo vận đơn đang được xác minh. Không tạo vận đơn mới cho đến khi đối soát xong.</Alert>}
+                  {order.shipmentCreationPending && (
+                    <Alert severity='warning' sx={{ mb: 2 }}>
+                      Kết quả tạo vận đơn đang được xác minh. Không tạo vận đơn mới cho đến khi đối soát xong.
+                    </Alert>
+                  )}
                   <QueryState loading={shipment.isLoading} error={shipment.error} onRetry={() => shipment.refetch()}>
                     {shipment.data ? (
                       <Box sx={{ display: 'grid', gap: 2 }}>
-                        <Typography>Đơn vị: {shipment.data.provider}</Typography>
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <Typography>Đơn vị vận chuyển: <strong>{shipment.data.provider}</strong></Typography>
+                          <Chip
+                            size='small'
+                            variant='tonal'
+                            color={shipmentStatusColors[shipment.data.status] || 'secondary'}
+                            label={shipmentStatusLabels[shipment.data.status] || shipment.data.status}
+                          />
+                        </Box>
+
+                        <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap' }}>
+                          <Typography>
+                            Mã vận đơn:{' '}
+                            {trackingLink ? (
+                              <Typography
+                                component='a'
+                                href={trackingLink}
+                                target='_blank'
+                                rel='noreferrer'
+                                sx={{
+                                  fontWeight: 600,
+                                  color: 'primary.main',
+                                  textDecoration: 'none',
+                                  '&:hover': { textDecoration: 'underline' }
+                                }}
+                              >
+                                {trackingCode} <i className='ri-external-link-line text-sm' />
+                              </Typography>
+                            ) : (
+                              <strong>{trackingCode || '—'}</strong>
+                            )}
+                          </Typography>
+                          {trackingCode && <CopyButton text={trackingCode} label='Sao chép mã vận đơn' />}
+                        </Box>
+
                         <Typography>
-                          Mã vận đơn: {shipment.data.trackingCode || shipment.data.ghnOrderCode || '—'}
+                          Cước vận chuyển: <strong>{shipment.data.fee != null ? money(shipment.data.fee) : '—'}</strong>
                         </Typography>
-                        <Typography>Trạng thái: {shipment.data.status}</Typography>
-                        <Typography>Phí: {shipment.data.fee != null ? money(shipment.data.fee) : '—'}</Typography>
                       </Box>
                     ) : (
                       <>
                         <Typography sx={{ mb: 2 }}>
-                          Chưa có vận đơn.{order.trackingCode && ' Mã theo dõi đã lưu: ' + order.trackingCode}
+                          Chưa có vận đơn.
+                          {order.trackingCode && <> Mã theo dõi đã lưu: <strong>{order.trackingCode}</strong></>}
                         </Typography>
-                        {!order.cancellation && !order.shipmentCreationPending && ['CONFIRMED', 'PROCESSING', 'PACKED'].includes(order.status) && (
-                          <Button
-                            variant='outlined'
-                            disabled={pending || shipment.isFetching}
-                            onClick={() => {
-                              createShipment.reset()
-                              setShipmentOpen(true)
-                            }}
-                          >
-                            Tạo vận đơn GHN
-                          </Button>
-                        )}
+                        {!order.cancellation &&
+                          !order.shipmentCreationPending &&
+                          ['CONFIRMED', 'PROCESSING', 'PACKED'].includes(order.status) && (
+                            <Button
+                              variant='outlined'
+                              disabled={pending || shipment.isFetching}
+                              onClick={() => {
+                                createShipment.reset()
+                                setShipmentOpen(true)
+                              }}
+                            >
+                              Tạo vận đơn GHN
+                            </Button>
+                          )}
                       </>
                     )}
                   </QueryState>
                 </Section>
+
+                {/* 4. Thanh toán & Hoàn tiền */}
+                <OrderPaymentPanel orderId={id} />
+
+                {/* 5. Hủy đơn (Danger Zone / Luồng ngoại lệ) */}
+                <OrderCancellationPanel key={id} order={order} onRefresh={handleRefreshAll} />
+
+                {/* 6. Chẩn đoán kỹ thuật */}
                 <Accordion expanded={diagnosticsOpen} onChange={(_, expanded) => setDiagnosticsOpen(expanded)}>
                   <AccordionSummary>Thông tin xử lý hệ thống</AccordionSummary>
                   <AccordionDetails>
@@ -230,17 +296,41 @@ export default function OrderDetail({ id }: { id: string }) {
                   </AccordionDetails>
                 </Accordion>
               </Grid>
+
+              {/* Cột phải: Thông tin người nhận và Lịch sử */}
               <Grid item xs={12} md={4} sx={{ minWidth: 0 }}>
                 <Section title='Người nhận'>
                   <Box sx={{ display: 'grid', gap: 2 }}>
-                    <Typography>{order.recipientName || '—'}</Typography>
-                    <Typography>{order.recipientPhone || '—'}</Typography>
-                    <Typography>{order.shippingAddress || '—'}</Typography>
-                    <Typography color='text.secondary'>
-                      Tạo: {new Date(order.createdAt).toLocaleString('vi-VN')}
+                    <Typography variant='subtitle1' sx={{ fontWeight: 600 }}>
+                      {order.recipientName || '—'}
+                    </Typography>
+
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                      <Typography
+                        component='a'
+                        href={`tel:${order.recipientPhone || ''}`}
+                        sx={{
+                          color: 'text.primary',
+                          textDecoration: 'none',
+                          '&:hover': { color: 'primary.main', textDecoration: 'underline' }
+                        }}
+                      >
+                        {order.recipientPhone || '—'}
+                      </Typography>
+                      {order.recipientPhone && <CopyButton text={order.recipientPhone} label='Sao chép SĐT' />}
+                    </Box>
+
+                    <Box sx={{ display: 'flex', alignItems: 'flex-start' }}>
+                      <Typography sx={{ flex: 1 }}>{order.shippingAddress || '—'}</Typography>
+                      {order.shippingAddress && <CopyButton text={order.shippingAddress} label='Sao chép địa chỉ' />}
+                    </Box>
+
+                    <Typography variant='caption' color='text.secondary'>
+                      Thời gian đặt hàng: {new Date(order.createdAt).toLocaleString('vi-VN')}
                     </Typography>
                   </Box>
                 </Section>
+
                 <Section title='Lịch sử trạng thái'>
                   <QueryState
                     loading={history.isLoading}
@@ -249,16 +339,30 @@ export default function OrderDetail({ id }: { id: string }) {
                     empty={!history.data?.length}
                     emptyTitle='Chưa có lịch sử.'
                   >
-                    <Box sx={{ display: 'grid', gap: 3 }}>
+                    <Box sx={{ display: 'grid', gap: 2.5 }}>
                       {[...(history.data || [])]
                         .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
                         .map(row => (
-                          <Box key={row.id} sx={{ borderLeft: '2px solid', borderColor: 'divider', pl: 2 }}>
-                            <Typography>{orderStatusLabels[row.toStatus] || row.toStatus}</Typography>
-                            <Typography variant='body2' color='text.secondary'>
+                          <Box
+                            key={row.id}
+                            sx={{
+                              borderLeft: '2px solid',
+                              borderColor: 'primary.main',
+                              pl: 2,
+                              position: 'relative'
+                            }}
+                          >
+                            <Typography sx={{ fontWeight: 600 }}>
+                              {orderStatusLabels[row.toStatus] || row.toStatus}
+                            </Typography>
+                            <Typography variant='caption' color='text.secondary' sx={{ display: 'block' }}>
                               {new Date(row.createdAt).toLocaleString('vi-VN')} · {row.changedBy || 'Hệ thống'}
                             </Typography>
-                            {row.reason && <Typography variant='body2'>{row.reason}</Typography>}
+                            {row.reason && (
+                              <Typography variant='body2' sx={{ mt: 0.5, fontStyle: 'italic' }}>
+                                Lý do: {row.reason}
+                              </Typography>
+                            )}
                           </Box>
                         ))}
                     </Box>
@@ -269,6 +373,7 @@ export default function OrderDetail({ id }: { id: string }) {
           </>
         )}
       </QueryState>
+
       <ConfirmActionDialog
         open={!!action}
         title='Cập nhật trạng thái đơn?'
@@ -284,7 +389,7 @@ export default function OrderDetail({ id }: { id: string }) {
             setAction(null)
             setNotice('Đã cập nhật trạng thái đơn.')
           } catch {
-            /* Keep the confirmation and server error visible. */
+            /* Keep confirmation dialog visible */
           }
         }}
       >
@@ -300,46 +405,22 @@ export default function OrderDetail({ id }: { id: string }) {
           inputProps={{ maxLength: 500 }}
         />
       </ConfirmActionDialog>
-      <Dialog
+
+      <CreateShipmentDialog
         open={shipmentOpen}
-        onClose={() => {
-          if (!pending) setShipmentOpen(false)
+        pending={pending}
+        error={createShipment.error}
+        onClose={() => setShipmentOpen(false)}
+        onConfirm={async () => {
+          try {
+            await createShipment.mutateAsync('')
+            setShipmentOpen(false)
+            setNotice('Đã tạo vận đơn.')
+          } catch {
+            /* Keep shipping dialog open on failure */
+          }
         }}
-        fullWidth
-        maxWidth='sm'
-      >
-        <DialogTitle>Tạo vận đơn GHN</DialogTitle>
-        <DialogContent>
-          {createShipment.error && (
-            <Alert severity='error' sx={{ mb: 2 }}>
-              {toVietnameseError(createShipment.error)}
-            </Alert>
-          )}
-          <Typography sx={{ mb: 3 }}>
-            Vận đơn dùng sản phẩm và địa chỉ đã lưu trong đơn này. Đơn chỉ chuyển sang Đang giao sau khi có vận đơn.
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button disabled={pending} onClick={() => setShipmentOpen(false)}>
-            Hủy
-          </Button>
-          <Button
-            disabled={pending}
-            variant='contained'
-            onClick={async () => {
-              try {
-                await createShipment.mutateAsync('')
-                setShipmentOpen(false)
-                setNotice('Đã tạo vận đơn.')
-              } catch {
-                /* Keep the shipping dialog open on failure. */
-              }
-            }}
-          >
-            {pending ? 'Đang tạo…' : 'Tạo vận đơn'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+      />
     </>
   )
 }

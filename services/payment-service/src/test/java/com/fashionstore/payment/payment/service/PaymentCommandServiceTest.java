@@ -59,6 +59,7 @@ class PaymentCommandServiceTest {
     @Mock
     WalletPaymentService walletPaymentService;
 
+    org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
     PaymentService service;
     Payment storedPayment;
 
@@ -72,7 +73,7 @@ class PaymentCommandServiceTest {
             storedPayment = call.getArgument(0);
             return storedPayment;
         });
-        var jdbcTemplate = org.mockito.Mockito.mock(org.springframework.jdbc.core.JdbcTemplate.class);
+        jdbcTemplate = org.mockito.Mockito.mock(org.springframework.jdbc.core.JdbcTemplate.class);
         org.mockito.Mockito.lenient().when(jdbcTemplate.queryForObject(anyString(), eq(Long.class))).thenReturn(5000000000000000L);
         PaymentTransactionService database = new PaymentTransactionService(paymentRepository, jdbcTemplate,
                 processedMessageService, outboxEventRecorder, org.mockito.Mockito.mock(PaymentStateService.class), org.mockito.Mockito.mock(WalletService.class),
@@ -180,6 +181,28 @@ class PaymentCommandServiceTest {
 
         assertThat(payment.getStatus()).isEqualTo(PaymentStatus.CANCELLED);
         verify(outboxEventRecorder).saveMessage(eq("order-1"), eq(EventTypes.PAYMENT_CANCELLED), any(EventEnvelope.class));
+    }
+
+    @Test
+    void cancellingBeforeAnyPaymentExistsRemembersTheCancelledOrder() {
+        when(paymentRepository.findByOrderIdForUpdate("order-1")).thenReturn(Optional.empty());
+
+        service.cancel(new CancelPaymentCommand("order-1", null, "Quá hạn"), "cancel-1", "saga-1");
+
+        verify(jdbcTemplate).update(org.mockito.ArgumentMatchers.contains("cancelled_payment_order"), eq("order-1"));
+        verify(outboxEventRecorder).saveMessage(eq("order-1"), eq(EventTypes.PAYMENT_CANCELLED), any(EventEnvelope.class));
+    }
+
+    @Test
+    void authorizeArrivingAfterCancelCreatesNoPayment() {
+        when(jdbcTemplate.queryForObject(org.mockito.ArgumentMatchers.contains("cancelled_payment_order"),
+                eq(Boolean.class), eq("order-1"))).thenReturn(true);
+        when(paymentRepository.findByOrderIdForUpdate("order-1")).thenReturn(Optional.empty());
+
+        service.authorize(onlineRequest().payload(), "message-late", "saga-1");
+
+        verify(paymentRepository, never()).save(any(Payment.class));
+        verify(outboxEventRecorder, never()).saveMessage(anyString(), anyString(), any(EventEnvelope.class));
     }
 
     private EventEnvelope<AuthorizePaymentCommand> onlineRequest() {
