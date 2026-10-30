@@ -352,7 +352,7 @@ export default function ProductList() {
                             variant='rounded'
                             src={row.thumbnailUrl}
                             alt={row.name}
-                            sx={{ width: 44, height: 44, borderRadius: 1.5, bgcolor: 'action.hover' }}
+                            sx={{ width: 40, height: 40, borderRadius: 1.5, bgcolor: 'action.hover' }}
                           >
                             <i className='ri-t-shirt-line text-lg text-textSecondary' />
                           </Avatar>
@@ -376,7 +376,7 @@ export default function ProductList() {
                             </Typography>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5, flexWrap: 'wrap' }}>
                               {row.createdAt && (
-                                <Typography variant='caption' color='text.secondary'>
+                                <Typography variant='caption' color='text.secondary' sx={{ fontSize: '0.75rem' }}>
                                   Tạo ngày: {new Date(row.createdAt).toLocaleDateString('vi-VN')}
                                 </Typography>
                               )}
@@ -386,7 +386,7 @@ export default function ProductList() {
                                   variant='tonal'
                                   color='warning'
                                   label='Nổi bật'
-                                  sx={{ height: 18, fontSize: '0.6875rem' }}
+                                  sx={{ height: 22, fontSize: '0.75rem', fontWeight: 600 }}
                                 />
                               )}
                             </Box>
@@ -405,14 +405,14 @@ export default function ProductList() {
                       </TableCell>
                       <TableCell align='right' sx={{ whiteSpace: 'nowrap' }}>
                         {row.salePrice && row.salePrice < (row.basePrice ?? row.price) ? (
-                          <Box>
-                            <Typography variant='body2' sx={{ fontWeight: 600, color: 'error.main' }}>
+                          <Box sx={{ fontVariantNumeric: 'tabular-nums' }}>
+                            <Typography variant='body2' sx={{ fontWeight: 600, color: 'error.main', fontVariantNumeric: 'tabular-nums' }}>
                               {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(row.salePrice)}
                             </Typography>
                             <Typography
                               variant='caption'
                               color='text.secondary'
-                              sx={{ textDecoration: 'line-through', display: 'block' }}
+                              sx={{ textDecoration: 'line-through', display: 'block', fontSize: '0.75rem', fontVariantNumeric: 'tabular-nums' }}
                             >
                               {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(
                                 row.basePrice ?? row.price
@@ -420,7 +420,7 @@ export default function ProductList() {
                             </Typography>
                           </Box>
                         ) : (
-                          <Typography variant='body2' sx={{ fontWeight: 600 }}>
+                          <Typography variant='body2' sx={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
                             {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(
                               row.basePrice ?? row.price
                             )}
@@ -435,8 +435,9 @@ export default function ProductList() {
                               variant='tonal'
                               color={stockColors[row.stock.state]}
                               label={stockStates[row.stock.state]}
+                              sx={{ height: 24, fontSize: '0.75rem', fontWeight: 600 }}
                             />
-                            <Typography variant='caption' color='text.secondary' sx={{ display: 'block', mt: 0.5 }}>
+                            <Typography variant='caption' color='text.secondary' sx={{ display: 'block', mt: 0.5, fontSize: '0.75rem', fontVariantNumeric: 'tabular-nums' }}>
                               {row.stock.totalAvailable} có thể bán
                               {row.stock.activeVariantCount ? ` · ${row.stock.activeVariantCount} mẫu` : ''}
                             </Typography>
@@ -451,6 +452,7 @@ export default function ProductList() {
                           variant='tonal'
                           color={row.status === 'PUBLISHED' ? 'success' : 'secondary'}
                           label={statuses[row.status as keyof typeof statuses] || row.status}
+                          sx={{ height: 24, fontSize: '0.75rem', fontWeight: 600 }}
                         />
                       </TableCell>
                       <TableCell align='right' sx={{ whiteSpace: 'nowrap' }}>

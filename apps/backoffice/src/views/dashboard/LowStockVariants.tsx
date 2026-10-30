@@ -105,7 +105,7 @@ const LowStockVariants = () => {
                     >
                       {item.productName}
                     </Typography>
-                    <Typography variant='caption' sx={{ color: 'text.secondary', display: 'block' }}>
+                    <Typography variant='caption' sx={{ color: 'text.secondary', display: 'block', fontSize: '0.75rem', fontVariantNumeric: 'tabular-nums' }}>
                       SKU: <b>{item.sku}</b> · Tồn: <b style={{ color: isOutOfStock ? 'var(--mui-palette-error-main)' : undefined }}>{item.availableQuantity}</b> / Ngưỡng: {item.minThreshold}
                     </Typography>
                   </Box>
@@ -116,7 +116,7 @@ const LowStockVariants = () => {
                       size='small'
                       color={statusColor}
                       variant='tonal'
-                      sx={{ fontWeight: 600, height: 22, fontSize: '0.6875rem' }}
+                      sx={{ fontWeight: 600, height: 24, fontSize: '0.75rem' }}
                     />
                     <Tooltip title='Nhập kho biến thể này' arrow>
                       <IconButton

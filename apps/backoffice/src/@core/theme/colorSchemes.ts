@@ -8,9 +8,10 @@ const colorSchemes = (): Theme['colorSchemes'] => {
     light: {
       palette: {
         primary: {
-          main: '#8C57FF',
-          light: '#A379FF',
-          dark: '#7E4EE6',
+          main: '#0F172A',
+          light: '#334155',
+          dark: '#020617',
+          contrastText: '#FFFFFF',
           lighterOpacity: 'rgb(var(--mui-palette-primary-mainChannel) / 0.08)',
           lightOpacity: 'rgb(var(--mui-palette-primary-mainChannel) / 0.16)',
           mainOpacity: 'rgb(var(--mui-palette-primary-mainChannel) / 0.24)',
@@ -18,9 +19,9 @@ const colorSchemes = (): Theme['colorSchemes'] => {
           darkerOpacity: 'rgb(var(--mui-palette-primary-mainChannel) / 0.38)'
         },
         secondary: {
-          main: '#8A8D93',
-          light: '#A1A4A9',
-          dark: '#7C7F84',
+          main: '#64748B',
+          light: '#94A3B8',
+          dark: '#475569',
           contrastText: '#fff',
           lighterOpacity: 'rgb(var(--mui-palette-secondary-mainChannel) / 0.08)',
           lightOpacity: 'rgb(var(--mui-palette-secondary-mainChannel) / 0.16)',
@@ -29,9 +30,9 @@ const colorSchemes = (): Theme['colorSchemes'] => {
           darkerOpacity: 'rgb(var(--mui-palette-secondary-mainChannel) / 0.38)'
         },
         error: {
-          main: '#FF4C51',
-          light: '#FF7074',
-          dark: '#E64449',
+          main: '#DC2626',
+          light: '#EF4444',
+          dark: '#B91C1C',
           contrastText: '#fff',
           lighterOpacity: 'rgb(var(--mui-palette-error-mainChannel) / 0.08)',
           lightOpacity: 'rgb(var(--mui-palette-error-mainChannel) / 0.16)',
@@ -40,9 +41,9 @@ const colorSchemes = (): Theme['colorSchemes'] => {
           darkerOpacity: 'rgb(var(--mui-palette-error-mainChannel) / 0.38)'
         },
         warning: {
-          main: '#FFB400',
-          light: '#FFC333',
-          dark: '#E6A200',
+          main: '#D97706',
+          light: '#F59E0B',
+          dark: '#B45309',
           contrastText: '#fff',
           lighterOpacity: 'rgb(var(--mui-palette-warning-mainChannel) / 0.08)',
           lightOpacity: 'rgb(var(--mui-palette-warning-mainChannel) / 0.16)',
@@ -51,9 +52,9 @@ const colorSchemes = (): Theme['colorSchemes'] => {
           darkerOpacity: 'rgb(var(--mui-palette-warning-mainChannel) / 0.38)'
         },
         info: {
-          main: '#16B1FF',
-          light: '#45C1FF',
-          dark: '#149FE6',
+          main: '#0284C7',
+          light: '#38BDF8',
+          dark: '#0369A1',
           contrastText: '#fff',
           lighterOpacity: 'rgb(var(--mui-palette-info-mainChannel) / 0.08)',
           lightOpacity: 'rgb(var(--mui-palette-info-mainChannel) / 0.16)',
@@ -62,9 +63,9 @@ const colorSchemes = (): Theme['colorSchemes'] => {
           darkerOpacity: 'rgb(var(--mui-palette-info-mainChannel) / 0.38)'
         },
         success: {
-          main: '#56CA00',
-          light: '#78D533',
-          dark: '#4DB600',
+          main: '#16A34A',
+          light: '#22C55E',
+          dark: '#15803D',
           contrastText: '#fff',
           lighterOpacity: 'rgb(var(--mui-palette-success-mainChannel) / 0.08)',
           lightOpacity: 'rgb(var(--mui-palette-success-mainChannel) / 0.16)',
@@ -73,16 +74,16 @@ const colorSchemes = (): Theme['colorSchemes'] => {
           darkerOpacity: 'rgb(var(--mui-palette-success-mainChannel) / 0.38)'
         },
         text: {
-          primary: `rgb(var(--mui-mainColorChannels-light) / 0.9)`,
-          secondary: `rgb(var(--mui-mainColorChannels-light) / 0.7)`,
-          disabled: `rgb(var(--mui-mainColorChannels-light) / 0.4)`,
+          primary: `rgb(var(--mui-mainColorChannels-light) / 0.95)`,
+          secondary: `rgb(var(--mui-mainColorChannels-light) / 0.75)`,
+          disabled: `rgb(var(--mui-mainColorChannels-light) / 0.50)`,
           primaryChannel: 'var(--mui-mainColorChannels-light)',
           secondaryChannel: 'var(--mui-mainColorChannels-light)'
         },
-        divider: `rgb(var(--mui-mainColorChannels-light) / 0.12)`,
+        divider: `rgb(var(--mui-mainColorChannels-light) / 0.14)`,
         dividerChannel: 'var(--mui-mainColorChannels-light)',
         background: {
-          default: skin === 'bordered' ? '#FFFFFF' : '#F4F5FA',
+          default: '#F8FAFC',
           paper: '#FFFFFF'
         },
         action: {
@@ -154,22 +155,23 @@ const colorSchemes = (): Theme['colorSchemes'] => {
           border: 'var(--mui-palette-divider)'
         },
         customColors: {
-          bodyBg: '#F4F5FA',
-          chatBg: '#F7F6FA',
-          greyLightBg: '#FAFAFA',
-          inputBorder: `rgb(var(--mui-mainColorChannels-light) / 0.22)`,
-          tableHeaderBg: '#F6F7FB',
+          bodyBg: '#F8FAFC',
+          chatBg: '#F1F5F9',
+          greyLightBg: '#F8FAFC',
+          inputBorder: '#CBD5E1',
+          tableHeaderBg: '#F8FAFC',
           tooltipText: '#FFFFFF',
-          trackBg: '#F0F2F8'
+          trackBg: '#E2E8F0'
         }
       }
     },
     dark: {
       palette: {
         primary: {
-          main: '#8C57FF',
-          light: '#A379FF',
-          dark: '#7E4EE6',
+          main: '#3B82F6',
+          light: '#60A5FA',
+          dark: '#2563EB',
+          contrastText: '#FFFFFF',
           lighterOpacity: 'rgb(var(--mui-palette-primary-mainChannel) / 0.08)',
           lightOpacity: 'rgb(var(--mui-palette-primary-mainChannel) / 0.16)',
           mainOpacity: 'rgb(var(--mui-palette-primary-mainChannel) / 0.24)',
@@ -177,9 +179,9 @@ const colorSchemes = (): Theme['colorSchemes'] => {
           darkerOpacity: 'rgb(var(--mui-palette-primary-mainChannel) / 0.38)'
         },
         secondary: {
-          main: '#8A8D93',
-          light: '#A1A4A9',
-          dark: '#7C7F84',
+          main: '#94A3B8',
+          light: '#CBD5E1',
+          dark: '#64748B',
           contrastText: '#fff',
           lighterOpacity: 'rgb(var(--mui-palette-secondary-mainChannel) / 0.08)',
           lightOpacity: 'rgb(var(--mui-palette-secondary-mainChannel) / 0.16)',
@@ -188,9 +190,9 @@ const colorSchemes = (): Theme['colorSchemes'] => {
           darkerOpacity: 'rgb(var(--mui-palette-secondary-mainChannel) / 0.38)'
         },
         error: {
-          main: '#FF4C51',
-          light: '#FF7074',
-          dark: '#E64449',
+          main: '#EF4444',
+          light: '#F87171',
+          dark: '#DC2626',
           contrastText: '#fff',
           lighterOpacity: 'rgb(var(--mui-palette-error-mainChannel) / 0.08)',
           lightOpacity: 'rgb(var(--mui-palette-error-mainChannel) / 0.16)',
@@ -199,9 +201,9 @@ const colorSchemes = (): Theme['colorSchemes'] => {
           darkerOpacity: 'rgb(var(--mui-palette-error-mainChannel) / 0.38)'
         },
         warning: {
-          main: '#FFB400',
-          light: '#FFC333',
-          dark: '#E6A200',
+          main: '#F59E0B',
+          light: '#FBBF24',
+          dark: '#D97706',
           contrastText: '#fff',
           lighterOpacity: 'rgb(var(--mui-palette-warning-mainChannel) / 0.08)',
           lightOpacity: 'rgb(var(--mui-palette-warning-mainChannel) / 0.16)',
@@ -210,9 +212,9 @@ const colorSchemes = (): Theme['colorSchemes'] => {
           darkerOpacity: 'rgb(var(--mui-palette-warning-mainChannel) / 0.38)'
         },
         info: {
-          main: '#16B1FF',
-          light: '#45C1FF',
-          dark: '#149FE6',
+          main: '#38BDF8',
+          light: '#7DD3FC',
+          dark: '#0284C7',
           contrastText: '#fff',
           lighterOpacity: 'rgb(var(--mui-palette-info-mainChannel) / 0.08)',
           lightOpacity: 'rgb(var(--mui-palette-info-mainChannel) / 0.16)',
@@ -221,9 +223,9 @@ const colorSchemes = (): Theme['colorSchemes'] => {
           darkerOpacity: 'rgb(var(--mui-palette-info-mainChannel) / 0.38)'
         },
         success: {
-          main: '#56CA00',
-          light: '#78D533',
-          dark: '#4DB600',
+          main: '#22C55E',
+          light: '#4ADE80',
+          dark: '#16A34A',
           contrastText: '#fff',
           lighterOpacity: 'rgb(var(--mui-palette-success-mainChannel) / 0.08)',
           lightOpacity: 'rgb(var(--mui-palette-success-mainChannel) / 0.16)',
@@ -232,17 +234,17 @@ const colorSchemes = (): Theme['colorSchemes'] => {
           darkerOpacity: 'rgb(var(--mui-palette-success-mainChannel) / 0.38)'
         },
         text: {
-          primary: `rgb(var(--mui-mainColorChannels-dark) / 0.9)`,
-          secondary: `rgb(var(--mui-mainColorChannels-dark) / 0.7)`,
-          disabled: `rgb(var(--mui-mainColorChannels-dark) / 0.4)`,
+          primary: `rgb(var(--mui-mainColorChannels-dark) / 0.95)`,
+          secondary: `rgb(var(--mui-mainColorChannels-dark) / 0.75)`,
+          disabled: `rgb(var(--mui-mainColorChannels-dark) / 0.50)`,
           primaryChannel: 'var(--mui-mainColorChannels-dark)',
           secondaryChannel: 'var(--mui-mainColorChannels-dark)'
         },
-        divider: `rgb(var(--mui-mainColorChannels-dark) / 0.12)`,
+        divider: `rgb(var(--mui-mainColorChannels-dark) / 0.16)`,
         dividerChannel: 'var(--mui-mainColorChannels-dark)',
         background: {
-          default: skin === 'bordered' ? '#312D4B' : '#28243D',
-          paper: '#312D4B'
+          default: '#0F172A',
+          paper: '#1E293B'
         },
         action: {
           active: `rgb(var(--mui-mainColorChannels-dark) / 0.6)`,

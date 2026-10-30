@@ -48,7 +48,7 @@ const getTimeRangeLabel = (range: DashboardTimeRange) => {
 
 const SalesAndOrdersMixedChart = ({ timeRange = '7days', revenueByDay = [], isLoading }: SalesAndOrdersMixedChartProps) => {
   const divider = 'var(--mui-palette-divider)'
-  const disabled = 'var(--mui-palette-text-disabled)'
+  const labelColor = 'var(--mui-palette-text-secondary)'
 
   const hasData = revenueByDay.length > 0
 
@@ -103,7 +103,7 @@ const SalesAndOrdersMixedChart = ({ timeRange = '7days', revenueByDay = [], isLo
       labels: { colors: 'var(--mui-palette-text-secondary)' },
       markers: { radius: 12 }
     },
-    colors: ['var(--mui-palette-primary-main, #8C57FF)', 'var(--mui-palette-warning-main, #FFB400)'],
+    colors: ['var(--mui-palette-primary-main, #0F172A)', 'var(--mui-palette-info-main, #0284C7)'],
     dataLabels: {
       enabled: false
     },
@@ -113,7 +113,7 @@ const SalesAndOrdersMixedChart = ({ timeRange = '7days', revenueByDay = [], isLo
       axisTicks: { show: false },
       labels: {
         style: {
-          colors: disabled,
+          colors: labelColor,
           fontSize: '12px'
         }
       }
@@ -121,14 +121,14 @@ const SalesAndOrdersMixedChart = ({ timeRange = '7days', revenueByDay = [], isLo
     yaxis: [
       {
         labels: {
-          style: { colors: disabled, fontSize: '11px' },
+          style: { colors: labelColor, fontSize: '12px' },
           formatter: val => `${val} tr`
         }
       },
       {
         opposite: true,
         labels: {
-          style: { colors: disabled, fontSize: '11px' },
+          style: { colors: labelColor, fontSize: '12px' },
           formatter: val => `${val}`
         }
       }

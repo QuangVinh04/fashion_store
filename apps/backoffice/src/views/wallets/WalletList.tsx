@@ -136,7 +136,7 @@ export default function WalletList() {
                       </Typography>
                     </TableCell>
                     <TableCell align='right'>
-                      <Typography variant='body2' sx={{ fontWeight: 600 }}>
+                      <Typography variant='body2' sx={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
                         {financialMoney(row.balance, row.currency)}
                       </Typography>
                     </TableCell>

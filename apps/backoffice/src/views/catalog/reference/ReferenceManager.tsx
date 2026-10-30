@@ -341,16 +341,18 @@ export default function ReferenceManager({ resource }: { resource: ReferenceReso
                         label={row.active ? 'Đang dùng' : 'Ngừng dùng'}
                         color={row.active ? 'success' : 'secondary'}
                         variant='tonal'
+                        sx={{ height: 24, fontSize: '0.75rem', fontWeight: 500 }}
                       />
                     </TableCell>
                     <TableCell align='right'>
                       <Tooltip title='Chỉnh sửa'>
-                        <IconButton aria-label={'Sửa ' + row.name} onClick={() => open(row)}>
+                        <IconButton size='small' aria-label={'Sửa ' + row.name} onClick={() => open(row)}>
                           <i className='ri-pencil-line' />
                         </IconButton>
                       </Tooltip>
                       <Tooltip title='Xóa'>
                         <IconButton
+                          size='small'
                           aria-label={'Xóa ' + row.name}
                           disabled={pending}
                           onClick={() => {

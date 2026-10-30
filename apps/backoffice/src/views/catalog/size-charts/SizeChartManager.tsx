@@ -221,6 +221,7 @@ export default function SizeChartManager() {
                         variant='tonal'
                         label={row.active ? 'Đang dùng' : 'Ngừng dùng'}
                         color={row.active ? 'success' : 'secondary'}
+                        sx={{ height: 24, fontSize: '0.75rem', fontWeight: 500 }}
                       />
                     </TableCell>
                     <TableCell align='right' sx={{ whiteSpace: 'nowrap' }}>

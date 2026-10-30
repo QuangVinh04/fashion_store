@@ -273,15 +273,16 @@ export default function ReturnList() {
                                 ? 'Hoàn ví cần xử lý'
                                 : returnStatusLabels[row.status] || row.status
                           }
+                          sx={{ height: 24, fontSize: '0.75rem', fontWeight: 600 }}
                         />
                       </TableCell>
                       <TableCell>
                         {row.sendBackBy && !row.receivedAt && !row.closedAt ? (
                           <>
-                            <Typography variant='body2'>
+                            <Typography variant='body2' sx={{ fontVariantNumeric: 'tabular-nums' }}>
                               {new Date(row.sendBackBy).toLocaleDateString('vi-VN')}
                             </Typography>
-                            <Typography variant='caption' color='text.secondary' sx={{ display: 'block' }}>
+                            <Typography variant='caption' color='text.secondary' sx={{ display: 'block', fontSize: '0.75rem', fontVariantNumeric: 'tabular-nums' }}>
                               {new Date(row.sendBackBy).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
                             </Typography>
                           </>

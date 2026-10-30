@@ -124,7 +124,7 @@ const RecentOrdersTable = () => {
               <TableCell sx={{ fontWeight: 600, py: 2 }}>Khách</TableCell>
               <TableCell sx={{ fontWeight: 600, py: 2 }}>Thời gian</TableCell>
               <TableCell sx={{ fontWeight: 600, py: 2 }}>Phương thức</TableCell>
-              <TableCell sx={{ fontWeight: 600, py: 2 }}>Tổng tiền</TableCell>
+              <TableCell align='right' sx={{ fontWeight: 600, py: 2 }}>Tổng tiền</TableCell>
               <TableCell align='right' sx={{ fontWeight: 600, py: 2 }}>
                 Trạng thái
               </TableCell>
@@ -194,8 +194,8 @@ const RecentOrdersTable = () => {
                         </Typography>
                       )}
                     </TableCell>
-                    <TableCell sx={{ py: 2 }}>
-                      <Typography variant='body2' sx={{ fontWeight: 600, color: 'text.primary', fontSize: '0.8125rem' }}>
+                    <TableCell align='right' sx={{ py: 2 }}>
+                      <Typography variant='body2' sx={{ fontWeight: 600, color: 'text.primary', fontSize: '0.8125rem', fontVariantNumeric: 'tabular-nums' }}>
                         {formatVnd(order.totalAmount)}
                       </Typography>
                     </TableCell>
@@ -205,7 +205,7 @@ const RecentOrdersTable = () => {
                         color={statusInfo.color}
                         size='small'
                         variant='tonal'
-                        sx={{ fontWeight: 500, height: 22, fontSize: '0.6875rem' }}
+                        sx={{ fontWeight: 600, height: 24, fontSize: '0.75rem' }}
                       />
                     </TableCell>
                   </TableRow>

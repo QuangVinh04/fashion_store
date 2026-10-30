@@ -30,7 +30,7 @@ import {
 
 import PageHeader from '@/components/backoffice/PageHeader'
 import ConfirmActionDialog from '@/components/backoffice/ConfirmActionDialog'
-import CustomAvatar from '@core/components/mui/Avatar'
+import Avatar from '@mui/material/Avatar'
 import useListQueryState from '@/hooks/useListQueryState'
 import { useCustomersQuery, useUpdateCustomerStatusMutation } from '@/hooks/useCustomers'
 import type { AdminUser } from '@/types/customer'
@@ -113,60 +113,45 @@ export default function CustomerList() {
         }
       />
 
-      {/* 1. Thẻ tóm tắt thông tin */}
+      {/* 1. Thẻ tóm tắt thông tin (Data-first, phẳng, không icon tròn màu mè) */}
       <Grid container spacing={4} sx={{ mb: 4 }}>
         <Grid item xs={12} sm={4}>
-          <Card>
-            <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 3, p: 3 }}>
-              <CustomAvatar skin='light' color='primary' size={44}>
-                <i className='ri-user-shared-line text-xl' />
-              </CustomAvatar>
-              <Box>
-                <Typography variant='caption' color='text.secondary'>
-                  Tổng người dùng
-                </Typography>
-                <Typography variant='h5' sx={{ fontWeight: 700 }}>
-                  {query.isLoading ? <Skeleton width={60} /> : totalElements}
-                </Typography>
-              </Box>
+          <Card variant='outlined' sx={{ borderRadius: 1.5 }}>
+            <CardContent sx={{ p: 3, '&:last-child': { pb: 3 } }}>
+              <Typography variant='caption' color='text.secondary' sx={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                Tổng khách hàng
+              </Typography>
+              <Typography variant='h4' component='div' sx={{ fontWeight: 700, mt: 0.5, fontVariantNumeric: 'tabular-nums' }}>
+                {query.isLoading ? <Skeleton width={60} /> : totalElements}
+              </Typography>
             </CardContent>
           </Card>
         </Grid>
         <Grid item xs={12} sm={4}>
-          <Card>
-            <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 3, p: 3 }}>
-              <CustomAvatar skin='light' color='success' size={44}>
-                <i className='ri-user-follow-line text-xl' />
-              </CustomAvatar>
-              <Box>
-                <Typography variant='caption' color='text.secondary'>
-                  Bộ lọc trạng thái
-                </Typography>
-                <Typography variant='body2' sx={{ fontWeight: 600 }}>
-                  {filters.isActive === 'false'
-                    ? 'Đang lọc: Đã khoá'
-                    : filters.isActive === 'true'
-                      ? 'Đang lọc: Hoạt động'
-                      : 'Hiển thị: Tất cả'}
-                </Typography>
-              </Box>
+          <Card variant='outlined' sx={{ borderRadius: 1.5 }}>
+            <CardContent sx={{ p: 3, '&:last-child': { pb: 3 } }}>
+              <Typography variant='caption' color='text.secondary' sx={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                Bộ lọc trạng thái
+              </Typography>
+              <Typography variant='body1' component='div' sx={{ fontWeight: 600, mt: 1 }}>
+                {filters.isActive === 'false'
+                  ? 'Đang lọc: Đã khoá'
+                  : filters.isActive === 'true'
+                    ? 'Đang lọc: Hoạt động'
+                    : 'Hiển thị: Tất cả'}
+              </Typography>
             </CardContent>
           </Card>
         </Grid>
         <Grid item xs={12} sm={4}>
-          <Card>
-            <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 3, p: 3 }}>
-              <CustomAvatar skin='light' color='info' size={44}>
-                <i className='ri-shield-user-line text-xl' />
-              </CustomAvatar>
-              <Box>
-                <Typography variant='caption' color='text.secondary'>
-                  Hệ thống xác thực
-                </Typography>
-                <Typography variant='body2' sx={{ fontWeight: 600 }}>
-                  Keycloak SSO & Identity
-                </Typography>
-              </Box>
+          <Card variant='outlined' sx={{ borderRadius: 1.5 }}>
+            <CardContent sx={{ p: 3, '&:last-child': { pb: 3 } }}>
+              <Typography variant='caption' color='text.secondary' sx={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                Hệ thống xác thực
+              </Typography>
+              <Typography variant='body1' component='div' sx={{ fontWeight: 600, mt: 1 }}>
+                Keycloak SSO & Identity
+              </Typography>
             </CardContent>
           </Card>
         </Grid>
@@ -278,9 +263,18 @@ export default function CustomerList() {
                   <TableRow key={customer.id} hover>
                     <TableCell>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                        <CustomAvatar skin='light' color='primary' size={36}>
+                        <Avatar
+                          sx={{
+                            width: 36,
+                            height: 36,
+                            bgcolor: 'action.hover',
+                            color: 'text.primary',
+                            fontWeight: 600,
+                            fontSize: '0.875rem'
+                          }}
+                        >
                           {customer.fullName ? customer.fullName.charAt(0).toUpperCase() : customer.email.charAt(0).toUpperCase()}
-                        </CustomAvatar>
+                        </Avatar>
                         <Box>
                           <Typography
                             variant='body2'

@@ -271,6 +271,7 @@ export default function AttributeManager() {
                           label={row.published ? 'Hiển thị' : 'Ẩn'}
                           color={row.published ? 'success' : 'default'}
                           variant='tonal'
+                          sx={{ height: 24, fontSize: '0.75rem', fontWeight: 500 }}
                         />
                       </TableCell>
 
@@ -696,6 +697,7 @@ function AttributeValuesView({
               label={attribute.published ? 'Hiển thị' : 'Ẩn'}
               color={attribute.published ? 'success' : 'default'}
               variant='tonal'
+              sx={{ height: 24, fontSize: '0.75rem', fontWeight: 500 }}
             />
             <Tooltip title='Sửa thông tin thuộc tính'>
               <IconButton size='small' onClick={onEditAttribute} aria-label='Sửa thông tin thuộc tính'>
@@ -793,6 +795,7 @@ function AttributeValuesView({
                         label={row.published ? 'Hiển thị' : 'Ẩn'}
                         color={row.published ? 'success' : 'default'}
                         variant='tonal'
+                        sx={{ height: 24, fontSize: '0.75rem', fontWeight: 500 }}
                       />
                     </TableCell>
                     <TableCell align='right'>

@@ -8,22 +8,20 @@ const card = (skin: Skin): Theme['components'] => {
   return {
     MuiCard: {
       defaultProps: {
-        ...(skin === 'bordered' && {
-          variant: 'outlined'
-        })
+        variant: 'outlined'
       },
       styleOverrides: {
-        root: ({ ownerState }) => ({
-          ...(ownerState.variant !== 'outlined' && {
-            boxShadow: 'var(--mui-customShadows-md)'
-          })
+        root: () => ({
+          border: '1px solid var(--mui-palette-divider)',
+          boxShadow: 'none',
+          backgroundImage: 'none'
         })
       }
     },
     MuiCardHeader: {
       styleOverrides: {
         root: ({ theme }) => ({
-          padding: theme.spacing(5),
+          padding: theme.spacing(4, 5),
           '& + .MuiCardContent-root, & + .MuiCardActions-root': {
             paddingBlockStart: 0
           },
@@ -32,9 +30,14 @@ const card = (skin: Skin): Theme['components'] => {
               paddingBlockStart: 0
             }
         }),
+        title: () => ({
+          fontSize: '1rem',
+          fontWeight: 600,
+          color: 'var(--mui-palette-text-primary)'
+        }),
         subheader: ({ theme }) => ({
-          ...theme.typography.subtitle1,
-          color: 'rgb(var(--mui-palette-text-primaryChannel) / 0.55)'
+          ...theme.typography.body2,
+          color: 'var(--mui-palette-text-secondary)'
         }),
         action: ({ theme }) => ({
           ...theme.typography.body1,

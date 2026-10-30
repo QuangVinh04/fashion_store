@@ -44,7 +44,7 @@ export default function ListResult<T>({
       >
         {children}
       </QueryState>
-      <Box sx={{ overflowX: 'auto' }}>
+      <Box sx={{ overflowX: 'auto', borderTop: '1px solid var(--mui-palette-divider)' }}>
         <TablePagination
           component='div'
           count={query.data?.totalElements || 0}
@@ -53,10 +53,17 @@ export default function ListResult<T>({
           rowsPerPageOptions={[10, 20, 50]}
           onPageChange={(_, value) => setPage(value)}
           onRowsPerPageChange={event => setSize(Number(event.target.value))}
-          labelRowsPerPage='Số dòng'
+          labelRowsPerPage='Số dòng:'
           labelDisplayedRows={({ from, to, count }) => `${from}–${to} / ${count}`}
           backIconButtonProps={{ disabled: query.isFetching || page === 0 }}
           nextIconButtonProps={{ disabled: query.isFetching || !query.data || page + 1 >= query.data.totalPage }}
+          sx={{
+            '.MuiTablePagination-selectLabel, .MuiTablePagination-displayedRows': {
+              fontSize: '0.8125rem',
+              color: 'text.secondary',
+              fontVariantNumeric: 'tabular-nums'
+            }
+          }}
         />
       </Box>
     </>

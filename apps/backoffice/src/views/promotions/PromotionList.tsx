@@ -183,25 +183,25 @@ export default function PromotionList() {
                         <Typography variant='body2' sx={{ fontWeight: 600, color: 'text.primary', letterSpacing: '0.5px' }}>
                           {row.code}
                         </Typography>
-                        <Typography variant='caption' color='text.secondary' sx={{ display: 'block' }}>
+                        <Typography variant='caption' color='text.secondary' sx={{ display: 'block', fontVariantNumeric: 'tabular-nums' }}>
                           {row.totalQuota ? `Giới hạn: ${row.totalQuota} lượt` : 'Không giới hạn lượt'}
                         </Typography>
                       </TableCell>
                       <TableCell>
-                        <Typography variant='body2' sx={{ fontWeight: 600, color: 'primary.main' }}>
+                        <Typography variant='body2' sx={{ fontWeight: 600, color: 'primary.main', fontVariantNumeric: 'tabular-nums' }}>
                           {formatPromotionValue(row)}
                         </Typography>
                       </TableCell>
                       <TableCell align='right' sx={{ whiteSpace: 'nowrap' }}>
-                        <Typography variant='body2' sx={{ fontWeight: 600 }}>
+                        <Typography variant='body2' sx={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
                           {row.minOrderValue ? formatOrderMoney(row.minOrderValue, 'VND') : '—'}
                         </Typography>
                       </TableCell>
                       <TableCell>
-                        <Typography variant='body2'>
+                        <Typography variant='body2' sx={{ fontVariantNumeric: 'tabular-nums' }}>
                           {formatDateTime(row.startAt)}
                         </Typography>
-                        <Typography variant='caption' color='text.secondary' sx={{ display: 'block' }}>
+                        <Typography variant='caption' color='text.secondary' sx={{ display: 'block', fontVariantNumeric: 'tabular-nums' }}>
                           đến {formatDateTime(row.endAt)}
                         </Typography>
                       </TableCell>
@@ -211,10 +211,11 @@ export default function PromotionList() {
                           variant='tonal'
                           color='secondary'
                           label={promotionScopeLabels[row.scopeType] || row.scopeType}
+                          sx={{ height: 24, fontSize: '0.75rem', fontWeight: 500 }}
                         />
                       </TableCell>
                       <TableCell>
-                        <Chip label={status} color={chipColor} size='small' variant='tonal' />
+                        <Chip label={status} color={chipColor} size='small' variant='tonal' sx={{ height: 24, fontSize: '0.75rem', fontWeight: 500 }} />
                       </TableCell>
                       <TableCell align='right' sx={{ whiteSpace: 'nowrap' }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 0.5 }}>

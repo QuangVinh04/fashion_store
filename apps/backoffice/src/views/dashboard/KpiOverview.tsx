@@ -9,20 +9,18 @@ import Box from '@mui/material/Box'
 import Skeleton from '@mui/material/Skeleton'
 
 // Component Imports
-import CustomAvatar from '@core/components/mui/Avatar'
 import type { DashboardTimeRange } from './types'
 import type { AdminDashboardData } from '@/types/dashboard'
 
 type KpiCardItem = {
   title: string
   stats: string
-  trend: 'positive' | 'negative'
+  trend: 'positive' | 'negative' | 'neutral'
   trendNumber: string
   subtitle?: string
   extraIcon?: string
   extraLabel?: string
-  avatarIcon: string
-  avatarColor: 'primary' | 'secondary' | 'error' | 'warning' | 'info' | 'success'
+  accentIcon: string
 }
 
 type KpiOverviewProps = {
@@ -49,20 +47,18 @@ const getKpiCards = (dashboardData?: AdminDashboardData): KpiCardItem[] => {
       {
         title: 'Tổng doanh thu',
         stats: '0 ₫',
-        trend: 'positive',
+        trend: 'neutral',
         trendNumber: '0 đơn chốt',
-        avatarIcon: 'ri-money-dollar-circle-line',
-        avatarColor: 'primary'
+        accentIcon: 'ri-money-dollar-circle-line'
       },
       {
         title: 'Tổng đơn hàng',
         stats: '0 đơn',
-        trend: 'positive',
+        trend: 'neutral',
         trendNumber: 'Đã hoàn tất',
         extraIcon: 'ri-price-tag-3-line',
         extraLabel: 'AOV: 0 ₫',
-        avatarIcon: 'ri-shopping-cart-2-line',
-        avatarColor: 'warning'
+        accentIcon: 'ri-shopping-bag-3-line'
       },
       {
         title: 'Đổi trả hàng',
@@ -70,17 +66,15 @@ const getKpiCards = (dashboardData?: AdminDashboardData): KpiCardItem[] => {
         trend: 'positive',
         trendNumber: '0 khiếu nại',
         subtitle: 'Kho an toàn',
-        avatarIcon: 'ri-arrow-go-back-line',
-        avatarColor: 'info'
+        accentIcon: 'ri-arrow-go-back-line'
       },
       {
         title: 'Tồn kho cảnh báo',
         stats: '0 biến thể',
         trend: 'positive',
-        trendNumber: 'Kho an toàn',
-        subtitle: 'Mức tồn ổn định',
-        avatarIcon: 'ri-alarm-warning-line',
-        avatarColor: 'success'
+        trendNumber: 'Mức tồn an toàn',
+        subtitle: 'Không thiếu hàng',
+        accentIcon: 'ri-alarm-warning-line'
       }
     ]
   }
@@ -97,8 +91,7 @@ const getKpiCards = (dashboardData?: AdminDashboardData): KpiCardItem[] => {
       stats: formatVndShort(revenue),
       trend: 'positive',
       trendNumber: `${orders} đơn chốt`,
-      avatarIcon: 'ri-money-dollar-circle-line',
-      avatarColor: 'primary'
+      accentIcon: 'ri-money-dollar-circle-line'
     },
     {
       title: 'Tổng đơn hàng',
@@ -107,8 +100,7 @@ const getKpiCards = (dashboardData?: AdminDashboardData): KpiCardItem[] => {
       trendNumber: 'Thành công',
       extraIcon: 'ri-price-tag-3-line',
       extraLabel: `AOV: ${formatVndShort(aov)}`,
-      avatarIcon: 'ri-shopping-cart-2-line',
-      avatarColor: 'warning'
+      accentIcon: 'ri-shopping-bag-3-line'
     },
     {
       title: 'Đổi trả hàng',
@@ -116,8 +108,7 @@ const getKpiCards = (dashboardData?: AdminDashboardData): KpiCardItem[] => {
       trend: returnedCount > 0 ? 'negative' : 'positive',
       trendNumber: returnedCount > 0 ? 'Đã hoàn hàng' : '0 khiếu nại',
       subtitle: returnedCount > 0 ? 'Cần nhập lại kho' : 'Không có khiếu nại',
-      avatarIcon: 'ri-arrow-go-back-line',
-      avatarColor: 'info'
+      accentIcon: 'ri-arrow-go-back-line'
     },
     {
       title: 'Tồn kho cảnh báo',
@@ -125,8 +116,7 @@ const getKpiCards = (dashboardData?: AdminDashboardData): KpiCardItem[] => {
       trend: lowStock > 0 ? 'negative' : 'positive',
       trendNumber: lowStock > 0 ? 'Dưới ngưỡng' : 'Đầy đủ',
       subtitle: lowStock > 0 ? 'Cần nhập hàng ngay' : 'Kho an toàn',
-      avatarIcon: 'ri-alarm-warning-line',
-      avatarColor: lowStock > 0 ? 'error' : 'success'
+      accentIcon: 'ri-alarm-warning-line'
     }
   ]
 }
@@ -135,40 +125,61 @@ const KpiOverview = ({ dashboardData, isLoading }: KpiOverviewProps) => {
   const cards = getKpiCards(dashboardData)
 
   return (
-    <Grid container spacing={5}>
+    <Grid container spacing={4}>
       {cards.map((item, index) => (
         <Grid item xs={12} sm={6} md={3} key={index}>
-          <Card className='bs-full'>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
-                <Typography variant='body2' sx={{ color: 'text.secondary', fontWeight: 600 }}>
+          <Card
+            sx={{
+              height: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'space-between',
+              transition: 'border-color 0.15s ease-in-out',
+              '&:hover': {
+                borderColor: 'var(--mui-palette-action-active)'
+              }
+            }}
+          >
+            <CardContent sx={{ p: 4, '&:last-child': { pb: 4 } }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                <Typography variant='body2' sx={{ color: 'text.secondary', fontWeight: 600, fontSize: '0.8125rem' }}>
                   {item.title}
                 </Typography>
-                <CustomAvatar color={item.avatarColor} skin='light' size={40}>
-                  <i className={`${item.avatarIcon} text-xl`} />
-                </CustomAvatar>
+                <i className={`${item.accentIcon} text-lg`} style={{ color: 'var(--mui-palette-text-secondary)' }} />
               </Box>
 
-              <Typography variant='h5' sx={{ fontWeight: 700, mb: 1 }}>
-                {isLoading ? <Skeleton width={100} height={32} /> : item.stats}
+              <Typography
+                variant='h4'
+                sx={{
+                  fontWeight: 700,
+                  fontSize: '1.625rem',
+                  fontVariantNumeric: 'tabular-nums',
+                  color: 'text.primary',
+                  letterSpacing: '-0.02em',
+                  mb: 1.5
+                }}
+              >
+                {isLoading ? <Skeleton width={110} height={36} /> : item.stats}
               </Typography>
 
               <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
                 <Typography
                   variant='caption'
                   sx={{
-                    color: item.trend === 'positive' ? 'success.main' : 'error.main',
+                    color: item.trend === 'positive' ? 'success.main' : item.trend === 'negative' ? 'error.main' : 'text.secondary',
                     fontWeight: 600,
+                    fontSize: '0.75rem',
                     display: 'flex',
                     alignItems: 'center',
                     gap: 0.5
                   }}
                 >
-                  <i className={item.trend === 'positive' ? 'ri-arrow-up-line' : 'ri-arrow-down-line'} />
+                  {item.trend === 'positive' && <i className='ri-arrow-up-line text-sm' />}
+                  {item.trend === 'negative' && <i className='ri-arrow-down-line text-sm' />}
                   {item.trendNumber}
                 </Typography>
                 {item.subtitle && (
-                  <Typography variant='caption' sx={{ color: 'text.disabled' }}>
+                  <Typography variant='caption' sx={{ color: 'text.secondary', fontSize: '0.75rem' }}>
                     · {item.subtitle}
                   </Typography>
                 )}
@@ -179,18 +190,20 @@ const KpiOverview = ({ dashboardData, isLoading }: KpiOverviewProps) => {
                   sx={{
                     display: 'inline-flex',
                     alignItems: 'center',
-                    gap: 0.5,
-                    mt: 1.5,
-                    px: 1.5,
-                    py: 0.25,
+                    gap: 1,
+                    mt: 2,
+                    px: 2,
+                    py: 0.5,
                     borderRadius: 1,
                     backgroundColor: 'action.hover',
                     border: '1px solid',
                     borderColor: 'divider'
                   }}
                 >
-                  {item.extraIcon && <i className={`${item.extraIcon} text-xs`} style={{ color: 'var(--mui-palette-text-secondary)' }} />}
-                  <Typography variant='caption' sx={{ fontWeight: 600, color: 'text.primary', fontSize: '0.6875rem' }}>
+                  {item.extraIcon && (
+                    <i className={`${item.extraIcon} text-xs`} style={{ color: 'var(--mui-palette-text-secondary)' }} />
+                  )}
+                  <Typography variant='caption' sx={{ fontWeight: 600, color: 'text.primary', fontSize: '0.75rem' }}>
                     {isLoading ? <Skeleton width={60} height={16} /> : item.extraLabel}
                   </Typography>
                 </Box>

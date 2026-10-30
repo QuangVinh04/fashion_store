@@ -228,16 +228,17 @@ export default function InventoryList() {
                         </Typography>
                       </TableCell>
                       <TableCell align='right'>
-                        <Typography variant='body2'>{row.quantity}</Typography>
+                        <Typography variant='body2' sx={{ fontVariantNumeric: 'tabular-nums' }}>{row.quantity}</Typography>
                       </TableCell>
                       <TableCell align='right'>
-                        <Typography variant='body2' color='text.secondary'>{row.reservedQuantity}</Typography>
+                        <Typography variant='body2' color='text.secondary' sx={{ fontVariantNumeric: 'tabular-nums' }}>{row.reservedQuantity}</Typography>
                       </TableCell>
                       <TableCell align='right'>
                         <Typography
                           variant='body2'
                           sx={{
                             fontWeight: 600,
+                            fontVariantNumeric: 'tabular-nums',
                             color: row.availableQuantity <= (row.minThreshold || 0) ? 'error.main' : 'text.primary'
                           }}
                         >
@@ -245,7 +246,7 @@ export default function InventoryList() {
                         </Typography>
                       </TableCell>
                       <TableCell align='right'>
-                        <Typography variant='body2' color='text.secondary'>{row.minThreshold}</Typography>
+                        <Typography variant='body2' color='text.secondary' sx={{ fontVariantNumeric: 'tabular-nums' }}>{row.minThreshold}</Typography>
                       </TableCell>
                       <TableCell>
                         <Chip
@@ -253,6 +254,7 @@ export default function InventoryList() {
                           variant='tonal'
                           label={status.label}
                           color={status.color}
+                          sx={{ height: 24, fontSize: '0.75rem', fontWeight: 600 }}
                         />
                       </TableCell>
                       <TableCell align='right' sx={{ whiteSpace: 'nowrap' }}>

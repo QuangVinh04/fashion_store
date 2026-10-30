@@ -12,8 +12,7 @@ import Grid from '@mui/material/Grid'
 import Chip from '@mui/material/Chip'
 import Skeleton from '@mui/material/Skeleton'
 
-// Component Imports
-import CustomAvatar from '@core/components/mui/Avatar'
+// Type Imports
 import type { OrderStatusCount } from '@/types/dashboard'
 
 type ActionItem = {
@@ -96,15 +95,13 @@ const ActionableBanner = ({ orderByStatus = [], returnRequestsCount = 0, isLoadi
       sx={{
         border: '1px solid',
         borderColor: 'warning.main',
-        backgroundColor: 'var(--mui-palette-warning-lighterOpacity, rgba(255, 180, 0, 0.06))'
+        backgroundColor: 'var(--mui-palette-warning-lighterOpacity, rgba(217, 119, 6, 0.05))'
       }}
     >
-      <CardContent sx={{ p: 3.5, '&:last-child': { pb: 3.5 } }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2.5 }}>
+      <CardContent sx={{ p: 4, '&:last-child': { pb: 4 } }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <CustomAvatar color='warning' skin='filled' size={30}>
-              <i className='ri-alarm-warning-line text-base' />
-            </CustomAvatar>
+            <i className='ri-time-line text-xl' style={{ color: 'var(--mui-palette-warning-main)' }} />
             <Typography variant='h6' sx={{ fontWeight: 600, color: 'text.primary', fontSize: '1rem' }}>
               Việc cần xử lý
             </Typography>
@@ -114,7 +111,7 @@ const ActionableBanner = ({ orderByStatus = [], returnRequestsCount = 0, isLoadi
             size='small'
             color='warning'
             variant='tonal'
-            sx={{ fontWeight: 600, height: 24 }}
+            sx={{ fontWeight: 600, height: 24, fontSize: '0.75rem' }}
           />
         </Box>
 
@@ -124,7 +121,7 @@ const ActionableBanner = ({ orderByStatus = [], returnRequestsCount = 0, isLoadi
                 <Grid item xs={12} sm={6} md={3} key={index}>
                   <Box
                     sx={{
-                      p: 2.5,
+                      p: 3,
                       height: '100%',
                       borderRadius: 1,
                       backgroundColor: 'background.paper',
@@ -145,7 +142,7 @@ const ActionableBanner = ({ orderByStatus = [], returnRequestsCount = 0, isLoadi
               <Grid item xs={12} sm={gridSm} md={gridMd} key={item.title}>
                 <Box
                   sx={{
-                    p: 2.5,
+                    p: 3,
                     height: '100%',
                     borderRadius: 1,
                     backgroundColor: 'background.paper',
@@ -156,20 +153,17 @@ const ActionableBanner = ({ orderByStatus = [], returnRequestsCount = 0, isLoadi
                     display: 'flex',
                     flexDirection: 'column',
                     justifyContent: 'space-between',
-                    gap: 2,
-                    boxShadow: 'var(--mui-customShadows-xs)'
+                    gap: 2
                   }}
                 >
                   <div>
                     <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}>
-                      <Typography variant='subtitle2' sx={{ fontWeight: 600, color: 'text.primary' }}>
+                      <Typography variant='subtitle2' sx={{ fontWeight: 600, color: 'text.primary', fontSize: '0.875rem' }}>
                         {item.title}
                       </Typography>
-                      <CustomAvatar color={item.badgeTone} skin='light' size={24}>
-                        <i className={`${item.icon} text-xs`} />
-                      </CustomAvatar>
+                      <i className={`${item.icon} text-base`} style={{ color: `var(--mui-palette-${item.badgeTone}-main)` }} />
                     </Box>
-                    <Typography variant='caption' sx={{ color: 'text.secondary', display: 'block' }}>
+                    <Typography variant='caption' sx={{ color: 'text.secondary', display: 'block', fontSize: '0.75rem' }}>
                       {item.subtitle}
                     </Typography>
                   </div>
@@ -178,8 +172,20 @@ const ActionableBanner = ({ orderByStatus = [], returnRequestsCount = 0, isLoadi
                     href={item.href}
                     variant='outlined'
                     size='small'
-                    color={item.badgeTone === 'error' ? 'primary' : 'secondary'}
-                    sx={{ alignSelf: 'flex-start', py: 0.5, px: 1.5, fontSize: '0.75rem', textTransform: 'none' }}
+                    color='secondary'
+                    sx={{
+                      alignSelf: 'flex-start',
+                      py: 0.5,
+                      px: 2,
+                      fontSize: '0.75rem',
+                      fontWeight: 600,
+                      borderColor: 'divider',
+                      color: 'text.primary',
+                      '&:hover': {
+                        borderColor: 'primary.main',
+                        backgroundColor: 'action.hover'
+                      }
+                    }}
                   >
                     {item.buttonText}
                   </Button>

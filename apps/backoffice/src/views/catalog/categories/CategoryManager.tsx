@@ -214,7 +214,7 @@ export default function CategoryManager() {
                       </Typography>
                     </TableCell>
                     <TableCell align='right'>
-                      <Typography variant='body2' sx={{ fontWeight: 500 }}>
+                      <Typography variant='body2' sx={{ fontWeight: 500, fontVariantNumeric: 'tabular-nums' }}>
                         {item.productCount ?? '—'}
                       </Typography>
                     </TableCell>
@@ -224,6 +224,7 @@ export default function CategoryManager() {
                         variant='tonal'
                         label={item.active === false ? 'Ngừng dùng' : 'Đang dùng'}
                         color={item.active === false ? 'secondary' : 'success'}
+                        sx={{ height: 24, fontSize: '0.75rem', fontWeight: 500 }}
                       />
                     </TableCell>
                     <TableCell align='right' sx={{ whiteSpace: 'nowrap' }}>

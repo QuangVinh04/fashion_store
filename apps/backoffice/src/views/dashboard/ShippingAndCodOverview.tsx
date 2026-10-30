@@ -113,7 +113,7 @@ const ShippingAndCodOverview = ({ orderByStatus = [], isLoading }: ShippingOverv
                 </Box>
               </Box>
               <Box sx={{ textAlign: 'right' }}>
-                <Typography variant='h6' sx={{ fontWeight: 700, color: 'info.main', lineHeight: 1.2 }}>
+                <Typography variant='h6' sx={{ fontWeight: 700, color: 'info.main', lineHeight: 1.2, fontVariantNumeric: 'tabular-nums' }}>
                   {isLoading ? <Skeleton width={40} height={24} /> : `${shippingCount} đơn`}
                 </Typography>
                 <Typography variant='caption' sx={{ color: 'text.secondary' }}>
@@ -154,10 +154,10 @@ const ShippingAndCodOverview = ({ orderByStatus = [], isLoading }: ShippingOverv
                 </Box>
               </Box>
               <Box sx={{ textAlign: 'right' }}>
-                <Typography variant='h6' sx={{ fontWeight: 700, color: 'warning.main', lineHeight: 1.2 }}>
+                <Typography variant='h6' sx={{ fontWeight: 700, color: 'warning.main', lineHeight: 1.2, fontVariantNumeric: 'tabular-nums' }}>
                   {isLoading ? <Skeleton width={40} height={24} /> : `${failedCount} đơn`}
                 </Typography>
-                <Chip label='Cần gọi' size='small' color='warning' variant='tonal' sx={{ height: 20, fontSize: '0.6875rem' }} />
+                <Chip label='Cần gọi' size='small' color='warning' variant='tonal' sx={{ height: 22, fontSize: '0.75rem', fontWeight: 600 }} />
               </Box>
             </Box>
 
@@ -171,11 +171,10 @@ const ShippingAndCodOverview = ({ orderByStatus = [], isLoading }: ShippingOverv
                 borderRadius: 1,
                 border: '1px solid',
                 borderColor: 'error.light',
-                backgroundColor: 'var(--mui-palette-error-lighterOpacity, rgba(255, 76, 81, 0.04))',
+                backgroundColor: 'var(--mui-palette-error-lighterOpacity, rgba(220, 38, 38, 0.04))',
                 transition: 'all 0.2s',
                 '&:hover': {
-                  borderColor: 'error.main',
-                  boxShadow: 'var(--mui-customShadows-xs)'
+                  borderColor: 'error.main'
                 }
               }}
             >
@@ -193,10 +192,10 @@ const ShippingAndCodOverview = ({ orderByStatus = [], isLoading }: ShippingOverv
                 </Box>
               </Box>
               <Box sx={{ textAlign: 'right' }}>
-                <Typography variant='h6' sx={{ fontWeight: 700, color: 'error.main', lineHeight: 1.2 }}>
+                <Typography variant='h6' sx={{ fontWeight: 700, color: 'error.main', lineHeight: 1.2, fontVariantNumeric: 'tabular-nums' }}>
                   {isLoading ? <Skeleton width={40} height={24} /> : `${returnedCount} đơn`}
                 </Typography>
-                <Chip label='Về kho' size='small' color='error' variant='tonal' sx={{ height: 20, fontSize: '0.6875rem' }} />
+                <Chip label='Về kho' size='small' color='error' variant='tonal' sx={{ height: 22, fontSize: '0.75rem', fontWeight: 600 }} />
               </Box>
             </Box>
           </Box>

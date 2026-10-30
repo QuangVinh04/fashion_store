@@ -267,6 +267,7 @@ export default function OrderList() {
                         variant='tonal'
                         label={orderStatusLabels[order.status] || order.status}
                         color={orderStatusColors[order.status] || 'secondary'}
+                        sx={{ height: 24, fontSize: '0.75rem', fontWeight: 600 }}
                       />
                     </TableCell>
                     <TableCell>
@@ -280,15 +281,15 @@ export default function OrderList() {
                       )}
                     </TableCell>
                     <TableCell align='right'>
-                      <Typography variant='body2' sx={{ fontWeight: 600 }}>
+                      <Typography variant='body2' sx={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
                         {formatOrderMoney(order.totalAmount, order.currency)}
                       </Typography>
                     </TableCell>
                     <TableCell>
-                      <Typography variant='body2'>
+                      <Typography variant='body2' sx={{ fontVariantNumeric: 'tabular-nums' }}>
                         {new Date(order.createdAt).toLocaleDateString('vi-VN')}
                       </Typography>
-                      <Typography variant='caption' color='text.secondary' sx={{ display: 'block' }}>
+                      <Typography variant='caption' color='text.secondary' sx={{ display: 'block', fontSize: '0.75rem', fontVariantNumeric: 'tabular-nums' }}>
                         {new Date(order.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
                       </Typography>
                     </TableCell>

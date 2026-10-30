@@ -128,14 +128,14 @@ const TopSellingProducts = ({ timeRange = '7days', products = [], isLoading }: T
                     >
                       {product.productName}
                     </Typography>
-                    <Typography variant='caption' sx={{ color: 'text.secondary' }}>
+                    <Typography variant='caption' sx={{ color: 'text.secondary', fontSize: '0.75rem', fontVariantNumeric: 'tabular-nums' }}>
                       Đã bán: <b>{product.totalQuantitySold}</b> món
                     </Typography>
                   </Box>
                 </Box>
 
                 <Box sx={{ textAlign: 'right', flexShrink: 0 }}>
-                  <Typography variant='subtitle2' sx={{ fontWeight: 700, color: 'text.primary', fontSize: '0.8125rem' }}>
+                  <Typography variant='subtitle2' sx={{ fontWeight: 700, color: 'text.primary', fontSize: '0.8125rem', fontVariantNumeric: 'tabular-nums' }}>
                     {formatVndShort(product.totalRevenue)}
                   </Typography>
                 </Box>

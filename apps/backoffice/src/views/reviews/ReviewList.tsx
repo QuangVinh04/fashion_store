@@ -55,11 +55,11 @@ function renderFitChip(fit?: FitRating | null) {
 
   switch (fit) {
     case 'TRUE_TO_SIZE':
-      return <Chip label='Chuẩn size' size='small' color='success' variant='tonal' sx={{ height: 20, fontSize: '0.75rem' }} />
+      return <Chip label='Chuẩn size' size='small' color='success' variant='tonal' sx={{ height: 22, fontSize: '0.75rem', fontWeight: 500 }} />
     case 'RUNS_SMALL':
-      return <Chip label='Form nhỏ / chật' size='small' color='warning' variant='tonal' sx={{ height: 20, fontSize: '0.75rem' }} />
+      return <Chip label='Form nhỏ / chật' size='small' color='warning' variant='tonal' sx={{ height: 22, fontSize: '0.75rem', fontWeight: 500 }} />
     case 'RUNS_LARGE':
-      return <Chip label='Form rộng' size='small' color='info' variant='tonal' sx={{ height: 20, fontSize: '0.75rem' }} />
+      return <Chip label='Form rộng' size='small' color='info' variant='tonal' sx={{ height: 22, fontSize: '0.75rem', fontWeight: 500 }} />
     default:
       return null
   }
@@ -221,9 +221,9 @@ export default function ReviewList() {
                           )}
                           <Box sx={{ mt: 0.5 }}>
                             {row.verifiedPurchase ? (
-                              <Chip label='Đã mua' color='success' size='small' variant='tonal' sx={{ height: 18, fontSize: '0.7rem' }} />
+                              <Chip label='Đã mua' color='success' size='small' variant='tonal' sx={{ height: 22, fontSize: '0.75rem', fontWeight: 500 }} />
                             ) : (
-                              <Chip label='Chưa xác thực' color='secondary' size='small' variant='tonal' sx={{ height: 18, fontSize: '0.7rem' }} />
+                              <Chip label='Chưa xác thực' color='secondary' size='small' variant='tonal' sx={{ height: 22, fontSize: '0.75rem', fontWeight: 500 }} />
                             )}
                           </Box>
                         </Box>
@@ -241,10 +241,10 @@ export default function ReviewList() {
                       >
                         {row.productName || 'Sản phẩm'}
                       </Typography>
-                      <Typography variant='caption' color='text.secondary' display='block'>
+                      <Typography variant='caption' color='text.secondary' display='block' sx={{ fontVariantNumeric: 'tabular-nums' }}>
                         ID: {row.productId}
                       </Typography>
-                      <Typography variant='caption' color='text.secondary' display='block'>
+                      <Typography variant='caption' color='text.secondary' display='block' sx={{ fontVariantNumeric: 'tabular-nums' }}>
                         {formatDate(row.createdAt)}
                       </Typography>
                     </TableCell>
@@ -253,7 +253,7 @@ export default function ReviewList() {
                     <TableCell sx={{ minWidth: 240, maxWidth: 300 }}>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
                         <Rating value={row.rating} readOnly size='small' />
-                        <Typography variant='body2' fontWeight={600}>
+                        <Typography variant='body2' fontWeight={600} sx={{ fontVariantNumeric: 'tabular-nums' }}>
                           ({row.rating})
                         </Typography>
                       </Box>
@@ -263,7 +263,7 @@ export default function ReviewList() {
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', mb: 0.5 }}>
                           {renderFitChip(row.fitRating)}
                           {(row.customerHeight || row.customerWeight) && (
-                            <Typography variant='caption' color='text.secondary'>
+                            <Typography variant='caption' color='text.secondary' sx={{ fontVariantNumeric: 'tabular-nums' }}>
                               {[row.customerHeight ? `${row.customerHeight}cm` : null, row.customerWeight ? `${row.customerWeight}kg` : null]
                                 .filter(Boolean)
                                 .join(' • ')}
@@ -363,9 +363,9 @@ export default function ReviewList() {
                     {/* Trạng thái */}
                     <TableCell>
                       {row.status === 'HIDDEN' ? (
-                        <Chip label='Đã ẩn' color='secondary' size='small' variant='tonal' />
+                        <Chip label='Đã ẩn' color='secondary' size='small' variant='tonal' sx={{ height: 24, fontSize: '0.75rem', fontWeight: 500 }} />
                       ) : (
-                        <Chip label='Hiển thị' color='success' size='small' variant='tonal' />
+                        <Chip label='Hiển thị' color='success' size='small' variant='tonal' sx={{ height: 24, fontSize: '0.75rem', fontWeight: 500 }} />
                       )}
                     </TableCell>
 

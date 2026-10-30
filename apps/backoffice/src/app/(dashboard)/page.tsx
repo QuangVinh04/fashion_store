@@ -60,7 +60,7 @@ const DashboardPage = () => {
   const returnRequestsCount = returnsData?.items?.length || 0
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
       {/* 1. Header & Bộ lọc thời gian toàn cục */}
       <Box
         sx={{
@@ -72,10 +72,10 @@ const DashboardPage = () => {
         }}
       >
         <Box>
-          <Typography variant='h5' sx={{ fontWeight: 700, color: 'text.primary' }}>
+          <Typography variant='h4' component='h1' sx={{ fontWeight: 700, color: 'text.primary', fontSize: '1.375rem', mb: 0.5 }}>
             Bàn điều hành
           </Typography>
-          <Typography variant='body2' sx={{ color: 'text.secondary' }}>
+          <Typography variant='body2' sx={{ color: 'text.secondary', fontSize: '0.875rem' }}>
             Theo dõi hiệu suất kinh doanh, giao vận và vận hành kho theo thời gian thực
           </Typography>
         </Box>
@@ -118,7 +118,7 @@ const DashboardPage = () => {
       />
 
       {/* 4. Biểu đồ Doanh thu/Đơn & Tình trạng giao vận kết nối BE */}
-      <Grid container spacing={5}>
+      <Grid container spacing={4}>
         <Grid item xs={12} lg={8}>
           <SalesAndOrdersMixedChart
             timeRange={timeRange}
@@ -135,14 +135,14 @@ const DashboardPage = () => {
       </Grid>
 
       {/* 5. Bảng đơn hàng mới nhất (gọi trực tiếp ordersApi.list) */}
-      <Grid container spacing={5}>
+      <Grid container spacing={4}>
         <Grid item xs={12}>
           <RecentOrdersTable />
         </Grid>
       </Grid>
 
       {/* 6. Cảnh báo tồn kho biến thể & Top sản phẩm bán chạy kết nối BE */}
-      <Grid container spacing={5}>
+      <Grid container spacing={4}>
         <Grid item xs={12} md={6}>
           <LowStockVariants />
         </Grid>

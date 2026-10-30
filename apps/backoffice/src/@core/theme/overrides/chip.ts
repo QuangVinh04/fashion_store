@@ -127,8 +127,10 @@ const chip: Theme['components'] = {
     ],
     styleOverrides: {
       root: ({ ownerState, theme }) => ({
-        ...theme.typography.body2,
-        fontWeight: theme.typography.fontWeightMedium,
+        fontWeight: 500,
+        fontSize: ownerState.size === 'small' ? '0.75rem' : '0.8125rem',
+        height: ownerState.size === 'small' ? 24 : 32,
+        borderRadius: 4,
 
         '& .MuiChip-deleteIcon': {
           ...(ownerState.size === 'small'
