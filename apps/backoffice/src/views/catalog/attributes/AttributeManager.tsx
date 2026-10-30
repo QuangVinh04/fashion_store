@@ -233,8 +233,6 @@ export default function AttributeManager() {
               </TableHead>
               <TableBody>
                 {query.data?.items.map(row => {
-                  const hasOptions = row.type === 'SINGLE_SELECT' || row.type === 'MULTI_SELECT' || !row.type
-
                   return (
                     <TableRow key={row.id} hover>
                       {/* Cột 1: Tên in đậm + Mã / Kiểu dữ liệu */}
@@ -633,8 +631,6 @@ function AttributeValuesView({
   const filteredItems = allItems.filter(item =>
     !keyword || item.value.toLowerCase().includes(keyword.toLowerCase().trim())
   )
-
-  const totalPages = Math.ceil(filteredItems.length / pageSize) || 1
 
   const paginatedItems = filteredItems.slice(page * pageSize, (page + 1) * pageSize)
 

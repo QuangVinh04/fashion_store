@@ -5,9 +5,6 @@ import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 
 import {
-  Accordion,
-  AccordionDetails,
-  AccordionSummary,
   Alert,
   Autocomplete,
   Box,
@@ -174,6 +171,7 @@ export default function ProductForm({ productId }: { productId?: string }) {
       onChange={event => {
         const val = numeric ? (event.target.value === '' ? undefined : Number(event.target.value)) : event.target.value
         const updates: Partial<ProductFormValues> = { [key]: val }
+
         if (key === 'weight') updates.weightGram = val as number | undefined
         if (key === 'length') updates.lengthMm = typeof val === 'number' ? val * 10 : undefined
         if (key === 'width') updates.widthMm = typeof val === 'number' ? val * 10 : undefined
@@ -441,6 +439,7 @@ export default function ProductForm({ productId }: { productId?: string }) {
                             ...row,
                             isPrimary: !row.colorOptionId && (row.mediaId ? row.mediaId === image.mediaId : row.url === image.url)
                           }))
+
                           const updatedVariants = values.variants.map(variant => {
                             if (!variant.thumbnailMediaId && !variant.thumbnailUrl) {
                               return {
@@ -449,8 +448,11 @@ export default function ProductForm({ productId }: { productId?: string }) {
                                 thumbnailUrl: image.url
                               }
                             }
-                            return variant
+
+                            
+return variant
                           })
+
                           patch({ images: updatedImages, variants: updatedVariants })
                         }}
                       >
@@ -462,10 +464,12 @@ export default function ProductForm({ productId }: { productId?: string }) {
                         onClick={() => {
                           const remaining = values.images.filter(row => row !== image)
                           const firstGeneral = remaining.find(row => !row.colorOptionId)
+
                           const updatedImages = remaining.map(row => ({
                             ...row,
                             isPrimary: image.isPrimary ? row === firstGeneral : row.isPrimary
                           }))
+
                           patch({ images: updatedImages })
                         }}
                       >
@@ -476,7 +480,9 @@ export default function ProductForm({ productId }: { productId?: string }) {
                         disabled={disabled || index === 0}
                         onClick={() => {
                           const generals = values.images.filter(row => !row.colorOptionId)
+
                           const colorSpecific = values.images.filter(row => !!row.colorOptionId)
+
                           ;[generals[index - 1], generals[index]] = [generals[index], generals[index - 1]]
                           patch({ images: [...generals, ...colorSpecific] })
                         }}
@@ -589,6 +595,7 @@ export default function ProductForm({ productId }: { productId?: string }) {
                   isOptionEqualToValue={(a, b) => a.id === b.id}
                   onChange={(_, rows) => {
                     const ids = rows.map(row => row.id)
+
                     patch({
                       categoryIds: ids,
                       categoryId: ids[0] || ''
@@ -750,6 +757,7 @@ export default function ProductForm({ productId }: { productId?: string }) {
           setValues(current => {
             const hasGeneralImages = current.images.some(image => !image.colorOptionId)
             const isFirst = !hasGeneralImages
+
             const newImage = {
               mediaId: media.id,
               url: media.url,

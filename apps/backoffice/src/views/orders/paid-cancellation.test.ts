@@ -18,6 +18,7 @@ it('reload preserves operation and changed payload is rejected',()=>{
 it('carrier verification requires no-handoff proof and preserves the complete payload across reload',()=>{
  const values=new Map<string,string>();const storage={getItem:(key:string)=>values.get(key)||null,setItem:(key:string,value:string)=>{values.set(key,value)}}
  const body={reason:'Carrier verified',carrierCancelled:true,noHandoff:true,noShipmentExists:false,trackingCode:'tracking',mediaIds:['photo']}
+
  expect(prepareCarrierVerification(storage,'case',body,()=> 'first').operationId).toBe('first')
  expect(prepareCarrierVerification(storage,'case',body,()=> 'second').operationId).toBe('first')
  expect(()=>prepareCarrierVerification(storage,'case',{...body,trackingCode:'foreign'},()=> 'third')).toThrow()

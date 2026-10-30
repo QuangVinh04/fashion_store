@@ -1,6 +1,7 @@
 import type {CarrierVerificationInput} from '@/types/orders'
 
 export type CancellationBody={operationId:string;reason:string}
+
 export function prepareCarrierVerification(storage:Pick<Storage,'getItem'|'setItem'>,caseId:string,
   input:Omit<CarrierVerificationInput,'operationId'>,newId:()=>string):CarrierVerificationInput {
   if(!input.reason.trim() || input.reason.length>500 || input.noHandoff!==true || input.carrierCancelled!==true
@@ -11,10 +12,12 @@ export function prepareCarrierVerification(storage:Pick<Storage,'getItem'|'setIt
   const payload={reason:input.reason,carrierCancelled:true,noHandoff:true,noShipmentExists:input.noShipmentExists,trackingCode:input.trackingCode||'',mediaIds:input.mediaIds}
   const key=`cancellation-carrier-verification:${caseId}`;const raw=storage.getItem(key)
   const value=raw?JSON.parse(raw):{caseId,operationId:newId(),payload}
+
   if(value?.caseId!==caseId || typeof value?.operationId!=='string' || !value.operationId.trim() || value.operationId.length>160
       || JSON.stringify(value.payload)!==JSON.stringify(payload))throw new Error('Yêu cầu xác minh đã lưu cần được đối soát trước khi thay đổi dữ liệu.')
   storage.setItem(key,JSON.stringify(value))
-  return {operationId:value.operationId,...payload}
+  
+return {operationId:value.operationId,...payload}
 }
 
 export function prepareCancellation(storage:Pick<Storage,'getItem'|'setItem'>,orderId:string,reason:string,newId:()=>string):CancellationBody {

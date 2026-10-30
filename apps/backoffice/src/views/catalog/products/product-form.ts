@@ -55,6 +55,7 @@ export function fromProductDetail(detail: ProductDetail): ProductFormValues {
   })
 
   const rawCategories = detail.categories || []
+
   const resolvedCategoryIds = [
     ...new Set([
       ...(detail.categoryIds || []),
@@ -124,6 +125,7 @@ export function generateVariantMatrix(
     const existingColorThumbnail = previous.find(
       variant => variant.colorOptionId === colorOptionId && (variant.thumbnailMediaId || variant.thumbnailUrl)
     )
+
     const fallbackMediaId = existingColorThumbnail?.thumbnailMediaId ?? defaultThumbnail?.thumbnailMediaId
     const fallbackUrl = existingColorThumbnail?.thumbnailUrl ?? defaultThumbnail?.thumbnailUrl
 
@@ -209,10 +211,12 @@ export function validateProductForm(values: ProductFormValues): Record<string, s
   if (!values.name.trim() || values.name.length > 255) errors.name = 'Tên sản phẩm bắt buộc và tối đa 255 ký tự.'
   if (!productTypes.includes(values.productType as ProductType))
     errors.productType = 'Vui lòng chọn loại quần áo hợp lệ.'
+
   if (!values.categoryIds?.length && !values.categoryId) {
     errors.categoryIds = 'Vui lòng chọn ít nhất một danh mục.'
     errors.categoryId = 'Vui lòng chọn ít nhất một danh mục.'
   }
+
   if (!values.variants.length) errors.variants = 'Vui lòng sinh ít nhất một biến thể màu × size.'
 
   for (const key of ['price', 'basePrice', 'salePrice'] as const) {

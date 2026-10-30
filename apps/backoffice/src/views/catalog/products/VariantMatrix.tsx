@@ -401,10 +401,12 @@ export default function VariantMatrix({
         onSelect={media => {
           if (thumbnailTarget) {
             update(thumbnailTarget.indexes, { thumbnailMediaId: media.id, thumbnailUrl: media.url })
+
             if (thumbnailTarget.colorOptionId && onColorThumbnailChange) {
               onColorThumbnailChange(thumbnailTarget.colorOptionId, media)
             }
           }
+
           setThumbnailTarget(null)
         }}
       />
