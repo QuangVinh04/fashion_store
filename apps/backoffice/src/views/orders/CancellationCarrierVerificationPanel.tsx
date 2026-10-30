@@ -1,9 +1,11 @@
 'use client'
 
 import {useRef,useState} from 'react'
+
 // eslint-disable-next-line import/named
 import {useQuery} from '@tanstack/react-query'
 import {Alert,Box,Button,Checkbox,FormControlLabel,TextField,Typography} from '@mui/material'
+
 import type {OrderDetail,CarrierVerificationInput} from '@/types/orders'
 import {ordersApi} from '@/libs/api/orders'
 import {toVietnameseError} from '@/libs/api/errors'
@@ -15,28 +17,40 @@ import {prepareCarrierVerification} from './paid-cancellation'
 export default function CancellationCarrierVerificationPanel({order,onRefresh}:{order:OrderDetail;onRefresh:()=>Promise<unknown>}) {
   const c=order.cancellation
   const key=`cancellation-carrier-verification:${c?.id}`
+
   const [draft,setDraft]=useState<Omit<CarrierVerificationInput,'operationId'>>(()=>{
-    try {const old=JSON.parse(sessionStorage.getItem(key)||'null');if(old?.caseId===c?.id && old.payload)return old.payload} catch {/* The submit guard will reject malformed stored data. */}
-    return {reason:'',trackingCode:order.trackingCode||'',carrierCancelled:false,noHandoff:false,noShipmentExists:false,mediaIds:[]}
+    try {const old=JSON.parse(sessionStorage.getItem(key)||'null');
+
+if(old?.caseId===c?.id && old.payload)return old.payload} catch {/* The submit guard will reject malformed stored data. */}
+    
+return {reason:'',trackingCode:order.trackingCode||'',carrierCancelled:false,noHandoff:false,noShipmentExists:false,mediaIds:[]}
   })
+
   const [open,setOpen]=useState(false);const [busy,setBusy]=useState(false);const [uploading,setUploading]=useState(false);const [error,setError]=useState<unknown>(null)
   const sending=useRef(false)
+
   const proof=useQuery({queryKey:['cancellation-carrier-verification',order.id,c?.carrierVerifiedAt],
     queryFn:()=>ordersApi.cancellationVerification(order.id),enabled:!!c?.carrierVerifiedAt,retry:false})
+
   async function submit() {
     if(!c || sending.current || uploading)return
     sending.current=true;setBusy(true);setError(null)
+
     try {
       const body=prepareCarrierVerification(sessionStorage,c.id,{...draft,reason:draft.reason.trim()},()=>crypto.randomUUID())
       const result=await ordersApi.verifyCancellationCarrier(order.id,body)
+
       if(result.cancellation?.carrierVerifiedAt)sessionStorage.removeItem(key)
       setOpen(false);await Promise.all([onRefresh(),proof.refetch()])
     } catch(failure) {setError(failure);try {await onRefresh()}catch{/* Preserve the same verification until its result is known. */}}
     finally {sending.current=false;setBusy(false)}
   }
+
   if(!c)return null
   const allowed=!c.closedAt && !c.fulfillmentStoppedAt && c.status!=='FULFILLMENT_EXCEPTION'
-  return <Box sx={{display:'grid',gap:2}}>
+
+  
+return <Box sx={{display:'grid',gap:2}}>
     {error ? <Alert severity='error'>{toVietnameseError(error)}</Alert>:null}
     {proof.error && <Alert severity='warning' action={<Button onClick={()=>void proof.refetch()}>Thử lại</Button>}>Không tải được chứng từ xác minh carrier.</Alert>}
     {proof.data && <Box sx={{display:'grid',gap:1}}>

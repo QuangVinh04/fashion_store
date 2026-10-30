@@ -17,7 +17,6 @@ import {
   FormControlLabel,
   IconButton,
   InputAdornment,
-  MenuItem,
   Snackbar,
   Table,
   TableBody,
@@ -84,6 +83,7 @@ export default function ReferenceManager({ resource }: { resource: ReferenceReso
     const currentItems = [...query.data.items]
     const updated = [...currentItems]
     const [moved] = updated.splice(fromIndex, 1)
+
     updated.splice(toIndex, 0, moved)
 
     // Cập nhật giao diện tức thì
@@ -93,6 +93,7 @@ export default function ReferenceManager({ resource }: { resource: ReferenceReso
     })
 
     setIsReordering(true)
+
     try {
       const changed = updated
         .map((item, idx) => ({ ...item, displayOrder: page * size + idx }))
@@ -114,6 +115,7 @@ export default function ReferenceManager({ resource }: { resource: ReferenceReso
     setErrors({})
     setDirty(false)
     const nextOrder = (query.data?.totalElements ?? query.data?.items?.length) || 0
+
     setDraft(row ? { ...row } : { name: '', active: true, displayOrder: nextOrder })
   }
 
@@ -239,6 +241,7 @@ export default function ReferenceManager({ resource }: { resource: ReferenceReso
                     }}
                     onDragOver={e => {
                       e.preventDefault()
+
                       if (dragOverIndex !== index) {
                         setDragOverIndex(index)
                       }
@@ -249,9 +252,11 @@ export default function ReferenceManager({ resource }: { resource: ReferenceReso
                     }}
                     onDrop={e => {
                       e.preventDefault()
+
                       if (draggedIndex !== null && draggedIndex !== index) {
                         void handleReorder(draggedIndex, index)
                       }
+
                       setDraggedIndex(null)
                       setDragOverIndex(null)
                     }}

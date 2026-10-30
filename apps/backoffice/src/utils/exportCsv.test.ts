@@ -6,20 +6,25 @@ describe('exportToCsv', () => {
   it('generates a CSV blob and triggers download', () => {
     const createObjectURLMock = vi.fn().mockReturnValue('blob:mock-url')
     const revokeObjectURLMock = vi.fn()
+
     window.URL.createObjectURL = createObjectURLMock
     window.URL.revokeObjectURL = revokeObjectURLMock
 
     const clickMock = vi.fn()
-    const appendChildSpy = vi.spyOn(document.body, 'appendChild')
-    const removeChildSpy = vi.spyOn(document.body, 'removeChild')
+
+    vi.spyOn(document.body, 'appendChild')
+    vi.spyOn(document.body, 'removeChild')
 
     // Mock HTMLAnchorElement click
     vi.spyOn(document, 'createElement').mockImplementation((tagName: string) => {
       const el = document.createElementNS('http://www.w3.org/1999/xhtml', tagName)
+
       if (tagName === 'a') {
         el.click = clickMock
       }
-      return el
+
+      
+return el
     })
 
     exportToCsv(

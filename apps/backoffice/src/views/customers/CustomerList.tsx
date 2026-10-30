@@ -28,9 +28,10 @@ import {
   Typography
 } from '@mui/material'
 
+import Avatar from '@mui/material/Avatar'
+
 import PageHeader from '@/components/backoffice/PageHeader'
 import ConfirmActionDialog from '@/components/backoffice/ConfirmActionDialog'
-import Avatar from '@mui/material/Avatar'
 import useListQueryState from '@/hooks/useListQueryState'
 import { useCustomersQuery, useUpdateCustomerStatusMutation } from '@/hooks/useCustomers'
 import type { AdminUser } from '@/types/customer'

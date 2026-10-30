@@ -1,7 +1,7 @@
 import { api, ApiError } from './client'
 import { normalizeAdminPage } from './page'
 import type { PageDto } from '@/types/api'
-import type { OrderDetail, OrderSummary, OrderStatus, OrderHistory, OrderSaga, Shipment } from '@/types/orders'
+import type { OrderDetail, OrderSummary, OrderStatus, OrderHistory, OrderSaga, Shipment, CarrierVerificationInput, CarrierVerification } from '@/types/orders'
 
 const path = (id: string) => `/api/v1/admin/orders/${encodeURIComponent(id)}`
 
@@ -18,8 +18,8 @@ export const ordersApi = {
   get: (id: string) => api.get<OrderDetail>(path(id)),
   cancel: (id:string,body:{operationId:string;reason:string})=>api.post<OrderDetail>(`${path(id)}/cancel`,body),
   retryCancellation: (id:string,body:{operationId:string;reason:string})=>api.post<OrderDetail>(`${path(id)}/cancellation/retry`,body),
-  verifyCancellationCarrier:(id:string,body:import('@/types/orders').CarrierVerificationInput)=>api.post<OrderDetail>(`${path(id)}/cancellation/verify-carrier`,body),
-  cancellationVerification:(id:string)=>api.get<import('@/types/orders').CarrierVerification|null>(`${path(id)}/cancellation/carrier-verification`),
+  verifyCancellationCarrier:(id:string,body:CarrierVerificationInput)=>api.post<OrderDetail>(`${path(id)}/cancellation/verify-carrier`,body),
+  cancellationVerification:(id:string)=>api.get<CarrierVerification|null>(`${path(id)}/cancellation/carrier-verification`),
   cancellationEvidenceUrl:(id:string,mediaId:string)=>api.get<string>(`${path(id)}/cancellation/evidence/${encodeURIComponent(mediaId)}`),
   history: (id: string) => api.get<OrderHistory[]>(`${path(id)}/history`),
   saga: (id: string) => api.get<OrderSaga>(`${path(id)}/saga`),
