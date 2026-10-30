@@ -1,20 +1,30 @@
 package com.fashionstore.order.order.controller;
 
+import com.fashionstore.common.dto.PageResponse;
 import com.fashionstore.common.exception.GlobalExceptionHandler;
+import com.fashionstore.common.payment.PaymentMethod;
+import com.fashionstore.order.order.dto.AdminOrderFilter;
 import com.fashionstore.order.order.dto.OrderStatusHistoryResponse;
+import com.fashionstore.order.order.dto.OrderSummaryResponse;
 import com.fashionstore.order.order.entity.OrderStatus;
 import com.fashionstore.order.order.service.OrderService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.web.PageableHandlerMethodArgumentResolver;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -40,6 +50,7 @@ class AdminOrderControllerTest {
         mockMvc = MockMvcBuilders.standaloneSetup(new AdminOrderController(orderService, returnService, shipmentService,
                 org.mockito.Mockito.mock(com.fashionstore.order.saga.service.OrderCancellationService.class),
                 sagaRecovery))
+                .setCustomArgumentResolvers(new PageableHandlerMethodArgumentResolver())
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
     }
@@ -58,6 +69,34 @@ class AdminOrderControllerTest {
                 .andExpect(jsonPath("$.data.status").value("COMPENSATING"));
 
         org.mockito.Mockito.verify(sagaRecovery).retryFailedCheckout("ord-1");
+    }
+
+    @Test
+    void searchOrders_bindsAllFiltersIntoOneFilterObject() throws Exception {
+        when(orderService.searchOrders(any(), any()))
+                .thenReturn(PageResponse.<List<OrderSummaryResponse>>builder().items(List.of()).build());
+
+        mockMvc.perform(get("/api/v1/admin/orders")
+                        .param("userId", "user-1")
+                        .param("status", "CONFIRMED")
+                        .param("search", "ORD-1")
+                        .param("paymentMethod", "COD")
+                        .param("createdFrom", "2026-10-10")
+                        .param("createdTo", "2026-10-12"))
+                .andExpect(status().isOk());
+
+        var captor = ArgumentCaptor.forClass(AdminOrderFilter.class);
+        verify(orderService).searchOrders(captor.capture(), any());
+        assertEquals(
+                AdminOrderFilter.builder()
+                        .userId("user-1")
+                        .status(OrderStatus.CONFIRMED)
+                        .search("ORD-1")
+                        .paymentMethod(PaymentMethod.COD)
+                        .createdFrom(LocalDate.of(2026, 10, 10))
+                        .createdTo(LocalDate.of(2026, 10, 12))
+                        .build(),
+                captor.getValue());
     }
 
     @Test

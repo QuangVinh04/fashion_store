@@ -2,6 +2,8 @@ package com.fashionstore.order.order.controller;
 
 import com.fashionstore.common.dto.ApiResponse;
 import com.fashionstore.common.dto.PageResponse;
+import com.fashionstore.common.payment.PaymentMethod;
+import com.fashionstore.order.order.dto.AdminOrderFilter;
 import com.fashionstore.order.order.dto.OrderResponse;
 import com.fashionstore.order.saga.dto.OrderSagaResponse;
 import com.fashionstore.order.order.dto.OrderStatusHistoryResponse;
@@ -25,6 +27,7 @@ import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -33,6 +36,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.LocalDate;
 import java.util.List;
 
 /**
@@ -115,16 +119,30 @@ hoặc bước hiện tại không có command để phát lại (409).""")
     }
 
     @Operation(
-            summary = "Tìm đơn theo user và/hoặc trạng thái (ADMIN)",
+            summary = "Tìm và lọc đơn (ADMIN)",
             description =
-                    "Mặc định 20 đơn/trang, mới nhất trước. Bỏ trống cả hai filter là quét toàn bộ"
-                        + " đơn.")
+                    "Mặc định 20 đơn/trang, mới nhất trước. Các filter kết hợp bằng AND; bỏ trống tất"
+                        + " cả là quét toàn bộ đơn.")
     @GetMapping
     public ApiResponse<PageResponse<List<OrderSummaryResponse>>> searchOrders(
             @Parameter(description = "Id người dùng chủ đơn") @RequestParam(required = false)
                     String userId,
             @Parameter(description = "Lọc theo trạng thái đơn") @RequestParam(required = false)
                     OrderStatus status,
+            @Parameter(description = "Tìm gần đúng theo mã đơn, tên hoặc SĐT người nhận")
+                    @RequestParam(required = false)
+                    String search,
+            @Parameter(description = "Lọc theo phương thức thanh toán")
+                    @RequestParam(required = false)
+                    PaymentMethod paymentMethod,
+            @Parameter(description = "Từ ngày tạo, gồm cả ngày này (yyyy-MM-dd)")
+                    @RequestParam(required = false)
+                    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+                    LocalDate createdFrom,
+            @Parameter(description = "Đến ngày tạo, gồm cả ngày này (yyyy-MM-dd)")
+                    @RequestParam(required = false)
+                    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+                    LocalDate createdTo,
             @ParameterObject
                     @PageableDefault(
                             page = 0,
@@ -132,9 +150,18 @@ hoặc bước hiện tại không có command để phát lại (409).""")
                             sort = "createdAt",
                             direction = Sort.Direction.DESC)
                     Pageable pageable) {
+        var filter =
+                AdminOrderFilter.builder()
+                        .userId(userId)
+                        .status(status)
+                        .search(search)
+                        .paymentMethod(paymentMethod)
+                        .createdFrom(createdFrom)
+                        .createdTo(createdTo)
+                        .build();
         return ApiResponse.<PageResponse<List<OrderSummaryResponse>>>builder()
                 .message("Search orders successfully")
-                .data(orderService.searchOrders(userId, status, pageable))
+                .data(orderService.searchOrders(filter, pageable))
                 .build();
     }
 
