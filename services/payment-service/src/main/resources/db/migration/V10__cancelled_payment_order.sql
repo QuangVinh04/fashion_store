@@ -1,0 +1,4 @@
+CREATE TABLE IF NOT EXISTS cancelled_payment_order (
+    order_id     VARCHAR(255) PRIMARY KEY,
+    cancelled_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
