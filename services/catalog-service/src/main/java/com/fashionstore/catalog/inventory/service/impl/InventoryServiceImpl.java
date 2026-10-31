@@ -55,6 +55,7 @@ import com.fashionstore.catalog.product.entity.ProductVariant;
 import com.fashionstore.catalog.inventory.entity.InventoryLedgerType;
 import com.fashionstore.catalog.product.entity.ProductStatus;
 import com.fashionstore.catalog.inventory.repository.InventoryLedgerRepository;
+import com.fashionstore.catalog.inventory.repository.InventoryLedgerSpecifications;
 import com.fashionstore.catalog.product.repository.ProductRepository;
 import com.fashionstore.catalog.product.repository.ProductVariantRepository;
 import com.fashionstore.common.dto.PageResponse;
@@ -755,8 +756,8 @@ public class InventoryServiceImpl implements InventoryService {
     @Transactional(readOnly = true)
     public PageResponse<List<InventoryLedgerResponse>> getLedger(String variantId, InventoryLedgerType type,
             LocalDateTime fromTime, LocalDateTime toTime, Pageable pageable) {
-        Page<InventoryLedger> page = inventoryLedgerRepository.search(
-                variantId == null || variantId.isBlank() ? null : variantId, type, fromTime, toTime, pageable);
+        Page<InventoryLedger> page = inventoryLedgerRepository.findAll(
+                InventoryLedgerSpecifications.filter(variantId, type, fromTime, toTime), pageable);
 
         List<InventoryLedgerResponse> items = page.getContent().stream()
                 .map(l -> InventoryLedgerResponse.builder()

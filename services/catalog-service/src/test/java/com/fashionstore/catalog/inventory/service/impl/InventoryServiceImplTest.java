@@ -12,8 +12,11 @@ import com.fashionstore.catalog.inventory.repository.InventoryReservationReposit
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import com.fashionstore.catalog.inventory.entity.InventoryLedger;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.jpa.domain.Specification;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -596,7 +599,8 @@ class InventoryServiceImplTest {
         org.springframework.data.domain.Page<com.fashionstore.catalog.inventory.entity.InventoryLedger> page =
                 new org.springframework.data.domain.PageImpl<>(List.of(ledger), pageable, 21);
 
-        when(inventoryLedgerRepository.search("var-1", null, null, null, pageable)).thenReturn(page);
+        when(inventoryLedgerRepository.findAll(ArgumentMatchers.<Specification<InventoryLedger>>any(), eq(pageable)))
+                .thenReturn(page);
 
         com.fashionstore.common.dto.PageResponse<List<com.fashionstore.catalog.inventory.dto.InventoryLedgerResponse>> response =
                 service.getLedger("var-1", null, null, null, pageable);
@@ -615,13 +619,15 @@ class InventoryServiceImplTest {
         org.springframework.data.domain.Page<com.fashionstore.catalog.inventory.entity.InventoryLedger> page =
                 new org.springframework.data.domain.PageImpl<>(List.of(), pageable, 0);
 
-        when(inventoryLedgerRepository.search(null, null, null, null, pageable)).thenReturn(page);
+        when(inventoryLedgerRepository.findAll(ArgumentMatchers.<Specification<InventoryLedger>>any(), eq(pageable)))
+                .thenReturn(page);
 
         com.fashionstore.common.dto.PageResponse<List<com.fashionstore.catalog.inventory.dto.InventoryLedgerResponse>> response =
                 service.getLedger(null, null, null, null, pageable);
 
         assertThat(response.getItems()).isEmpty();
-        verify(inventoryLedgerRepository, times(1)).search(null, null, null, null, pageable);
+        verify(inventoryLedgerRepository, times(1))
+                .findAll(ArgumentMatchers.<Specification<InventoryLedger>>any(), eq(pageable));
     }
 
     @Test

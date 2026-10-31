@@ -78,7 +78,8 @@ class InventoryRepositoryQueryTest {
                 .reservationId(reservation.getId()).variantId(variant.getId()).quantity(3).build());
         assertThat(reservationItems.findForAdmin(variant.getId(), InventoryReservationStatus.RESERVED,
                 PageRequest.of(0, 20)).getContent()).hasSize(1);
-        assertThat(ledger.search(null, null, null, null, PageRequest.of(0, 20)).getContent()).isEmpty();
+        assertThat(ledger.findAll(InventoryLedgerSpecifications.filter(null, null, null, null),
+                PageRequest.of(0, 20)).getContent()).isEmpty();
 
         inventory.setQuantity(3);
         inventories.saveAndFlush(inventory);
