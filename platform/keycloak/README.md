@@ -60,6 +60,7 @@ Create real admins in Keycloak afterwards. A realm is imported only once, so cha
 | `admin@fashion.local` | `Admin@12345` | `ADMIN`, `fashion-api/product:write` |
 | `customer@fashion.local` | `Customer@12345` | `USER` |
 | 10 seeded customers (`nguyen.van.an@fashion.local`, …) | `User@12345` | `USER` |
+| 10 more customers from `scripts/seed/keycloak-users.json` (`truong.minh.khoa@fashion.local`, …; `luong.van.son@fashion.local` is disabled) | `User@12345` | `USER` |
 
 ## Migrating legacy identity users
 

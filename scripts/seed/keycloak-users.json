@@ -2,11 +2,11 @@
   "ifResourceExists": "SKIP",
   "users": [
     {
-      "id": "00000000-0000-0000-0000-000000000011",
-      "username": "nguyen.van.an@fashion.local",
-      "email": "nguyen.van.an@fashion.local",
-      "firstName": "An",
-      "lastName": "Nguyễn Văn",
+      "id": "7cb10f2e-3068-4a3a-b15e-981dd47c1273",
+      "username": "customer@fashion.local",
+      "email": "customer@fashion.local",
+      "firstName": "Mẫu",
+      "lastName": "Khách Hàng",
       "enabled": true,
       "emailVerified": true,
       "credentials": [
@@ -21,11 +21,11 @@
       ]
     },
     {
-      "id": "00000000-0000-0000-0000-000000000012",
-      "username": "tran.thi.binh@fashion.local",
-      "email": "tran.thi.binh@fashion.local",
-      "firstName": "Bình",
-      "lastName": "Trần Thị",
+      "id": "00000000-0000-0000-0000-000000000021",
+      "username": "truong.minh.khoa@fashion.local",
+      "email": "truong.minh.khoa@fashion.local",
+      "firstName": "Khoa",
+      "lastName": "Trương Minh",
       "enabled": true,
       "emailVerified": true,
       "credentials": [
@@ -40,11 +40,11 @@
       ]
     },
     {
-      "id": "00000000-0000-0000-0000-000000000013",
-      "username": "le.hoang.nam@fashion.local",
-      "email": "le.hoang.nam@fashion.local",
-      "firstName": "Nam",
-      "lastName": "Lê Hoàng",
+      "id": "00000000-0000-0000-0000-000000000022",
+      "username": "ly.thanh.ha@fashion.local",
+      "email": "ly.thanh.ha@fashion.local",
+      "firstName": "Hà",
+      "lastName": "Lý Thanh",
       "enabled": true,
       "emailVerified": true,
       "credentials": [
@@ -59,11 +59,11 @@
       ]
     },
     {
-      "id": "00000000-0000-0000-0000-000000000014",
-      "username": "pham.minh.trang@fashion.local",
-      "email": "pham.minh.trang@fashion.local",
-      "firstName": "Trang",
-      "lastName": "Phạm Minh",
+      "id": "00000000-0000-0000-0000-000000000023",
+      "username": "phan.quoc.huy@fashion.local",
+      "email": "phan.quoc.huy@fashion.local",
+      "firstName": "Huy",
+      "lastName": "Phan Quốc",
       "enabled": true,
       "emailVerified": true,
       "credentials": [
@@ -78,11 +78,11 @@
       ]
     },
     {
-      "id": "00000000-0000-0000-0000-000000000015",
-      "username": "vu.duc.thang@fashion.local",
-      "email": "vu.duc.thang@fashion.local",
-      "firstName": "Thắng",
-      "lastName": "Vũ Đức",
+      "id": "00000000-0000-0000-0000-000000000024",
+      "username": "vo.ngoc.anh@fashion.local",
+      "email": "vo.ngoc.anh@fashion.local",
+      "firstName": "Anh",
+      "lastName": "Võ Ngọc",
       "enabled": true,
       "emailVerified": true,
       "credentials": [
@@ -97,11 +97,11 @@
       ]
     },
     {
-      "id": "00000000-0000-0000-0000-000000000016",
-      "username": "hoang.thu.thao@fashion.local",
-      "email": "hoang.thu.thao@fashion.local",
-      "firstName": "Thảo",
-      "lastName": "Hoàng Thu",
+      "id": "00000000-0000-0000-0000-000000000025",
+      "username": "dang.hai.yen@fashion.local",
+      "email": "dang.hai.yen@fashion.local",
+      "firstName": "Yến",
+      "lastName": "Đặng Hải",
       "enabled": true,
       "emailVerified": true,
       "credentials": [
@@ -116,11 +116,11 @@
       ]
     },
     {
-      "id": "00000000-0000-0000-0000-000000000017",
-      "username": "do.quoc.bao@fashion.local",
-      "email": "do.quoc.bao@fashion.local",
+      "id": "00000000-0000-0000-0000-000000000026",
+      "username": "duong.gia.bao@fashion.local",
+      "email": "duong.gia.bao@fashion.local",
       "firstName": "Bảo",
-      "lastName": "Đỗ Quốc",
+      "lastName": "Dương Gia",
       "enabled": true,
       "emailVerified": true,
       "credentials": [
@@ -135,11 +135,11 @@
       ]
     },
     {
-      "id": "00000000-0000-0000-0000-000000000018",
-      "username": "ngo.phuong.linh@fashion.local",
-      "email": "ngo.phuong.linh@fashion.local",
+      "id": "00000000-0000-0000-0000-000000000027",
+      "username": "mai.khanh.linh@fashion.local",
+      "email": "mai.khanh.linh@fashion.local",
       "firstName": "Linh",
-      "lastName": "Ngô Phương",
+      "lastName": "Mai Khánh",
       "enabled": true,
       "emailVerified": true,
       "credentials": [
@@ -154,11 +154,11 @@
       ]
     },
     {
-      "id": "00000000-0000-0000-0000-000000000019",
-      "username": "bui.anh.tuan@fashion.local",
-      "email": "bui.anh.tuan@fashion.local",
-      "firstName": "Tuấn",
-      "lastName": "Bùi Anh",
+      "id": "00000000-0000-0000-0000-000000000028",
+      "username": "ta.duc.anh@fashion.local",
+      "email": "ta.duc.anh@fashion.local",
+      "firstName": "Anh",
+      "lastName": "Tạ Đức",
       "enabled": true,
       "emailVerified": true,
       "credentials": [
@@ -173,12 +173,31 @@
       ]
     },
     {
-      "id": "00000000-0000-0000-0000-000000000020",
-      "username": "dinh.ngoc.mai@fashion.local",
-      "email": "dinh.ngoc.mai@fashion.local",
-      "firstName": "Mai",
-      "lastName": "Đinh Ngọc",
+      "id": "00000000-0000-0000-0000-000000000029",
+      "username": "ho.thu.trang@fashion.local",
+      "email": "ho.thu.trang@fashion.local",
+      "firstName": "Trang",
+      "lastName": "Hồ Thu",
       "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "User@12345",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "USER"
+      ]
+    },
+    {
+      "id": "00000000-0000-0000-0000-000000000030",
+      "username": "luong.van.son@fashion.local",
+      "email": "luong.van.son@fashion.local",
+      "firstName": "Sơn",
+      "lastName": "Lương Văn",
+      "enabled": false,
       "emailVerified": true,
       "credentials": [
         {

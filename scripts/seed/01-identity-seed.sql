@@ -1,10 +1,10 @@
 -- 01-identity-seed.sql
--- Seed dữ liệu cho identity_database (Port: 5434 / Service: identity-service)
--- Đồng bộ hoàn toàn với User UUID trong platform/keycloak/realm-fashion-store.json
+-- Seed cho identity_database. Sinh tự động, chạy lại nhiều lần an toàn (ON CONFLICT DO NOTHING).
+-- Thời gian tính tương đối từ now() để dữ liệu luôn "mới" khi kiểm thử giao diện.
 BEGIN;
 SET client_encoding = 'UTF8';
 
--- 1. Permissions (12 quyền)
+
 INSERT INTO permissions (id, name, description) VALUES
     ('perm-01', 'product:read', 'Xem danh sách và chi tiết sản phẩm'),
     ('perm-02', 'product:write', 'Thêm, sửa, xóa sản phẩm và biến thể'),
@@ -18,19 +18,14 @@ INSERT INTO permissions (id, name, description) VALUES
     ('perm-10', 'promotion:manage', 'Quản lý mã giảm giá và khuyến mãi'),
     ('perm-11', 'payment:manage', 'Tra cứu giao dịch và xử lý hoàn tiền'),
     ('perm-12', 'report:view', 'Xem báo cáo doanh thu và vận hành')
-ON CONFLICT (name) DO NOTHING;
+ON CONFLICT DO NOTHING;
 
--- 2. Roles
 INSERT INTO roles (id, name, description) VALUES
     ('00000000-0000-0000-0000-000000000001', 'USER', 'Khách hàng mua sắm'),
-    ('00000000-0000-0000-0000-000000000002', 'ADMIN', 'Quản trị viên hệ thống'),
-    ('00000000-0000-0000-0000-000000000003', 'STAFF', 'Nhân viên vận hành cửa hàng')
-ON CONFLICT (name) DO NOTHING;
+    ('00000000-0000-0000-0000-000000000002', 'ADMIN', 'Quản trị viên hệ thống')
+ON CONFLICT DO NOTHING;
 
--- 3. Role Permissions
 INSERT INTO role_permissions (role_id, permission_id) VALUES
-    ('00000000-0000-0000-0000-000000000001', 'perm-01'),
-    ('00000000-0000-0000-0000-000000000001', 'perm-03'),
     ('00000000-0000-0000-0000-000000000002', 'perm-01'),
     ('00000000-0000-0000-0000-000000000002', 'perm-02'),
     ('00000000-0000-0000-0000-000000000002', 'perm-03'),
@@ -42,26 +37,36 @@ INSERT INTO role_permissions (role_id, permission_id) VALUES
     ('00000000-0000-0000-0000-000000000002', 'perm-09'),
     ('00000000-0000-0000-0000-000000000002', 'perm-10'),
     ('00000000-0000-0000-0000-000000000002', 'perm-11'),
-    ('00000000-0000-0000-0000-000000000002', 'perm-12')
+    ('00000000-0000-0000-0000-000000000002', 'perm-12'),
+    ('00000000-0000-0000-0000-000000000001', 'perm-01'),
+    ('00000000-0000-0000-0000-000000000001', 'perm-03')
 ON CONFLICT DO NOTHING;
 
--- 4. Users (12 tài khoản đồng bộ UUID Keycloak)
 INSERT INTO users (id, email, password, full_name, phone, address, avatar, is_active, is_email_verified, created_at, updated_at) VALUES
-    ('00000000-0000-0000-0000-000000000001', 'admin@fashion.local', '{noop}Admin@12345', 'Quản Trị Viên', '0901000001', 'Tòa nhà LINO Tower, Cầu Giấy, Hà Nội', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400', true, true, now(), now()),
-    ('7cb10f2e-3068-4a3a-b15e-981dd47c1273', 'customer@fashion.local', '{noop}Customer@12345', 'Khách Hàng Mẫu', '0901000002', '123 Lê Lợi, Phường Bến Nghé, Quận 1, TP. Hồ Chí Minh', 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400', true, true, now(), now()),
-    ('00000000-0000-0000-0000-000000000011', 'nguyen.van.an@fashion.local', '{noop}User@12345', 'Nguyễn Văn An', '0912345601', 'Số 15 Hàng Bài, Phường Tràng Tiền, Quận Hoàn Kiếm, Hà Nội', 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400', true, true, now(), now()),
-    ('00000000-0000-0000-0000-000000000012', 'tran.thi.binh@fashion.local', '{noop}User@12345', 'Trần Thị Bình', '0912345602', '45 Nguyễn Thị Minh Khai, Phường Bến Nghé, Quận 1, TP. Hồ Chí Minh', 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400', true, true, now(), now()),
-    ('00000000-0000-0000-0000-000000000013', 'le.hoang.nam@fashion.local', '{noop}User@12345', 'Lê Hoàng Nam', '0912345603', '88 Trần Phú, Phường Hải Châu 1, Quận Hải Châu, Đà Nẵng', 'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=400', true, true, now(), now()),
-    ('00000000-0000-0000-0000-000000000014', 'pham.minh.trang@fashion.local', '{noop}User@12345', 'Phạm Minh Trang', '0912345604', '204 Cầu Giấy, Phường Dịch Vọng, Quận Cầu Giấy, Hà Nội', 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=400', true, true, now(), now()),
-    ('00000000-0000-0000-0000-000000000015', 'vu.duc.thang@fashion.local', '{noop}User@12345', 'Vũ Đức Thắng', '0912345605', '12 Lạch Tray, Phường Lạch Tray, Quận Ngô Quyền, Hải Phòng', 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=400', true, true, now(), now()),
-    ('00000000-0000-0000-0000-000000000016', 'hoang.thu.thao@fashion.local', '{noop}User@12345', 'Hoàng Thu Thảo', '0912345606', '56 Nguyễn Trãi, Phường Ninh Kiều, Quận Ninh Kiều, Cần Thơ', 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=400', true, true, now(), now()),
-    ('00000000-0000-0000-0000-000000000017', 'do.quoc.bao@fashion.local', '{noop}User@12345', 'Đỗ Quốc Bảo', '0912345607', '180 Võ Thị Sáu, Phường Võ Thị Sáu, Quận 3, TP. Hồ Chí Minh', 'https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=400', true, true, now(), now()),
-    ('00000000-0000-0000-0000-000000000018', 'ngo.phuong.linh@fashion.local', '{noop}User@12345', 'Ngô Phương Linh', '0912345608', '77 Nguyễn Thái Học, Phường Điện Biên, Quận Ba Đình, Hà Nội', 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=400', true, true, now(), now()),
-    ('00000000-0000-0000-0000-000000000019', 'bui.anh.tuan@fashion.local', '{noop}User@12345', 'Bùi Anh Tuấn', '0912345609', '320 Nguyễn Văn Linh, Phường Tân Phú, Quận 7, TP. Hồ Chí Minh', 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=400', true, true, now(), now()),
-    ('00000000-0000-0000-0000-000000000020', 'dinh.ngoc.mai@fashion.local', '{noop}User@12345', 'Đinh Ngọc Mai', '0912345610', '95 Hùng Vương, Phường Phú Hội, Thành phố Huế, Thừa Thiên Huế', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400', true, true, now(), now())
-ON CONFLICT (email) DO NOTHING;
+    ('00000000-0000-0000-0000-000000000001', 'admin@fashion.local', NULL, 'Quản Trị Viên', '0901000001', '15 Hàng Bài, Phường Bến Nghé, Quận 1, Hồ Chí Minh', 'https://i.pravatar.cc/200?img=1', true, true, now() - interval '115200 minutes', now() - interval '57600 minutes'),
+    ('7cb10f2e-3068-4a3a-b15e-981dd47c1273', 'customer@fashion.local', NULL, 'Khách Hàng Mẫu', '0901000002', '45 Nguyễn Thị Minh Khai, Phường Tràng Tiền, Quận Hoàn Kiếm, Hà Nội', 'https://i.pravatar.cc/200?img=2', true, true, now() - interval '112320 minutes', now() - interval '56160 minutes'),
+    ('00000000-0000-0000-0000-000000000011', 'nguyen.van.an@fashion.local', NULL, 'Nguyễn Văn An', '0912345601', '88 Trần Phú, Phường Hải Châu 1, Quận Hải Châu, Đà Nẵng', 'https://i.pravatar.cc/200?img=3', true, true, now() - interval '109440 minutes', now() - interval '54720 minutes'),
+    ('00000000-0000-0000-0000-000000000012', 'tran.thi.binh@fashion.local', NULL, 'Trần Thị Bình', '0912345602', '204 Cầu Giấy, Phường Dịch Vọng, Quận Cầu Giấy, Hà Nội', 'https://i.pravatar.cc/200?img=4', true, true, now() - interval '106560 minutes', now() - interval '53280 minutes'),
+    ('00000000-0000-0000-0000-000000000013', 'le.hoang.nam@fashion.local', NULL, 'Lê Hoàng Nam', '0912345603', '12 Lạch Tray, Phường Lạch Tray, Quận Ngô Quyền, Hải Phòng', 'https://i.pravatar.cc/200?img=5', true, true, now() - interval '103680 minutes', now() - interval '51840 minutes'),
+    ('00000000-0000-0000-0000-000000000014', 'pham.minh.trang@fashion.local', NULL, 'Phạm Minh Trang', '0912345604', '56 Nguyễn Trãi, Phường An Hòa, Quận Ninh Kiều, Cần Thơ', 'https://i.pravatar.cc/200?img=6', true, true, now() - interval '100800 minutes', now() - interval '50400 minutes'),
+    ('00000000-0000-0000-0000-000000000015', 'vu.duc.thang@fashion.local', NULL, 'Vũ Đức Thắng', '0912345605', '180 Võ Thị Sáu, Phường Võ Thị Sáu, Quận 3, Hồ Chí Minh', 'https://i.pravatar.cc/200?img=7', true, true, now() - interval '97920 minutes', now() - interval '48960 minutes'),
+    ('00000000-0000-0000-0000-000000000016', 'hoang.thu.thao@fashion.local', NULL, 'Hoàng Thu Thảo', '0912345606', '77 Nguyễn Thái Học, Phường Điện Biên, Quận Ba Đình, Hà Nội', 'https://i.pravatar.cc/200?img=8', true, true, now() - interval '95040 minutes', now() - interval '47520 minutes'),
+    ('00000000-0000-0000-0000-000000000017', 'do.quoc.bao@fashion.local', NULL, 'Đỗ Quốc Bảo', '0912345607', '320 Nguyễn Văn Linh, Phường Tân Phú, Quận 7, Hồ Chí Minh', 'https://i.pravatar.cc/200?img=9', true, true, now() - interval '92160 minutes', now() - interval '46080 minutes'),
+    ('00000000-0000-0000-0000-000000000018', 'ngo.phuong.linh@fashion.local', NULL, 'Ngô Phương Linh', '0912345608', '95 Hùng Vương, Phường Phú Hội, Thành phố Huế, Thừa Thiên Huế', 'https://i.pravatar.cc/200?img=10', true, true, now() - interval '89280 minutes', now() - interval '44640 minutes'),
+    ('00000000-0000-0000-0000-000000000019', 'bui.anh.tuan@fashion.local', NULL, 'Bùi Anh Tuấn', '0912345609', '26 Lý Thường Kiệt, Phường Ô Chợ Dừa, Quận Đống Đa, Hà Nội', 'https://i.pravatar.cc/200?img=11', true, true, now() - interval '86400 minutes', now() - interval '43200 minutes'),
+    ('00000000-0000-0000-0000-000000000020', 'dinh.ngoc.mai@fashion.local', NULL, 'Đinh Ngọc Mai', '0912345610', '9 Phan Chu Trinh, Phường Bến Nghé, Quận 1, Hồ Chí Minh', 'https://i.pravatar.cc/200?img=12', true, true, now() - interval '83520 minutes', now() - interval '41760 minutes'),
+    ('00000000-0000-0000-0000-000000000021', 'truong.minh.khoa@fashion.local', NULL, 'Trương Minh Khoa', '0912345611', '15 Hàng Bài, Phường Tràng Tiền, Quận Hoàn Kiếm, Hà Nội', 'https://i.pravatar.cc/200?img=13', true, true, now() - interval '80640 minutes', now() - interval '40320 minutes'),
+    ('00000000-0000-0000-0000-000000000022', 'ly.thanh.ha@fashion.local', NULL, 'Lý Thanh Hà', '0912345612', '45 Nguyễn Thị Minh Khai, Phường Hải Châu 1, Quận Hải Châu, Đà Nẵng', 'https://i.pravatar.cc/200?img=14', true, true, now() - interval '77760 minutes', now() - interval '38880 minutes'),
+    ('00000000-0000-0000-0000-000000000023', 'phan.quoc.huy@fashion.local', NULL, 'Phan Quốc Huy', '0912345613', '88 Trần Phú, Phường Dịch Vọng, Quận Cầu Giấy, Hà Nội', 'https://i.pravatar.cc/200?img=15', true, true, now() - interval '74880 minutes', now() - interval '37440 minutes'),
+    ('00000000-0000-0000-0000-000000000024', 'vo.ngoc.anh@fashion.local', NULL, 'Võ Ngọc Anh', '0912345614', '204 Cầu Giấy, Phường Lạch Tray, Quận Ngô Quyền, Hải Phòng', 'https://i.pravatar.cc/200?img=16', true, true, now() - interval '72000 minutes', now() - interval '36000 minutes'),
+    ('00000000-0000-0000-0000-000000000025', 'dang.hai.yen@fashion.local', NULL, 'Đặng Hải Yến', '0912345615', '12 Lạch Tray, Phường An Hòa, Quận Ninh Kiều, Cần Thơ', 'https://i.pravatar.cc/200?img=17', true, true, now() - interval '69120 minutes', now() - interval '34560 minutes'),
+    ('00000000-0000-0000-0000-000000000026', 'duong.gia.bao@fashion.local', NULL, 'Dương Gia Bảo', '0912345616', '56 Nguyễn Trãi, Phường Võ Thị Sáu, Quận 3, Hồ Chí Minh', 'https://i.pravatar.cc/200?img=18', true, true, now() - interval '66240 minutes', now() - interval '33120 minutes'),
+    ('00000000-0000-0000-0000-000000000027', 'mai.khanh.linh@fashion.local', NULL, 'Mai Khánh Linh', '0912345617', '180 Võ Thị Sáu, Phường Điện Biên, Quận Ba Đình, Hà Nội', 'https://i.pravatar.cc/200?img=19', true, true, now() - interval '63360 minutes', now() - interval '31680 minutes'),
+    ('00000000-0000-0000-0000-000000000028', 'ta.duc.anh@fashion.local', NULL, 'Tạ Đức Anh', '0912345618', '77 Nguyễn Thái Học, Phường Tân Phú, Quận 7, Hồ Chí Minh', 'https://i.pravatar.cc/200?img=20', true, true, now() - interval '60480 minutes', now() - interval '30240 minutes'),
+    ('00000000-0000-0000-0000-000000000029', 'ho.thu.trang@fashion.local', NULL, 'Hồ Thu Trang', '0912345619', '320 Nguyễn Văn Linh, Phường Phú Hội, Thành phố Huế, Thừa Thiên Huế', 'https://i.pravatar.cc/200?img=21', true, true, now() - interval '57600 minutes', now() - interval '28800 minutes'),
+    ('00000000-0000-0000-0000-000000000030', 'luong.van.son@fashion.local', NULL, 'Lương Văn Sơn', '0912345620', '95 Hùng Vương, Phường Ô Chợ Dừa, Quận Đống Đa, Hà Nội', 'https://i.pravatar.cc/200?img=22', false, true, now() - interval '54720 minutes', now() - interval '27360 minutes')
+ON CONFLICT DO NOTHING;
 
--- 5. User Roles
 INSERT INTO user_roles (user_id, role_id) VALUES
     ('00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000002'),
     ('7cb10f2e-3068-4a3a-b15e-981dd47c1273', '00000000-0000-0000-0000-000000000001'),
@@ -74,51 +79,50 @@ INSERT INTO user_roles (user_id, role_id) VALUES
     ('00000000-0000-0000-0000-000000000017', '00000000-0000-0000-0000-000000000001'),
     ('00000000-0000-0000-0000-000000000018', '00000000-0000-0000-0000-000000000001'),
     ('00000000-0000-0000-0000-000000000019', '00000000-0000-0000-0000-000000000001'),
-    ('00000000-0000-0000-0000-000000000020', '00000000-0000-0000-0000-000000000001')
+    ('00000000-0000-0000-0000-000000000020', '00000000-0000-0000-0000-000000000001'),
+    ('00000000-0000-0000-0000-000000000021', '00000000-0000-0000-0000-000000000001'),
+    ('00000000-0000-0000-0000-000000000022', '00000000-0000-0000-0000-000000000001'),
+    ('00000000-0000-0000-0000-000000000023', '00000000-0000-0000-0000-000000000001'),
+    ('00000000-0000-0000-0000-000000000024', '00000000-0000-0000-0000-000000000001'),
+    ('00000000-0000-0000-0000-000000000025', '00000000-0000-0000-0000-000000000001'),
+    ('00000000-0000-0000-0000-000000000026', '00000000-0000-0000-0000-000000000001'),
+    ('00000000-0000-0000-0000-000000000027', '00000000-0000-0000-0000-000000000001'),
+    ('00000000-0000-0000-0000-000000000028', '00000000-0000-0000-0000-000000000001'),
+    ('00000000-0000-0000-0000-000000000029', '00000000-0000-0000-0000-000000000001'),
+    ('00000000-0000-0000-0000-000000000030', '00000000-0000-0000-0000-000000000001')
 ON CONFLICT DO NOTHING;
 
--- 6. User Addresses (12 địa chỉ chuẩn GHN Location IDs)
-INSERT INTO user_addresses (
-    id, user_id, recipient_name, phone,
-    province, district, ward, detail_address,
-    province_id, district_id, ward_code, is_default, created_at, updated_at
-) VALUES
-    ('addr-01', '7cb10f2e-3068-4a3a-b15e-981dd47c1273', 'Khách Hàng Mẫu', '0901000002',
-     'Hồ Chí Minh', 'Quận 1', 'Phường Bến Nghé', '123 Lê Lợi',
-     202, 1442, '20101', true, now(), now()),
-    ('addr-02', '00000000-0000-0000-0000-000000000011', 'Nguyễn Văn An', '0912345601',
-     'Hà Nội', 'Quận Hoàn Kiếm', 'Phường Tràng Tiền', 'Số 15 Hàng Bài',
-     201, 1482, '10101', true, now(), now()),
-    ('addr-03', '00000000-0000-0000-0000-000000000012', 'Trần Thị Bình', '0912345602',
-     'Hồ Chí Minh', 'Quận 1', 'Phường Bến Nghé', '45 Nguyễn Thị Minh Khai',
-     202, 1442, '20101', true, now(), now()),
-    ('addr-04', '00000000-0000-0000-0000-000000000013', 'Lê Hoàng Nam', '0912345603',
-     'Đà Nẵng', 'Quận Hải Châu', 'Phường Hải Châu 1', '88 Trần Phú',
-     203, 1530, '40101', true, now(), now()),
-    ('addr-05', '00000000-0000-0000-0000-000000000014', 'Phạm Minh Trang', '0912345604',
-     'Hà Nội', 'Quận Cầu Giấy', 'Phường Dịch Vọng', '204 Cầu Giấy',
-     201, 1485, '10203', true, now(), now()),
-    ('addr-06', '00000000-0000-0000-0000-000000000015', 'Vũ Đức Thắng', '0912345605',
-     'Hải Phòng', 'Quận Ngô Quyền', 'Phường Lạch Tray', '12 Lạch Tray',
-     204, 1560, '30102', true, now(), now()),
-    ('addr-07', '00000000-0000-0000-0000-000000000016', 'Hoàng Thu Thảo', '0912345606',
-     'Cần Thơ', 'Quận Ninh Kiều', 'Phường An Hòa', '56 Nguyễn Trãi',
-     205, 1580, '50104', true, now(), now()),
-    ('addr-08', '00000000-0000-0000-0000-000000000017', 'Đỗ Quốc Bảo', '0912345607',
-     'Hồ Chí Minh', 'Quận 3', 'Phường Võ Thị Sáu', '180 Võ Thị Sáu',
-     202, 1444, '20205', true, now(), now()),
-    ('addr-09', '00000000-0000-0000-0000-000000000018', 'Ngô Phương Linh', '0912345608',
-     'Hà Nội', 'Quận Ba Đình', 'Phường Điện Biên', '77 Nguyễn Thái Học',
-     201, 1481, '10103', true, now(), now()),
-    ('addr-10', '00000000-0000-0000-0000-000000000019', 'Bùi Anh Tuấn', '0912345609',
-     'Hồ Chí Minh', 'Quận 7', 'Phường Tân Phú', '320 Nguyễn Văn Linh',
-     202, 1450, '20701', true, now(), now()),
-    ('addr-11', '00000000-0000-0000-0000-000000000020', 'Đinh Ngọc Mai', '0912345610',
-     'Thừa Thiên Huế', 'Thành phố Huế', 'Phường Phú Hội', '95 Hùng Vương',
-     206, 1600, '60102', true, now(), now()),
-    ('addr-12', '00000000-0000-0000-0000-000000000011', 'Nguyễn Văn An (Văn phòng)', '0912345601',
-     'Hà Nội', 'Quận Đống Đa', 'Phường Ô Chợ Dừa', '15 Hoàng Cầu',
-     201, 1484, '10201', false, now(), now())
-ON CONFLICT (id) DO NOTHING;
+INSERT INTO user_addresses (id, user_id, recipient_name, phone, province, district, ward, detail_address, is_default, province_id, district_id, ward_code, created_at, updated_at) VALUES
+    ('addr-00-1', '00000000-0000-0000-0000-000000000001', 'Quản Trị Viên', '0901000001', 'Hồ Chí Minh', 'Quận 1', 'Phường Bến Nghé', '15 Hàng Bài', true, 202, 1442, '20101', now() - interval '115200 minutes', now() - interval '115200 minutes'),
+    ('addr-01-1', '7cb10f2e-3068-4a3a-b15e-981dd47c1273', 'Khách Hàng Mẫu', '0901000002', 'Hà Nội', 'Quận Hoàn Kiếm', 'Phường Tràng Tiền', '45 Nguyễn Thị Minh Khai', true, 201, 1482, '10101', now() - interval '112320 minutes', now() - interval '112320 minutes'),
+    ('addr-02-1', '00000000-0000-0000-0000-000000000011', 'Nguyễn Văn An', '0912345601', 'Đà Nẵng', 'Quận Hải Châu', 'Phường Hải Châu 1', '88 Trần Phú', true, 203, 1530, '40101', now() - interval '109440 minutes', now() - interval '109440 minutes'),
+    ('addr-03-1', '00000000-0000-0000-0000-000000000012', 'Trần Thị Bình', '0912345602', 'Hà Nội', 'Quận Cầu Giấy', 'Phường Dịch Vọng', '204 Cầu Giấy', true, 201, 1485, '10203', now() - interval '106560 minutes', now() - interval '106560 minutes'),
+    ('addr-03-2', '00000000-0000-0000-0000-000000000012', 'Trần Thị Bình (Văn phòng)', '0912345602', 'Hà Nội', 'Quận Ba Đình', 'Phường Điện Biên', '320 Nguyễn Văn Linh', false, 201, 1481, '10103', now() - interval '106560 minutes', now() - interval '106560 minutes'),
+    ('addr-04-1', '00000000-0000-0000-0000-000000000013', 'Lê Hoàng Nam', '0912345603', 'Hải Phòng', 'Quận Ngô Quyền', 'Phường Lạch Tray', '12 Lạch Tray', true, 204, 1560, '30102', now() - interval '103680 minutes', now() - interval '103680 minutes'),
+    ('addr-05-1', '00000000-0000-0000-0000-000000000014', 'Phạm Minh Trang', '0912345604', 'Cần Thơ', 'Quận Ninh Kiều', 'Phường An Hòa', '56 Nguyễn Trãi', true, 205, 1580, '50104', now() - interval '100800 minutes', now() - interval '100800 minutes'),
+    ('addr-06-1', '00000000-0000-0000-0000-000000000015', 'Vũ Đức Thắng', '0912345605', 'Hồ Chí Minh', 'Quận 3', 'Phường Võ Thị Sáu', '180 Võ Thị Sáu', true, 202, 1444, '20205', now() - interval '97920 minutes', now() - interval '97920 minutes'),
+    ('addr-06-2', '00000000-0000-0000-0000-000000000015', 'Vũ Đức Thắng (Văn phòng)', '0912345605', 'Hà Nội', 'Quận Đống Đa', 'Phường Ô Chợ Dừa', '9 Phan Chu Trinh', false, 201, 1484, '10201', now() - interval '97920 minutes', now() - interval '97920 minutes'),
+    ('addr-07-1', '00000000-0000-0000-0000-000000000016', 'Hoàng Thu Thảo', '0912345606', 'Hà Nội', 'Quận Ba Đình', 'Phường Điện Biên', '77 Nguyễn Thái Học', true, 201, 1481, '10103', now() - interval '95040 minutes', now() - interval '95040 minutes'),
+    ('addr-08-1', '00000000-0000-0000-0000-000000000017', 'Đỗ Quốc Bảo', '0912345607', 'Hồ Chí Minh', 'Quận 7', 'Phường Tân Phú', '320 Nguyễn Văn Linh', true, 202, 1450, '20701', now() - interval '92160 minutes', now() - interval '92160 minutes'),
+    ('addr-09-1', '00000000-0000-0000-0000-000000000018', 'Ngô Phương Linh', '0912345608', 'Thừa Thiên Huế', 'Thành phố Huế', 'Phường Phú Hội', '95 Hùng Vương', true, 206, 1600, '60102', now() - interval '89280 minutes', now() - interval '89280 minutes'),
+    ('addr-09-2', '00000000-0000-0000-0000-000000000018', 'Ngô Phương Linh (Văn phòng)', '0912345608', 'Đà Nẵng', 'Quận Hải Châu', 'Phường Hải Châu 1', '88 Trần Phú', false, 203, 1530, '40101', now() - interval '89280 minutes', now() - interval '89280 minutes'),
+    ('addr-10-1', '00000000-0000-0000-0000-000000000019', 'Bùi Anh Tuấn', '0912345609', 'Hà Nội', 'Quận Đống Đa', 'Phường Ô Chợ Dừa', '26 Lý Thường Kiệt', true, 201, 1484, '10201', now() - interval '86400 minutes', now() - interval '86400 minutes'),
+    ('addr-11-1', '00000000-0000-0000-0000-000000000020', 'Đinh Ngọc Mai', '0912345610', 'Hồ Chí Minh', 'Quận 1', 'Phường Bến Nghé', '9 Phan Chu Trinh', true, 202, 1442, '20101', now() - interval '83520 minutes', now() - interval '83520 minutes'),
+    ('addr-12-1', '00000000-0000-0000-0000-000000000021', 'Trương Minh Khoa', '0912345611', 'Hà Nội', 'Quận Hoàn Kiếm', 'Phường Tràng Tiền', '15 Hàng Bài', true, 201, 1482, '10101', now() - interval '80640 minutes', now() - interval '80640 minutes'),
+    ('addr-12-2', '00000000-0000-0000-0000-000000000021', 'Trương Minh Khoa (Văn phòng)', '0912345611', 'Cần Thơ', 'Quận Ninh Kiều', 'Phường An Hòa', '56 Nguyễn Trãi', false, 205, 1580, '50104', now() - interval '80640 minutes', now() - interval '80640 minutes'),
+    ('addr-13-1', '00000000-0000-0000-0000-000000000022', 'Lý Thanh Hà', '0912345612', 'Đà Nẵng', 'Quận Hải Châu', 'Phường Hải Châu 1', '45 Nguyễn Thị Minh Khai', true, 203, 1530, '40101', now() - interval '77760 minutes', now() - interval '77760 minutes'),
+    ('addr-14-1', '00000000-0000-0000-0000-000000000023', 'Phan Quốc Huy', '0912345613', 'Hà Nội', 'Quận Cầu Giấy', 'Phường Dịch Vọng', '88 Trần Phú', true, 201, 1485, '10203', now() - interval '74880 minutes', now() - interval '74880 minutes'),
+    ('addr-15-1', '00000000-0000-0000-0000-000000000024', 'Võ Ngọc Anh', '0912345614', 'Hải Phòng', 'Quận Ngô Quyền', 'Phường Lạch Tray', '204 Cầu Giấy', true, 204, 1560, '30102', now() - interval '72000 minutes', now() - interval '72000 minutes'),
+    ('addr-15-2', '00000000-0000-0000-0000-000000000024', 'Võ Ngọc Anh (Văn phòng)', '0912345614', 'Hồ Chí Minh', 'Quận 7', 'Phường Tân Phú', '320 Nguyễn Văn Linh', false, 202, 1450, '20701', now() - interval '72000 minutes', now() - interval '72000 minutes'),
+    ('addr-16-1', '00000000-0000-0000-0000-000000000025', 'Đặng Hải Yến', '0912345615', 'Cần Thơ', 'Quận Ninh Kiều', 'Phường An Hòa', '12 Lạch Tray', true, 205, 1580, '50104', now() - interval '69120 minutes', now() - interval '69120 minutes'),
+    ('addr-17-1', '00000000-0000-0000-0000-000000000026', 'Dương Gia Bảo', '0912345616', 'Hồ Chí Minh', 'Quận 3', 'Phường Võ Thị Sáu', '56 Nguyễn Trãi', true, 202, 1444, '20205', now() - interval '66240 minutes', now() - interval '66240 minutes'),
+    ('addr-18-1', '00000000-0000-0000-0000-000000000027', 'Mai Khánh Linh', '0912345617', 'Hà Nội', 'Quận Ba Đình', 'Phường Điện Biên', '180 Võ Thị Sáu', true, 201, 1481, '10103', now() - interval '63360 minutes', now() - interval '63360 minutes'),
+    ('addr-18-2', '00000000-0000-0000-0000-000000000027', 'Mai Khánh Linh (Văn phòng)', '0912345617', 'Hồ Chí Minh', 'Quận 1', 'Phường Bến Nghé', '9 Phan Chu Trinh', false, 202, 1442, '20101', now() - interval '63360 minutes', now() - interval '63360 minutes'),
+    ('addr-19-1', '00000000-0000-0000-0000-000000000028', 'Tạ Đức Anh', '0912345618', 'Hồ Chí Minh', 'Quận 7', 'Phường Tân Phú', '77 Nguyễn Thái Học', true, 202, 1450, '20701', now() - interval '60480 minutes', now() - interval '60480 minutes'),
+    ('addr-20-1', '00000000-0000-0000-0000-000000000029', 'Hồ Thu Trang', '0912345619', 'Thừa Thiên Huế', 'Thành phố Huế', 'Phường Phú Hội', '320 Nguyễn Văn Linh', true, 206, 1600, '60102', now() - interval '57600 minutes', now() - interval '57600 minutes'),
+    ('addr-21-1', '00000000-0000-0000-0000-000000000030', 'Lương Văn Sơn', '0912345620', 'Hà Nội', 'Quận Đống Đa', 'Phường Ô Chợ Dừa', '95 Hùng Vương', true, 201, 1484, '10201', now() - interval '54720 minutes', now() - interval '54720 minutes'),
+    ('addr-21-2', '00000000-0000-0000-0000-000000000030', 'Lương Văn Sơn (Văn phòng)', '0912345620', 'Hà Nội', 'Quận Cầu Giấy', 'Phường Dịch Vọng', '88 Trần Phú', false, 201, 1485, '10203', now() - interval '54720 minutes', now() - interval '54720 minutes')
+ON CONFLICT DO NOTHING;
+
 
 COMMIT;

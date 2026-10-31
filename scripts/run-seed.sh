@@ -34,7 +34,7 @@ echo "-> [5/5] Nạp Notification Service..."
 docker compose exec -T notification-postgres psql -U root -d notification_database < "$SEED_DIR/05-notification-seed.sql"
 
 if [ -f "$SEED_DIR/keycloak-users.json" ]; then
-    echo "-> [6/6] Nạp 10 tài khoản vào Keycloak realm fashion-store..."
+    echo "-> [6/6] Nạp thêm 10 tài khoản bổ sung (id 21-30) vào Keycloak realm fashion-store..."
     docker compose exec -T keycloak /opt/keycloak/bin/kcadm.sh config credentials --server http://localhost:8080 --realm master --user admin --password admin 2>/dev/null || true
     docker compose exec -T keycloak /opt/keycloak/bin/kcadm.sh create partialImport -r fashion-store -f - < "$SEED_DIR/keycloak-users.json"
 fi

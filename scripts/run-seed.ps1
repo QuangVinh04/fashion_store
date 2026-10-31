@@ -20,35 +20,35 @@ $Databases = @(
         Service = "identity-postgres"
         Database = "identity_database"
         File = "01-identity-seed.sql"
-        Port = 5434
-        Label = "1/5: Identity Service (Users, Roles, Addresses chuan GHN)"
+        Port = 5438
+        Label = "1/5: Identity Service (22 Users, Roles, Permissions, Addresses chuan GHN)"
     },
     @{
         Service = "catalog-postgres"
         Database = "catalog_database"
         File = "02-catalog-seed.sql"
-        Port = 5433
-        Label = "2/5: Catalog Service (Brands, Categories, Products, Images, Stock)"
+        Port = 5435
+        Label = "2/5: Catalog Service (Brands, Categories, 37 Products, 304 Variants, Stock, Reviews)"
     },
     @{
         Service = "order-postgres"
         Database = "order_database"
         File = "03-order-seed.sql"
-        Port = 5435
-        Label = "3/5: Order Service (Carts, Orders, Shipments, Returns, Promos)"
+        Port = 5437
+        Label = "3/5: Order Service (Carts, 62 Orders, Shipments, Returns, Sagas, Promos)"
     },
     @{
         Service = "payment-postgres"
         Database = "payment_database"
         File = "04-payment-seed.sql"
-        Port = 5436
+        Port = 5433
         Label = "4/5: Payment Service (Payments, Refunds, Wallets, Ledgers)"
     },
     @{
         Service = "notification-postgres"
         Database = "notification_database"
         File = "05-notification-seed.sql"
-        Port = 5437
+        Port = 5439
         Label = "5/5: Notification Service (In-App Notifications)"
     }
 )
@@ -93,18 +93,22 @@ foreach ($db in $Databases) {
     }
 }
 
-# Nap 10 user vao Keycloak realm fashion-store
+# Nap them 10 user vao Keycloak realm fashion-store
 $KeycloakFile = Join-Path $SeedDir "keycloak-users.json"
 if (Test-Path $KeycloakFile) {
-    Write-Host "`nDang nap: 6/6: Keycloak Realm (10 tai khoan khach hang)..." -ForegroundColor Yellow
+    Write-Host "`nDang nap: 6/6: Keycloak Realm (10 tai khoan khach hang bo sung, id 21-30)..." -ForegroundColor Yellow
     docker compose exec -T keycloak /opt/keycloak/bin/kcadm.sh config credentials --server http://localhost:8080 --realm master --user admin --password admin 2>$null | Out-Null
     if ($LASTEXITCODE -eq 0) {
-        Get-Content $KeycloakFile -Raw -Encoding UTF8 | docker compose exec -T keycloak /opt/keycloak/bin/kcadm.sh create partialImport -r fashion-store -f - 2>$null | Out-Null
-        if ($LASTEXITCODE -eq 0) {
-            Write-Host "  -> [THANH CONG] Da nap 10 user vao Keycloak realm fashion-store" -ForegroundColor Green
+        # Copy file thay vi pipe: PowerShell 5.1 chen BOM khi pipe UTF-8 vao native exe, kcadm khong doc duoc JSON
+        docker compose cp $KeycloakFile "keycloak:/tmp/keycloak-users.json" 2>$null | Out-Null
+        docker compose exec -T keycloak /opt/keycloak/bin/kcadm.sh create partialImport -r fashion-store -f /tmp/keycloak-users.json 2>$null | Out-Null
+        $importExitCode = $LASTEXITCODE
+        docker compose exec -T keycloak rm -f /tmp/keycloak-users.json 2>$null | Out-Null
+        if ($importExitCode -eq 0) {
+            Write-Host "  -> [THANH CONG] Da nap 10 user bo sung vao Keycloak realm fashion-store" -ForegroundColor Green
         }
         else {
-            Write-Host "  -> [THAT BAI] Loi khi import user vao Keycloak (Exit code: $LASTEXITCODE)" -ForegroundColor Red
+            Write-Host "  -> [THAT BAI] Loi khi import user vao Keycloak (Exit code: $importExitCode)" -ForegroundColor Red
             $hasError = $true
         }
     }
