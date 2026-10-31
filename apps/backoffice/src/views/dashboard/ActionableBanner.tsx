@@ -42,12 +42,12 @@ const ActionableBanner = ({ orderByStatus = [], returnRequestsCount = 0, isLoadi
   const actionItems: ActionItem[] = [
     {
       count: confirmedCount,
-      title: `${confirmedCount} Đơn tiếp nhận`,
-      subtitle: 'Đã thanh toán / chốt COD',
+      title: `${confirmedCount} Đơn chờ xác nhận`,
+      subtitle: 'Đang chờ admin xác nhận để đóng gói',
       badgeTone: 'primary',
       icon: 'ri-checkbox-circle-line',
       href: '/orders?status=CONFIRMED',
-      buttonText: 'Tiếp nhận'
+      buttonText: 'Xác nhận'
     },
     {
       count: processingCount,
@@ -60,12 +60,12 @@ const ActionableBanner = ({ orderByStatus = [], returnRequestsCount = 0, isLoadi
     },
     {
       count: packedCount,
-      title: `${packedCount} Đơn xuất kho`,
-      subtitle: 'Đã gói, chờ tạo vận đơn GHN',
+      title: `${packedCount} Đơn chờ lấy hàng`,
+      subtitle: 'Đã đóng gói, chờ bưu tá GHN',
       badgeTone: 'info',
       icon: 'ri-truck-line',
       href: '/orders?status=PACKED',
-      buttonText: 'Xuất kho'
+      buttonText: 'Xem đơn'
     },
     {
       count: returnRequestsCount,

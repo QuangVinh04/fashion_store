@@ -26,10 +26,10 @@ import { ordersApi } from '@/libs/api/orders'
 import type { OrderStatus } from '@/types/orders'
 
 const statusMap: Record<OrderStatus, { label: string; color: 'primary' | 'warning' | 'info' | 'success' | 'secondary' | 'error' }> = {
-  PENDING: { label: 'Đang xác nhận', color: 'warning' },
-  CONFIRMED: { label: 'Đã xác nhận', color: 'primary' },
-  PROCESSING: { label: 'Đang xử lý', color: 'warning' },
-  PACKED: { label: 'Đã đóng gói', color: 'info' },
+  PENDING: { label: 'Đang xử lý thanh toán', color: 'warning' },
+  CONFIRMED: { label: 'Chờ xác nhận', color: 'primary' },
+  PROCESSING: { label: 'Đang đóng gói', color: 'warning' },
+  PACKED: { label: 'Chờ lấy hàng', color: 'info' },
   SHIPPING: { label: 'Đang giao', color: 'success' },
   DELIVERED: { label: 'Đã giao', color: 'success' },
   COMPLETED: { label: 'Hoàn tất', color: 'success' },

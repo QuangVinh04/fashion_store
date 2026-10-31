@@ -29,16 +29,11 @@ import ConfirmActionDialog from '@/components/backoffice/ConfirmActionDialog'
 import { useOrder } from '@/hooks/useOrders'
 import { ordersApi } from '@/libs/api/orders'
 import { ApiError } from '@/libs/api/client'
-import type { OrderStatus } from '@/types/orders'
 import {
-  allowedOrderActions,
   orderStatusLabels,
   orderStatusColors,
   paymentMethodLabels,
   paymentProviderLabels,
-  shipmentStatusLabels,
-  shipmentStatusColors,
-  ghnTrackingUrl,
   formatOrderMoney
 } from './order-actions'
 import OrderLifecycleStepper from './OrderLifecycleStepper'
@@ -47,6 +42,8 @@ import CopyButton from './CopyButton'
 import OrderPaymentPanel from './OrderPaymentPanel'
 import OrderCancellationPanel from './OrderCancellationPanel'
 import { CreateShipmentDialog } from './CreateShipmentDialog'
+import { OrderRejectionDialog } from './OrderRejectionDialog'
+import { OrderShipmentSection } from './OrderShipmentSection'
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -58,8 +55,9 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 }
 
 export default function OrderDetail({ id }: { id: string }) {
-  const { query, history, shipment, status, createShipment } = useOrder(id)
-  const [action, setAction] = useState<OrderStatus | null>(null)
+  const { query, history, shipment, status, createShipment, syncShipment } = useOrder(id)
+  const [confirmDialogOpen, setConfirmDialogOpen] = useState(false)
+  const [rejectDialogOpen, setRejectDialogOpen] = useState(false)
   const [shipmentOpen, setShipmentOpen] = useState(false)
   const [reason, setReason] = useState('')
   const [notice, setNotice] = useState('')
@@ -73,12 +71,8 @@ export default function OrderDetail({ id }: { id: string }) {
   })
 
   const order = query.data
-  const pending = status.isPending || createShipment.isPending
-  const available = order && !shipment.isLoading && !shipment.error ? allowedOrderActions(order, shipment.data) : []
+  const pending = status.isPending || createShipment.isPending || syncShipment.isPending
   const money = (value: number) => formatOrderMoney(value, order?.currency || '')
-
-  const trackingCode = shipment.data?.trackingCode || shipment.data?.ghnOrderCode || order?.trackingCode || ''
-  const trackingLink = ghnTrackingUrl(trackingCode)
 
   const handleRefreshAll = async () => {
     await Promise.all([query.refetch(), history.refetch(), shipment.refetch()])
@@ -94,24 +88,47 @@ export default function OrderDetail({ id }: { id: string }) {
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
               <Chip
                 variant='tonal'
-                label={orderStatusLabels[order.status]}
+                label={orderStatusLabels[order.status] || order.status}
                 color={orderStatusColors[order.status] || 'secondary'}
                 sx={{ fontWeight: 600 }}
               />
-              {available.map((next, index) => (
+
+              {order.status === 'CONFIRMED' && !order.cancellation && (
+                <>
+                  <Button
+                    variant='contained'
+                    disabled={pending || query.isFetching}
+                    onClick={() => {
+                      status.reset()
+                      setReason('')
+                      setConfirmDialogOpen(true)
+                    }}
+                  >
+                    Xác nhận đơn
+                  </Button>
+                  <Button
+                    variant='outlined'
+                    color='error'
+                    disabled={pending || query.isFetching}
+                    onClick={() => setRejectDialogOpen(true)}
+                  >
+                    Từ chối đơn
+                  </Button>
+                </>
+              )}
+
+              {order.status === 'PROCESSING' && !order.cancellation && (
                 <Button
-                  key={next}
-                  variant={index === 0 ? 'contained' : 'outlined'}
+                  variant='contained'
                   disabled={pending || query.isFetching}
                   onClick={() => {
-                    status.reset()
-                    setReason('')
-                    setAction(next)
+                    createShipment.reset()
+                    setShipmentOpen(true)
                   }}
                 >
-                  {orderStatusLabels[next]}
+                  Đóng gói xong
                 </Button>
-              ))}
+              )}
             </Box>
           )
         }
@@ -130,7 +147,7 @@ export default function OrderDetail({ id }: { id: string }) {
 
             {order.status === 'PENDING' && (
               <Alert severity='info' sx={{ mb: 3 }}>
-                Đơn đang được hệ thống xác nhận. Các thao tác đổi trạng thái sẽ có sau khi xác nhận xong.
+                Đơn đang được hệ thống xử lý thanh toán và giữ kho. Quản trị viên chỉ thao tác khi đơn chuyển sang Chờ xác nhận.
               </Alert>
             )}
 
@@ -142,12 +159,12 @@ export default function OrderDetail({ id }: { id: string }) {
 
             <Grid container spacing={3}>
               <Grid item xs={12} md={8} sx={{ minWidth: 0 }}>
-                {/* 1. Sản phẩm trong đơn đặt lên vị trí ưu tiên số 1 */}
+                {/* 1. Sản phẩm trong đơn */}
                 <Section title='Sản phẩm trong đơn'>
                   <OrderItemsTable items={order.items} currency={order.currency} />
                 </Section>
 
-                {/* 2. Giá trị đơn hàng với cấu trúc định dạng rõ ràng */}
+                {/* 2. Giá trị đơn hàng */}
                 <Section title='Giá trị đơn hàng'>
                   <Box sx={{ display: 'grid', gap: 2 }}>
                     {[
@@ -195,78 +212,19 @@ export default function OrderDetail({ id }: { id: string }) {
                 </Section>
 
                 {/* 3. Vận chuyển */}
-                <Section title='Vận chuyển'>
-                  {order.shipmentCreationPending && (
-                    <Alert severity='warning' sx={{ mb: 2 }}>
-                      Kết quả tạo vận đơn đang được xác minh. Không tạo vận đơn mới cho đến khi đối soát xong.
-                    </Alert>
-                  )}
-                  <QueryState loading={shipment.isLoading} error={shipment.error} onRetry={() => shipment.refetch()}>
-                    {shipment.data ? (
-                      <Box sx={{ display: 'grid', gap: 2 }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <Typography>Đơn vị vận chuyển: <strong>{shipment.data.provider}</strong></Typography>
-                          <Chip
-                            size='small'
-                            variant='tonal'
-                            color={shipmentStatusColors[shipment.data.status] || 'secondary'}
-                            label={shipmentStatusLabels[shipment.data.status] || shipment.data.status}
-                          />
-                        </Box>
-
-                        <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap' }}>
-                          <Typography>
-                            Mã vận đơn:{' '}
-                            {trackingLink ? (
-                              <Typography
-                                component='a'
-                                href={trackingLink}
-                                target='_blank'
-                                rel='noreferrer'
-                                sx={{
-                                  fontWeight: 600,
-                                  color: 'primary.main',
-                                  textDecoration: 'none',
-                                  '&:hover': { textDecoration: 'underline' }
-                                }}
-                              >
-                                {trackingCode} <i className='ri-external-link-line text-sm' />
-                              </Typography>
-                            ) : (
-                              <strong>{trackingCode || '—'}</strong>
-                            )}
-                          </Typography>
-                          {trackingCode && <CopyButton text={trackingCode} label='Sao chép mã vận đơn' />}
-                        </Box>
-
-                        <Typography>
-                          Cước vận chuyển: <strong>{shipment.data.fee != null ? money(shipment.data.fee) : '—'}</strong>
-                        </Typography>
-                      </Box>
-                    ) : (
-                      <>
-                        <Typography sx={{ mb: 2 }}>
-                          Chưa có vận đơn.
-                          {order.trackingCode && <> Mã theo dõi đã lưu: <strong>{order.trackingCode}</strong></>}
-                        </Typography>
-                        {!order.cancellation &&
-                          !order.shipmentCreationPending &&
-                          ['CONFIRMED', 'PROCESSING', 'PACKED'].includes(order.status) && (
-                            <Button
-                              variant='outlined'
-                              disabled={pending || shipment.isFetching}
-                              onClick={() => {
-                                createShipment.reset()
-                                setShipmentOpen(true)
-                              }}
-                            >
-                              Tạo vận đơn GHN
-                            </Button>
-                          )}
-                      </>
-                    )}
-                  </QueryState>
-                </Section>
+                <OrderShipmentSection
+                  order={order}
+                  shipment={shipment}
+                  syncShipment={syncShipment}
+                  pending={pending}
+                  isFetchingOrder={query.isFetching}
+                  onRefreshAll={handleRefreshAll}
+                  onOpenCreateShipment={() => {
+                    createShipment.reset()
+                    setShipmentOpen(true)
+                  }}
+                  onNotice={msg => setNotice(msg)}
+                />
 
                 {/* 4. Thanh toán & Hoàn tiền */}
                 <OrderPaymentPanel orderId={id} />
@@ -375,26 +333,24 @@ export default function OrderDetail({ id }: { id: string }) {
       </QueryState>
 
       <ConfirmActionDialog
-        open={!!action}
-        title='Cập nhật trạng thái đơn?'
-        message={action ? `Chuyển đơn sang “${orderStatusLabels[action]}”?` : ''}
+        open={confirmDialogOpen}
+        title='Xác nhận đơn hàng'
+        message='Chuyển đơn hàng sang trạng thái “Đang đóng gói” để bắt đầu chuẩn bị hàng?'
         pending={status.isPending}
         error={status.error}
-        onClose={() => setAction(null)}
+        onClose={() => setConfirmDialogOpen(false)}
         onConfirm={async () => {
-          if (!action) return
-
           try {
-            await status.mutateAsync({ status: action, reason })
-            setAction(null)
-            setNotice('Đã cập nhật trạng thái đơn.')
+            await status.mutateAsync({ status: 'PROCESSING', reason })
+            setConfirmDialogOpen(false)
+            setNotice('Đã xác nhận đơn hàng, chuyển sang trạng thái đang đóng gói.')
           } catch {
             /* Keep confirmation dialog visible */
           }
         }}
       >
         <TextField
-          label='Lý do cập nhật (không bắt buộc)'
+          label='Ghi chú xác nhận (không bắt buộc)'
           value={reason}
           onChange={event => setReason(event.target.value)}
           disabled={status.isPending}
@@ -406,16 +362,26 @@ export default function OrderDetail({ id }: { id: string }) {
         />
       </ConfirmActionDialog>
 
+      <OrderRejectionDialog
+        open={rejectDialogOpen}
+        orderId={id}
+        onClose={() => setRejectDialogOpen(false)}
+        onSuccess={async () => {
+          await handleRefreshAll()
+          setNotice('Đã từ chối đơn hàng thành công.')
+        }}
+      />
+
       <CreateShipmentDialog
         open={shipmentOpen}
-        pending={pending}
+        pending={createShipment.isPending}
         error={createShipment.error}
         onClose={() => setShipmentOpen(false)}
-        onConfirm={async () => {
+        onConfirm={async payload => {
           try {
-            await createShipment.mutateAsync('')
+            await createShipment.mutateAsync(payload)
             setShipmentOpen(false)
-            setNotice('Đã tạo vận đơn.')
+            setNotice('Đã xác nhận đóng gói và tạo vận đơn GHN thành công.')
           } catch {
             /* Keep shipping dialog open on failure */
           }

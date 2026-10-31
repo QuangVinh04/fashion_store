@@ -1,10 +1,8 @@
 import {expect,it} from 'vitest'
 
-import {allowedOrderActions} from './order-actions'
 import {prepareCancellation,cancellationState,prepareCarrierVerification} from './paid-cancellation'
 
-it('pending cancellation blocks fulfillment actions and does not claim wallet credit',()=>{
- expect(allowedOrderActions({status:'CONFIRMED',cancellation:{status:'REFUND_PENDING'}})).toEqual([])
+it('pending cancellation does not claim wallet credit until completed',()=>{
  expect(cancellationState({status:'REFUND_PENDING'}).credited).toBe(false)
  expect(cancellationState({status:'COMPLETED',refundLedgerEntryId:'ledger'}).credited).toBe(true)
 })

@@ -2,7 +2,7 @@
 
 import { Table, TableBody, TableCell, TableContainer, TableHead, TableRow } from '@mui/material'
 
-import type { OrderItemResponse } from '@/libs/api/orders'
+import type { OrderItemResponse } from '@/types/orders'
 import { formatOrderMoney } from '@/views/orders/order-actions'
 
 interface Props {

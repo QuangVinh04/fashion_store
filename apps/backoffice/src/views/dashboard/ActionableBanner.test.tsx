@@ -3,7 +3,6 @@ import React, { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { describe, expect, it } from 'vitest'
 
-
 import ActionableBanner from './ActionableBanner'
 
 describe('ActionableBanner', () => {
@@ -50,11 +49,11 @@ describe('ActionableBanner', () => {
     expect(container.textContent).toContain('7 việc cần làm')
 
     // 2 Card có số lượng > 0 xuất hiện
-    expect(container.textContent).toContain('5 Đơn tiếp nhận')
+    expect(container.textContent).toContain('5 Đơn chờ xác nhận')
     expect(container.textContent).toContain('2 Đổi trả hàng')
 
     // 2 Card có số lượng = 0 không xuất hiện
     expect(container.textContent).not.toContain('Đơn đóng gói')
-    expect(container.textContent).not.toContain('Đơn xuất kho')
+    expect(container.textContent).not.toContain('Đơn chờ lấy hàng')
   })
 })

@@ -1,18 +1,26 @@
 import { expect, it } from 'vitest'
 
-import { allowedOrderActions } from './order-actions'
+import { formatOrderMoney, ghnTrackingUrl, orderStatusLabels } from './order-actions'
 
-it('admin status buttons cannot bypass receipt, return or refund workflows',()=>{
-  expect(allowedOrderActions({status:'DELIVERED'})).toEqual([])
-  expect(allowedOrderActions({status:'RETURNED'})).toEqual([])
+it('has updated status labels according to the new workflow', () => {
+  expect(orderStatusLabels.PENDING).toBe('Đang xử lý thanh toán')
+  expect(orderStatusLabels.CONFIRMED).toBe('Chờ xác nhận')
+  expect(orderStatusLabels.PROCESSING).toBe('Đang đóng gói')
+  expect(orderStatusLabels.PACKED).toBe('Chờ lấy hàng')
+  expect(orderStatusLabels.SHIPPING).toBe('Đang giao')
+  expect(orderStatusLabels.DELIVERED).toBe('Đã giao')
+  expect(orderStatusLabels.COMPLETED).toBe('Hoàn tất')
+  expect(orderStatusLabels.CANCELLED).toBe('Đã hủy')
 })
 
-it('follows the backend sequence and requires a shipment before shipping', () => {
-  expect(allowedOrderActions({ status: 'PENDING' })).toEqual([])
-  expect(allowedOrderActions({ status: 'CONFIRMED' })).toEqual(['PROCESSING'])
-  expect(allowedOrderActions({ status: 'PROCESSING' })).toEqual(['PACKED'])
-  expect(allowedOrderActions({ status: 'PACKED' })).toEqual([])
-  expect(allowedOrderActions({ status: 'PACKED' }, { id: 's1' })).toEqual(['SHIPPING'])
-  expect(allowedOrderActions({ status: 'PACKED', trackingCode: 'track' })).toEqual(['SHIPPING'])
-  expect(allowedOrderActions({ status: 'RETURNED' })).toEqual([])
+it('generates GHN tracking url correctly', () => {
+  expect(ghnTrackingUrl('')).toBeNull()
+  expect(ghnTrackingUrl('  ')).toBeNull()
+  expect(ghnTrackingUrl('GHN12345')).toBe('https://donhang.ghn.vn/?order_code=GHN12345')
+})
+
+it('formats order money correctly', () => {
+  const formatted = formatOrderMoney(100000, 'VND')
+
+  expect(formatted).toContain('100.000')
 })

@@ -40,6 +40,16 @@ import {
 } from './order-actions'
 import { exportToCsv } from '@/utils/exportCsv'
 
+const QUICK_STATUS_FILTERS = [
+  { label: 'Tất cả', value: '' },
+  { label: 'Chờ xác nhận', value: 'CONFIRMED', highlight: true },
+  { label: 'Đang đóng gói', value: 'PROCESSING' },
+  { label: 'Chờ lấy hàng', value: 'PACKED' },
+  { label: 'Đang giao', value: 'SHIPPING' },
+  { label: 'Hoàn tất', value: 'COMPLETED' },
+  { label: 'Đã hủy', value: 'CANCELLED' }
+]
+
 export default function OrderList() {
   const router = useRouter()
   const { page, size, filters, setPage, setSize, setFilters } = useListQueryState()
@@ -137,10 +147,49 @@ export default function OrderList() {
         }
       />
       <Card>
+        {/* Quick status tabs/chips */}
+        <Box
+          sx={{
+            px: { xs: 4, sm: 5 },
+            pt: { xs: 3, sm: 4 },
+            pb: 1,
+            display: 'flex',
+            gap: 1.5,
+            flexWrap: 'wrap',
+            alignItems: 'center'
+          }}
+        >
+          <Typography variant='body2' sx={{ fontWeight: 600, color: 'text.secondary', mr: 0.5 }}>
+            Lọc nhanh:
+          </Typography>
+          {QUICK_STATUS_FILTERS.map(q => {
+            const isSelected = (filters.status || '') === q.value
+
+            return (
+              <Chip
+                key={q.value}
+                label={q.label}
+                size='small'
+                clickable
+                color={isSelected ? 'primary' : q.highlight ? 'warning' : 'default'}
+                variant={isSelected ? 'filled' : 'outlined'}
+                onClick={() => {
+                  setPage(0)
+                  setFilters({ status: q.value })
+                }}
+                sx={{
+                  fontWeight: isSelected || q.highlight ? 600 : 500,
+                  cursor: 'pointer'
+                }}
+              />
+            )
+          })}
+        </Box>
+
         <Box
           component='form'
           onSubmit={handleApplySearch}
-          sx={{ p: { xs: 4, sm: 5 }, display: 'flex', gap: 3, flexWrap: 'wrap', alignItems: 'center' }}
+          sx={{ p: { xs: 4, sm: 5 }, pt: { xs: 2, sm: 3 }, display: 'flex', gap: 3, flexWrap: 'wrap', alignItems: 'center' }}
         >
           <TextField
             size='small'
@@ -178,8 +227,11 @@ export default function OrderList() {
             size='small'
             label='Trạng thái'
             value={filters.status || ''}
-            onChange={event => setFilters({ status: event.target.value })}
-            sx={{ minWidth: 180 }}
+            onChange={event => {
+              setPage(0)
+              setFilters({ status: event.target.value })
+            }}
+            sx={{ minWidth: 200 }}
           >
             <MenuItem value=''>Tất cả trạng thái</MenuItem>
             {Object.entries(orderStatusLabels).map(([key, label]) => (
@@ -194,7 +246,10 @@ export default function OrderList() {
             size='small'
             label='Thanh toán'
             value={filters.paymentMethod || ''}
-            onChange={event => setFilters({ paymentMethod: event.target.value })}
+            onChange={event => {
+              setPage(0)
+              setFilters({ paymentMethod: event.target.value })
+            }}
             sx={{ minWidth: 190 }}
           >
             <MenuItem value=''>Tất cả phương thức</MenuItem>
@@ -208,7 +263,10 @@ export default function OrderList() {
             type='date'
             label='Từ ngày'
             value={filters.createdFrom || ''}
-            onChange={event => setFilters({ createdFrom: event.target.value })}
+            onChange={event => {
+              setPage(0)
+              setFilters({ createdFrom: event.target.value })
+            }}
             InputLabelProps={{ shrink: true }}
             sx={{ minWidth: 150 }}
           />
@@ -218,7 +276,10 @@ export default function OrderList() {
             type='date'
             label='Đến ngày'
             value={filters.createdTo || ''}
-            onChange={event => setFilters({ createdTo: event.target.value })}
+            onChange={event => {
+              setPage(0)
+              setFilters({ createdTo: event.target.value })
+            }}
             InputLabelProps={{ shrink: true }}
             sx={{ minWidth: 150 }}
           />

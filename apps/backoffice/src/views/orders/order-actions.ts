@@ -1,10 +1,10 @@
 import type { OrderStatus } from '@/types/orders'
 
 export const orderStatusLabels: Record<OrderStatus, string> = {
-  PENDING: 'Đang xác nhận',
-  CONFIRMED: 'Đã xác nhận',
-  PROCESSING: 'Đang xử lý',
-  PACKED: 'Đã đóng gói',
+  PENDING: 'Đang xử lý thanh toán',
+  CONFIRMED: 'Chờ xác nhận',
+  PROCESSING: 'Đang đóng gói',
+  PACKED: 'Chờ lấy hàng',
   SHIPPING: 'Đang giao',
   DELIVERED: 'Đã giao',
   COMPLETED: 'Hoàn tất',
@@ -95,26 +95,6 @@ export function ghnTrackingUrl(trackingCode?: string): string | null {
   if (!code) return null
 
   return `https://donhang.ghn.vn/?order_code=${encodeURIComponent(code)}`
-}
-
-export function allowedOrderActions(
-  order: { status: OrderStatus; trackingCode?: string; cancellation?: { status: string } },
-  shipment?: { id: string } | null
-): OrderStatus[] {
-  if (order.cancellation) return []
-
-  switch (order.status) {
-    case 'CONFIRMED':
-      return ['PROCESSING']
-    case 'PROCESSING':
-      return ['PACKED']
-    case 'PACKED':
-      return shipment || order.trackingCode?.trim() ? ['SHIPPING'] : []
-    case 'SHIPPING':
-      return ['DELIVERED']
-    default:
-      return []
-  }
 }
 
 export function formatOrderMoney(value: number, currency: string) {

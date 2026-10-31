@@ -41,11 +41,17 @@ export const ordersApi = {
       throw error
     }
   },
-  createShipment: (id: string, note?: string) =>
-    api.post<Shipment>(`/api/v1/orders/${encodeURIComponent(id)}/shipment`, {
+  createShipment: (id: string, payload?: string | { note?: string; weightGram?: number }) => {
+    const note = typeof payload === 'string' ? payload : payload?.note
+    const weightGram = typeof payload === 'object' && payload?.weightGram ? payload.weightGram : undefined
+
+    return api.post<Shipment>(`/api/v1/orders/${encodeURIComponent(id)}/shipment`, {
       provider: 'GHN',
-      note: note?.trim() || undefined
-    }),
+      note: note?.trim() || undefined,
+      weightGram: weightGram && weightGram > 0 ? Math.round(weightGram) : undefined
+    })
+  },
+  syncShipment: (id: string) => api.post<Shipment>(`${path(id)}/shipment/sync`),
   updateStatus: (id: string, status: OrderStatus, reason?: string) =>
     api.put<OrderDetail>(`/api/v1/orders/${encodeURIComponent(id)}/status`, {
       status,

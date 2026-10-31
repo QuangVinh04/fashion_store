@@ -40,10 +40,17 @@ export function useOrder(id: string) {
   })
 
   const createShipment = useMutation({
-    mutationFn: (note: string) => ordersApi.createShipment(id, note),
+    mutationFn: (payload?: string | { note?: string; weightGram?: number }) =>
+      ordersApi.createShipment(id, payload),
     onSuccess: invalidate,
     retry: false
   })
 
-  return { query, history, shipment, status, createShipment }
+  const syncShipment = useMutation({
+    mutationFn: () => ordersApi.syncShipment(id),
+    onSuccess: invalidate,
+    retry: false
+  })
+
+  return { query, history, shipment, status, createShipment, syncShipment }
 }

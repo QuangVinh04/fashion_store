@@ -38,16 +38,20 @@ export interface OrderDetail extends OrderSummary {
   subtotalAmount: number
   discountAmount: number
   shippingFee: number
-  items: {
-    variantId: string
-    productName: string
-    size?: string
-    color?: string
-    unitPrice: number
-    quantity: number
-    lineTotal: number
-  }[]
+  items: OrderItem[]
 }
+
+export interface OrderItem {
+  variantId: string
+  productName: string
+  size?: string
+  color?: string
+  unitPrice: number
+  quantity: number
+  lineTotal: number
+}
+
+export type OrderItemResponse = OrderItem
 
 export interface CarrierVerificationInput {
   operationId:string
@@ -67,6 +71,12 @@ export interface CarrierVerification {
   noShipmentExists:boolean
   mediaIds:string[]
 }
+export interface CreateShipmentInput {
+  provider?: string
+  note?: string
+  weightGram?: number
+}
+
 export interface Shipment {
   id: string
   orderId: string
