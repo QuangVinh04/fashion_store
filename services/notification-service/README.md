@@ -31,7 +31,7 @@ $env:JAVA_HOME = 'C:/Program Files/Java/jdk-21'
 docker compose up -d --build notification-service order-service api-gateway storefront-bff
 ```
 
-Flyway adds `V3__in_app_notifications.sql`; existing migrations are preserved. Existing orders are not backfilled; notifications begin with events emitted after this version is deployed. No sample notifications are shipped. The bell reuses storefront Popover/Button and existing color/font tokens; no new theme is introduced.
+The in-app notifications table is part of the `V1` baseline. Existing orders are not backfilled; notifications begin with events emitted after this version is deployed. No sample notifications are shipped. The bell reuses storefront Popover/Button and existing color/font tokens; no new theme is introduced.
 
 This version supports **one notification-service instance** for live delivery. Database history survives service restarts and missed signals. Multiple replicas require shared live fanout (for example Redis Pub/Sub) before scaling.
 

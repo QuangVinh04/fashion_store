@@ -1,1 +1,0 @@
-ALTER TABLE outbox_event ADD COLUMN IF NOT EXISTS aggregate_id VARCHAR(255);

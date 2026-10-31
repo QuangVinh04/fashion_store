@@ -1,1 +1,0 @@
-ALTER TABLE checkout ADD COLUMN address_id VARCHAR(36);

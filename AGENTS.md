@@ -32,7 +32,7 @@ Hai agent làm song song. Mỗi agent chỉ sửa thư mục mình sở hữu.
 - **API contract** (endpoint, request/response DTO, Swagger) thuộc Claude Code.
 - Frontend cần endpoint hoặc field mới: thêm một entry vào `docs/api-requests.md`. Không sửa code Java.
 - Claude Code implement yêu cầu, cập nhật Swagger, chuyển entry sang mục **Done**.
-- Mỗi agent làm trên worktree và branch riêng: `feat/be-*` cho backend, `feat/fe-*` cho frontend. Không chạy hai agent trên cùng một checkout.
+- Mọi agent làm trực tiếp trên nhánh `main` của checkout này. Không tạo worktree hay nhánh riêng. Ranh giới thư mục ở trên thay cho việc tách nhánh: không sửa file ngoài thư mục của mình.
 
 ## Git
 

@@ -1,2 +1,0 @@
-ALTER TABLE checkout ADD COLUMN province_id INTEGER, ADD COLUMN ward_id INTEGER;
-ALTER TABLE orders ADD COLUMN province_id INTEGER, ADD COLUMN ward_id INTEGER;

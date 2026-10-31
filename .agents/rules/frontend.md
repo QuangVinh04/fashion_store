@@ -11,7 +11,7 @@ trigger: always_on
 - Sở hữu `apps/backoffice/**` và `apps/storefront/**`.
 - Không sửa `services/**`, `packages/**`, `platform/**`, `docker-compose.yml`, `pom.xml`, migration Flyway.
 - Cần endpoint hoặc field mới: thêm entry vào `docs/api-requests.md` theo mẫu trong file, rồi báo người dùng. Không sửa backend.
-- Làm trên worktree và branch frontend (`feat/fe-*`), không làm trên checkout backend.
+- Làm trực tiếp trên nhánh `main`, không tạo worktree hay nhánh riêng. Chỉ sửa file trong `apps/**`.
 
 ## Chạy app
 
