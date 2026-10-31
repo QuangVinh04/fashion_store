@@ -41,7 +41,7 @@ Gộp từ cart-service. Không tách lại.
 
 - Phát command tới catalog (`inventory.*`) và payment (`payment.*`, `wallet.saga-compensation.requested`, `payment.order-funds-refund.requested`).
 - Phát `order.confirmed`, `order.delivered`, `order.cancelled`, `notification.email.requested`, `notification.in-app.requested`.
-- Nhận reply từ catalog và payment, và `order.confirmed` của chính mình.
+- Nhận reply từ catalog và payment.
 
 Chi tiết: `docs/flows/`.
 

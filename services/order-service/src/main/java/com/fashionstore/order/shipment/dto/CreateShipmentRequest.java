@@ -1,6 +1,7 @@
 package com.fashionstore.order.shipment.dto;
 
 import com.fashionstore.order.shipment.entity.ShipmentProvider;
+import jakarta.validation.constraints.Positive;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -19,5 +20,8 @@ public class CreateShipmentRequest {
     @Builder.Default
     ShipmentProvider provider = ShipmentProvider.GHN;
     String note;
+
+    /** Cân nặng thực tế sau khi đóng gói. Bỏ trống thì tính từ catalog. */
+    @Positive Integer weightGram;
 }
 

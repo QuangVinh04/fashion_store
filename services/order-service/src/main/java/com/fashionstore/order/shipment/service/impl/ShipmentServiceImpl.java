@@ -78,10 +78,7 @@ public class ShipmentServiceImpl implements ShipmentService {
     @Transactional(propagation = org.springframework.transaction.annotation.Propagation.NEVER)
     public ShipmentResponse createShipment(String orderId, CreateShipmentRequest request) {
         var snapshot = shipmentCreation.snapshot(orderId);
-        int weight =
-                shipmentRepository.findByOrderId(orderId).isPresent()
-                        ? 200
-                        : calculateTotalWeight(snapshot.getItems());
+        int weight = resolveWeight(orderId, request, snapshot.getItems());
         var claim = shipmentCreation.claim(orderId, request, weight);
         if (claim.existing() != null) return toResponse(claim.existing());
         try {
@@ -430,6 +427,15 @@ public class ShipmentServiceImpl implements ShipmentService {
                             }
                             shipmentRepository.save(shipment);
                         });
+    }
+
+    private int resolveWeight(String orderId, CreateShipmentRequest request, List<OrderItem> items) {
+        if (request != null && request.getWeightGram() != null) {
+            return request.getWeightGram();
+        }
+        return shipmentRepository.findByOrderId(orderId).isPresent()
+                ? 200
+                : calculateTotalWeight(items);
     }
 
     private int calculateTotalWeight(List<OrderItem> items) {

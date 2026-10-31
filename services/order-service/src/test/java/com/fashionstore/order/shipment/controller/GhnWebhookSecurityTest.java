@@ -29,6 +29,7 @@ class GhnWebhookSecurityTest {
 
     @Autowired MockMvc mvc;
     @MockitoBean ShipmentService shipments;
+    @MockitoBean com.fashionstore.order.shipment.service.ShipmentSyncService shipmentSync;
     @MockitoBean com.fashionstore.order.returns.service.ReturnPickupService returnPickup;
     @MockitoBean GhnProperties properties;
     @MockitoBean JwtDecoder decoder;

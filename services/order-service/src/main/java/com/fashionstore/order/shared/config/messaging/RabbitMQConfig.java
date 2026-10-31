@@ -116,16 +116,6 @@ public class RabbitMQConfig {
     }
 
     @Bean
-    Queue orderConfirmedQueue() {
-        return sagaQueue(RabbitMQNames.ORDER_CONFIRMED_QUEUE);
-    }
-
-    @Bean
-    Binding orderConfirmedBinding(Queue orderConfirmedQueue, DirectExchange fashionEventsExchange) {
-        return RabbitTopology.bind(orderConfirmedQueue, fashionEventsExchange, EventTypes.ORDER_CONFIRMED);
-    }
-
-    @Bean
     Binding orderInventoryReservedBinding(Queue orderInventoryReservedQueue, DirectExchange fashionEventsExchange) {
         return RabbitTopology.bind(orderInventoryReservedQueue, fashionEventsExchange, EventTypes.INVENTORY_RESERVED);
     }

@@ -67,8 +67,7 @@ public class ShipmentCreationTransactionService {
         var existing = shipments.findByOrderId(id).orElse(null);
         if (existing != null && !recreatable(existing))
             return new Claim(order, null, weight, existing.getProvider(), null, existing, null);
-        if (!Set.of(OrderStatus.CONFIRMED, OrderStatus.PROCESSING, OrderStatus.PACKED)
-                .contains(order.getStatus()))
+        if (!Set.of(OrderStatus.PROCESSING, OrderStatus.PACKED).contains(order.getStatus()))
             throw new AppException(OrderErrorCode.ORDER_STATUS_INVALID);
         if (order.getShipmentInitiationToken() != null)
             throw new AppException(OrderErrorCode.SHIPMENT_INITIATION_CONFLICT);

@@ -8,6 +8,7 @@ import com.fashionstore.order.shipment.dto.GhnWebhookPayload;
 import com.fashionstore.order.shipment.entity.ShipmentProvider;
 import com.fashionstore.order.shipment.entity.ShipmentStatus;
 import com.fashionstore.order.shipment.service.ShipmentService;
+import com.fashionstore.order.shipment.service.ShipmentSyncService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -40,6 +41,9 @@ class ShipmentControllerTest {
     ShipmentService shipmentService;
 
     @Mock
+    ShipmentSyncService shipmentSyncService;
+
+    @Mock
     com.fashionstore.order.returns.service.ReturnPickupService returnPickupService;
 
     GhnProperties ghnProperties;
@@ -48,7 +52,7 @@ class ShipmentControllerTest {
     void setUp() {
         ghnProperties = new GhnProperties();
         ghnProperties.setWebhookToken("fashion-store-ghn-webhook-secret");
-        mockMvc = MockMvcBuilders.standaloneSetup(new ShipmentController(shipmentService, ghnProperties, returnPickupService))
+        mockMvc = MockMvcBuilders.standaloneSetup(new ShipmentController(shipmentService, shipmentSyncService, ghnProperties, returnPickupService))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
     }
@@ -73,6 +77,29 @@ class ShipmentControllerTest {
                 .andExpect(jsonPath("$.data.id").value("ship-1"))
                 .andExpect(jsonPath("$.data.trackingCode").value("TRACK123"))
                 .andExpect(jsonPath("$.data.status").value("PENDING"));
+    }
+
+    @Test
+    void createShipment_rejectsNonPositiveWeight() throws Exception {
+        mockMvc.perform(post("/api/v1/orders/ord-1/shipment")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"weightGram\":0}"))
+                .andExpect(status().isBadRequest());
+
+        verify(shipmentService, never()).createShipment(any(), any());
+    }
+
+    @Test
+    void syncShipment_pullsCarrierStatusAndReturnsShipment() throws Exception {
+        when(shipmentSyncService.syncFromCarrier("ord-1"))
+                .thenReturn(ShipmentResponse.builder()
+                        .orderId("ord-1")
+                        .status(ShipmentStatus.PICKED)
+                        .build());
+
+        mockMvc.perform(post("/api/v1/admin/orders/ord-1/shipment/sync"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("PICKED"));
     }
 
     @Test

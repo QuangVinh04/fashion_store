@@ -18,7 +18,9 @@
 
 `AUTHORIZE_PAYMENT` có deadline dài vì khách có thể đang thao tác trên cổng thanh toán. `payment.initiated` ở bước này chỉ lưu `paymentUrl` vào đơn. Chi tiết thanh toán: `docs/flows/payment.md`.
 
-Sau khi nhận `order.confirmed`, order-service chuyển đơn `CONFIRMED → PROCESSING`.
+Đơn dừng ở `CONFIRMED` chờ shop xác nhận, áp cho mọi phương thức thanh toán. Admin chọn:
+- Xác nhận: `PATCH` trạng thái `PROCESSING` (đang đóng gói).
+- Từ chối: `POST /api/v1/admin/orders/{orderId}/cancel` kèm lý do. Đơn đi qua cancellation saga (`docs/flows/order-cancellation.md`), đơn đã trả được hoàn vào ví, đơn COD chưa thu tiền thì không hoàn.
 
 ## Bù trừ
 

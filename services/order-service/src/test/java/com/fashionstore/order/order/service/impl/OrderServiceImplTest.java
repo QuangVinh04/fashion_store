@@ -30,7 +30,6 @@ import com.fashionstore.order.checkout.entity.CheckoutItem;
 import com.fashionstore.order.order.entity.Order;
 import com.fashionstore.order.saga.entity.OrderSaga;
 import com.fashionstore.order.order.entity.OrderStatusHistory;
-import com.fashionstore.order.shipment.entity.Shipment;
 import com.fashionstore.order.order.entity.ShippingAddress;
 import com.fashionstore.order.checkout.entity.CheckoutStatus;
 import com.fashionstore.order.saga.entity.OrderSagaStatus;
@@ -43,7 +42,6 @@ import com.fashionstore.order.checkout.repository.CheckoutRepository;
 import com.fashionstore.order.order.repository.OrderRepository;
 import com.fashionstore.order.saga.repository.OrderSagaRepository;
 import com.fashionstore.order.order.repository.OrderStatusHistoryRepository;
-import com.fashionstore.order.shipment.repository.ShipmentRepository;
 import com.fashionstore.order.saga.service.SagaCancellationService;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -83,8 +81,6 @@ class OrderServiceImplTest {
 
     @Mock private OrderStatusHistoryRepository orderStatusHistoryRepository;
 
-    @Mock private ShipmentRepository shipmentRepository;
-
     @Mock private com.fashionstore.order.order.service.OrderNotificationService orderNotificationService;
 
     private OrderServiceImpl service;
@@ -120,7 +116,6 @@ class OrderServiceImplTest {
                         currentUserProvider,
                         promotionService,
                         orderStatusHistoryRepository,
-                        shipmentRepository,
                         orderNotificationService,
                         receipts,
                         cancellationProjection);
@@ -603,60 +598,6 @@ class OrderServiceImplTest {
     // ----- updateOrderStatus & order history -----
 
     @Test
-    void updateOrderStatus_toShipping_withoutShipmentOrTrackingCode_throwsShipmentRequired() {
-        Order order = order(OrderStatus.PACKED);
-        when(orderRepository.findWithItemsById("order-1")).thenReturn(Optional.of(order));
-        when(shipmentRepository.findByOrderId("order-1")).thenReturn(Optional.empty());
-
-        UpdateOrderStatusRequest request = new UpdateOrderStatusRequest();
-        request.setStatus(OrderStatus.SHIPPING);
-
-        AppException ex =
-                assertThrows(
-                        AppException.class, () -> service.updateOrderStatus("order-1", request));
-        assertEquals(OrderErrorCode.SHIPMENT_REQUIRED, ex.getErrorCode());
-    }
-
-    @Test
-    void updateOrderStatus_toShipping_withOnlyCancelledShipment_throwsShipmentRequired() {
-        Order order = order(OrderStatus.PACKED);
-        when(orderRepository.findWithItemsById("order-1")).thenReturn(Optional.of(order));
-        when(shipmentRepository.findByOrderId("order-1"))
-                .thenReturn(
-                        Optional.of(
-                                Shipment.builder()
-                                        .order(order)
-                                        .trackingCode("OLD1")
-                                        .status(com.fashionstore.order.shipment.entity.ShipmentStatus.CANCELLED)
-                                        .build()));
-
-        UpdateOrderStatusRequest request = new UpdateOrderStatusRequest();
-        request.setStatus(OrderStatus.SHIPPING);
-
-        AppException ex =
-                assertThrows(
-                        AppException.class, () -> service.updateOrderStatus("order-1", request));
-        assertEquals(OrderErrorCode.SHIPMENT_REQUIRED, ex.getErrorCode());
-    }
-
-    @Test
-    void
-            updateOrderStatus_toShipping_whenClientSendsTrackingCodeWithoutShipment_throwsShipmentRequired() {
-        Order order = order(OrderStatus.PACKED);
-        when(orderRepository.findWithItemsById("order-1")).thenReturn(Optional.of(order));
-        when(shipmentRepository.findByOrderId("order-1")).thenReturn(Optional.empty());
-
-        UpdateOrderStatusRequest request = new UpdateOrderStatusRequest();
-        request.setStatus(OrderStatus.SHIPPING);
-        request.setTrackingCode("FAKE_TRACK_123");
-
-        AppException ex =
-                assertThrows(
-                        AppException.class, () -> service.updateOrderStatus("order-1", request));
-        assertEquals(OrderErrorCode.SHIPMENT_REQUIRED, ex.getErrorCode());
-    }
-
-    @Test
     void updateOrderStatus_sameStatus_returnsEarlyWithoutDuplicateHistory() {
         Order order = order(OrderStatus.PROCESSING);
         when(orderRepository.findWithItemsById("order-1")).thenReturn(Optional.of(order));
@@ -705,6 +646,29 @@ class OrderServiceImplTest {
     }
 
     @Test
+    void adminCanOnlyConfirmOrdersManuallyBecauseCarrierDrivesTheRest() {
+        for (var move :
+                List.of(
+                        List.of(OrderStatus.PROCESSING, OrderStatus.PACKED),
+                        List.of(OrderStatus.PACKED, OrderStatus.SHIPPING),
+                        List.of(OrderStatus.SHIPPING, OrderStatus.DELIVERED))) {
+            Order order = order(move.get(0));
+            when(orderRepository.findByIdForUpdate("order-1")).thenReturn(Optional.of(order));
+            var request = new UpdateOrderStatusRequest();
+            request.setStatus(move.get(1));
+
+            assertEquals(
+                    OrderErrorCode.ORDER_STATUS_INVALID,
+                    assertThrows(
+                                    AppException.class,
+                                    () -> service.updateOrderStatus("order-1", request))
+                            .getErrorCode());
+        }
+        verify(orderRepository, never()).save(any());
+        verify(orderStatusHistoryRepository, never()).save(any());
+    }
+
+    @Test
     void genericAdminStatusCannotBypassReceiptReturnOrRefundWorkflow() {
         Order delivered = order(OrderStatus.DELIVERED);
         when(orderRepository.findByIdForUpdate("order-1")).thenReturn(Optional.of(delivered));
@@ -721,48 +685,6 @@ class OrderServiceImplTest {
         }
         verify(sagaOutbox, never()).emit(any(), any(), any());
         verify(orderRepository, never()).save(any());
-    }
-
-    @Test
-    void updateOrderStatus_preservesExistingTrackingCodeWhenRequestTrackingCodeIsNull() {
-        Order order = order(OrderStatus.PACKED);
-        order.setTrackingCode("GHN_ORIGINAL_123");
-        when(orderRepository.findWithItemsById("order-1")).thenReturn(Optional.of(order));
-        Shipment shipment = Shipment.builder().trackingCode("GHN_ORIGINAL_123").build();
-        when(shipmentRepository.findByOrderId("order-1")).thenReturn(Optional.of(shipment));
-
-        UpdateOrderStatusRequest request = new UpdateOrderStatusRequest();
-        request.setStatus(OrderStatus.SHIPPING);
-        request.setTrackingCode(null); // Request không gửi trackingCode
-
-        OrderResponse response = service.updateOrderStatus("order-1", request);
-        assertEquals(OrderStatus.SHIPPING, response.getStatus());
-        assertEquals("GHN_ORIGINAL_123", order.getTrackingCode());
-    }
-
-    @Test
-    void updateOrderStatus_toShipping_withShipment_succeedsAndRecordsHistory() {
-        Order order = order(OrderStatus.PACKED);
-        when(orderRepository.findWithItemsById("order-1")).thenReturn(Optional.of(order));
-        Shipment shipment = Shipment.builder().trackingCode("GHN123").build();
-        when(shipmentRepository.findByOrderId("order-1")).thenReturn(Optional.of(shipment));
-
-        UpdateOrderStatusRequest request = new UpdateOrderStatusRequest();
-        request.setStatus(OrderStatus.SHIPPING);
-        request.setReason("Shipped via GHN");
-
-        OrderResponse response = service.updateOrderStatus("order-1", request);
-        assertEquals(OrderStatus.SHIPPING, response.getStatus());
-
-        ArgumentCaptor<OrderStatusHistory> historyCaptor =
-                ArgumentCaptor.forClass(OrderStatusHistory.class);
-        verify(orderStatusHistoryRepository, org.mockito.Mockito.times(1))
-                .save(historyCaptor.capture());
-        OrderStatusHistory captured = historyCaptor.getValue();
-        assertEquals(OrderStatus.PACKED, captured.getFromStatus());
-        assertEquals(OrderStatus.SHIPPING, captured.getToStatus());
-        assertEquals("ADMIN_UPDATE", captured.getAction());
-        assertEquals("Shipped via GHN", captured.getReason());
     }
 
     @Test

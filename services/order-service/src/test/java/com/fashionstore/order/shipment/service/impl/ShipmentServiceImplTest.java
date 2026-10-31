@@ -171,7 +171,7 @@ class ShipmentServiceImplTest {
 
     @Test
     void onlineDeliveryDoesNotInventCodCollection() {
-        Order order = confirmedOrder(null);
+        Order order = processingOrder(null);
         order.setPaymentMethod(com.fashionstore.common.payment.PaymentMethod.ONLINE);
         order.setTotalAmount(new BigDecimal("100000"));
         order.setStatus(OrderStatus.SHIPPING);
@@ -199,7 +199,7 @@ class ShipmentServiceImplTest {
 
     @Test
     void codTransferUsesProviderDateRatherThanCurrentTime() {
-        Order order = confirmedOrder(null);
+        Order order = processingOrder(null);
         order.setPaymentMethod(com.fashionstore.common.payment.PaymentMethod.COD);
         order.setTotalAmount(new BigDecimal("100000"));
         Shipment shipment =
@@ -229,7 +229,7 @@ class ShipmentServiceImplTest {
     @Test
     void createShipment_success_usesOrderAddressSnapshotOnly() {
         Order order =
-                confirmedOrder(
+                processingOrder(
                         ShippingAddress.builder()
                                 .recipientName("Nguyen Van A")
                                 .recipientPhone("0987654321")
@@ -242,7 +242,6 @@ class ShipmentServiceImplTest {
                                 .provinceId(1000001)
                                 .wardId(1003646)
                                 .build());
-        order.setStatus(OrderStatus.PROCESSING); // order.confirmed tự chuyển CONFIRMED -> PROCESSING trước khi tạo vận đơn
 
         when(orderRepository.findByIdForUpdate("order-1")).thenReturn(Optional.of(order));
         when(shipmentRepository.findByOrderId("order-1")).thenReturn(Optional.empty());
@@ -280,7 +279,7 @@ class ShipmentServiceImplTest {
 
     @Test
     void acceptedCancellationBlocksEvenExistingShipmentReplay() {
-        var order = confirmedOrder(null);
+        var order = processingOrder(null);
         order.setStatus(OrderStatus.CANCELLING);
         when(orderRepository.findByIdForUpdate("order-1")).thenReturn(Optional.of(order));
         when(shipmentRepository.findByOrderId("order-1"))
@@ -299,7 +298,7 @@ class ShipmentServiceImplTest {
 
     @Test
     void carrierReadyToPickIsNotActualHandoff() {
-        var order = confirmedOrder(null);
+        var order = processingOrder(null);
         var shipment =
                 Shipment.builder()
                         .order(order)
@@ -321,7 +320,7 @@ class ShipmentServiceImplTest {
 
     @Test
     void carrierCancelReturnsOrderToProcessingForNewLabel() {
-        var order = confirmedOrder(null);
+        var order = processingOrder(null);
         order.setStatus(OrderStatus.PACKED);
         order.setTrackingCode("tracking");
         var shipment =
@@ -351,7 +350,7 @@ class ShipmentServiceImplTest {
 
     @Test
     void recreatedLabelCallbackAcceptsSuffixedClientOrderCode() {
-        var order = confirmedOrder(null);
+        var order = processingOrder(null);
         order.setStatus(OrderStatus.PACKED);
         var shipment =
                 Shipment.builder()
@@ -375,7 +374,7 @@ class ShipmentServiceImplTest {
 
     @Test
     void carrierPickedIsHandoffAndMovesOrderToShipping() {
-        var order = confirmedOrder(null);
+        var order = processingOrder(null);
         order.setStatus(OrderStatus.PACKED);
         var shipment =
                 Shipment.builder()
@@ -400,7 +399,7 @@ class ShipmentServiceImplTest {
 
     @Test
     void lateCarrierHandoffAfterCancellationKeepsFactAndCreatesException() {
-        var order = confirmedOrder(null);
+        var order = processingOrder(null);
         order.setStatus(OrderStatus.CANCELLED);
         var shipment =
                 Shipment.builder()
@@ -425,7 +424,7 @@ class ShipmentServiceImplTest {
 
     @Test
     void firstVerifiedHandoffTimestampIsImmutable() {
-        var order = confirmedOrder(null);
+        var order = processingOrder(null);
         var shipment =
                 Shipment.builder()
                         .order(order)
@@ -456,7 +455,7 @@ class ShipmentServiceImplTest {
     @Test
     void carrierAndCatalogHttpDoNotHoldOrderTransaction() {
         var order =
-                confirmedOrder(
+                processingOrder(
                         ShippingAddress.builder()
                                 .recipientName("Test")
                                 .recipientPhone("0900000000")
@@ -499,7 +498,7 @@ class ShipmentServiceImplTest {
     @Test
     void cancellationAcceptedDuringCarrierCreationCannotPackOrderOnLateReply() {
         var order =
-                confirmedOrder(
+                processingOrder(
                         ShippingAddress.builder()
                                 .recipientName("Test")
                                 .recipientPhone("0900000000")
@@ -523,7 +522,7 @@ class ShipmentServiceImplTest {
     @Test
     void failedCarrierCreationReleasesClaimSoAdminCanRetry() {
         var order =
-                confirmedOrder(
+                processingOrder(
                         ShippingAddress.builder()
                                 .recipientName("Test")
                                 .recipientPhone("0900000000")
@@ -551,7 +550,7 @@ class ShipmentServiceImplTest {
 
     @Test
     void createShipment_whenOrderHasNoAddressSnapshot_throwsShippingAddressInvalid() {
-        Order order = confirmedOrder(null);
+        Order order = processingOrder(null);
         when(orderRepository.findByIdForUpdate("order-1")).thenReturn(Optional.of(order));
         when(shipmentRepository.findByOrderId("order-1")).thenReturn(Optional.empty());
 
@@ -566,7 +565,7 @@ class ShipmentServiceImplTest {
     @Test
     void createShipment_whenLegacyOrderHasNoGhnCodes_throwsShippingAddressInvalid() {
         Order order =
-                confirmedOrder(
+                processingOrder(
                         ShippingAddress.builder()
                                 .recipientName("Nguyen Van A")
                                 .recipientPhone("0987654321")
@@ -581,12 +580,12 @@ class ShipmentServiceImplTest {
         verify(ghnClient, never()).createOrder(any(), any(), any(Integer.class), any());
     }
 
-    private Order confirmedOrder(ShippingAddress address) {
+    private Order processingOrder(ShippingAddress address) {
         Order order =
                 Order.builder()
                         .orderCode("ORD123")
                         .userId("user-1")
-                        .status(OrderStatus.CONFIRMED)
+                        .status(OrderStatus.PROCESSING)
                         .checkoutId("chk-1")
                         .shippingAddress("123 Le Loi, Ben Nghe, Quan 1, Ho Chi Minh")
                         .address(address)
@@ -632,7 +631,7 @@ class ShipmentServiceImplTest {
     @Test
     void createShipment_afterCarrierCancel_createsNewLabelOnSameRow() {
         var order =
-                confirmedOrder(
+                processingOrder(
                         ShippingAddress.builder()
                                 .recipientName("Test")
                                 .recipientPhone("0900000000")
@@ -703,6 +702,62 @@ class ShipmentServiceImplTest {
                 .isInstanceOf(AppException.class)
                 .extracting("errorCode")
                 .isEqualTo(OrderErrorCode.ORDER_STATUS_INVALID);
+    }
+
+    private static final ShippingAddress DELIVERABLE_ADDRESS =
+            ShippingAddress.builder()
+                    .recipientName("Test")
+                    .recipientPhone("0900000000")
+                    .provinceId(1)
+                    .wardId(2)
+                    .districtId(3)
+                    .wardCode("ward")
+                    .build();
+
+    @Test
+    void createShipment_whenOrderAwaitsAdminConfirmation_throwsInvalidStatus() {
+        var order = processingOrder(DELIVERABLE_ADDRESS);
+        order.setStatus(OrderStatus.CONFIRMED);
+        when(orderRepository.findByIdForUpdate("order-1")).thenReturn(Optional.of(order));
+        when(shipmentRepository.findByOrderId("order-1")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.createShipment("order-1", null))
+                .isInstanceOf(AppException.class)
+                .extracting("errorCode")
+                .isEqualTo(OrderErrorCode.ORDER_STATUS_INVALID);
+        verify(ghnClient, never()).createOrder(any(), any(), any(Integer.class), any());
+    }
+
+    @Test
+    void createShipment_whenLegacyPackedOrderHasNoLabel_createsItWithoutAnotherStatusChange() {
+        var order = processingOrder(DELIVERABLE_ADDRESS);
+        order.setStatus(OrderStatus.PACKED);
+        when(orderRepository.findByIdForUpdate("order-1")).thenReturn(Optional.of(order));
+        when(shipmentRepository.findByOrderId("order-1")).thenReturn(Optional.empty());
+        when(ghnClient.createOrder(eq(order), any(), any(Integer.class), any()))
+                .thenReturn("LEGACY_LABEL");
+
+        var response = service.createShipment("order-1", null);
+
+        assertThat(response.getTrackingCode()).isEqualTo("LEGACY_LABEL");
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.PACKED);
+        verify(orderStatusHistoryRepository, never()).save(any());
+    }
+
+    @Test
+    void createShipment_usesWeightEnteredByAdminInsteadOfCatalogEstimate() {
+        var order = processingOrder(DELIVERABLE_ADDRESS);
+        when(orderRepository.findByIdForUpdate("order-1")).thenReturn(Optional.of(order));
+        when(shipmentRepository.findByOrderId("order-1")).thenReturn(Optional.empty());
+        when(ghnClient.createOrder(eq(order), any(), eq(750), any())).thenReturn("GHN_TRACK_750");
+
+        var response =
+                service.createShipment(
+                        "order-1", CreateShipmentRequest.builder().weightGram(750).build());
+
+        assertThat(response.getTrackingCode()).isEqualTo("GHN_TRACK_750");
+        assertThat(response.getWeightGram()).isEqualTo(750);
+        verify(catalogClient, never()).getVariantsBatch(any());
     }
 
     @Test

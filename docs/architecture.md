@@ -52,7 +52,7 @@ Browser
 | `payment.requested`, `payment.cancellation.requested`, `wallet.saga-compensation.requested`, `payment.order-funds-refund.requested` | order | payment |
 | `payment.initiated`, `payment.completed`, `payment.failed`, `payment.cancelled`, `payment.cancellation.rejected` | payment | order |
 | `wallet.saga-compensation.completed` / `.rejected`, `payment.order-funds-refund.credited` / `.rejected` | payment | order |
-| `order.confirmed` | order | order (chuyển đơn sang `PROCESSING`) |
+| `order.confirmed` | order | chưa có consumer (rơi vào hàng `unrouted`) |
 | `order.delivered` | order | payment (ghi nhận thu tiền COD) |
 | `order.cancelled` | order | — (chưa có consumer) |
 | `notification.email.requested`, `notification.in-app.requested` | order | notification |

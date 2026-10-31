@@ -29,7 +29,6 @@ import com.fashionstore.order.order.entity.ShippingAddress;
 import com.fashionstore.order.checkout.entity.CheckoutStatus;
 import com.fashionstore.order.saga.entity.OrderSagaType;
 import com.fashionstore.order.order.entity.OrderStatus;
-import com.fashionstore.order.shipment.entity.ShipmentStatus;
 import com.fashionstore.order.shared.outbox.OutboxEventRecorder;
 import com.fashionstore.order.saga.event.SagaOutbox;
 import com.fashionstore.order.shared.exception.OrderErrorCode;
@@ -37,7 +36,6 @@ import com.fashionstore.order.checkout.repository.CheckoutRepository;
 import com.fashionstore.order.order.repository.OrderRepository;
 import com.fashionstore.order.saga.repository.OrderSagaRepository;
 import com.fashionstore.order.order.repository.OrderStatusHistoryRepository;
-import com.fashionstore.order.shipment.repository.ShipmentRepository;
 import com.fashionstore.order.order.service.OrderAdminSpecifications;
 import com.fashionstore.order.order.service.OrderNotificationService;
 import com.fashionstore.order.order.service.OrderService;
@@ -73,7 +71,6 @@ public class OrderServiceImpl implements OrderService {
     CurrentUserProvider currentUserProvider;
     PromotionService promotionService;
     OrderStatusHistoryRepository orderStatusHistoryRepository;
-    ShipmentRepository shipmentRepository;
     OrderNotificationService orderNotificationService;
     com.fashionstore.order.order.service.OrderReceiptService orderReceiptService;
     com.fashionstore.order.saga.service.OrderCancellationViewService cancellationProjection;
@@ -392,27 +389,6 @@ public class OrderServiceImpl implements OrderService {
             throw new AppException(OrderErrorCode.FULFILLMENT_BLOCKED);
         validateTransition(fromStatus, request.getStatus());
 
-        // Guard: Chỉ cho phép chuyển sang SHIPPING khi đã có vận đơn hoặc trackingCode
-        if (request.getStatus() == OrderStatus.SHIPPING) {
-            boolean hasShipment =
-                    shipmentRepository
-                                    .findByOrderId(order.getId())
-                                    .filter(s -> s.getStatus() != ShipmentStatus.CANCELLED)
-                                    .isPresent()
-                            || (order.getTrackingCode() != null
-                                    && !order.getTrackingCode().isBlank());
-            if (!hasShipment) {
-                throw new AppException(OrderErrorCode.SHIPMENT_REQUIRED);
-            }
-        }
-
-        // REFUNDED không phải một cột cần set — nó là kết quả của một reply từ payment-service.
-        // Đơn giữ nguyên RETURNED cho tới khi ví xác nhận đã ghi có (order-funds-refund.credited).
-        if (request.getStatus() == OrderStatus.DELIVERED) {
-            orderReceiptService.markDelivered(orderId, orderReceiptService.now(), "ADMIN");
-            return toResponse(order, order.getCheckoutId());
-        }
-
         order.setStatus(request.getStatus());
         if (request.getShippingProvider() != null && !request.getShippingProvider().isBlank()) {
             order.setShippingProvider(request.getShippingProvider());
@@ -465,16 +441,11 @@ public class OrderServiceImpl implements OrderService {
         if (current == target) {
             return;
         }
-        // Đơn PENDING còn nằm trong saga — admin không được can thiệp giữa chừng.
+        // PENDING còn trong saga. Từ PROCESSING trở đi trạng thái do vận đơn quyết định:
+        // PACKED khi tạo vận đơn, SHIPPING/DELIVERED theo GHN.
         boolean valid =
                 switch (current) {
                     case CONFIRMED -> target == OrderStatus.PROCESSING;
-                    case PROCESSING -> target == OrderStatus.PACKED;
-                    case PACKED -> target == OrderStatus.SHIPPING;
-                    case SHIPPING -> target == OrderStatus.DELIVERED;
-                    case DELIVERED ->
-                            target == OrderStatus.COMPLETED || target == OrderStatus.RETURNED;
-                    case RETURNED -> target == OrderStatus.REFUNDED;
                     default -> false;
                 };
 

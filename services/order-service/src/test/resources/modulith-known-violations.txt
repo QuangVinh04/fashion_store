@@ -70,8 +70,6 @@ Module 'order' depends on non-exposed type saga.service.SagaCancellationService$
 Module 'order' depends on non-exposed type shipment.dto.ShipmentResponse within module 'shipment'!
 Module 'order' depends on non-exposed type shipment.entity.Shipment within module 'shipment'!
 Module 'order' depends on non-exposed type shipment.entity.ShipmentProvider within module 'shipment'!
-Module 'order' depends on non-exposed type shipment.entity.ShipmentStatus within module 'shipment'!
-Module 'order' depends on non-exposed type shipment.repository.ShipmentRepository within module 'shipment'!
 Module 'order' depends on non-exposed type shipment.service.ShipmentService within module 'shipment'!
 Module 'returns' depends on non-exposed type order.entity.Order within module 'order'!
 Module 'returns' depends on non-exposed type order.entity.OrderItem within module 'order'!

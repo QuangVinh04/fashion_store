@@ -8,8 +8,10 @@ import com.fashionstore.order.shipment.dto.CreateShipmentRequest;
 import com.fashionstore.order.shipment.dto.ShipmentResponse;
 import com.fashionstore.order.shipment.dto.GhnWebhookPayload;
 import com.fashionstore.order.shipment.service.ShipmentService;
+import com.fashionstore.order.shipment.service.ShipmentSyncService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import java.nio.charset.StandardCharsets;
@@ -30,6 +32,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class ShipmentController {
 
     ShipmentService shipmentService;
+    ShipmentSyncService shipmentSyncService;
     GhnProperties ghnProperties;
     com.fashionstore.order.returns.service.ReturnPickupService returnPickupService;
 
@@ -38,11 +41,26 @@ public class ShipmentController {
     @PostMapping("/api/v1/orders/{orderId}/shipment")
     public ApiResponse<ShipmentResponse> createShipment(
             @PathVariable String orderId,
-            @RequestBody(required = false) CreateShipmentRequest request
+            @Valid @RequestBody(required = false) CreateShipmentRequest request
     ) {
         return ApiResponse.<ShipmentResponse>builder()
                 .message("Create shipment successfully")
                 .data(shipmentService.createShipment(orderId, request))
+                .build();
+    }
+
+    @Operation(
+            summary = "Đồng bộ trạng thái vận đơn từ GHN (ADMIN)",
+            description =
+                    "Dùng khi đơn kẹt ở `PACKED`/`SHIPPING` do mất webhook. Lấy trạng thái thật từ GHN"
+                        + " rồi áp như webhook: có thể chuyển đơn sang `SHIPPING`/`DELIVERED`. Lỗi GHN"
+                        + " trả 502.")
+    @PreAuthorize("hasRole('ADMIN')")
+    @PostMapping("/api/v1/admin/orders/{orderId}/shipment/sync")
+    public ApiResponse<ShipmentResponse> syncShipment(@PathVariable String orderId) {
+        return ApiResponse.<ShipmentResponse>builder()
+                .message("Sync shipment successfully")
+                .data(shipmentSyncService.syncFromCarrier(orderId))
                 .build();
     }
 

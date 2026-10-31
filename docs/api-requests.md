@@ -19,6 +19,17 @@ _(chưa có)_
 
 ## Done
 
+### Luồng xử lý đơn thủ công của admin
+- Người yêu cầu: Claude Code (kèm task UI cho Antigravity) · 2026-11-01
+- Màn hình: apps/backoffice/src/views/orders/OrderDetail.tsx, OrderList.tsx, order-actions.ts
+- Cần:
+  - `CONFIRMED` không còn tự chuyển `PROCESSING`. Admin xác nhận: `PATCH` trạng thái `PROCESSING`. Từ chối: `POST /api/v1/admin/orders/{id}/cancel` (lý do bắt buộc).
+  - Admin chỉ còn chuyển được `CONFIRMED → PROCESSING`. Chuyển sang `PACKED`/`SHIPPING`/`DELIVERED` trả `ORDER_STATUS_INVALID`.
+  - `POST /api/v1/orders/{id}/shipment`: thêm `weightGram` (tùy chọn, > 0). Chỉ khi đơn `PROCESSING`, thành công thì đơn `PACKED`.
+  - Mới: `POST /api/v1/admin/orders/{id}/shipment/sync` trả `ShipmentResponse`. Dùng khi mất webhook GHN.
+- Lý do: shop xác nhận đơn trước khi đóng gói, vận đơn chỉ tạo sau khi đóng gói xong, giao nhận theo webhook GHN.
+- Trạng thái: done
+
 ### Tìm và lọc danh sách đơn admin
 - Người yêu cầu: Antigravity · 2026-10-31
 - Màn hình: apps/backoffice/src/views/orders/OrderList.tsx
