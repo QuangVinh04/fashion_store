@@ -2,6 +2,7 @@ package com.fashionstore.order.shipment.controller;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fashionstore.common.redis.CacheRegion;
 import com.fashionstore.common.redis.RedisService;
 import com.fashionstore.common.dto.ApiResponse;
 import com.fashionstore.common.exception.AppException;
@@ -34,8 +35,9 @@ public class ShippingLocationController {
 
     private static final int DEMO_PROVINCE_ID = 999;
     private static final int DEMO_WARD_ID = 99901;
-    private static final Duration CACHE_TTL = Duration.ofHours(24);
-    private static final TypeReference<List<Location>> LOCATIONS = new TypeReference<>() {};
+    // Danh mục địa chỉ GHN ít đổi, nên cache một ngày.
+    private static final CacheRegion<List<Location>> LOCATIONS = new CacheRegion<>(
+            "ghn", new TypeReference<List<Location>>() {}, Duration.ofHours(24));
 
     public record Location(String code, String name) {}
 
@@ -63,20 +65,19 @@ public class ShippingLocationController {
                 || properties.getShopId() == null || properties.getShopId().isBlank());
     }
 
-    private String key(String suffix) {
-        String environment = properties.getApiUrl().contains("dev-online") ? "staging" : "production";
-        return redis.key("ghn", environment, "locations", "v2", suffix);
+    private String environment() {
+        return properties.getApiUrl().contains("dev-online") ? "staging" : "production";
     }
 
     private List<Location> cached(String suffix, UpstreamCall call) {
-        return redis.getOrLoad(key(suffix), CACHE_TTL, LOCATIONS, () -> {
+        return redis.getOrLoad(LOCATIONS, () -> {
             try {
                 return call.get();
             } catch (FeignException exception) {
                 log.warn("GHN location lookup failed with status {}", exception.status());
                 throw new AppException(ErrorCode.UPSTREAM_SERVICE_ERROR);
             }
-        });
+        }, environment(), "locations", "v2", suffix);
     }
 
     private ApiResponse<List<Location>> locations(List<Location> rows) {
