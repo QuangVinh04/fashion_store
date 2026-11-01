@@ -137,6 +137,23 @@ public class RedisService {
         return loaded;
     }
 
+    /** Như {@link #getOrLoad(String, Duration, TypeReference, Supplier)} nhưng key và TTL lấy từ {@code region}. */
+    public <T> T getOrLoad(CacheRegion<T> region, Supplier<T> loader, String... keyParts) {
+        return getOrLoad(regionKey(region, keyParts), region.ttl(), region.type(), loader);
+    }
+
+    /** Xoá một mục của vùng cache, dùng khi dữ liệu nguồn đổi mà không muốn chờ TTL. */
+    public void evict(CacheRegion<?> region, String... keyParts) {
+        delete(regionKey(region, keyParts));
+    }
+
+    private String regionKey(CacheRegion<?> region, String... keyParts) {
+        String[] parts = new String[keyParts.length + 1];
+        parts[0] = region.name();
+        System.arraycopy(keyParts, 0, parts, 1, keyParts.length);
+        return key(parts);
+    }
+
     /**
      * Ghi sau khi transaction DB đã commit. Ghi trước commit thì một lần crash giữa chừng khiến marker
      * tồn tại dù DB rollback. Không có transaction đang chạy thì ghi ngay.

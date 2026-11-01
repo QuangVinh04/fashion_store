@@ -21,6 +21,7 @@
 | JPA base class | `persistence.BaseEntity`, `persistence.AuditedEntity` |
 | security | `security.CurrentUserProvider`, `ApiAuthenticationEntryPoint`, `ApiAccessDeniedHandler`, `KeycloakJwtAuthoritiesConverter` (bean `JwtAuthenticationConverter` auto-configured — service chỉ cần `.oauth2ResourceServer(rs -> rs.jwt(withDefaults()))`) |
 | messaging | `messaging.RabbitTopology` (exchange/DLX/unrouted + quorum queue factory — mọi `RabbitMQConfig` khai báo qua đây), `messaging.outbox.ConfirmedRabbitSender` (gửi có publisher-confirm cho outbox relay), `messaging.outbox.OutboxEventStatus`, `messaging.processed.@EnableProcessedMessages` + `ProcessedMessageService` |
+| cache Redis | `redis.RedisService` (fail-open, TTL bắt buộc, key có namespace) + `redis.CacheRegion` (khai báo tên/kiểu/TTL: `redis.getOrLoad(REGION, loader, keyParts...)`, `redis.evict(REGION, keyParts...)`) — không tự dùng `StringRedisTemplate` |
 | khác | `util.SlugUtils`, `web.CorrelationIdFilter`, `payment.PaymentMethod/PaymentProvider` |
 
 `com.fashionstore.contracts.*` (api-contracts): `common.EventEnvelope`, `common.EventTypes`, cùng các command/event `inventory.*`, `order.*`, `payment.*`, `notification.*`. Event mới thêm **ở đây** và tham chiếu `EventTypes` — không hardcode chuỗi routing key ở hai service.

@@ -1,5 +1,8 @@
 package com.fashionstore.order.dashboard.service.impl;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fashionstore.common.redis.CacheRegion;
+import com.fashionstore.common.redis.RedisService;
 import com.fashionstore.order.shared.client.CatalogClient;
 import com.fashionstore.order.dashboard.dto.AdminDashboardResponse;
 import com.fashionstore.order.order.dto.OrderStatusCountResponse;
@@ -19,6 +22,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Arrays;
@@ -34,6 +38,13 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
     OrderRepository orderRepository;
     OrderItemRepository orderItemRepository;
     CatalogClient catalogClient;
+    RedisService redis;
+
+    private static final int DEFAULT_DAYS = 30;
+    private static final int DEFAULT_LOW_STOCK_THRESHOLD = 10;
+    // Số liệu tổng hợp nặng (~400ms ở 200k đơn) và admin chấp nhận trễ tối đa 1 phút.
+    private static final CacheRegion<AdminDashboardResponse> DASHBOARD = new CacheRegion<>(
+            "dashboard", new TypeReference<AdminDashboardResponse>() {}, Duration.ofMinutes(1));
 
     private static final Set<OrderStatus> REVENUE_STATUSES = Set.of(
             OrderStatus.CONFIRMED,
@@ -48,9 +59,13 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
     @PreAuthorize("hasRole('ADMIN')")
     @Transactional(readOnly = true)
     public AdminDashboardResponse getDashboardStats(int days, int lowStockThreshold) {
-        if (days <= 0) days = 30;
-        if (lowStockThreshold <= 0) lowStockThreshold = 10;
+        int windowDays = days > 0 ? days : DEFAULT_DAYS;
+        int threshold = lowStockThreshold > 0 ? lowStockThreshold : DEFAULT_LOW_STOCK_THRESHOLD;
+        return redis.getOrLoad(DASHBOARD, () -> loadDashboardStats(windowDays, threshold),
+                String.valueOf(windowDays), String.valueOf(threshold));
+    }
 
+    private AdminDashboardResponse loadDashboardStats(int days, int lowStockThreshold) {
         LocalDateTime startDate = LocalDateTime.now().minusDays(days);
 
         BigDecimal totalRevenue = orderRepository.calculateTotalRevenue(REVENUE_STATUSES);

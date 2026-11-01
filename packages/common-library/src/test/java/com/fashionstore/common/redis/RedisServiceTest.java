@@ -232,6 +232,43 @@ class RedisServiceTest {
         verify(values, times(1)).set(eq("k"), eq("1"), eq(TTL));
     }
 
+    // ----- CacheRegion (khai báo cache dùng lại) -----
+
+    static final CacheRegion<List<String>> REGION = new CacheRegion<>("dashboard", STRINGS, TTL);
+
+    @Test
+    void aRegionKeepsItsEntriesUnderItsNameInTheServiceNamespaceWithTheRegionTtl() {
+        List<String> result = redis.getOrLoad(REGION, () -> List.of("fresh"), "30", "10");
+
+        assertThat(result).containsExactly("fresh");
+        verify(values).set("fashion-store:order-service:dashboard:30:10", "[\"fresh\"]", TTL);
+    }
+
+    @Test
+    void aRegionServesAHitWithoutCallingTheLoader() {
+        when(values.get("fashion-store:order-service:dashboard:30")).thenReturn("[\"cached\"]");
+        AtomicInteger loads = new AtomicInteger();
+
+        List<String> result = redis.getOrLoad(REGION, () -> { loads.incrementAndGet(); return List.of("fresh"); }, "30");
+
+        assertThat(result).containsExactly("cached");
+        assertThat(loads).hasValue(0);
+    }
+
+    @Test
+    void evictingARegionEntryDeletesOnlyThatKey() {
+        redis.evict(REGION, "30", "10");
+
+        verify(template).delete(List.of("fashion-store:order-service:dashboard:30:10"));
+    }
+
+    @Test
+    void aRegionNeedsANameAndAPositiveTtlSoMisconfigurationFailsAtStartup() {
+        assertThatThrownBy(() -> new CacheRegion<>(" ", STRINGS, TTL)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new CacheRegion<>("x", STRINGS, Duration.ZERO)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new CacheRegion<>("x", STRINGS, null)).isInstanceOf(IllegalArgumentException.class);
+    }
+
     @Test
     void aRolledBackTransactionNeverWritesTheMarker() {
         TransactionSynchronizationManager.initSynchronization();

@@ -1,5 +1,8 @@
 package com.fashionstore.order.dashboard.service.impl;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.fashionstore.common.redis.RedisService;
 import com.fashionstore.order.shared.client.CatalogClient;
 import com.fashionstore.order.dashboard.dto.AdminDashboardResponse;
 import com.fashionstore.order.order.dto.OrderStatusCountResponse;
@@ -10,11 +13,15 @@ import com.fashionstore.order.order.repository.OrderRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -22,6 +29,8 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -41,7 +50,7 @@ class AdminDashboardServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = new AdminDashboardServiceImpl(orderRepository, orderItemRepository, catalogClient);
+        service = new AdminDashboardServiceImpl(orderRepository, orderItemRepository, catalogClient, RedisService.disabled());
     }
 
     @Test
@@ -93,5 +102,37 @@ class AdminDashboardServiceImplTest {
 
         assertThat(response.getLowStockCount()).isEqualTo(0L);
         assertThat(response.getTotalOrders()).isEqualTo(0L);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void getDashboardStats_servesRepeatCallFromRedisWithoutQueryingAgain() {
+        StringRedisTemplate template = mock(StringRedisTemplate.class);
+        ValueOperations<String, String> values = mock(ValueOperations.class);
+        when(template.opsForValue()).thenReturn(values);
+        RedisService redis = new RedisService(template, new ObjectMapper().registerModule(new JavaTimeModule()), "order-service");
+        service = new AdminDashboardServiceImpl(orderRepository, orderItemRepository, catalogClient, redis);
+        when(orderRepository.calculateTotalRevenue(any())).thenReturn(new BigDecimal("15000000"));
+        when(orderRepository.count()).thenReturn(50L);
+        when(orderRepository.countOrdersByStatus()).thenReturn(List.of(new OrderStatusCountResponse(OrderStatus.DELIVERED, 50L)));
+        when(orderRepository.findRevenueByDay(any(), any(LocalDateTime.class)))
+                .thenReturn(List.<Object[]>of(new Object[]{LocalDate.of(2026, 9, 18), new BigDecimal("5000000"), 10L}));
+        when(orderItemRepository.findTopSellingProducts(any(), any(Pageable.class)))
+                .thenReturn(List.of(new TopProductResponse("var-1", "Áo Polo", 50L, new BigDecimal("10000000"))));
+        when(catalogClient.getLowStockCount(10)).thenReturn(4L);
+
+        AdminDashboardResponse first = service.getDashboardStats(30, 10);
+
+        ArgumentCaptor<String> key = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> json = ArgumentCaptor.forClass(String.class);
+        verify(values).set(key.capture(), json.capture(), any(Duration.class));
+        assertThat(key.getValue()).isEqualTo("fashion-store:order-service:dashboard:30:10");
+        when(values.get(key.getValue())).thenReturn(json.getValue());
+
+        AdminDashboardResponse second = service.getDashboardStats(30, 10);
+
+        assertThat(second).isEqualTo(first);
+        verify(orderRepository, times(1)).count();
+        verify(catalogClient, times(1)).getLowStockCount(10);
     }
 }
