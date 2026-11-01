@@ -20,6 +20,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { useCart } from "../context/CartContext";
+import { useAuth } from "../context/AuthContext";
 import { money } from "../api/client";
 import { Status } from "../components/StoreUI";
 
@@ -39,6 +40,7 @@ export default function Cart() {
     clearCart,
   } = useCart();
   const navigate = useNavigate();
+  const { isLoggedIn, login } = useAuth();
 
   const [busyId, setBusyId] = useState<string>("");
   const [actionError, setActionError] = useState<string>("");
@@ -46,7 +48,7 @@ export default function Cart() {
 
   useEffect(() => {
     if (!cart?.items.length) return;
-    const pids = Array.from(new Set(cart.items.map((i) => i.productId)));
+    const pids = Array.from(new Set(cart.items.map((i) => i.productId).filter(Boolean)));
     pids.forEach((pid) => {
       if (!thumbnails[pid]) {
         store.product(pid).then((p) => {
@@ -220,6 +222,21 @@ export default function Cart() {
         </div>
 
         
+
+        {!isLoggedIn && (
+          <div className="mb-6 p-4 bg-secondary/50 rounded-xl border border-border flex items-center justify-between gap-3 flex-wrap">
+            <p className="text-xs text-muted-foreground">
+              Bạn đang xem giỏ hàng với tư cách <strong>Khách</strong>. Đăng nhập để lưu giỏ hàng và đồng bộ trên mọi thiết bị.
+            </p>
+            <button
+              type="button"
+              onClick={() => login('/cart')}
+              className="text-xs font-semibold text-primary hover:underline cursor-pointer"
+            >
+              Đăng Nhập Ngay →
+            </button>
+          </div>
+        )}
 
         <Status loading={loading} error={error} retry={() => void refresh()} />
 

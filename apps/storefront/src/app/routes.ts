@@ -16,7 +16,7 @@ export const router = createBrowserRouter([
       { path: 'products', lazy: () => import('../pages/Products').then(m => ({ Component: m.default })) },
       { path: 'products/:id', lazy: () => import('../pages/ProductDetail').then(m => ({ Component: m.default })) },
       { path: 'products/:id/reviews', lazy: () => import('../pages/ProductReviews').then(m => ({ Component: m.default })) },
-      { path: 'cart', lazy: () => import('../pages/Cart').then(m => ({ element: protectedPage(createElement(m.default)) })) },
+      { path: 'cart', lazy: () => import('../pages/Cart').then(m => ({ Component: m.default })) },
       { path: 'checkout/wallet-pay', lazy: () => import('../pages/WalletPay').then(m => ({ element: protectedPage(createElement(m.default)) })) },
       { path: 'profile/wallet', lazy: () => import('../pages/Wallet').then(m => ({ element: protectedPage(createElement(m.default)) })) },
       { path: 'profile/wallet/top-up', lazy: () => import('../pages/WalletTopUp').then(m => ({ element: protectedPage(createElement(m.default)) })) },

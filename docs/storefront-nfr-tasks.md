@@ -111,7 +111,7 @@ Các việc backend (cache ảnh, WebP/srcset, Redis catalog, rate limit, gộp 
   - Sau đăng nhập: gọi `cartAdd` lần lượt từng dòng, xong thì xóa `localStorage`. Dòng nào lỗi (hết hàng) thì báo trên trang Cart.
   - Nếu cần gộp một lần (atomic), thêm entry `POST /api/v1/cart/merge` vào `docs/api-requests.md`.
 - Kiểm chứng: ẩn danh thêm 2 sản phẩm → đăng nhập → giỏ server có đủ 2 dòng, header đúng số lượng.
-- Trạng thái: chờ duyệt
+- Trạng thái: done (Khách vãng lai xem được /cart, chỉnh số lượng/xóa món offline, auto-merge vào server khi login)
 
 ### T10. Gộp kiểm tra wishlist của lưới sản phẩm
 - Tiêu chí: SF-07, SF-29.

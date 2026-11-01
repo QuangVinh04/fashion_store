@@ -138,6 +138,7 @@ export function QuickViewModal({
     product?.salePrice != null && product.salePrice < product.basePrice;
 
   async function handleAddToCart() {
+    if (!product) return;
     if (!selectedColor || !selectedSize || !selectedVariant) {
       setFeedback("Vui lòng chọn màu sắc và kích cỡ.");
       return;
@@ -150,7 +151,13 @@ export function QuickViewModal({
     setBusy(true);
     setFeedback("");
     try {
-      await addItem(selectedVariant.id, 1);
+      await addItem(selectedVariant.id, 1, {
+        productId: product.id,
+        productName: product.name,
+        color: selectedVariant.color || selectedColor,
+        size: selectedVariant.size || selectedSize,
+        unitPrice: selectedVariant.salePrice ?? selectedVariant.price ?? product.salePrice ?? product.price ?? 0,
+      });
       setJustAdded(true);
       setTimeout(() => setJustAdded(false), 2000);
     } catch {

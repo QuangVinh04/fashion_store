@@ -304,7 +304,13 @@ export default function ProductDetail() {
     setVariantPrompt(false);
     setFeedback(null);
     try {
-      await addItem(selectedVariant.id, qty);
+      await addItem(selectedVariant.id, qty, {
+        productId: id,
+        productName: p?.name || "Sản phẩm",
+        color: selectedVariant.color || selectedColor,
+        size: selectedVariant.size || selectedSize,
+        unitPrice: displayPrice,
+      });
       if (buyNow) {
         navigate("/cart");
       } else {
