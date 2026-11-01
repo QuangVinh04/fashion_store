@@ -287,10 +287,6 @@ export default function ProductDetail() {
   const isSale = p?.basePrice != null && displayPrice < p.basePrice;
 
   async function handleAddToCart(buyNow = false) {
-    if (!isLoggedIn) {
-      login(`/products/${id}`);
-      return;
-    }
     if (!selectedColor || !selectedSize || !selectedVariant) {
       setVariantPrompt(true);
       setFeedback({

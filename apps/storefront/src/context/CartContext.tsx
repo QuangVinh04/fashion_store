@@ -2,6 +2,9 @@ import { createContext, useCallback, useContext, useEffect, useState, type React
 import { store } from '../api/store';
 import type { Cart } from '../api/types';
 import { useAuth } from './AuthContext';
+import { addToGuestCart, guestCartCount, mergeGuestCart } from './guestCart';
+
+const MERGE_REJECTED_MESSAGE = 'Một số sản phẩm trong giỏ trước khi đăng nhập không còn đủ hàng nên chưa được thêm.';
 
 type CartValue = {
   cart: Cart | null; count: number; total: number; loading: boolean; error: string;
@@ -15,6 +18,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const [cart, setCart] = useState<Cart | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [guestCount, setGuestCount] = useState(guestCartCount);
   const refresh = useCallback(async () => {
     if (!session?.authenticated) { setCart(null); setError(''); setLoading(false); return; }
     try { setCart(await store.cart()); setError(''); }
@@ -23,12 +27,13 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }, [session?.authenticated]);
   useEffect(() => {
     if (!ready) return;
-    if (!session?.authenticated) { setCart(null); setError(''); setLoading(false); return; }
+    if (!session?.authenticated) { setCart(null); setError(''); setGuestCount(guestCartCount()); setLoading(false); return; }
     let active = true;
     (async () => {
       try {
+        const rejected = await mergeGuestCart(store.cartAdd);
         const current = await store.cart();
-        if (active) { setCart(current); setError(''); }
+        if (active) { setCart(current); setError(rejected ? MERGE_REJECTED_MESSAGE : ''); }
       } catch (e) { if (active) setError((e as Error).message); }
       finally { if (active) setLoading(false); }
     })();
@@ -38,8 +43,14 @@ export function CartProvider({ children }: { children: ReactNode }) {
     try { setCart(await run()); setError(''); }
     catch (e) { setError((e as Error).message); throw e; }
   };
-  return <Context.Provider value={{ cart, count: cart?.totalQuantity ?? 0, total: cart?.totalPrice ?? 0, loading, error, refresh,
-    addItem: (variantId, quantity) => mutate(() => store.cartAdd(variantId, quantity)),
+  const addItem = async (variantId: string, quantity: number) => {
+    if (session?.authenticated) { await mutate(() => store.cartAdd(variantId, quantity)); return; }
+    addToGuestCart(variantId, quantity);
+    setGuestCount(guestCartCount());
+  };
+  const count = session?.authenticated ? cart?.totalQuantity ?? 0 : guestCount;
+  return <Context.Provider value={{ cart, count, total: cart?.totalPrice ?? 0, loading, error, refresh,
+    addItem,
     updateQty: (id, quantity) => mutate(() => store.cartQty(id, quantity)),
     removeItem: id => mutate(() => store.cartRemove(id)),
     clearCart: () => mutate(() => store.cartClear()),

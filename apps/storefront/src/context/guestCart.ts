@@ -1,0 +1,49 @@
+const STORAGE_KEY = 'lino:guestCart';
+
+type GuestCartEntry = { variantId: string; quantity: number };
+
+function read(): GuestCartEntry[] {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '[]');
+    return Array.isArray(parsed) ? parsed : [];
+  } catch { return []; }
+}
+
+function write(entries: GuestCartEntry[]) {
+  try {
+    if (entries.length) localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
+    else localStorage.removeItem(STORAGE_KEY);
+  } catch { /* storage bị chặn: giỏ khách không lưu được, chấp nhận mất */ }
+}
+
+export function guestCartCount() {
+  return read().reduce((sum, entry) => sum + entry.quantity, 0);
+}
+
+export function addToGuestCart(variantId: string, quantity: number) {
+  const entries = read();
+  const existing = entries.find(entry => entry.variantId === variantId);
+  if (existing) existing.quantity += quantity;
+  else entries.push({ variantId, quantity });
+  write(entries);
+}
+
+// Dùng chung một lần chạy: effect của CartProvider có thể chạy hai lần (StrictMode) và sẽ cộng đôi số lượng.
+let mergeInFlight: Promise<number> | null = null;
+
+/** Đẩy giỏ khách lên giỏ server từng món (server tự cộng dồn món trùng). Trả về số món bị từ chối. */
+export function mergeGuestCart(add: (variantId: string, quantity: number) => Promise<unknown>): Promise<number> {
+  if (mergeInFlight) return mergeInFlight;
+  const entries = read();
+  if (!entries.length) return Promise.resolve(0);
+  write([]);
+  mergeInFlight = (async () => {
+    let rejected = 0;
+    for (const entry of entries) {
+      try { await add(entry.variantId, entry.quantity); }
+      catch { rejected += 1; }
+    }
+    return rejected;
+  })().finally(() => { mergeInFlight = null; });
+  return mergeInFlight;
+}

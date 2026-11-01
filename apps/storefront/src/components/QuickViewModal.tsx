@@ -8,7 +8,6 @@ import { store } from "../api/store";
 import { media, money } from "../api/client";
 import type { Product, Variant } from "../api/types";
 import { useCart } from "../context/CartContext";
-import { useAuth } from "../context/AuthContext";
 import {
   Dialog,
   DialogContent,
@@ -38,7 +37,6 @@ export function QuickViewModal({
   const [feedback, setFeedback] = useState<string>("");
 
   const { addItem } = useCart();
-  const { isLoggedIn, login } = useAuth();
 
   useEffect(() => {
     if (!open || !productId) return;
@@ -140,11 +138,6 @@ export function QuickViewModal({
     product?.salePrice != null && product.salePrice < product.basePrice;
 
   async function handleAddToCart() {
-    if (!isLoggedIn) {
-      onOpenChange(false);
-      login(`/products/${productId}`);
-      return;
-    }
     if (!selectedColor || !selectedSize || !selectedVariant) {
       setFeedback("Vui lòng chọn màu sắc và kích cỡ.");
       return;
