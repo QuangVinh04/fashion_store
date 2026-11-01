@@ -17,6 +17,7 @@ import com.fashionstore.order.returns.dto.OrderReturnReference;
 import com.fashionstore.order.saga.dto.OrderSagaResponse;
 import com.fashionstore.order.order.dto.OrderStatusHistoryResponse;
 import com.fashionstore.order.order.dto.OrderSummaryResponse;
+import com.fashionstore.order.checkout.mapper.PromotionItemMapper;
 import com.fashionstore.order.promotion.dto.PromotionItemDto;
 import com.fashionstore.order.order.dto.UpdateOrderStatusRequest;
 import com.fashionstore.order.checkout.entity.Checkout;
@@ -52,6 +53,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -128,6 +130,7 @@ public class OrderServiceImpl implements OrderService {
                         .subtotalAmount(checkout.getSubtotalAmount())
                         .discountAmount(checkout.getDiscountAmount())
                         .shippingFee(checkout.getShippingFee())
+                        .shippingDiscountAmount(checkout.getShippingDiscountAmount())
                         .totalAmount(checkout.getTotalAmount())
                         .build();
 
@@ -144,28 +147,7 @@ public class OrderServiceImpl implements OrderService {
                 userId,
                 "Khách hàng tạo đơn hàng từ checkout");
 
-        if (checkout.getCouponCode() != null && !checkout.getCouponCode().isBlank()) {
-
-            List<PromotionItemDto> promoItems =
-                    checkoutItems.stream()
-                            .map(
-                                    item ->
-                                            PromotionItemDto.builder()
-                                                    .variantId(item.getVariantId())
-                                                    .productId(item.getProductId())
-                                                    .categoryId(item.getCategoryId())
-                                                    .unitPrice(item.getUnitPrice())
-                                                    .quantity(item.getQuantity())
-                                                    .lineTotal(item.getLineTotal())
-                                                    .build())
-                            .toList();
-            promotionService.reserve(
-                    checkout.getCouponCode(),
-                    userId,
-                    order.getId(),
-                    checkout.getSubtotalAmount(),
-                    promoItems);
-        }
+        reserveCoupons(checkout, checkoutItems, userId, order.getId());
 
         checkout.setOrder(order);
         checkout.setStatus(CheckoutStatus.COMPLETED);
@@ -180,6 +162,33 @@ public class OrderServiceImpl implements OrderService {
                 reserveInventory(order, saga, checkoutItems));
 
         return toResponse(order, checkoutId);
+    }
+
+    /**
+     * Reserves the product and shipping coupons under the promotion lock. The discount recomputed there must equal the
+     * checkout snapshot the customer saw; an admin edit in between fails the order (rolling back) instead of silently
+     * charging a different total.
+     */
+    private void reserveCoupons(Checkout checkout, List<CheckoutItem> checkoutItems, String userId, String orderId) {
+        if (checkout.getCouponCode() != null && !checkout.getCouponCode().isBlank()) {
+            List<PromotionItemDto> promoItems =
+                    checkoutItems.stream().map(PromotionItemMapper::fromCheckoutItem).toList();
+            BigDecimal discount = promotionService.reserve(
+                    checkout.getCouponCode(), userId, orderId, checkout.getSubtotalAmount(), promoItems);
+            requireSameDiscount(checkout.getDiscountAmount(), discount);
+        }
+        if (checkout.getShippingCouponCode() != null && !checkout.getShippingCouponCode().isBlank()) {
+            BigDecimal shippingDiscount = promotionService.reserveShipping(
+                    checkout.getShippingCouponCode(), userId, orderId, checkout.getSubtotalAmount(),
+                    checkout.getShippingFee());
+            requireSameDiscount(checkout.getShippingDiscountAmount(), shippingDiscount);
+        }
+    }
+
+    private void requireSameDiscount(BigDecimal expected, BigDecimal actual) {
+        if (actual == null || expected.compareTo(actual) != 0) {
+            throw new AppException(OrderErrorCode.PROMOTION_CHANGED);
+        }
     }
 
     /**

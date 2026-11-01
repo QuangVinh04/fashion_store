@@ -5,6 +5,7 @@ import com.fashionstore.order.promotion.entity.PromotionType;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Size;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -26,6 +27,15 @@ public class PromotionRequest {
 
     @NotBlank(message = "Promotion code is required")
     String code;
+
+    @Builder.Default
+    PromotionTarget target = PromotionTarget.PRODUCT;
+
+    @Size(max = 255, message = "Description must be at most 255 characters")
+    String description;
+
+    @Builder.Default
+    Boolean isPublic = false;
 
     @NotNull(message = "Promotion type is required")
     PromotionType type;

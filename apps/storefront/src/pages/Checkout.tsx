@@ -1,27 +1,21 @@
-import { customerError } from "../api/client";
+import { ApiError, customerError, couponError, money } from "../api/client";
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router";
 import {
   Truck,
   CreditCard,
   QrCode,
-  ShieldCheck,
   AlertCircle,
-  Check,
   Lock,
-  ArrowRight,
-  ExternalLink,
-  MapPin,
-  Tag,
 } from "lucide-react";
 import { store } from "../api/store";
 import { paymentLinkMessage, requestPaymentUrl } from "../api/payment-link";
 import { walletCheckoutPath } from "../api/wallet-payment";
-import { money } from "../api/client";
-import type { Address, Checkout } from "../api/types";
+import type { AvailablePromotion, Checkout } from "../api/types";
 import { Status, useLoad } from "../components/StoreUI";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
+import { CouponSection } from "../components/checkout/CouponSection";
 
 export default function CheckoutPage() {
   const { cart, loading: cartLoading, error: cartError, refresh: refreshCart } = useCart();
@@ -31,18 +25,40 @@ export default function CheckoutPage() {
   const addressesLoad = useLoad(store.addresses, []);
 
   const [addressId, setAddressId] = useState<string>("");
-  const [shippingMethod, setShippingMethod] = useState<"STANDARD" | "EXPRESS">(
-    "STANDARD",
-  );
-  const [paymentProvider, setPaymentProvider] = useState<
-    "COD" | "VNPAY" | "PAYOS" | "INTERNAL"
-  >("COD");
-  const [couponCode, setCouponCode] = useState<string>("");
+  const [shippingMethod, setShippingMethod] = useState<"STANDARD" | "EXPRESS">("STANDARD");
+  const [paymentProvider, setPaymentProvider] = useState<"COD" | "VNPAY" | "PAYOS" | "INTERNAL">("COD");
+  const [productCouponCode, setProductCouponCode] = useState<string>("");
+  const [shippingCouponCode, setShippingCouponCode] = useState<string>("");
+  const [productCouponError, setProductCouponError] = useState<string>("");
+  const [shippingCouponError, setShippingCouponError] = useState<string>("");
+  const [productPromotions, setProductPromotions] = useState<AvailablePromotion[]>([]);
+  const [shippingPromotions, setShippingPromotions] = useState<AvailablePromotion[]>([]);
+  const [loadingPromotions, setLoadingPromotions] = useState<boolean>(true);
   const [checkout, setCheckout] = useState<Checkout | null>(null);
 
   const [busy, setBusy] = useState<boolean>(false);
   const [processingText, setProcessingText] = useState<string>("");
   const [error, setError] = useState<string>("");
+
+  useEffect(() => {
+    let active = true;
+    setLoadingPromotions(true);
+    Promise.all([
+      store.availablePromotions("PRODUCT").catch(() => []),
+      store.availablePromotions("SHIPPING").catch(() => []),
+    ])
+      .then(([prod, ship]) => {
+        if (!active) return;
+        setProductPromotions(prod);
+        setShippingPromotions(ship);
+      })
+      .finally(() => {
+        if (active) setLoadingPromotions(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   // Resume active checkout if available in session
   useEffect(() => {
@@ -62,7 +78,8 @@ export default function CheckoutPage() {
           if (data.addressId) setAddressId(data.addressId);
           setShippingMethod(data.shippingMethod);
           setPaymentProvider(data.paymentProvider);
-          if (data.couponCode) setCouponCode(data.couponCode);
+          if (data.couponCode) setProductCouponCode(data.couponCode);
+          if (data.shippingCouponCode) setShippingCouponCode(data.shippingCouponCode);
         } else {
           sessionStorage.removeItem("lino:checkoutId");
         }
@@ -79,8 +96,7 @@ export default function CheckoutPage() {
   // Set default address
   useEffect(() => {
     if (!addressId && addressesLoad.data && addressesLoad.data.length > 0) {
-      const def =
-        addressesLoad.data.find((a) => a.isDefault) || addressesLoad.data[0];
+      const def = addressesLoad.data.find((a) => a.isDefault) || addressesLoad.data[0];
       setAddressId(def.id);
     }
   }, [addressesLoad.data, addressId]);
@@ -88,9 +104,129 @@ export default function CheckoutPage() {
   const selectedAddress = addressesLoad.data?.find((a) => a.id === addressId);
   const paymentMethod = paymentProvider === "COD" ? "COD" : paymentProvider === "INTERNAL" ? "WALLET" : "ONLINE";
 
-  function invalidateCheckoutSnapshot() {
-    setCheckout(null);
-    sessionStorage.removeItem("lino:checkoutId");
+  async function handleAddressChange(newAddrId: string) {
+    setAddressId(newAddrId);
+    if (!checkout) return;
+    setBusy(true);
+    setError("");
+    try {
+      const result = await store.checkoutUpdate(checkout.id, { addressId: newAddrId });
+      setCheckout(result);
+    } catch (e) {
+      setError(customerError(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleShippingMethodChange(newMethod: "STANDARD" | "EXPRESS") {
+    setShippingMethod(newMethod);
+    if (!checkout) return;
+    setBusy(true);
+    setError("");
+    try {
+      const result = await store.checkoutUpdate(checkout.id, { shippingMethod: newMethod });
+      setCheckout(result);
+    } catch (e) {
+      setError(customerError(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handlePaymentProviderChange(newProvider: "COD" | "VNPAY" | "PAYOS" | "INTERNAL") {
+    setPaymentProvider(newProvider);
+    if (!checkout) return;
+    const newMethod = newProvider === "COD" ? "COD" : newProvider === "INTERNAL" ? "WALLET" : "ONLINE";
+    setBusy(true);
+    setError("");
+    try {
+      const result = await store.checkoutUpdate(checkout.id, {
+        paymentProvider: newProvider,
+        paymentMethod: newMethod,
+      });
+      setCheckout(result);
+    } catch (e) {
+      setError(customerError(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleApplyProductCoupon(codeToApply?: string) {
+    const targetCode = (codeToApply ?? productCouponCode).trim().toUpperCase();
+    if (!targetCode) return;
+    setProductCouponError("");
+    if (checkout) {
+      setBusy(true);
+      try {
+        const result = await store.checkoutUpdate(checkout.id, { couponCode: targetCode });
+        setCheckout(result);
+        setProductCouponCode(result.couponCode || targetCode);
+      } catch (e) {
+        setProductCouponError(couponError(e));
+      } finally {
+        setBusy(false);
+      }
+    } else {
+      setProductCouponCode(targetCode);
+    }
+  }
+
+  async function handleRemoveProductCoupon() {
+    setProductCouponError("");
+    if (checkout) {
+      setBusy(true);
+      try {
+        const result = await store.checkoutUpdate(checkout.id, { couponCode: "" });
+        setCheckout(result);
+        setProductCouponCode("");
+      } catch (e) {
+        setProductCouponError(couponError(e));
+      } finally {
+        setBusy(false);
+      }
+    } else {
+      setProductCouponCode("");
+    }
+  }
+
+  async function handleApplyShippingCoupon(codeToApply?: string) {
+    const targetCode = (codeToApply ?? shippingCouponCode).trim().toUpperCase();
+    if (!targetCode) return;
+    setShippingCouponError("");
+    if (checkout) {
+      setBusy(true);
+      try {
+        const result = await store.checkoutUpdate(checkout.id, { shippingCouponCode: targetCode });
+        setCheckout(result);
+        setShippingCouponCode(result.shippingCouponCode || targetCode);
+      } catch (e) {
+        setShippingCouponError(couponError(e));
+      } finally {
+        setBusy(false);
+      }
+    } else {
+      setShippingCouponCode(targetCode);
+    }
+  }
+
+  async function handleRemoveShippingCoupon() {
+    setShippingCouponError("");
+    if (checkout) {
+      setBusy(true);
+      try {
+        const result = await store.checkoutUpdate(checkout.id, { shippingCouponCode: "" });
+        setCheckout(result);
+        setShippingCouponCode("");
+      } catch (e) {
+        setShippingCouponError(couponError(e));
+      } finally {
+        setBusy(false);
+      }
+    } else {
+      setShippingCouponCode("");
+    }
   }
 
   // Create checkout preview snapshot with backend
@@ -99,23 +235,23 @@ export default function CheckoutPage() {
       setError("Vui lòng chọn địa chỉ giao hàng.");
       return;
     }
-    if (
-      selectedAddress &&
-      (!selectedAddress.provinceId || !selectedAddress.wardId)
-    ) {
+    if (selectedAddress && (!selectedAddress.provinceId || !selectedAddress.wardId)) {
       setError("Vui lòng cập nhật tỉnh/thành phố và phường/xã trong địa chỉ giao hàng.");
       return;
     }
 
     setBusy(true);
     setError("");
+    setProductCouponError("");
+    setShippingCouponError("");
     try {
       const result = await store.checkoutCreate({
         addressId,
         shippingMethod,
         paymentMethod,
         paymentProvider,
-        couponCode: couponCode.trim() || undefined,
+        couponCode: productCouponCode.trim() || undefined,
+        shippingCouponCode: shippingCouponCode.trim() || undefined,
       });
       setCheckout(result);
       sessionStorage.setItem("lino:checkoutId", result.id);
@@ -144,11 +280,11 @@ export default function CheckoutPage() {
       }
 
       if (paymentProvider === "INTERNAL") {
-        setProcessingText("\u0110ang m\u1edf thanh to\u00e1n b\u1eb1ng v\u00ed...");
+        setProcessingText("Đang mở thanh toán bằng ví...");
         const until = Date.now() + 8000;
         let fresh = order;
         while (!walletCheckoutPath(fresh) && Date.now() < until && fresh.status === "PENDING") {
-          await new Promise(resolve => setTimeout(resolve, 600));
+          await new Promise((resolve) => setTimeout(resolve, 600));
           fresh = await store.order(order.id);
         }
         const walletPath = walletCheckoutPath(fresh);
@@ -157,17 +293,26 @@ export default function CheckoutPage() {
         return;
       }
 
-      // Online payment (VNPay or PayOS): tạo link một lần rồi chuyển sang cổng thanh toán.
+      // Online payment (VNPay or PayOS)
       setProcessingText(`Đang kết nối cổng thanh toán ${paymentProvider}...`);
       try {
-        window.location.assign(order.paymentUrl || await requestPaymentUrl(order.id, store));
+        window.location.assign(order.paymentUrl || (await requestPaymentUrl(order.id, store)));
       } catch (e) {
-        // Đơn đã tạo: đưa khách tới trang đơn để thử lại hoặc hủy, kèm lý do.
         navigate(`/profile/orders/${order.id}`, {
           state: { paymentError: paymentLinkMessage(e) || customerError(e) },
         });
       }
     } catch (e) {
+      if (e instanceof ApiError && e.code === 4017) {
+        try {
+          const refreshed = await store.checkout(checkout.id);
+          setCheckout(refreshed);
+        } catch {
+          // ignore
+        }
+        setError("Khuyến mãi vừa thay đổi, cần tải lại checkout. Vui lòng kiểm tra lại tổng tiền trước khi đặt đơn.");
+        return;
+      }
       setError(customerError(e));
     } finally {
       setBusy(false);
@@ -241,7 +386,7 @@ export default function CheckoutPage() {
         />
 
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_400px] gap-6 items-start">
-          {/* Left Form: Customer -> Address -> Shipping -> Payment -> Coupon */}
+          {/* Left Form */}
           <div className="space-y-8">
             {/* 1. Customer Info */}
             <section className="border border-border p-4 sm:p-5 bg-white rounded-2xl">
@@ -302,10 +447,7 @@ export default function CheckoutPage() {
                           type="radio"
                           name="addressSelection"
                           checked={isSelected}
-                          onChange={() => {
-                            setAddressId(addr.id);
-                            invalidateCheckoutSnapshot();
-                          }}
+                          onChange={() => void handleAddressChange(addr.id)}
                           className="mt-1 choice-control"
                         />
                         <div className="text-xs flex-1">
@@ -395,12 +537,11 @@ export default function CheckoutPage() {
                         type="radio"
                         name="shippingMethodSelection"
                         checked={isSelected}
-                        onChange={() => {
-                          setShippingMethod(
+                        onChange={() =>
+                          void handleShippingMethodChange(
                             method.id as "STANDARD" | "EXPRESS",
-                          );
-                          invalidateCheckoutSnapshot();
-                        }}
+                          )
+                        }
                         className="mt-0.5 choice-control"
                       />
                       <div className="text-xs">
@@ -430,8 +571,8 @@ export default function CheckoutPage() {
                 {[
                   {
                     id: "INTERNAL",
-                    title: "V\u00ed c\u1eeda h\u00e0ng",
-                    desc: "Thanh to\u00e1n to\u00e0n b\u1ed9 \u0111\u01a1n b\u1eb1ng s\u1ed1 d\u01b0 c\u1ee7a b\u1ea1n",
+                    title: "Ví cửa hàng",
+                    desc: "Thanh toán toàn bộ đơn bằng số dư của bạn",
                     icon: CreditCard,
                   },
                   {
@@ -468,12 +609,11 @@ export default function CheckoutPage() {
                         type="radio"
                         name="paymentProviderSelection"
                         checked={isSelected}
-                        onChange={() => {
-                          setPaymentProvider(
+                        onChange={() =>
+                          void handlePaymentProviderChange(
                             prov.id as "COD" | "VNPAY" | "PAYOS" | "INTERNAL",
-                          );
-                          invalidateCheckoutSnapshot();
-                        }}
+                          )
+                        }
                         className="mt-1 choice-control"
                       />
                       <Icon
@@ -494,54 +634,35 @@ export default function CheckoutPage() {
               </div>
             </section>
 
-            {/* 5. Voucher Coupon */}
-            <section className="border border-border p-4 sm:p-5 bg-white rounded-2xl">
-              <h2 className="text-xs font-semibold text-foreground mb-3 flex items-center gap-2 text-balance">
-                <Tag size={15} /> Mã Giảm Giá / Khuyến Mãi
-              </h2>
-              <div className="flex gap-2 mb-3">
-                <input
-                  type="text"
-                  placeholder="Nhập mã ưu đãi (ví dụ: LINOMOI)"
-                  aria-label="Mã giảm giá"
-                  value={couponCode}
-                  onChange={(e) => {
-                    setCouponCode(e.target.value.toUpperCase());
-                    invalidateCheckoutSnapshot();
-                  }}
-                  className="flex-1 border border-border-strong rounded-xl px-4 py-2.5 text-xs outline-none focus:border-border-strong store-input"
-                />
-              </div>
+            {/* 5. Mã giảm giá sản phẩm */}
+            <CouponSection
+              title="Mã Giảm Giá Sản Phẩm"
+              placeholder="Nhập mã giảm giá sản phẩm (ví dụ: SALE10)"
+              value={productCouponCode}
+              appliedCode={checkout?.couponCode}
+              onChange={setProductCouponCode}
+              onApply={(c) => void handleApplyProductCoupon(c)}
+              onRemove={() => void handleRemoveProductCoupon()}
+              busy={busy}
+              error={productCouponError}
+              promotions={productPromotions}
+              loadingPromotions={loadingPromotions}
+            />
 
-              {/* 1-Click Coupon Chips */}
-              <div className="space-y-2 pt-2 border-t border-border/60">
-                <p className="text-[11px] text-muted-foreground font-medium">Gợi ý mã ưu đãi (bấm để chọn ngay):</p>
-                <div className="flex flex-wrap gap-2">
-                  {[
-                    { code: "LINOMOI", desc: "Giảm 50k cho thành viên" },
-                    { code: "FREESHIP", desc: "Freeship đơn từ 300k" },
-                  ].map((coupon) => (
-                    <button
-                      key={coupon.code}
-                      type="button"
-                      onClick={() => {
-                        setCouponCode(coupon.code);
-                        invalidateCheckoutSnapshot();
-                      }}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs transition-all active:scale-[0.97] ${
-                        couponCode === coupon.code
-                          ? "border-primary bg-primary/10 text-primary font-bold shadow-2xs"
-                          : "border-border bg-background text-foreground hover:border-border-strong hover:bg-secondary/40 font-medium"
-                      }`}
-                    >
-                      <span className="font-mono font-semibold">{coupon.code}</span>
-                      <span className="text-[11px] text-muted-foreground hidden sm:inline">• {coupon.desc}</span>
-                      {couponCode === coupon.code && <Check size={12} className="text-primary" />}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </section>
+            {/* 6. Mã giảm phí vận chuyển */}
+            <CouponSection
+              title="Mã Giảm Phí Vận Chuyển"
+              placeholder="Nhập mã giảm phí vận chuyển (ví dụ: FREESHIP)"
+              value={shippingCouponCode}
+              appliedCode={checkout?.shippingCouponCode}
+              onChange={setShippingCouponCode}
+              onApply={(c) => void handleApplyShippingCoupon(c)}
+              onRemove={() => void handleRemoveShippingCoupon()}
+              busy={busy}
+              error={shippingCouponError}
+              promotions={shippingPromotions}
+              loadingPromotions={loadingPromotions}
+            />
           </div>
 
           {/* Right Summary Sidebar */}
@@ -589,22 +710,29 @@ export default function CheckoutPage() {
 
               {checkout ? (
                 <>
-                  <div className="flex justify-between text-muted-foreground">
-                    <span>Giảm giá khuyến mãi</span>
-                    <span className="font-semibold text-success">
-                      {checkout.discountAmount > 0
-                        ? `−${money(checkout.discountAmount)}`
-                        : "0 ₫"}
-                    </span>
-                  </div>
+                  {checkout.discountAmount > 0 && (
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>Giảm giá sản phẩm</span>
+                      <span className="font-semibold text-success">
+                        −{money(checkout.discountAmount)}
+                      </span>
+                    </div>
+                  )}
                   <div className="flex justify-between text-muted-foreground">
                     <span>Phí vận chuyển GHN</span>
                     <span className="font-semibold text-foreground">
-                      {checkout.shippingFee === 0
-                        ? "Miễn phí"
-                        : money(checkout.shippingFee)}
+                      {money(checkout.shippingFee)}
                     </span>
                   </div>
+                  {checkout.shippingDiscountAmount !== undefined &&
+                    checkout.shippingDiscountAmount > 0 && (
+                      <div className="flex justify-between text-muted-foreground">
+                        <span>Giảm phí vận chuyển</span>
+                        <span className="font-semibold text-success">
+                          −{money(checkout.shippingDiscountAmount)}
+                        </span>
+                      </div>
+                    )}
                 </>
               ) : (
                 <div className="flex justify-between text-muted-foreground italic">

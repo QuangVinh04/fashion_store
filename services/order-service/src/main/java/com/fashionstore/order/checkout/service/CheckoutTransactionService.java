@@ -66,8 +66,10 @@ public class CheckoutTransactionService {
         current.setPaymentProvider(dto.paymentProvider());
         current.setShippingMethod(dto.shippingMethod());
         current.setCouponCode(dto.couponCode());
+        current.setShippingCouponCode(dto.shippingCouponCode());
         current.setDiscountAmount(dto.discount());
         current.setShippingFee(dto.shippingFee());
+        current.setShippingDiscountAmount(dto.shippingDiscount());
         current.setTotalAmount(dto.total());
 
         return checkoutRepository.save(

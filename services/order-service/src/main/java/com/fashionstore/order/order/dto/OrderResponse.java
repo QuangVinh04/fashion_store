@@ -49,6 +49,7 @@ public class OrderResponse {
     BigDecimal subtotalAmount;
     BigDecimal discountAmount;
     BigDecimal shippingFee;
+    BigDecimal shippingDiscountAmount;
     BigDecimal totalAmount;
     List<OrderItemResponse> items;
     LocalDateTime createdAt;

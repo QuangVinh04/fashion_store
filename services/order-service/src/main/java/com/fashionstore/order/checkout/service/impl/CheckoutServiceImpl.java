@@ -6,7 +6,11 @@ import com.fashionstore.order.checkout.dto.CheckoutResponse;
 import com.fashionstore.order.checkout.dto.CheckoutUpdateDto;
 import com.fashionstore.order.checkout.dto.CreateCheckoutRequest;
 import com.fashionstore.order.shared.dto.ProductVariantDto;
+import com.fashionstore.order.cart.dto.CartItemResponse;
 import com.fashionstore.order.promotion.dto.PromotionItemDto;
+import com.fashionstore.order.promotion.dto.AvailablePromotionResponse;
+import com.fashionstore.order.promotion.dto.PromotionPreviewResponse;
+import com.fashionstore.order.promotion.dto.PromotionTarget;
 import com.fashionstore.order.checkout.dto.UpdateCheckoutRequest;
 import com.fashionstore.order.shared.dto.UserAddressDto;
 import com.fashionstore.order.shared.exception.OrderErrorCode;
@@ -15,6 +19,7 @@ import com.fashionstore.order.cart.entity.Cart;
 import com.fashionstore.order.cart.entity.CartItem;
 import com.fashionstore.order.checkout.entity.Checkout;
 import com.fashionstore.order.checkout.entity.CheckoutItem;
+import com.fashionstore.order.checkout.mapper.PromotionItemMapper;
 import com.fashionstore.order.order.entity.ShippingAddress;
 import com.fashionstore.order.checkout.entity.CheckoutStatus;
 import com.fashionstore.order.order.entity.ShippingMethod;
@@ -77,19 +82,18 @@ public class CheckoutServiceImpl implements CheckoutService {
         ShippingMethod shippingMethod = request.getShippingMethod() == null ? ShippingMethod.STANDARD : request.getShippingMethod();
         int totalWeightGram = calculateTotalWeightFromCartItems(cartItems);
         ShippingAddress shippingAddress = snapshotAddress(userId, request.getAddressId());
-        BigDecimal shippingFee = calculateShippingFee(subtotal, shippingMethod, shippingAddress, totalWeightGram);
+        BigDecimal shippingFee = calculateShippingFee(shippingMethod, shippingAddress, totalWeightGram);
+        Map<String, List<String>> categoryIdsByVariant =
+                loadCategoryIds(cartItems.stream().map(CartItem::getVariantId).toList());
         List<PromotionItemDto> promoItems = cartItems.stream()
-                .map(item -> PromotionItemDto.builder()
-                        .variantId(item.getVariantId())
-                        .productId(item.getProductId())
-                        .unitPrice(item.getUnitPrice())
-                        .quantity(item.getQuantity())
-                        .lineTotal(toLineTotal(item))
-                        .build())
+                .map(item -> PromotionItemMapper.fromCartItem(
+                        item, categoryIdsByVariant.getOrDefault(item.getVariantId(), List.of()), toLineTotal(item)))
                 .toList();
         BigDecimal discount = calculateDiscount(request.getCouponCode(), userId, subtotal, promoItems);
-        BigDecimal total = subtotal.subtract(discount).add(shippingFee);
-        validateAmounts(subtotal, discount, shippingFee, total);
+        BigDecimal shippingDiscount =
+                calculateShippingDiscount(request.getShippingCouponCode(), userId, subtotal, shippingFee);
+        BigDecimal total = subtotal.subtract(discount).add(shippingFee).subtract(shippingDiscount);
+        validateAmounts(subtotal, discount, shippingFee, shippingDiscount, total);
 
         String userEmail = null;
         try {
@@ -109,9 +113,11 @@ public class CheckoutServiceImpl implements CheckoutService {
                 .paymentProvider(resolvePaymentProvider(request.getPaymentMethod(), request.getPaymentProvider()))
                 .shippingMethod(shippingMethod)
                 .couponCode(request.getCouponCode())
+                .shippingCouponCode(request.getShippingCouponCode())
                 .subtotalAmount(subtotal)
                 .discountAmount(discount)
                 .shippingFee(shippingFee)
+                .shippingDiscountAmount(shippingDiscount)
                 .totalAmount(total)
                 .addressId(request.getAddressId())
                 .shippingAddress(shippingAddress)
@@ -119,7 +125,7 @@ public class CheckoutServiceImpl implements CheckoutService {
                 .build();
 
         List<CheckoutItem> snapshotItems = cartItems.stream()
-                .map(item -> toCheckoutItem(checkout, item))
+                .map(item -> toCheckoutItem(checkout, item, categoryIdsByVariant.get(item.getVariantId())))
                 .toList();
 
         Checkout savedCheckout = checkoutTransactionService.saveNewCheckout(checkout, snapshotItems);
@@ -150,21 +156,18 @@ public class CheckoutServiceImpl implements CheckoutService {
         ShippingMethod shippingMethod = request.getShippingMethod() != null
                 ? request.getShippingMethod() : checkout.getShippingMethod();
         String couponCode = request.getCouponCode() != null ? request.getCouponCode() : checkout.getCouponCode();
+        String shippingCouponCode = request.getShippingCouponCode() != null
+                ? request.getShippingCouponCode() : checkout.getShippingCouponCode();
         List<PromotionItemDto> promoItems = checkout.getItems() == null ? List.of() : checkout.getItems().stream()
-                .map(item -> PromotionItemDto.builder()
-                        .variantId(item.getVariantId())
-                        .productId(item.getProductId())
-                        .categoryId(item.getCategoryId())
-                        .unitPrice(item.getUnitPrice())
-                        .quantity(item.getQuantity())
-                        .lineTotal(item.getLineTotal())
-                        .build())
+                .map(PromotionItemMapper::fromCheckoutItem)
                 .toList();
         BigDecimal discount = calculateDiscount(couponCode, userId, checkout.getSubtotalAmount(), promoItems);
         int totalWeightGram = calculateTotalWeightFromCheckoutItems(checkout.getItems());
-        BigDecimal shippingFee = calculateShippingFee(checkout.getSubtotalAmount(), shippingMethod, shippingAddress, totalWeightGram);
-        BigDecimal total = checkout.getSubtotalAmount().subtract(discount).add(shippingFee);
-        validateAmounts(checkout.getSubtotalAmount(), discount, shippingFee, total);
+        BigDecimal shippingFee = calculateShippingFee(shippingMethod, shippingAddress, totalWeightGram);
+        BigDecimal shippingDiscount = calculateShippingDiscount(
+                shippingCouponCode, userId, checkout.getSubtotalAmount(), shippingFee);
+        BigDecimal total = checkout.getSubtotalAmount().subtract(discount).add(shippingFee).subtract(shippingDiscount);
+        validateAmounts(checkout.getSubtotalAmount(), discount, shippingFee, shippingDiscount, total);
 
         CheckoutUpdateDto updateDto = new CheckoutUpdateDto(
                 addressId,
@@ -173,8 +176,10 @@ public class CheckoutServiceImpl implements CheckoutService {
                 paymentProvider,
                 shippingMethod,
                 couponCode,
+                shippingCouponCode,
                 discount,
                 shippingFee,
+                shippingDiscount,
                 total);
 
         // 3. Khóa chỉ trong lúc kiểm tra và ghi. Request khác có thể đã sửa/hủy/đặt hàng
@@ -256,17 +261,68 @@ public class CheckoutServiceImpl implements CheckoutService {
                 .paymentProvider(checkout.getPaymentProvider())
                 .shippingMethod(checkout.getShippingMethod())
                 .couponCode(checkout.getCouponCode())
+                .shippingCouponCode(checkout.getShippingCouponCode())
                 .items(itemResponses)
                 .subtotalAmount(checkout.getSubtotalAmount())
                 .discountAmount(checkout.getDiscountAmount())
                 .shippingFee(checkout.getShippingFee())
+                .shippingDiscountAmount(checkout.getShippingDiscountAmount())
                 .totalAmount(checkout.getTotalAmount())
                 .addressId(checkout.getAddressId())
                 .submittedAt(checkout.getSubmittedAt())
                 .build();
     }
 
-    private CheckoutItem toCheckoutItem(Checkout checkout, CartItem cartItem) {
+    @Override
+    public PromotionPreviewResponse previewCoupon(String code) {
+        ActiveCart cart = loadActiveCart();
+        return promotionService.validatePromotionForCustomer(code, cart.userId(), cart.subtotal(), cart.items());
+    }
+
+    @Override
+    public List<AvailablePromotionResponse> availableCoupons(PromotionTarget target) {
+        ActiveCart cart = loadActiveCart();
+        return promotionService.listAvailable(cart.userId(), target, cart.subtotal(), cart.items());
+    }
+
+    /** The current user's cart as a promotion sees it: subtotal plus items carrying their categories. */
+    private ActiveCart loadActiveCart() {
+        String userId = currentUserProvider.getCurrentUserId();
+        List<CartItemResponse> cartItems = cartService.getMyCart().getItems();
+        if (cartItems == null) {
+            cartItems = List.of();
+        }
+        Map<String, List<String>> categoryIdsByVariant =
+                loadCategoryIds(cartItems.stream().map(CartItemResponse::getVariantId).toList());
+        List<PromotionItemDto> promoItems = cartItems.stream()
+                .map(item -> PromotionItemMapper.fromCartItemResponse(
+                        item, categoryIdsByVariant.getOrDefault(item.getVariantId(), List.of())))
+                .toList();
+        BigDecimal subtotal = promoItems.stream()
+                .map(PromotionItemDto::getLineTotal)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        return new ActiveCart(userId, subtotal, promoItems);
+    }
+
+    private record ActiveCart(String userId, BigDecimal subtotal, List<PromotionItemDto> items) {
+    }
+
+    /** Categories only matter for CATEGORY-scoped coupons, so a catalog outage degrades to "no categories" instead of failing checkout. */
+    private Map<String, List<String>> loadCategoryIds(List<String> variantIds) {
+        if (variantIds.isEmpty()) {
+            return Map.of();
+        }
+        try {
+            return catalogClient.getVariantsBatch(variantIds).stream()
+                    .filter(variant -> variant.getCategoryIds() != null)
+                    .collect(Collectors.toMap(ProductVariantDto::getVariantId, ProductVariantDto::getCategoryIds, (a, b) -> a));
+        } catch (Exception e) {
+            log.warn("[Checkout] Failed to load categories for coupon scope: {}", e.getMessage());
+            return Map.of();
+        }
+    }
+
+    private CheckoutItem toCheckoutItem(Checkout checkout, CartItem cartItem, List<String> categoryIds) {
         if (cartItem.getProductName() == null || cartItem.getProductName().isBlank()) {
             // Dòng giỏ hàng tạo trước khi cart_item lưu snapshot: báo rõ thay vì để DB ném NOT NULL.
             throw new AppException(OrderErrorCode.CART_ITEM_STALE);
@@ -277,6 +333,7 @@ public class CheckoutServiceImpl implements CheckoutService {
                 .cartItemId(cartItem.getId())
                 .variantId(cartItem.getVariantId())
                 .productId(cartItem.getProductId())
+                .categoryIds(PromotionItemMapper.joinCategoryIds(categoryIds))
                 .productName(cartItem.getProductName())
                 .size(cartItem.getSize())
                 .color(cartItem.getColor())
@@ -314,10 +371,7 @@ public class CheckoutServiceImpl implements CheckoutService {
                 .build();
     }
 
-    private BigDecimal calculateShippingFee(BigDecimal subtotal, ShippingMethod shippingMethod, ShippingAddress address, int totalWeightGram) {
-        if (subtotal.compareTo(BigDecimal.valueOf(500000)) >= 0) {
-            return BigDecimal.ZERO;
-        }
+    private BigDecimal calculateShippingFee(ShippingMethod shippingMethod, ShippingAddress address, int totalWeightGram) {
         if (address == null) {
             return shippingMethod == ShippingMethod.EXPRESS ? BigDecimal.valueOf(40000) : BigDecimal.valueOf(25000);
         }
@@ -373,14 +427,27 @@ public class CheckoutServiceImpl implements CheckoutService {
         return promotionService.previewDiscount(couponCode.trim(), userId, subtotal, items);
     }
 
-    private void validateAmounts(BigDecimal subtotal, BigDecimal discount, BigDecimal shippingFee, BigDecimal total) {
-        if (subtotal == null || discount == null || shippingFee == null || total == null) {
+    private BigDecimal calculateShippingDiscount(
+            String shippingCouponCode, String userId, BigDecimal subtotal, BigDecimal shippingFee) {
+        if (shippingCouponCode == null || shippingCouponCode.isBlank()) {
+            return BigDecimal.ZERO;
+        }
+        return promotionService.previewShippingDiscount(shippingCouponCode.trim(), userId, subtotal, shippingFee);
+    }
+
+    private void validateAmounts(BigDecimal subtotal, BigDecimal discount, BigDecimal shippingFee,
+                                 BigDecimal shippingDiscount, BigDecimal total) {
+        if (subtotal == null || discount == null || shippingFee == null || shippingDiscount == null || total == null) {
             throw new AppException(OrderErrorCode.CHECKOUT_AMOUNT_INVALID);
         }
         if (subtotal.compareTo(BigDecimal.ZERO) < 0
                 || discount.compareTo(BigDecimal.ZERO) < 0
                 || shippingFee.compareTo(BigDecimal.ZERO) < 0
+                || shippingDiscount.compareTo(BigDecimal.ZERO) < 0
                 || total.compareTo(BigDecimal.ZERO) < 0) {
+            throw new AppException(OrderErrorCode.CHECKOUT_AMOUNT_INVALID);
+        }
+        if (shippingDiscount.compareTo(shippingFee) > 0) {
             throw new AppException(OrderErrorCode.CHECKOUT_AMOUNT_INVALID);
         }
         if (discount.compareTo(subtotal) > 0) {

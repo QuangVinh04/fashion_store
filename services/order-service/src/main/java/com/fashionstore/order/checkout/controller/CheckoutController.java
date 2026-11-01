@@ -33,8 +33,14 @@ public class CheckoutController {
                     hiện tại bao nhiêu, kho còn đủ không. Giá đổi từ lúc bỏ vào giỏ thì **lấy giá mới** và ghi
                     lại vào giỏ — nên tổng tiền ở đây có thể khác trang giỏ hàng, hãy hiển thị lại theo response này.
 
-                    Phí ship: 25.000 (STANDARD) / 40.000 (EXPRESS), miễn phí khi subtotal ≥ 500.000.
-                    Coupon: chỉ `WELCOME10` (10%, tối đa 50.000).
+                    Phí ship: lấy từ GHN theo địa chỉ; chưa có địa chỉ thì tạm tính 25.000 (STANDARD) / 40.000
+                    (EXPRESS). Không còn miễn phí ship tự động theo giá trị đơn — chỉ mã ship mới giảm được phí.
+
+                    Hai loại coupon, mỗi đơn dùng tối đa một mã mỗi loại: `couponCode` (mã sản phẩm, giảm tiền hàng →
+                    `discountAmount`) và `shippingCouponCode` (mã vận chuyển, giảm phí ship → `shippingDiscountAmount`).
+                    `shippingFee` luôn là phí thật của hãng vận chuyển. Tổng = subtotal − discountAmount + shippingFee −
+                    shippingDiscountAmount. Xem trước mã sản phẩm bằng `GET /api/v1/promotions/validate`; gợi ý mã bằng
+                    `GET /api/v1/promotions/available`. Mã seed: `WELCOME10`, `VIP100K`, `FREESHIP`, `SHIP20K`.
 
                     `addressId` được chụp thành địa chỉ giao hàng của checkout; phí ship tính theo bản chụp đó và
                     đơn đặt từ checkout này dùng đúng bản chụp đó.

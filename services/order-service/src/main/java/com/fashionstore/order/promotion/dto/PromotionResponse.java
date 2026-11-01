@@ -22,6 +22,11 @@ import java.time.LocalDateTime;
 public class PromotionResponse {
     String id;
     String code;
+    PromotionTarget target;
+    String description;
+    Boolean isPublic;
+    long reservedCount;
+    long confirmedCount;
     PromotionType type;
     BigDecimal value;
     BigDecimal maxDiscount;

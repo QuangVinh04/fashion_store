@@ -17,6 +17,9 @@ public class CreateCheckoutRequest {
 
     String couponCode;
 
+    /** Coupon that discounts the shipping fee; only a SHIPPING-target promotion is accepted here. */
+    String shippingCouponCode;
+
     @NotNull
     PaymentMethod paymentMethod;
 

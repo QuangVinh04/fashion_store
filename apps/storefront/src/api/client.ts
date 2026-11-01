@@ -20,6 +20,21 @@ export function customerError(error: unknown): string {
   return 'Không thể xử lý yêu cầu lúc này. Vui lòng thử lại hoặc liên hệ shop.';
 }
 
+export function couponError(error: unknown): string {
+  if (error instanceof ApiError && error.code !== undefined) {
+    switch (error.code) {
+      case 4010: return 'Mã không tồn tại';
+      case 4011: return 'Mã hết hạn hoặc chưa đến thời gian áp dụng';
+      case 4012: return 'Mã đã hết lượt';
+      case 4013: return 'Đơn chưa đạt giá trị tối thiểu';
+      case 4014: return 'Mã không áp dụng cho sản phẩm trong giỏ';
+      case 4018: return 'Mã này dành cho loại khác (mã sản phẩm / mã vận chuyển)';
+      case 4017: return 'Khuyến mãi vừa thay đổi, cần tải lại checkout';
+    }
+  }
+  return customerError(error);
+}
+
 function cookie(name: string): string | undefined {
   return document.cookie.split('; ').find(part => part.startsWith(`${name}=`))?.slice(name.length + 1);
 }

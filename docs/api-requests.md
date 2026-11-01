@@ -19,6 +19,18 @@ _(chưa có)_
 
 ## Done
 
+### Mã giảm giá hai loại (sản phẩm + vận chuyển)
+- Người yêu cầu: Claude Code (kèm task UI cho Antigravity) · 2026-11-01
+- Màn hình: apps/storefront (Checkout, chi tiết đơn, Home), apps/backoffice (views/promotions)
+- Đã có (order-service, xem Swagger "Customer - Promotions", "Checkout", "Admin - Promotions"):
+  - `POST /api/v1/checkouts`, `PUT /api/v1/checkouts/{id}` nhận thêm `shippingCouponCode`; response thêm `shippingCouponCode`, `shippingDiscountAmount`. `shippingFee` là phí thật, `totalAmount` đã trừ cả hai khoản giảm. Hết freeship tự động cho đơn từ 500.000.
+  - `OrderResponse` thêm `shippingDiscountAmount`.
+  - `GET /api/v1/promotions/validate?code=` tính trên giỏ active (bỏ qua `subtotal`), chỉ cho mã sản phẩm.
+  - `GET /api/v1/promotions/available?target=PRODUCT|SHIPPING` → `{ code, description, target, type, value, maxDiscount, minOrderValue, endAt, scopeType, eligible, reasonCode, reason, estimatedDiscount }`.
+  - Admin promotion request/response thêm `target`, `description`, `isPublic`; response thêm `reservedCount`, `confirmedCount`. Không đổi được `code`/`target` khi đã có lượt dùng (`4016`).
+  - Mã lỗi mới: `4037` (409) khuyến mãi đổi sau khi tạo checkout, tải lại checkout; `4038` (400) mã sai loại. Mã `4010`–`4014` giữ nguyên.
+- Trạng thái: done
+
 ### Ảnh thu nhỏ (thumbnail) cho danh sách sản phẩm
 - Người yêu cầu: Claude Code (kèm task UI cho Antigravity) · 2026-11-01
 - Màn hình: apps/backoffice (ProductList, MediaLibrary/MediaPicker), apps/storefront (thẻ sản phẩm)

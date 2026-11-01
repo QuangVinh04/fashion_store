@@ -27,9 +27,6 @@ Module 'checkout' depends on non-exposed type order.entity.Order within module '
 Module 'checkout' depends on non-exposed type order.entity.ShippingAddress within module 'order'!
 Module 'checkout' depends on non-exposed type order.entity.ShippingAddress$ShippingAddressBuilder within module 'order'!
 Module 'checkout' depends on non-exposed type order.entity.ShippingMethod within module 'order'!
-Module 'checkout' depends on non-exposed type promotion.dto.PromotionItemDto within module 'promotion'!
-Module 'checkout' depends on non-exposed type promotion.dto.PromotionItemDto$PromotionItemDtoBuilder within module 'promotion'!
-Module 'checkout' depends on non-exposed type promotion.service.PromotionService within module 'promotion'!
 Module 'checkout' depends on non-exposed type shipment.client.GhnClient within module 'shipment'!
 Module 'dashboard' depends on non-exposed type order.dto.OrderStatusCountResponse within module 'order'!
 Module 'dashboard' depends on non-exposed type order.dto.TopProductResponse within module 'order'!
@@ -40,9 +37,6 @@ Module 'order' depends on non-exposed type checkout.entity.Checkout within modul
 Module 'order' depends on non-exposed type checkout.entity.CheckoutItem within module 'checkout'!
 Module 'order' depends on non-exposed type checkout.entity.CheckoutStatus within module 'checkout'!
 Module 'order' depends on non-exposed type checkout.repository.CheckoutRepository within module 'checkout'!
-Module 'order' depends on non-exposed type promotion.dto.PromotionItemDto within module 'promotion'!
-Module 'order' depends on non-exposed type promotion.dto.PromotionItemDto$PromotionItemDtoBuilder within module 'promotion'!
-Module 'order' depends on non-exposed type promotion.service.PromotionService within module 'promotion'!
 Module 'order' depends on non-exposed type returns.dto.OrderReturnReference within module 'returns'!
 Module 'order' depends on non-exposed type returns.dto.ReturnOrderRequest within module 'returns'!
 Module 'order' depends on non-exposed type returns.dto.ReturnRefundStatus within module 'returns'!
@@ -103,7 +97,6 @@ Module 'saga' depends on non-exposed type order.repository.OrderRepository withi
 Module 'saga' depends on non-exposed type order.repository.OrderStatusHistoryRepository within module 'order'!
 Module 'saga' depends on non-exposed type order.service.OrderNotificationService within module 'order'!
 Module 'saga' depends on non-exposed type order.service.OrderService within module 'order'!
-Module 'saga' depends on non-exposed type promotion.service.PromotionService within module 'promotion'!
 Module 'saga' depends on non-exposed type returns.service.ReturnService within module 'returns'!
 Module 'saga' depends on non-exposed type shipment.client.GhnClient within module 'shipment'!
 Module 'saga' depends on non-exposed type shipment.dto.ShipmentCancellationResult within module 'shipment'!

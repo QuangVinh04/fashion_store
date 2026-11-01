@@ -30,8 +30,9 @@ public class CheckoutItem extends BaseEntity {
     @Column(name = "product_id", length = 36)
     String productId;
 
-    @Column(name = "category_id", length = 36)
-    String categoryId;
+    /** Comma-separated category ids of the product when the checkout was created (a product can sit in several). */
+    @Column(name = "category_ids", columnDefinition = "text")
+    String categoryIds;
 
     @Column(name = "product_name", nullable = false, length = 255)
     String productName;

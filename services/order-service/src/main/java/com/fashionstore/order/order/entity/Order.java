@@ -108,6 +108,11 @@ public class Order extends BaseEntity {
     @Builder.Default
     BigDecimal shippingFee = BigDecimal.ZERO;
 
+    /** Part of {@code shippingFee} paid by a shipping coupon; the carrier is still owed the full fee. */
+    @Column(name = "shipping_discount_amount", nullable = false, precision = 19, scale = 2)
+    @Builder.Default
+    BigDecimal shippingDiscountAmount = BigDecimal.ZERO;
+
     @Column(name = "total_amount", nullable = false, precision = 19, scale = 2)
     BigDecimal totalAmount;
 

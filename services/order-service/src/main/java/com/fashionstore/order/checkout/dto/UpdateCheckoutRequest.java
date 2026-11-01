@@ -17,5 +17,6 @@ public class UpdateCheckoutRequest {
     PaymentProvider paymentProvider;
     ShippingMethod shippingMethod;
     String couponCode;
+    String shippingCouponCode;
     String addressId;
 }

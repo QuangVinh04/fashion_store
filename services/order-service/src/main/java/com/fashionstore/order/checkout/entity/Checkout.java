@@ -61,6 +61,9 @@ public class Checkout extends BaseEntity {
     @Column(name = "coupon_code", length = 100)
     String couponCode;
 
+    @Column(name = "shipping_coupon_code", length = 100)
+    String shippingCouponCode;
+
     @Column(name = "subtotal_amount", nullable = false, precision = 19, scale = 2)
     BigDecimal subtotalAmount;
 
@@ -71,6 +74,10 @@ public class Checkout extends BaseEntity {
     @Column(name = "shipping_fee", nullable = false, precision = 19, scale = 2)
     @Builder.Default
     BigDecimal shippingFee = BigDecimal.ZERO;
+
+    @Column(name = "shipping_discount_amount", nullable = false, precision = 19, scale = 2)
+    @Builder.Default
+    BigDecimal shippingDiscountAmount = BigDecimal.ZERO;
 
     @Column(name = "total_amount", nullable = false, precision = 19, scale = 2)
     BigDecimal totalAmount;

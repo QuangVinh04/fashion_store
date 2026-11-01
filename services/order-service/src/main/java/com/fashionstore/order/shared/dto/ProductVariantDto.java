@@ -4,6 +4,7 @@ package com.fashionstore.order.shared.dto;
 import lombok.*;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 /** Mirror của catalog-service's ProductVariantSnapshotResponse — chỉ giữ field cart thật sự cần. */
 @Getter
@@ -25,6 +26,7 @@ public class ProductVariantDto {
     private Integer widthMm;
     private Integer heightMm;
     private Boolean active;
+    private List<String> categoryIds;
 
     /** true = chưa hỏi được catalog (fallback), khác hẳn với "catalog nói variant này không tồn tại". */
     private boolean upstreamUnavailable;

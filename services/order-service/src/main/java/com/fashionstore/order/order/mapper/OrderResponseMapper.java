@@ -46,6 +46,7 @@ public final class OrderResponseMapper {
                 .subtotalAmount(order.getSubtotalAmount())
                 .discountAmount(order.getDiscountAmount())
                 .shippingFee(order.getShippingFee())
+                .shippingDiscountAmount(order.getShippingDiscountAmount())
                 .totalAmount(order.getTotalAmount())
                 .items(items)
                 .createdAt(order.getCreatedAt())

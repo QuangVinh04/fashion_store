@@ -1076,6 +1076,32 @@ class ProductServiceImplTest {
     }
 
     @Test
+    void getProductVariantSnapshot_returnsAllCategoryIdsOfProduct() {
+        Product product = Product.builder().name("Áo Thun").build();
+        product.setId("prod-1");
+        for (String categoryId : List.of("cat-1", "cat-2")) {
+            Category category = Category.builder().name(categoryId).build();
+            category.setId(categoryId);
+            product.getProductCategories().add(ProductCategory.builder()
+                    .product(product)
+                    .category(category)
+                    .build());
+        }
+        ProductVariant variant = ProductVariant.builder()
+                .product(product)
+                .sku("SKU-1")
+                .price(BigDecimal.valueOf(100000))
+                .active(true)
+                .build();
+        variant.setId("var-1");
+        when(productVariantRepository.findById("var-1")).thenReturn(Optional.of(variant));
+
+        ProductVariantSnapshotResponse response = productService.getProductVariantSnapshot("var-1");
+
+        assertThat(response.getCategoryIds()).containsExactlyInAnyOrder("cat-1", "cat-2");
+    }
+
+    @Test
     void getProductVariantSnapshot_usesProductLogisticsDefaults() {
         Product product = Product.builder()
                 .name("Basic Tee")

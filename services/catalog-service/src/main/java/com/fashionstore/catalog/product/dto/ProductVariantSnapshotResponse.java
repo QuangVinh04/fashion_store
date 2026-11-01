@@ -9,6 +9,7 @@ import lombok.Setter;
 import lombok.experimental.FieldDefaults;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 @Getter
 @Setter
@@ -24,6 +25,7 @@ public class ProductVariantSnapshotResponse {
     String size;
     String color;
     String colorHex;
+    List<String> categoryIds;
     BigDecimal price;
     BigDecimal salePrice;
 

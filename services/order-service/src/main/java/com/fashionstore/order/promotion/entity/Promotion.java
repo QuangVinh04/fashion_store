@@ -14,6 +14,8 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.FieldDefaults;
 
+import com.fashionstore.order.promotion.dto.PromotionTarget;
+
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
@@ -29,6 +31,18 @@ public class Promotion extends BaseEntity {
 
     @Column(name = "code", nullable = false, unique = true, length = 50)
     String code;
+
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(name = "target", nullable = false, length = 20)
+    PromotionTarget target = PromotionTarget.PRODUCT;
+
+    @Column(name = "description", length = 255)
+    String description;
+
+    @Builder.Default
+    @Column(name = "is_public", nullable = false)
+    Boolean isPublic = false;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "type", nullable = false, length = 20)

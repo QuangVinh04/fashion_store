@@ -43,7 +43,7 @@ public class CouponUsage extends BaseEntity {
     @Column(name = "user_id", nullable = false, length = 36)
     String userId;
 
-    @Column(name = "order_id", nullable = false, unique = true, length = 36)
+    @Column(name = "order_id", nullable = false, length = 36)
     String orderId;
 
     @Column(name = "used_at", nullable = false)

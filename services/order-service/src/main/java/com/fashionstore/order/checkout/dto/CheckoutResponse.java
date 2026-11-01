@@ -25,10 +25,12 @@ public class CheckoutResponse {
     PaymentProvider paymentProvider;
     ShippingMethod shippingMethod;
     String couponCode;
+    String shippingCouponCode;
     List<CheckoutItemResponse> items;
     BigDecimal subtotalAmount;
     BigDecimal discountAmount;
     BigDecimal shippingFee;
+    BigDecimal shippingDiscountAmount;
     BigDecimal totalAmount;
     String addressId;
     LocalDateTime submittedAt;

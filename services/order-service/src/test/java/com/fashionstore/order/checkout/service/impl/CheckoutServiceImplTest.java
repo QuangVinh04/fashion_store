@@ -27,7 +27,13 @@ import com.fashionstore.order.shared.exception.OrderErrorCode;
 import com.fashionstore.order.checkout.repository.CheckoutRepository;
 import com.fashionstore.order.cart.service.CartService;
 import com.fashionstore.order.promotion.service.PromotionService;
+import com.fashionstore.order.cart.dto.CartItemResponse;
+import com.fashionstore.order.cart.dto.CartResponse;
+import com.fashionstore.order.promotion.dto.PromotionItemDto;
+import com.fashionstore.order.promotion.dto.PromotionPreviewResponse;
+import com.fashionstore.order.shared.dto.ProductVariantDto;
 import org.junit.jupiter.api.BeforeEach;
+import org.mockito.ArgumentCaptor;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -141,6 +147,28 @@ class CheckoutServiceImplTest {
                 .thenAnswer(invocation -> invocation.getArgument(0));
         when(checkoutRepository.findForUpdateByIdAndUserId(anyString(), anyString()))
                 .thenAnswer(invocation -> checkoutRepository.findByIdAndUserId(invocation.getArgument(0), invocation.getArgument(1)));
+    }
+
+    @Test
+    void previewCouponEvaluatesTheCouponAgainstTheActiveCartOfTheCurrentUser() {
+        CartItemResponse cartItem = CartItemResponse.builder()
+                .variantId("var-1").productId("prod-1").quantity(2).unitPrice(new BigDecimal("100000")).build();
+        when(cartService.getMyCart()).thenReturn(CartResponse.builder().items(List.of(cartItem)).build());
+        when(catalogClient.getVariantsBatch(List.of("var-1"))).thenReturn(List.of(
+                ProductVariantDto.builder().variantId("var-1").categoryIds(List.of("cat-1", "cat-2")).build()));
+        PromotionPreviewResponse expected = PromotionPreviewResponse.builder().code("CAT10").valid(true).build();
+        when(promotionService.validatePromotionForCustomer(eq("CAT10"), eq("user-1"), any(), any()))
+                .thenReturn(expected);
+
+        PromotionPreviewResponse response = service.previewCoupon("CAT10");
+
+        assertEquals(expected, response);
+        ArgumentCaptor<List<PromotionItemDto>> itemsCaptor = ArgumentCaptor.forClass(List.class);
+        verify(promotionService).validatePromotionForCustomer(
+                eq("CAT10"), eq("user-1"), eq(new BigDecimal("200000")), itemsCaptor.capture());
+        PromotionItemDto item = itemsCaptor.getValue().get(0);
+        assertEquals(List.of("cat-1", "cat-2"), item.getCategoryIds());
+        assertEquals(new BigDecimal("200000"), item.getLineTotal());
     }
 
     @Test
@@ -381,7 +409,7 @@ class CheckoutServiceImplTest {
         verify(checkoutRepository, never()).save(any(Checkout.class));
     }
 
-    // ----- địa chỉ luôn được kiểm tra ở checkout, kể cả khi được miễn phí ship -----
+    // ----- địa chỉ luôn được kiểm tra ở checkout, kể cả với đơn lớn -----
 
     @Test
     void createsCheckout_freeShipping_withAddressLackingGhnCodes_rejectsAtCheckout() {
@@ -573,10 +601,12 @@ class CheckoutServiceImplTest {
     }
 
     @Test
-    void createsCheckout_freeShippingWhenSubtotalOver500k() {
+    void createsCheckout_chargesTheCarrierFeeEvenForLargeOrders() {
         Cart cart = cart(cartItem("item-1", "variant-1", 3, "200000")); // 600k subtotal
         when(cartService.revalidateActiveCart()).thenReturn(cart);
         when(identityClient.getAddress("user-1", "addr-1")).thenReturn(address(1444, "20308"));
+        when(ghnClient.calculateFee(any(ShippingAddress.class), any(Integer.class), eq(ShippingMethod.STANDARD)))
+                .thenReturn(BigDecimal.valueOf(30000));
 
         CheckoutResponse response = service.createCheckout(CreateCheckoutRequest.builder()
                 .addressId("addr-1")
@@ -585,10 +615,66 @@ class CheckoutServiceImplTest {
                 .build());
 
         assertEquals(0, response.getSubtotalAmount().compareTo(BigDecimal.valueOf(600000)));
-        assertEquals(0, response.getShippingFee().compareTo(BigDecimal.ZERO));
-        assertEquals(0, response.getTotalAmount().compareTo(BigDecimal.valueOf(600000)));
-        verify(ghnClient, never()).calculateFee(any(), any(Integer.class), any());
+        assertEquals(0, response.getShippingFee().compareTo(BigDecimal.valueOf(30000)));
+        assertEquals(0, response.getTotalAmount().compareTo(BigDecimal.valueOf(630000)));
         assertEquals("123 Lê Lợi", savedCheckout().getShippingAddress().getDetailAddress());
+    }
+
+    @Test
+    void createsCheckout_withShippingCoupon_keepsCarrierFeeAndStoresTheDiscountSeparately() {
+        Cart cart = cart(cartItem("item-1", "variant-1", 1, "200000"));
+        when(cartService.revalidateActiveCart()).thenReturn(cart);
+        when(identityClient.getAddress("user-1", "addr-1")).thenReturn(address(1444, "20308"));
+        when(ghnClient.calculateFee(any(ShippingAddress.class), any(Integer.class), eq(ShippingMethod.STANDARD)))
+                .thenReturn(BigDecimal.valueOf(25000));
+        when(promotionService.previewShippingDiscount("SHIP20K", "user-1", new BigDecimal("200000"), BigDecimal.valueOf(25000)))
+                .thenReturn(new BigDecimal("20000"));
+
+        CheckoutResponse response = service.createCheckout(CreateCheckoutRequest.builder()
+                .addressId("addr-1")
+                .paymentMethod(PaymentMethod.COD)
+                .shippingMethod(ShippingMethod.STANDARD)
+                .shippingCouponCode("SHIP20K")
+                .build());
+
+        assertEquals("SHIP20K", response.getShippingCouponCode());
+        assertEquals(0, response.getShippingFee().compareTo(BigDecimal.valueOf(25000)));
+        assertEquals(0, response.getShippingDiscountAmount().compareTo(new BigDecimal("20000")));
+        assertEquals(0, response.getTotalAmount().compareTo(BigDecimal.valueOf(205000)));
+    }
+
+    @Test
+    void updateCheckout_afterAddressChange_recomputesShippingDiscountOnTheNewFee() {
+        Checkout checkout = openCheckout("200000", "addr-1");
+        checkout.setShippingCouponCode("SHIP20K");
+        when(identityClient.getAddress("user-1", "addr-2")).thenReturn(address(1542, "1A0101"));
+        when(ghnClient.calculateFee(any(ShippingAddress.class), any(Integer.class), eq(ShippingMethod.STANDARD)))
+                .thenReturn(BigDecimal.valueOf(45000));
+        when(promotionService.previewShippingDiscount("SHIP20K", "user-1", new BigDecimal("200000"), BigDecimal.valueOf(45000)))
+                .thenReturn(new BigDecimal("20000"));
+
+        CheckoutResponse response = service.updateCheckout("checkout-1",
+                UpdateCheckoutRequest.builder().addressId("addr-2").build());
+
+        assertEquals(0, response.getShippingFee().compareTo(BigDecimal.valueOf(45000)));
+        assertEquals(0, response.getShippingDiscountAmount().compareTo(new BigDecimal("20000")));
+        assertEquals(0, response.getTotalAmount().compareTo(BigDecimal.valueOf(225000)));
+    }
+
+    @Test
+    void updateCheckout_emptyShippingCouponCode_removesTheShippingCoupon() {
+        Checkout checkout = openCheckout("200000", "addr-1");
+        checkout.setShippingCouponCode("SHIP20K");
+        checkout.setShippingDiscountAmount(new BigDecimal("20000"));
+        when(ghnClient.calculateFee(any(ShippingAddress.class), any(Integer.class), eq(ShippingMethod.STANDARD)))
+                .thenReturn(BigDecimal.valueOf(25000));
+
+        CheckoutResponse response = service.updateCheckout("checkout-1",
+                UpdateCheckoutRequest.builder().shippingCouponCode("").build());
+
+        assertEquals(0, response.getShippingDiscountAmount().compareTo(BigDecimal.ZERO));
+        assertEquals(0, response.getTotalAmount().compareTo(BigDecimal.valueOf(225000)));
+        verify(promotionService, never()).previewShippingDiscount(any(), any(), any(), any());
     }
 
     @Test

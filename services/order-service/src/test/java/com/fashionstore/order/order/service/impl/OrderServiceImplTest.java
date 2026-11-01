@@ -164,6 +164,7 @@ class OrderServiceImplTest {
         checkout.setDiscountAmount(new BigDecimal("10000"));
         checkout.setTotalAmount(new BigDecimal("90000"));
         stubCreateOrder(checkout);
+        when(promotionService.reserve(any(), any(), any(), any(), any())).thenReturn(new BigDecimal("10000"));
 
         OrderResponse response = service.createOrder("checkout-1", null, "127.0.0.1");
 
@@ -178,6 +179,57 @@ class OrderServiceImplTest {
                         eq(new BigDecimal("100000")),
                         itemsCaptor.capture());
         assertEquals("product-1", itemsCaptor.getValue().get(0).getProductId());
+    }
+
+    @Test
+    void createOrder_withShippingCoupon_reservesItAndKeepsTheDiscountOnTheOrder() {
+        Checkout checkout = submittedCheckout(snapshot());
+        checkout.setShippingCouponCode("SHIP20K");
+        checkout.setShippingFee(new BigDecimal("25000"));
+        checkout.setShippingDiscountAmount(new BigDecimal("20000"));
+        checkout.setTotalAmount(new BigDecimal("105000"));
+        stubCreateOrder(checkout);
+        when(promotionService.reserveShipping("SHIP20K", "user-1", "order-1", new BigDecimal("100000"), new BigDecimal("25000")))
+                .thenReturn(new BigDecimal("20000"));
+
+        service.createOrder("checkout-1", null, "127.0.0.1");
+
+        ArgumentCaptor<Order> orderCaptor = ArgumentCaptor.forClass(Order.class);
+        verify(orderRepository).save(orderCaptor.capture());
+        assertEquals(0, orderCaptor.getValue().getShippingDiscountAmount().compareTo(new BigDecimal("20000")));
+        assertEquals(0, orderCaptor.getValue().getShippingFee().compareTo(new BigDecimal("25000")));
+        verify(promotionService, never()).reserve(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void createOrder_whenCouponDiscountChangedSinceCheckout_failsWithPromotionChanged() {
+        Checkout checkout = submittedCheckout(snapshot());
+        checkout.setCouponCode("WELCOME10");
+        checkout.setDiscountAmount(new BigDecimal("10000"));
+        stubCreateOrder(checkout);
+        when(promotionService.reserve(any(), any(), any(), any(), any())).thenReturn(new BigDecimal("5000"));
+
+        AppException exception =
+                assertThrows(AppException.class, () -> service.createOrder("checkout-1", null, "127.0.0.1"));
+
+        assertEquals(OrderErrorCode.PROMOTION_CHANGED, exception.getErrorCode());
+        verify(orderSagaRepository, never()).save(any());
+        verify(outboxEventRecorder, never()).saveMessage(anyString(), anyString(), any());
+    }
+
+    @Test
+    void createOrder_whenShippingCouponDiscountChangedSinceCheckout_failsWithPromotionChanged() {
+        Checkout checkout = submittedCheckout(snapshot());
+        checkout.setShippingCouponCode("SHIP20K");
+        checkout.setShippingFee(new BigDecimal("25000"));
+        checkout.setShippingDiscountAmount(new BigDecimal("20000"));
+        stubCreateOrder(checkout);
+        when(promotionService.reserveShipping(any(), any(), any(), any(), any())).thenReturn(new BigDecimal("10000"));
+
+        AppException exception =
+                assertThrows(AppException.class, () -> service.createOrder("checkout-1", null, "127.0.0.1"));
+
+        assertEquals(OrderErrorCode.PROMOTION_CHANGED, exception.getErrorCode());
     }
 
     // ----- snapshot địa chỉ: đơn chỉ chép bản chụp của checkout -----

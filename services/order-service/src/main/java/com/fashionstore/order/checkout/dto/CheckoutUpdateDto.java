@@ -14,7 +14,9 @@ public record CheckoutUpdateDto (
         PaymentProvider paymentProvider,
         ShippingMethod shippingMethod,
         String couponCode,
+        String shippingCouponCode,
         BigDecimal discount,
         BigDecimal shippingFee,
+        BigDecimal shippingDiscount,
         BigDecimal total
 ){}

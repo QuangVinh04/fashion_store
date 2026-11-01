@@ -2,7 +2,9 @@ package com.fashionstore.order.promotion.service.impl;
 
 import com.fashionstore.common.dto.PageResponse;
 import com.fashionstore.common.exception.AppException;
+import com.fashionstore.common.exception.BaseErrorCode;
 import com.fashionstore.common.exception.ErrorCode;
+import com.fashionstore.order.promotion.dto.AvailablePromotionResponse;
 import com.fashionstore.order.promotion.dto.PromotionItemDto;
 import com.fashionstore.order.promotion.dto.PromotionPreviewResponse;
 import com.fashionstore.order.promotion.dto.PromotionRequest;
@@ -11,6 +13,7 @@ import com.fashionstore.order.promotion.entity.CouponUsage;
 import com.fashionstore.order.promotion.entity.Promotion;
 import com.fashionstore.order.promotion.entity.CouponUsageStatus;
 import com.fashionstore.order.promotion.entity.PromotionScopeType;
+import com.fashionstore.order.promotion.dto.PromotionTarget;
 import com.fashionstore.order.promotion.entity.PromotionType;
 import com.fashionstore.order.shared.exception.OrderErrorCode;
 import com.fashionstore.order.promotion.repository.CouponUsageRepository;
@@ -26,18 +29,21 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.LocalDateTime;
-import java.util.Arrays;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
-import java.util.Set;
-import java.util.stream.Collectors;
+import java.util.Map;
+import java.util.Objects;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class PromotionServiceImpl implements PromotionService {
+
+    private static final List<CouponUsageStatus> ACTIVE_STATUSES =
+            List.of(CouponUsageStatus.RESERVED, CouponUsageStatus.CONFIRMED);
 
     PromotionRepository promotionRepository;
     CouponUsageRepository couponUsageRepository;
@@ -48,60 +54,82 @@ public class PromotionServiceImpl implements PromotionService {
         if (code == null || code.isBlank()) {
             return BigDecimal.ZERO;
         }
-        Promotion promotion = findAndValidatePromotion(code.trim(), userId, subtotal, items);
-        return calculateDiscount(promotion, subtotal, items);
+        Promotion promotion = findAndValidatePromotion(code.trim(), PromotionTarget.PRODUCT, userId, subtotal, items);
+        return PromotionCalculator.productDiscount(promotion, subtotal, items);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public BigDecimal previewShippingDiscount(String code, String userId, BigDecimal subtotal, BigDecimal shippingFee) {
+        if (code == null || code.isBlank()) {
+            return BigDecimal.ZERO;
+        }
+        Promotion promotion = findAndValidatePromotion(code.trim(), PromotionTarget.SHIPPING, userId, subtotal, null);
+        return PromotionCalculator.shippingDiscount(promotion, shippingFee);
     }
 
     @Override
     @Transactional
-    public void reserve(String code, String userId, String orderId, BigDecimal subtotal, List<PromotionItemDto> items) {
-        if (code == null || code.isBlank()) {
-            return;
-        }
-        if (couponUsageRepository.findByOrderId(orderId).isPresent()) {
-            return; // Idempotent: already reserved
-        }
+    public BigDecimal reserve(String code, String userId, String orderId, BigDecimal subtotal, List<PromotionItemDto> items) {
+        return reserveUsage(code, PromotionTarget.PRODUCT, userId, orderId, subtotal, items, null);
+    }
 
+    @Override
+    @Transactional
+    public BigDecimal reserveShipping(
+            String code, String userId, String orderId, BigDecimal subtotal, BigDecimal shippingFee) {
+        return reserveUsage(code, PromotionTarget.SHIPPING, userId, orderId, subtotal, null, shippingFee);
+    }
+
+    private BigDecimal reserveUsage(String code, PromotionTarget target, String userId, String orderId,
+                                    BigDecimal subtotal, List<PromotionItemDto> items, BigDecimal shippingFee) {
+        if (code == null || code.isBlank()) {
+            return BigDecimal.ZERO;
+        }
         // Khóa bi quan trên promotion để ngăn race condition vượt quota
         Promotion promotion = promotionRepository.findForUpdateByCodeIgnoreCase(code.trim())
                 .orElseThrow(() -> new AppException(OrderErrorCode.PROMOTION_NOT_FOUND));
+        requireTarget(promotion, target);
+        BigDecimal discount = PromotionCalculator.discountFor(promotion, subtotal, items, shippingFee);
+        if (couponUsageRepository.existsByOrderIdAndPromotionId(orderId, promotion.getId())) {
+            return discount; // Idempotent: already reserved
+        }
 
         validatePromotionEligibility(promotion, userId, subtotal, items);
 
-        CouponUsage couponUsage = CouponUsage.builder()
+        couponUsageRepository.save(CouponUsage.builder()
                 .promotion(promotion)
                 .userId(userId)
                 .orderId(orderId)
                 .usedAt(LocalDateTime.now())
                 .status(CouponUsageStatus.RESERVED)
-                .build();
-
-        couponUsageRepository.save(couponUsage);
+                .build());
         log.info("Reserved coupon {} for user {} order {}", promotion.getCode(), userId, orderId);
+        return discount;
     }
 
     @Override
     @Transactional
     public void confirm(String orderId) {
-        couponUsageRepository.findByOrderId(orderId).ifPresent(usage -> {
+        for (CouponUsage usage : couponUsageRepository.findAllByOrderId(orderId)) {
             if (usage.getStatus() == CouponUsageStatus.RESERVED) {
                 usage.setStatus(CouponUsageStatus.CONFIRMED);
                 couponUsageRepository.save(usage);
                 log.info("Confirmed coupon usage for order {}", orderId);
             }
-        });
+        }
     }
 
     @Override
     @Transactional
     public void release(String orderId) {
-        couponUsageRepository.findByOrderId(orderId).ifPresent(usage -> {
+        for (CouponUsage usage : couponUsageRepository.findAllByOrderId(orderId)) {
             if (usage.getStatus() != CouponUsageStatus.RELEASED) {
                 usage.setStatus(CouponUsageStatus.RELEASED);
                 couponUsageRepository.save(usage);
                 log.info("Released coupon usage for order {}", orderId);
             }
-        });
+        }
     }
 
     @Override
@@ -115,6 +143,9 @@ public class PromotionServiceImpl implements PromotionService {
 
         Promotion promotion = Promotion.builder()
                 .code(request.getCode().trim().toUpperCase())
+                .target(resolveTarget(request))
+                .description(request.getDescription())
+                .isPublic(Boolean.TRUE.equals(request.getIsPublic()))
                 .type(request.getType())
                 .value(request.getValue())
                 .maxDiscount(request.getMaxDiscount())
@@ -128,7 +159,7 @@ public class PromotionServiceImpl implements PromotionService {
                 .active(request.getActive() != null ? request.getActive() : true)
                 .build();
 
-        return toResponse(promotionRepository.save(promotion));
+        return toResponse(promotionRepository.save(promotion), Map.of());
     }
 
     @Override
@@ -140,18 +171,21 @@ public class PromotionServiceImpl implements PromotionService {
                 .orElseThrow(() -> new AppException(OrderErrorCode.PROMOTION_NOT_FOUND));
 
         String newCode = request.getCode().trim().toUpperCase();
-        if (!promotion.getCode().equalsIgnoreCase(newCode)) {
-            long usageCount = couponUsageRepository.countByPromotionIdAndStatusIn(
-                    id, List.of(CouponUsageStatus.RESERVED, CouponUsageStatus.CONFIRMED));
-            if (usageCount > 0) {
-                throw new AppException(OrderErrorCode.PROMOTION_CANNOT_BE_MODIFIED);
-            }
+        boolean isCodeChanged = !promotion.getCode().equalsIgnoreCase(newCode);
+        boolean isTargetChanged = resolveTarget(request) != promotion.getTarget();
+        if ((isCodeChanged || isTargetChanged) && hasUsage(id)) {
+            throw new AppException(OrderErrorCode.PROMOTION_CANNOT_BE_MODIFIED);
+        }
+        if (isCodeChanged) {
             if (promotionRepository.existsByCodeIgnoreCase(newCode)) {
                 throw new AppException(OrderErrorCode.PROMOTION_CODE_EXISTS);
             }
             promotion.setCode(newCode);
         }
 
+        promotion.setTarget(resolveTarget(request));
+        promotion.setDescription(request.getDescription());
+        promotion.setIsPublic(Boolean.TRUE.equals(request.getIsPublic()));
         promotion.setType(request.getType());
         promotion.setValue(request.getValue());
         promotion.setMaxDiscount(request.getMaxDiscount());
@@ -166,7 +200,7 @@ public class PromotionServiceImpl implements PromotionService {
             promotion.setActive(request.getActive());
         }
 
-        return toResponse(promotionRepository.save(promotion));
+        return toResponse(promotionRepository.save(promotion), usageCounts(List.of(id)));
     }
 
     @Override
@@ -174,7 +208,7 @@ public class PromotionServiceImpl implements PromotionService {
     public PromotionResponse getPromotionById(String id) {
         Promotion promotion = promotionRepository.findById(id)
                 .orElseThrow(() -> new AppException(OrderErrorCode.PROMOTION_NOT_FOUND));
-        return toResponse(promotion);
+        return toResponse(promotion, usageCounts(List.of(id)));
     }
 
     @Override
@@ -182,7 +216,7 @@ public class PromotionServiceImpl implements PromotionService {
     public PromotionResponse getPromotionByCode(String code) {
         Promotion promotion = promotionRepository.findByCodeIgnoreCase(code.trim())
                 .orElseThrow(() -> new AppException(OrderErrorCode.PROMOTION_NOT_FOUND));
-        return toResponse(promotion);
+        return toResponse(promotion, usageCounts(List.of(promotion.getId())));
     }
 
     @Override
@@ -192,8 +226,9 @@ public class PromotionServiceImpl implements PromotionService {
                 ? promotionRepository.findByActive(active, pageable)
                 : promotionRepository.findAll(pageable);
 
+        Map<String, long[]> counts = usageCounts(page.getContent().stream().map(Promotion::getId).toList());
         List<PromotionResponse> items = page.getContent().stream()
-                .map(this::toResponse)
+                .map(promotion -> toResponse(promotion, counts))
                 .toList();
 
         return PageResponse.<List<PromotionResponse>>builder()
@@ -215,7 +250,8 @@ public class PromotionServiceImpl implements PromotionService {
 
     @Override
     @Transactional(readOnly = true)
-    public PromotionPreviewResponse validatePromotionForCustomer(String code, BigDecimal subtotal) {
+    public PromotionPreviewResponse validatePromotionForCustomer(
+            String code, String userId, BigDecimal subtotal, List<PromotionItemDto> items) {
         if (code == null || code.isBlank()) {
             return PromotionPreviewResponse.builder()
                     .code("")
@@ -225,8 +261,8 @@ public class PromotionServiceImpl implements PromotionService {
                     .build();
         }
         try {
-            Promotion promotion = findAndValidatePromotion(code.trim(), null, subtotal, List.of());
-            BigDecimal discount = calculateDiscount(promotion, subtotal, List.of());
+            Promotion promotion = findAndValidatePromotion(code.trim(), PromotionTarget.PRODUCT, userId, subtotal, items);
+            BigDecimal discount = PromotionCalculator.productDiscount(promotion, subtotal, items);
             return PromotionPreviewResponse.builder()
                     .code(promotion.getCode())
                     .valid(true)
@@ -243,12 +279,54 @@ public class PromotionServiceImpl implements PromotionService {
         }
     }
 
-    private Promotion findAndValidatePromotion(String code, String userId, BigDecimal subtotal, List<PromotionItemDto> items) {
+    @Override
+    @Transactional(readOnly = true)
+    public List<AvailablePromotionResponse> listAvailable(
+            String userId, PromotionTarget target, BigDecimal subtotal, List<PromotionItemDto> items) {
+        return promotionRepository.findPublicCurrentlyValid(LocalDateTime.now(), target).stream()
+                .map(promotion -> toAvailable(promotion, userId, subtotal, items))
+                .filter(Objects::nonNull)
+                .toList();
+    }
+
+    /** Null means the coupon cannot be shown at all (quota used up); cart-specific misses stay listed as ineligible. */
+    private AvailablePromotionResponse toAvailable(
+            Promotion promotion, String userId, BigDecimal subtotal, List<PromotionItemDto> items) {
+        try {
+            validatePromotionEligibility(promotion, userId, subtotal, items);
+            BigDecimal estimated = promotion.getTarget() == PromotionTarget.PRODUCT
+                    ? PromotionCalculator.productDiscount(promotion, subtotal, items) : null;
+            return toAvailable(promotion, true, null, estimated);
+        } catch (AppException e) {
+            boolean isCartSpecific = e.getErrorCode() == OrderErrorCode.PROMOTION_MIN_ORDER_NOT_MET
+                    || e.getErrorCode() == OrderErrorCode.PROMOTION_SCOPE_MISMATCH;
+            return isCartSpecific ? toAvailable(promotion, false, e.getErrorCode(), null) : null;
+        }
+    }
+
+    private AvailablePromotionResponse toAvailable(
+            Promotion promotion, boolean isEligible, BaseErrorCode reason, BigDecimal estimatedDiscount) {
+        return new AvailablePromotionResponse(
+                promotion.getCode(), promotion.getDescription(), promotion.getTarget(), promotion.getType(),
+                promotion.getValue(), promotion.getMaxDiscount(), promotion.getMinOrderValue(), promotion.getEndAt(),
+                promotion.getScopeType(), isEligible,
+                reason == null ? null : reason.getCode(), reason == null ? null : reason.getMessage(),
+                estimatedDiscount);
+    }
+
+    private Promotion findAndValidatePromotion(
+            String code, PromotionTarget target, String userId, BigDecimal subtotal, List<PromotionItemDto> items) {
         Promotion promotion = promotionRepository.findByCodeIgnoreCase(code)
                 .orElseThrow(() -> new AppException(OrderErrorCode.PROMOTION_NOT_FOUND));
-
+        requireTarget(promotion, target);
         validatePromotionEligibility(promotion, userId, subtotal, items);
         return promotion;
+    }
+
+    private void requireTarget(Promotion promotion, PromotionTarget target) {
+        if (promotion.getTarget() != target) {
+            throw new AppException(OrderErrorCode.PROMOTION_TARGET_MISMATCH);
+        }
     }
 
     private void validatePromotionEligibility(Promotion promotion, String userId, BigDecimal subtotal, List<PromotionItemDto> items) {
@@ -265,25 +343,32 @@ public class PromotionServiceImpl implements PromotionService {
             throw new AppException(OrderErrorCode.PROMOTION_MIN_ORDER_NOT_MET);
         }
 
-        List<CouponUsageStatus> activeStatuses = List.of(CouponUsageStatus.RESERVED, CouponUsageStatus.CONFIRMED);
-
         if (promotion.getTotalQuota() != null) {
-            long usedCount = couponUsageRepository.countByPromotionIdAndStatusIn(promotion.getId(), activeStatuses);
+            long usedCount = couponUsageRepository.countByPromotionIdAndStatusIn(promotion.getId(), ACTIVE_STATUSES);
             if (usedCount >= promotion.getTotalQuota()) {
                 throw new AppException(OrderErrorCode.PROMOTION_QUOTA_EXCEEDED);
             }
         }
 
         if (promotion.getPerUserQuota() != null && userId != null && !userId.isBlank()) {
-            long userUsedCount = couponUsageRepository.countByPromotionIdAndUserIdAndStatusIn(promotion.getId(), userId, activeStatuses);
+            long userUsedCount = couponUsageRepository.countByPromotionIdAndUserIdAndStatusIn(
+                    promotion.getId(), userId, ACTIVE_STATUSES);
             if (userUsedCount >= promotion.getPerUserQuota()) {
                 throw new AppException(OrderErrorCode.PROMOTION_QUOTA_EXCEEDED);
             }
         }
 
         if (promotion.getScopeType() != PromotionScopeType.ALL && items != null && !items.isEmpty()) {
-            getApplicableAmount(promotion, subtotal, items);
+            PromotionCalculator.productDiscount(promotion, subtotal, items);
         }
+    }
+
+    private boolean hasUsage(String promotionId) {
+        return couponUsageRepository.countByPromotionIdAndStatusIn(promotionId, ACTIVE_STATUSES) > 0;
+    }
+
+    private PromotionTarget resolveTarget(PromotionRequest request) {
+        return request.getTarget() == null ? PromotionTarget.PRODUCT : request.getTarget();
     }
 
     private void validatePromotionRequest(PromotionRequest request) {
@@ -310,70 +395,39 @@ public class PromotionServiceImpl implements PromotionService {
                 throw new AppException(ErrorCode.VALIDATION_FAILED);
             }
         }
+        if (resolveTarget(request) == PromotionTarget.SHIPPING && request.getScopeType() != PromotionScopeType.ALL) {
+            throw new AppException(ErrorCode.VALIDATION_FAILED);
+        }
     }
 
-    private BigDecimal calculateDiscount(Promotion promotion, BigDecimal subtotal, List<PromotionItemDto> items) {
-        BigDecimal applicableAmount = getApplicableAmount(promotion, subtotal, items);
-
-        BigDecimal discount;
-        if (promotion.getType() == PromotionType.PERCENT) {
-            discount = applicableAmount.multiply(promotion.getValue())
-                    .divide(BigDecimal.valueOf(100), 0, RoundingMode.HALF_UP);
-            if (promotion.getMaxDiscount() != null) {
-                discount = discount.min(promotion.getMaxDiscount());
+    /** One group-by query for a whole page of promotions: id -> [reserved, confirmed]. */
+    private Map<String, long[]> usageCounts(Collection<String> promotionIds) {
+        List<String> ids = promotionIds.stream().filter(Objects::nonNull).toList();
+        Map<String, long[]> counts = new HashMap<>();
+        if (ids.isEmpty()) {
+            return counts;
+        }
+        for (Object[] row : couponUsageRepository.countByPromotionIdsGroupedByStatus(ids)) {
+            long[] pair = counts.computeIfAbsent((String) row[0], key -> new long[2]);
+            if (row[1] == CouponUsageStatus.RESERVED) {
+                pair[0] = (Long) row[2];
+            } else if (row[1] == CouponUsageStatus.CONFIRMED) {
+                pair[1] = (Long) row[2];
             }
-        } else {
-            discount = promotion.getValue();
         }
-
-        return discount.min(applicableAmount).max(BigDecimal.ZERO);
+        return counts;
     }
 
-    private BigDecimal getApplicableAmount(Promotion promotion, BigDecimal subtotal, List<PromotionItemDto> items) {
-        if (promotion.getScopeType() == PromotionScopeType.ALL) {
-            return subtotal != null ? subtotal : BigDecimal.ZERO;
-        }
-
-        if (promotion.getScopeIds() == null || promotion.getScopeIds().isBlank()) {
-            return subtotal != null ? subtotal : BigDecimal.ZERO;
-        }
-
-        Set<String> scopeIdSet = Arrays.stream(promotion.getScopeIds().split(","))
-                .map(String::trim)
-                .filter(s -> !s.isEmpty())
-                .collect(Collectors.toSet());
-
-        if (items == null || items.isEmpty()) {
-            throw new AppException(OrderErrorCode.PROMOTION_SCOPE_MISMATCH);
-        }
-
-        List<PromotionItemDto> matchingItems;
-        if (promotion.getScopeType() == PromotionScopeType.PRODUCT) {
-            matchingItems = items.stream()
-                    .filter(item -> (item.getProductId() != null && scopeIdSet.contains(item.getProductId()))
-                            || (item.getVariantId() != null && scopeIdSet.contains(item.getVariantId())))
-                    .toList();
-        } else if (promotion.getScopeType() == PromotionScopeType.CATEGORY) {
-            matchingItems = items.stream()
-                    .filter(item -> item.getCategoryId() != null && scopeIdSet.contains(item.getCategoryId()))
-                    .toList();
-        } else {
-            matchingItems = items;
-        }
-
-        if (matchingItems.isEmpty()) {
-            throw new AppException(OrderErrorCode.PROMOTION_SCOPE_MISMATCH);
-        }
-
-        return matchingItems.stream()
-                .map(item -> item.getLineTotal() != null ? item.getLineTotal() : BigDecimal.ZERO)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-    }
-
-    private PromotionResponse toResponse(Promotion promotion) {
+    private PromotionResponse toResponse(Promotion promotion, Map<String, long[]> usageCounts) {
+        long[] counts = usageCounts.getOrDefault(promotion.getId(), new long[2]);
         return PromotionResponse.builder()
                 .id(promotion.getId())
                 .code(promotion.getCode())
+                .target(promotion.getTarget())
+                .description(promotion.getDescription())
+                .isPublic(promotion.getIsPublic())
+                .reservedCount(counts[0])
+                .confirmedCount(counts[1])
                 .type(promotion.getType())
                 .value(promotion.getValue())
                 .maxDiscount(promotion.getMaxDiscount())
