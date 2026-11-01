@@ -234,6 +234,7 @@ public class PromotionServiceImpl implements PromotionService {
                 .pageNo(page.getNumber())
                 .pageSize(page.getSize())
                 .totalPage(page.getTotalPages())
+                .totalElements(page.getTotalElements())
                 .items(items)
                 .build();
     }

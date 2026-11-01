@@ -8,6 +8,7 @@ import com.fashionstore.catalog.product.repository.CategoryRepository;
 import com.fashionstore.catalog.product.repository.ProductRepository;
 import com.fashionstore.catalog.product.service.impl.CategoryServiceImpl;
 import com.fashionstore.common.exception.AppException;
+import com.fashionstore.common.redis.RedisService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.*;
@@ -21,6 +22,7 @@ class BackofficeCategoryContractTest {
     @Mock CategoryRepository categories;
     @Mock ProductRepository products;
     @Mock CategoryMapper mapper;
+    @Mock RedisService redis;
     @InjectMocks CategoryServiceImpl service;
 
     @Test void honorsCustomSlugAndMetadata() {

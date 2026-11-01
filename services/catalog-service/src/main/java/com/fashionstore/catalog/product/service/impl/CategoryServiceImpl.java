@@ -2,6 +2,9 @@ package com.fashionstore.catalog.product.service.impl;
 
 import com.fashionstore.common.dto.PageResponse;
 import com.fashionstore.common.exception.AppException;
+import com.fashionstore.common.redis.CacheRegion;
+import com.fashionstore.common.redis.RedisService;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fashionstore.catalog.product.dto.CategoryRequest;
 import com.fashionstore.common.util.SlugUtils;
 import com.fashionstore.catalog.product.dto.CategoryResponse;
@@ -19,6 +22,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -28,9 +32,14 @@ import java.util.stream.Collectors;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class CategoryServiceImpl implements CategoryService {
 
+    // TTL ngắn vì productCount trong cây đổi mỗi khi sản phẩm thêm/chuyển danh mục; danh mục tự xóa cache khi sửa.
+    static final CacheRegion<List<CategoryResponse>> CATEGORY_TREE = new CacheRegion<>(
+            "category-tree", new TypeReference<List<CategoryResponse>>() {}, Duration.ofSeconds(60));
+
     CategoryRepository categoryRepository;
     ProductRepository productRepository;
     CategoryMapper categoryMapper;
+    RedisService redis;
 
 
     @Override
@@ -56,6 +65,10 @@ public class CategoryServiceImpl implements CategoryService {
     @Override
     @Transactional(readOnly = true)
     public List<CategoryResponse> getCategoryTree() {
+        return redis.getOrLoad(CATEGORY_TREE, this::loadCategoryTree);
+    }
+
+    private List<CategoryResponse> loadCategoryTree() {
         List<CategoryResponse> result = categoryRepository.findByParentIsNullOrderByNameAsc().stream()
                 .map(categoryMapper::toCategoryResponse)
                 .toList();
@@ -101,6 +114,7 @@ public class CategoryServiceImpl implements CategoryService {
             category.setParent(parent);
         }
         category = categoryRepository.save(category);
+        redis.evict(CATEGORY_TREE);
         CategoryResponse response = categoryMapper.toCategoryResponse(category);
 
         if (category.getParent() != null) {
@@ -139,6 +153,7 @@ public class CategoryServiceImpl implements CategoryService {
         if (request.getDisplayOrder() != null) category.setDisplayOrder(request.getDisplayOrder());
 
         category = categoryRepository.save(category);
+        redis.evict(CATEGORY_TREE);
         return categoryMapper.toCategoryResponse(category);
     }
 
@@ -153,6 +168,7 @@ public class CategoryServiceImpl implements CategoryService {
         }
 
         categoryRepository.delete(category);
+        redis.evict(CATEGORY_TREE);
     }
 
     private void ensureNoParentCycle(String categoryId, Category candidateParent) {

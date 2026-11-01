@@ -1,0 +1,7 @@
+User-agent: *
+Disallow: /cart
+Disallow: /checkout
+Disallow: /profile
+Disallow: /wishlist
+Disallow: /payment
+Disallow: /*?*sort=

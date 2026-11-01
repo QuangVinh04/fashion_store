@@ -537,6 +537,14 @@ class PromotionServiceTest {
     }
 
     @Test
+    void getPromotions_reportsTotalElementsForTheAdminPagingContract() {
+        when(promotionRepository.search(any(), any(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(shippingPromo("SHIP20K", PromotionType.FIXED, "20000"))));
+
+        assertEquals(1L, promotionService.getPromotions(null, null, Pageable.unpaged()).getTotalElements());
+    }
+
+    @Test
     void listAvailable_keepsMinOrderMissesAsIneligibleAndDropsExhaustedCoupons() {
         Promotion usable = publicPromo("p-ok", "OK10", PromotionType.PERCENT, "10");
         Promotion tooSmall = publicPromo("p-big", "BIG", PromotionType.FIXED, "50000");

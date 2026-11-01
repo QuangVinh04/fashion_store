@@ -17,4 +17,6 @@ public interface WishlistService {
     PageResponse<List<WishlistItemResponse>> getMyWishlist(Pageable pageable);
 
     WishlistCheckResponse checkInWishlist(String productId);
+
+    List<String> findWishlistedProductIds(List<String> productIds);
 }

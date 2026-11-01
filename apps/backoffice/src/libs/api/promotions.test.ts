@@ -49,6 +49,22 @@ it('lists promotions with target filter', async () => {
   expect(fetch.mock.calls[0][0]).toBe('/api/v1/admin/promotions?page=0&size=20&target=SHIPPING')
 })
 
+it('falls back gracefully when backend omits totalElements', async () => {
+  const pageWithoutTotal = {
+    pageNo: 0,
+    pageSize: 20,
+    totalPage: 1,
+    items: page.items
+  }
+
+  vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ data: pageWithoutTotal })))
+
+  const result = await promotionsApi.list({ page: 0, size: 20 })
+
+  expect(result.totalElements).toBe(1)
+  expect(result.items).toHaveLength(1)
+})
+
 it('creates a promotion with serialized input', async () => {
   const fetch = vi
     .spyOn(globalThis, 'fetch')

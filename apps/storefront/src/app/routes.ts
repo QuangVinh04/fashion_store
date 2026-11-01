@@ -2,27 +2,7 @@ import { createElement, type ReactNode } from 'react';
 import { createBrowserRouter } from 'react-router';
 import Root from './Root';
 import RequireAuth from '../components/RequireAuth';
-import Home from '../pages/Home';
-import Products from '../pages/Products';
-import ProductDetail from '../pages/ProductDetail';
-import ProductReviews from '../pages/ProductReviews';
-import Cart from '../pages/Cart';
-import Checkout from '../pages/Checkout';
-import PaymentReturn from '../pages/PaymentReturn';
-import Profile from '../pages/Profile';
-import AddressesPage from '../pages/AddressesPage';
-import Orders from '../pages/Orders';
-import OrderDetail from '../pages/OrderDetail';
-import ReturnPage from '../pages/ReturnPage';
-import Wishlist from '../pages/Wishlist';
-import Login from '../pages/Login';
-import Register from '../pages/Register';
-import Contact from '../pages/Contact';
-import Policy from '../pages/Policy';
-import NotFound from '../pages/NotFound';
-import Wallet from '../pages/Wallet';
-import WalletTopUp from '../pages/WalletTopUp';
-import WalletPay from '../pages/WalletPay';
+import ErrorPage from '../pages/ErrorPage';
 
 const protectedPage = (element: ReactNode) => createElement(RequireAuth, null, element);
 
@@ -30,31 +10,32 @@ export const router = createBrowserRouter([
   {
     path: '/',
     Component: Root,
+    errorElement: createElement(ErrorPage),
     children: [
-      { index: true, Component: Home },
-      { path: 'products', Component: Products },
-      { path: 'products/:id', Component: ProductDetail },
-      { path: 'products/:id/reviews', Component: ProductReviews },
-      { path: 'cart', element: protectedPage(createElement(Cart)) },
-      { path: 'checkout/wallet-pay', element: protectedPage(createElement(WalletPay)) },
-      { path: 'profile/wallet', element: protectedPage(createElement(Wallet)) },
-      { path: 'profile/wallet/top-up', element: protectedPage(createElement(WalletTopUp)) },
-      { path: 'profile/wallet/top-ups/:id', element: protectedPage(createElement(WalletTopUp)) },
-      { path: 'checkout', element: protectedPage(createElement(Checkout)) },
-      { path: 'login', Component: Login },
-      { path: 'register', Component: Register },
-      { path: 'profile', element: protectedPage(createElement(Profile)) },
-      { path: 'profile/addresses', element: protectedPage(createElement(AddressesPage)) },
-      { path: 'profile/orders', element: protectedPage(createElement(Orders)) },
-      { path: 'profile/orders/:id', element: protectedPage(createElement(OrderDetail)) },
-      { path: 'profile/orders/:id/return', element: protectedPage(createElement(ReturnPage)) },
-      { path: 'wishlist', element: protectedPage(createElement(Wishlist)) },
-      { path: 'payment/vnpay/return', element: protectedPage(createElement(PaymentReturn)) },
-      { path: 'payment/payos/success', element: protectedPage(createElement(PaymentReturn)) },
-      { path: 'payment/payos/cancel', element: protectedPage(createElement(PaymentReturn)) },
-      { path: 'contact', Component: Contact },
-      { path: 'policy', Component: Policy },
-      { path: '*', Component: NotFound },
+      { index: true, lazy: () => import('../pages/Home').then(m => ({ Component: m.default })) },
+      { path: 'products', lazy: () => import('../pages/Products').then(m => ({ Component: m.default })) },
+      { path: 'products/:id', lazy: () => import('../pages/ProductDetail').then(m => ({ Component: m.default })) },
+      { path: 'products/:id/reviews', lazy: () => import('../pages/ProductReviews').then(m => ({ Component: m.default })) },
+      { path: 'cart', lazy: () => import('../pages/Cart').then(m => ({ element: protectedPage(createElement(m.default)) })) },
+      { path: 'checkout/wallet-pay', lazy: () => import('../pages/WalletPay').then(m => ({ element: protectedPage(createElement(m.default)) })) },
+      { path: 'profile/wallet', lazy: () => import('../pages/Wallet').then(m => ({ element: protectedPage(createElement(m.default)) })) },
+      { path: 'profile/wallet/top-up', lazy: () => import('../pages/WalletTopUp').then(m => ({ element: protectedPage(createElement(m.default)) })) },
+      { path: 'profile/wallet/top-ups/:id', lazy: () => import('../pages/WalletTopUp').then(m => ({ element: protectedPage(createElement(m.default)) })) },
+      { path: 'checkout', lazy: () => import('../pages/Checkout').then(m => ({ element: protectedPage(createElement(m.default)) })) },
+      { path: 'login', lazy: () => import('../pages/Login').then(m => ({ Component: m.default })) },
+      { path: 'register', lazy: () => import('../pages/Register').then(m => ({ Component: m.default })) },
+      { path: 'profile', lazy: () => import('../pages/Profile').then(m => ({ element: protectedPage(createElement(m.default)) })) },
+      { path: 'profile/addresses', lazy: () => import('../pages/AddressesPage').then(m => ({ element: protectedPage(createElement(m.default)) })) },
+      { path: 'profile/orders', lazy: () => import('../pages/Orders').then(m => ({ element: protectedPage(createElement(m.default)) })) },
+      { path: 'profile/orders/:id', lazy: () => import('../pages/OrderDetail').then(m => ({ element: protectedPage(createElement(m.default)) })) },
+      { path: 'profile/orders/:id/return', lazy: () => import('../pages/ReturnPage').then(m => ({ element: protectedPage(createElement(m.default)) })) },
+      { path: 'wishlist', lazy: () => import('../pages/Wishlist').then(m => ({ element: protectedPage(createElement(m.default)) })) },
+      { path: 'payment/vnpay/return', lazy: () => import('../pages/PaymentReturn').then(m => ({ element: protectedPage(createElement(m.default)) })) },
+      { path: 'payment/payos/success', lazy: () => import('../pages/PaymentReturn').then(m => ({ element: protectedPage(createElement(m.default)) })) },
+      { path: 'payment/payos/cancel', lazy: () => import('../pages/PaymentReturn').then(m => ({ element: protectedPage(createElement(m.default)) })) },
+      { path: 'contact', lazy: () => import('../pages/Contact').then(m => ({ Component: m.default })) },
+      { path: 'policy', lazy: () => import('../pages/Policy').then(m => ({ Component: m.default })) },
+      { path: '*', lazy: () => import('../pages/NotFound').then(m => ({ Component: m.default })) },
     ],
   },
 ]);

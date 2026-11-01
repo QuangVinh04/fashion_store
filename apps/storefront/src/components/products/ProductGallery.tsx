@@ -41,7 +41,7 @@ export default function ProductGallery({ photos, name }: { photos: GalleryPhoto[
       {safePhotos.map((photo, i) => <button key={photo.key} type="button" className="pd-gallery-photo" ref={el => { triggers.current[i] = el; }}
         aria-label={`Xem ảnh ${i + 1} toàn màn hình`} aria-haspopup="dialog" disabled={!photo.src}
         onClick={() => { opener.current = i; setIndex(i); setOpen(true); }}>
-        <ProductPhoto src={photo.src} name={photo.alt} />
+        <ProductPhoto src={photo.src} name={photo.alt} priority={i === 0} />
       </button>)}
     </div>
     <DialogPortal>

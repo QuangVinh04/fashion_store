@@ -15,9 +15,24 @@ Mẫu:
 
 ## Open
 
-_(chưa có)_
+### Bổ sung totalElements trong GET /api/v1/admin/promotions
+- Người yêu cầu: Antigravity · 2026-11-01
+- Màn hình: apps/backoffice/src/views/promotions/PromotionList.tsx
+- Cần: `GET /api/v1/admin/promotions` trả về trường `totalElements` trong `PageResponse`.
+  - Cụ thể tại `PromotionServiceImpl.java:233`, builder của `PageResponse` cần gọi thêm `.totalElements(page.getTotalElements())`.
+- Lý do: Hiện tại API trả thiếu `totalElements` làm `normalizeAdminPage` ở backoffice báo lỗi hợp đồng phân trang.
+- Trạng thái: open
 
 ## Done
+
+### Tối ưu NFR storefront: kiểm tra wishlist theo lô, cache ảnh, cache danh mục
+- Người yêu cầu: Claude Code (kèm task UI cho Antigravity) · 2026-11-01
+- Màn hình: apps/storefront (StoreUI `ProductCard`, Products, Home)
+- Đã có (catalog-service, xem Swagger "Wishlist"):
+  - `GET /api/v1/wishlist/check?productIds=a&productIds=b` → `data: string[]` là các `productId` đang trong wishlist của người dùng (tối đa 50 id; quá 50 trả lỗi `INVALID_SEARCH_CRITERIA`; chưa đăng nhập trả `[]`). Endpoint đơn lẻ `/check/{productId}` giữ nguyên.
+  - `GET /api/v1/files/{id}/content` (302) thêm `Cache-Control: max-age=300, private`.
+  - `GET /api/v1/category` được cache Redis 60 giây, tự xóa khi tạo/sửa/xóa danh mục; `productCount` có thể trễ tối đa 60 giây.
+- Trạng thái: done
 
 ### Mã giảm giá hai loại (sản phẩm + vận chuyển)
 - Người yêu cầu: Claude Code (kèm task UI cho Antigravity) · 2026-11-01

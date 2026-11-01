@@ -1,6 +1,8 @@
 package com.fashionstore.catalog.product.service.impl;
 
 import com.fashionstore.common.exception.AppException;
+import com.fashionstore.common.redis.CacheRegion;
+import com.fashionstore.common.redis.RedisService;
 import com.fashionstore.catalog.product.dto.CategoryRequest;
 import com.fashionstore.catalog.product.exception.ProductErrorCode;
 import com.fashionstore.catalog.product.mapper.CategoryMapper;
@@ -11,12 +13,16 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.List;
 import java.util.Optional;
+import java.util.function.Supplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -30,6 +36,9 @@ class CategoryServiceImplTest {
     ProductRepository productRepository;
     @Mock
     CategoryMapper categoryMapper;
+
+    @Spy
+    RedisService redis = RedisService.disabled();
 
     @InjectMocks
     CategoryServiceImpl categoryService;
@@ -86,5 +95,37 @@ class CategoryServiceImplTest {
                                 .isEqualTo(ProductErrorCode.CATEGORY_PARENT_INVALID));
 
         verify(categoryMapper, never()).updateCategory(category, request);
+    }
+
+    @Test
+    void categoryTreeIsReadThroughTheCache() {
+        when(categoryRepository.findByParentIsNullOrderByNameAsc()).thenReturn(List.of());
+
+        assertThat(categoryService.getCategoryTree()).isEmpty();
+
+        verify(redis).getOrLoad(any(CacheRegion.class), any(Supplier.class));
+    }
+
+    @Test
+    void deletingCategoryEvictsTheTreeCache() {
+        Category category = Category.builder().name("Shirts").slug("shirts").build();
+        category.setId("category-1");
+        when(categoryRepository.findById("category-1")).thenReturn(Optional.of(category));
+
+        categoryService.deleteCategory("category-1");
+
+        verify(redis).evict(any(CacheRegion.class));
+    }
+
+    @Test
+    void creatingCategoryEvictsTheTreeCache() {
+        CategoryRequest request = new CategoryRequest("Shirts", null, null);
+        Category category = Category.builder().name("Shirts").slug("shirts").build();
+        when(categoryMapper.toCategory(request)).thenReturn(category);
+        when(categoryRepository.save(category)).thenReturn(category);
+
+        categoryService.createCategory(request);
+
+        verify(redis).evict(any(CacheRegion.class));
     }
 }

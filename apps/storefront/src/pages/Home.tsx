@@ -1,3 +1,4 @@
+import { useDocumentMeta } from "../hooks/useDocumentMeta";
 import { customerError } from "../api/client";
 import { useState, useEffect } from "react";
 import { Link } from "react-router";
@@ -15,6 +16,7 @@ import {
 } from "../components/StoreUI";
 
 export default function Home() {
+  useDocumentMeta("Trang Chủ — Sống Tối Giản, Mặc Tinh Tế", "Trang phục thiết kế hiện đại từ chất liệu Linen & Organic Cotton cao cấp — tôn vinh phong thái tự tin mỗi ngày.");
   const [activeTab, setActiveTab] = useState<
     "ALL" | "MEN" | "WOMEN" | "UNISEX"
   >("ALL");
@@ -123,6 +125,10 @@ export default function Home() {
             <img
               src="https://images.unsplash.com/photo-1665832102316-9fd8e8f77c88?w=1000&h=1200&fit=crop&auto=format"
               alt="Bộ sưu tập thời trang LINO"
+              width={1000}
+              height={1200}
+              fetchPriority="high"
+              decoding="async"
               className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-105"
             />
 
@@ -379,12 +385,10 @@ export default function Home() {
         ) : tabProducts.length > 0 ? (
           <motion.div
             key={activeTab}
-            initial="hidden"
             animate="visible"
+            initial={false}
             variants={{
-              hidden: { opacity: 0 },
               visible: {
-                opacity: 1,
                 transition: {
                   staggerChildren: 0.05,
                 },
@@ -392,13 +396,13 @@ export default function Home() {
             }}
             className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3"
           >
-            {tabProducts.map((p) => (
+            {tabProducts.map((p, index) => (
               <motion.div
                 key={p.id}
+                initial={false}
                 variants={{
-                  hidden: { opacity: 0, y: 14 },
+                  hidden: { y: 14 },
                   visible: {
-                    opacity: 1,
                     y: 0,
                     transition: {
                       type: "spring",
@@ -408,7 +412,7 @@ export default function Home() {
                   },
                 }}
               >
-                <ProductCard product={p} />
+                <ProductCard product={p} priority={index < 2} />
               </motion.div>
             ))}
           </motion.div>

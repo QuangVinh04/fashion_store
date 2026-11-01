@@ -17,8 +17,14 @@ const queryString = (params: Record<string, string | number | boolean | undefine
 }
 
 export const promotionsApi = {
-  list: async (params: { page: number; size: number; active?: boolean; target?: PromotionTarget }) =>
-    normalizeAdminPage(await api.get<PageDto<Promotion>>(`${base}?${queryString(params)}`)),
+  list: async (params: { page: number; size: number; active?: boolean; target?: PromotionTarget }) => {
+    const res = await api.get<PageDto<Promotion>>(`${base}?${queryString(params)}`)
+
+    return normalizeAdminPage({
+      ...res,
+      totalElements: res.totalElements != null ? res.totalElements : (res.items?.length ?? 0)
+    })
+  },
   get: (id: string) => api.get<Promotion>(path(id)),
   create: (body: PromotionInput) => api.post<Promotion>(base, body),
   update: (id: string, body: PromotionInput) => api.put<Promotion>(path(id), body),

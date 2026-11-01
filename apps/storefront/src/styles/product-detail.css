@@ -33,11 +33,11 @@
 .pd-size-choice[aria-pressed=true]:hover,.pd-swatch[aria-pressed=true]:hover { background:var(--secondary); }
 .pd-invalid .pd-label { color:var(--destructive); }
 .pd-quantity { display:inline-flex; border:1px solid var(--border-strong); border-radius:12px; overflow:hidden; transition:border-color 180ms,box-shadow 180ms; }
-.pd-quantity button { position:relative; display:grid; place-items:center; isolation:isolate; width:40px; min-height:40px; border:0; background:transparent; color:var(--muted-foreground); }
+.pd-quantity button { position:relative; display:grid; place-items:center; isolation:isolate; width:44px; min-height:44px; border:0; background:transparent; color:var(--muted-foreground); }
 .pd-quantity button::before { content:""; position:absolute; inset:4px; z-index:-1; border-radius:8px; transition:background-color 180ms; }
 .pd-quantity button:not(:disabled):hover::before { background:var(--accent); }
 .pd-quantity button:not(:disabled):hover { color:var(--foreground); }
-.pd-quantity input { border:0; width:48px; height:40px; text-align:center; font-size:16px; font-variant-numeric:tabular-nums; appearance:textfield; outline:none; background:transparent; }
+.pd-quantity input { border:0; width:48px; height:44px; text-align:center; font-size:16px; font-variant-numeric:tabular-nums; appearance:textfield; outline:none; background:transparent; }
 .pd-quantity input::-webkit-inner-spin-button { appearance:none; }
 .pd-quantity:has(input:focus) { border-color:var(--primary); box-shadow:0 0 0 2px var(--primary-light); }
 .pd-feedback { min-height:24px; font-size:12px; margin:0 0 8px; display:flex; gap:8px; align-items:center; }

@@ -105,7 +105,15 @@ export function PageTitle({
   );
 }
 
-export function ProductPhoto({ src, name }: { src?: string; name: string }) {
+export function ProductPhoto({
+  src,
+  name,
+  priority = false,
+}: {
+  src?: string;
+  name: string;
+  priority?: boolean;
+}) {
   const [failed, setFailed] = useState(false);
   useEffect(() => setFailed(false), [src]);
   if (!src || failed) {
@@ -121,7 +129,9 @@ export function ProductPhoto({ src, name }: { src?: string; name: string }) {
   }
   return (
     <img
-      loading="lazy"
+      loading={priority ? "eager" : "lazy"}
+      fetchPriority={priority ? "high" : "auto"}
+      decoding="async"
       src={src}
       alt={name}
       className="h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-105"
@@ -132,9 +142,11 @@ export function ProductPhoto({ src, name }: { src?: string; name: string }) {
 
 export function ProductCard({
   product,
+  priority = false,
   onWishlistChange,
 }: {
   product: ProductSummary;
+  priority?: boolean;
   onWishlistChange?: (productId: string, inWishlist: boolean) => void;
 }) {
   const { isLoggedIn, login } = useAuth();
@@ -201,7 +213,7 @@ export function ProductCard({
       />
 
       <div className="relative aspect-[3/4] bg-background overflow-hidden pointer-events-none">
-        <ProductPhoto src={photoUrl} name={product.name} />
+        <ProductPhoto src={photoUrl} name={product.name} priority={priority} />
 
         {/* Sale / Status Tag */}
         {isSale && (

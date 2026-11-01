@@ -1,10 +1,12 @@
 package com.fashionstore.catalog.wishlist.controller;
 
+import com.fashionstore.catalog.product.exception.ProductErrorCode;
 import com.fashionstore.catalog.wishlist.dto.WishlistCheckResponse;
 import com.fashionstore.catalog.wishlist.dto.WishlistItemResponse;
 import com.fashionstore.catalog.wishlist.service.WishlistService;
 import com.fashionstore.common.dto.ApiResponse;
 import com.fashionstore.common.dto.PageResponse;
+import com.fashionstore.common.exception.AppException;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.AccessLevel;
@@ -20,6 +22,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -31,6 +34,8 @@ import java.util.List;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 @Tag(name = "Wishlist", description = "Quản lý danh sách sản phẩm yêu thích (Wishlist)")
 public class WishlistController {
+
+    private static final int MAX_CHECK_PRODUCT_IDS = 50;
 
     WishlistService wishlistService;
 
@@ -69,6 +74,20 @@ public class WishlistController {
         return ApiResponse.<PageResponse<List<WishlistItemResponse>>>builder()
                 .message("Get wishlist successfully")
                 .data(wishlistService.getMyWishlist(pageable))
+                .build();
+    }
+
+    @Operation(summary = "Kiểm tra nhiều sản phẩm cùng lúc",
+            description = "Trả về các productId (trong danh sách gửi lên) đang nằm trong danh sách yêu thích của tôi. Tối đa "
+                    + MAX_CHECK_PRODUCT_IDS + " id mỗi lần.")
+    @GetMapping("/check")
+    public ApiResponse<List<String>> checkMany(@RequestParam("productIds") List<String> productIds) {
+        if (productIds.size() > MAX_CHECK_PRODUCT_IDS) {
+            throw new AppException(ProductErrorCode.INVALID_SEARCH_CRITERIA);
+        }
+        return ApiResponse.<List<String>>builder()
+                .message("Check wishlist status completed")
+                .data(wishlistService.findWishlistedProductIds(productIds))
                 .build();
     }
 

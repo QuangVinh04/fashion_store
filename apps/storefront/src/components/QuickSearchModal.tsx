@@ -57,7 +57,7 @@ export function QuickSearchModal({ open, onOpenChange }: QuickSearchModalProps) 
 
     const timer = setTimeout(() => {
       store
-        .products({ q: query.trim(), page: 0, size: 6 })
+        .products({ keyword: query.trim(), page: 0, size: 6 })
         .then((res) => {
           if (active) {
             setResults(res.items || []);

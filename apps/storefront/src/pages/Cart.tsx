@@ -1,3 +1,4 @@
+import { useDocumentMeta } from "../hooks/useDocumentMeta";
 import { motion, AnimatePresence } from "motion/react";
 import { customerError } from "../api/client";
 import { useState, useEffect } from "react";
@@ -25,6 +26,7 @@ import { Status } from "../components/StoreUI";
 
 
 export default function Cart() {
+  useDocumentMeta("Giỏ Hàng", "Xem và quản lý các sản phẩm trong giỏ hàng của bạn.");
   const {
     cart,
     count,

@@ -1,3 +1,4 @@
+import { useDocumentMeta } from "../hooks/useDocumentMeta";
 import { ApiError, customerError, couponError, money } from "../api/client";
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router";
@@ -18,6 +19,7 @@ import { useAuth } from "../context/AuthContext";
 import { CouponSection } from "../components/checkout/CouponSection";
 
 export default function CheckoutPage() {
+  useDocumentMeta("Thanh Toán Đơn Hàng", "Thanh toán an toàn, nhanh chóng với nhiều phương thức linh hoạt.");
   const { cart, loading: cartLoading, error: cartError, refresh: refreshCart } = useCart();
   const { user } = useAuth();
   const navigate = useNavigate();

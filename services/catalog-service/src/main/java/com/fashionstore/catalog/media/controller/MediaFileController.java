@@ -18,6 +18,7 @@ import lombok.experimental.FieldDefaults;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -31,6 +32,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.net.URI;
+import java.time.Duration;
 import java.util.List;
 
 @RestController
@@ -38,6 +40,8 @@ import java.util.List;
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class MediaFileController {
+
+    private static final Duration CONTENT_REDIRECT_TTL = Duration.ofMinutes(5);
 
     MediaFileService mediaFileService;
 
@@ -90,8 +94,10 @@ public class MediaFileController {
                                            @RequestParam(required = false) String variant) {
         // Gia tri la khac "thumb" thi tra anh goc, de URL cu va URL sai khong bi loi.
         boolean thumbnail = "thumb".equals(variant);
+        // private: cùng endpoint trả cả file riêng tư. TTL ngắn hơn hạn presign để URL đích còn hiệu lực khi dùng lại.
         return ResponseEntity.status(HttpStatus.FOUND)
                 .location(URI.create(mediaFileService.resolveContentUrl(id, thumbnail)))
+                .cacheControl(CacheControl.maxAge(CONTENT_REDIRECT_TTL).cachePrivate())
                 .build();
     }
 

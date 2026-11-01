@@ -109,6 +109,16 @@ public class WishlistServiceImpl implements WishlistService {
         return WishlistCheckResponse.builder().inWishlist(exists).build();
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public List<String> findWishlistedProductIds(List<String> productIds) {
+        String userId = currentUserProvider.getCurrentUserId();
+        if (userId == null || userId.isBlank() || productIds.isEmpty()) {
+            return List.of();
+        }
+        return wishlistItemRepository.findWishlistedProductIds(userId, productIds);
+    }
+
     private String requireCurrentUserId() {
         String userId = currentUserProvider.getCurrentUserId();
         if (userId == null || userId.isBlank()) {

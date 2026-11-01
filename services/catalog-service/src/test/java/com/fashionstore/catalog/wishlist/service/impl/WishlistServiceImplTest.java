@@ -197,4 +197,19 @@ class WishlistServiceImplTest {
 
         assertThat(response.isInWishlist()).isFalse();
     }
+
+    @Test
+    void findWishlistedProductIds_returnsOnlyIdsInWishlist() {
+        when(wishlistItemRepository.findWishlistedProductIds("user-1", List.of("prod-1", "prod-2")))
+                .thenReturn(List.of("prod-1"));
+
+        assertThat(service.findWishlistedProductIds(List.of("prod-1", "prod-2"))).containsExactly("prod-1");
+    }
+
+    @Test
+    void findWishlistedProductIds_whenNoProductIds_skipsQuery() {
+        assertThat(service.findWishlistedProductIds(List.of())).isEmpty();
+
+        verify(wishlistItemRepository, never()).findWishlistedProductIds(any(), any());
+    }
 }

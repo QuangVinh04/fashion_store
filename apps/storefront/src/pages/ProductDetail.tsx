@@ -1,3 +1,5 @@
+import { SafeBoundary } from "../components/SafeBoundary";
+import { useDocumentMeta } from "../hooks/useDocumentMeta";
 import { motion, AnimatePresence } from "motion/react";
 import { StickyQuickBuyBar } from "../components/StickyQuickBuyBar";
 import { customerError } from "../api/client";
@@ -128,6 +130,13 @@ export default function ProductDetail() {
 
   const p = productLoad.data?.id === id ? productLoad.data : null;
 
+  useDocumentMeta(
+    p?.name,
+    p?.description || p?.shortDescription || "Chi tiết sản phẩm thời trang cao cấp LINO"
+  );
+
+
+
   // Reset state when product id changes
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -237,6 +246,36 @@ export default function ProductDetail() {
 
   const galleryPhotos = filteredImages.map(img => ({ key: img.id, src: img.url || media(img.mediaId), alt: img.altText || p?.name || "Sản phẩm" }));
   if (!galleryPhotos.length && p) galleryPhotos.push({ key: "thumbnail", src: p.thumbnailUrl || media(p.thumbnailMediaId), alt: p.name });
+
+  const productJsonLd = useMemo(() => {
+    if (!p) return null;
+    const price = p.salePrice ?? p.price ?? p.basePrice ?? 0;
+    const hasInStock = (p.variants || []).some(
+      (v) => v.active && v.available !== false
+    );
+    const mainImg =
+      galleryPhotos[0]?.src || p.thumbnailUrl || media(p.thumbnailMediaId) || "";
+    return JSON.stringify({
+      "@context": "https://schema.org",
+      "@type": "Product",
+      name: p.name,
+      image: mainImg ? [mainImg] : [],
+      description: p.description || p.shortDescription || p.name,
+      brand: {
+        "@type": "Brand",
+        name: p.brandName || "LINO",
+      },
+      offers: {
+        "@type": "Offer",
+        price: price,
+        priceCurrency: "VND",
+        availability: hasInStock
+          ? "https://schema.org/InStock"
+          : "https://schema.org/OutOfStock",
+        url: typeof window !== "undefined" ? window.location.href : "",
+      },
+    });
+  }, [p, galleryPhotos]);
 
   const displayPrice =
     selectedVariant?.salePrice ??
@@ -425,12 +464,22 @@ export default function ProductDetail() {
             <div className="pd-services"><p><Truck size={17} />Hỗ trợ mã giảm phí vận chuyển</p><p><RefreshCw size={17} />Đổi trả trong 7 ngày</p></div>
           </section>
         </div>
+        {productJsonLd && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: productJsonLd }}
+        />
+      )}
+      <SafeBoundary>
         <section className="pd-section" aria-labelledby="pd-reviews-title">
           <div className="pd-section-title"><h2 id="pd-reviews-title">Đánh giá sản phẩm</h2><Link className="pd-text-link" to={`/products/${id}/reviews`}>Xem thêm đánh giá</Link></div>
           <Status loading={reviewsLoad.loading} error={reviewsLoad.error} retry={() => void reviewsLoad.refresh()} />
           {!reviewsLoad.loading && !reviewsLoad.error && reviewsLoad.data && <div className="pd-review-preview"><div><strong className="pd-review-score">{reviewsLoad.data.averageRating.toFixed(1)} <small>/ 5</small></strong><StarRating rating={reviewsLoad.data.averageRating} size={16} /><p className="pd-meta">{reviewsLoad.data.totalReviews} đánh giá</p></div><div>{reviewsLoad.data.reviews.items.length ? reviewsLoad.data.reviews.items.slice(0, 3).map(review => <article key={review.id} className="pd-review-excerpt"><StarRating rating={review.rating} size={14} /><p>{review.comment}</p><time dateTime={review.createdAt}>{new Date(review.createdAt).toLocaleDateString("vi-VN")}</time></article>) : <p className="pd-empty">Chưa có đánh giá cho sản phẩm này.</p>}</div></div>}
         </section>
+      </SafeBoundary>
+      <SafeBoundary>
         {!!relatedProducts.length && <section className="pd-section"><h2>Sản phẩm liên quan</h2><div className="pd-related">{relatedProducts.map(item => <ProductCard key={item.id} product={item} />)}</div></section>}
+      </SafeBoundary>
         <SizeGuide open={sizeOpen} onOpenChange={setSizeOpen} rows={sizeChartLoad.data?.rows || []} loading={sizeChartLoad.loading} error={sizeChartLoad.error} retry={() => void sizeChartLoad.refresh()} />
       </>}
     </div>

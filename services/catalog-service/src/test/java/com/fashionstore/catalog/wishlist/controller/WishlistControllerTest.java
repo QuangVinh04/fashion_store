@@ -118,4 +118,13 @@ class WishlistControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.inWishlist").value(true));
     }
+
+    @Test
+    void checkMany_returnsWishlistedProductIds() throws Exception {
+        when(wishlistService.findWishlistedProductIds(List.of("prod-1", "prod-2"))).thenReturn(List.of("prod-2"));
+
+        mockMvc.perform(get("/api/v1/wishlist/check").param("productIds", "prod-1", "prod-2"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0]").value("prod-2"));
+    }
 }

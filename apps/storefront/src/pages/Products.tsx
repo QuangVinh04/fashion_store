@@ -1,3 +1,4 @@
+import { useDocumentMeta } from "../hooks/useDocumentMeta";
 import { motion } from "motion/react";
 import StoreSelect from "../components/StoreSelect";
 import { useState, useMemo, useEffect } from "react";
@@ -75,6 +76,7 @@ const PRODUCT_TYPES = [
 
 
 export default function Products() {
+  useDocumentMeta("Bộ Sưu Tập Sản Phẩm", "Khám phá các sản phẩm thời trang cao cấp LINO dành cho nam, nữ và unisex.");
   const [params, setParams] = useSearchParams();
   const page = Math.max(0, Number(params.get("page") || 0));
   const keyword = params.get("q") || "";
@@ -491,12 +493,10 @@ export default function Products() {
               <>
                 <motion.div
                   key={location.search}
-                  initial="hidden"
                   animate="visible"
+                  initial={false}
                   variants={{
-                    hidden: { opacity: 0 },
                     visible: {
-                      opacity: 1,
                       transition: {
                         staggerChildren: 0.04,
                       },
@@ -504,13 +504,13 @@ export default function Products() {
                   }}
                   className={gridCols === 2 ? "grid grid-cols-1 sm:grid-cols-2 gap-4" : "grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3"}
                 >
-                  {listing.data.items.map((p) => (
+                  {listing.data.items.map((p, index) => (
                     <motion.div
                       key={p.id}
+                      initial={false}
                       variants={{
-                        hidden: { opacity: 0, y: 14 },
+                        hidden: { y: 14 },
                         visible: {
-                          opacity: 1,
                           y: 0,
                           transition: {
                             type: "spring",
@@ -520,7 +520,7 @@ export default function Products() {
                         },
                       }}
                     >
-                      <ProductCard product={p} />
+                      <ProductCard product={p} priority={index < 2} />
                     </motion.div>
                   ))}
                 </motion.div>
