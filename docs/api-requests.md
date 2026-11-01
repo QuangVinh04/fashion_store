@@ -25,6 +25,18 @@ Mẫu:
 
 ## Done
 
+### Gợi ý size theo chiều cao/cân nặng hoặc số đo cơ thể
+- Người yêu cầu: Claude Code (kèm task UI cho Antigravity) · 2026-11-02
+- Màn hình: apps/storefront (`ProductDetail`, cạnh `SizeGuide`)
+- Đã có (catalog-service, công khai, không cần đăng nhập, không lưu số đo):
+  - `GET /api/v1/products/{id}/size-recommendation` với query tùy chọn (cm/kg): `heightCm`, `weightKg`, `chestCm`, `waistCm`, `hipCm`, `shoulderCm`, `lengthCm`, `inseamCm`, `preference` = `SNUG | REGULAR | LOOSE` (mặc định `REGULAR`). Phải có ít nhất một giá trị, nếu không trả 400 `SIZE_RECOMMENDATION_INPUT_REQUIRED`. Giá trị ngoài khoảng hợp lệ trả 400.
+  - `data.status`: `RECOMMENDED` hoặc `NOT_ENOUGH_DATA` (sản phẩm chưa có bảng size, hoặc dữ liệu nhập không đủ để so) → ẩn widget, không báo lỗi.
+  - Khi `RECOMMENDED`: `recommendedSize`, `alternativeSize` (có thể không có), `recommendedSizeAvailable` (false = size gợi ý đang hết hàng), `basis` (`BODY_MEASUREMENTS` | `HEIGHT_WEIGHT`), `confidence` (`HIGH` | `MEDIUM` | `LOW`), `regions[]` = `{region, fit, differenceCm}` (chỉ có khi `BODY_MEASUREMENTS`; `differenceCm` = số đo của size trừ số đo của người, âm là chật).
+  - Màu heatmap theo `fit`: `GOOD` xanh lá, `SNUG` vàng, `TIGHT` đỏ, `LOOSE` xám.
+- Task UI chi tiết cho Antigravity: `docs/storefront-size-finder-tasks.md` (F1–F6).
+- Gợi ý UI: form tối thiểu chiều cao + cân nặng, mục "Chính xác hơn" mở thêm số đo và ưu tiên form; nhớ số đo trong phiên; `confidence = LOW` hiển thị là gợi ý tham khảo. Đây là gợi ý theo bảng size, không phải kết quả của try-on.
+- Trạng thái: done
+
 ### Tối ưu NFR storefront: kiểm tra wishlist theo lô, cache ảnh, cache danh mục
 - Người yêu cầu: Claude Code (kèm task UI cho Antigravity) · 2026-11-01
 - Màn hình: apps/storefront (StoreUI `ProductCard`, Products, Home)

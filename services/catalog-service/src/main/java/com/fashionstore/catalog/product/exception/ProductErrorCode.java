@@ -45,6 +45,7 @@ public enum ProductErrorCode implements BaseErrorCode {
     SIZE_CHART_RANGE_INVALID(1041, "Size chart minimum value cannot exceed maximum value", HttpStatus.BAD_REQUEST),
     DUPLICATE_VARIANT_COMBINATION(1042, "Duplicate variant combination", HttpStatus.BAD_REQUEST),
     SIZE_CHART_CODE_DUPLICATE(1043, "Size code already exists in this chart", HttpStatus.CONFLICT),
+    SIZE_RECOMMENDATION_INPUT_REQUIRED(1044, "Provide height, weight or at least one body measurement", HttpStatus.BAD_REQUEST),
     ;
 
     private final int code;

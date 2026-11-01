@@ -17,7 +17,7 @@ Gộp từ product-service, inventory-service, file-service. Không tách lại.
 
 | nhóm | path |
 |---|---|
-| sản phẩm (public) | `/api/v1/products/**`, `/api/v1/category`, `/api/v1/brands`, `/api/v1/size-charts` |
+| sản phẩm (public) | `/api/v1/products/**` (gồm `/{id}/size-recommendation`), `/api/v1/category`, `/api/v1/brands`, `/api/v1/size-charts` |
 | sản phẩm (admin) | `/admin/products/**`, `/admin/brands`, `/admin/color-options`, `/admin/size-options`, `/admin/product-attributes/**`, `/admin/size-charts/**` |
 | tồn kho | `/api/v1/inventory/**`, `/admin/inventory/**`, `/internal/inventory/low-stock/count` |
 | media | `/api/v1/files/**`, `/api/v1/files/avatars/**`, `/api/v1/files/evidence/**`, `/internal/v1/media/**` |
