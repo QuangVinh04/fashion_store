@@ -41,8 +41,8 @@ class CatalogBaselinePostgresIntegrationTest extends CatalogEntityPersistenceTes
     @Autowired JdbcTemplate jdbc;
     @Autowired Flyway flyway;
 
-    @Test void hasOneValidatedMigrationAndNoRetiredTablesOrDuplicateProductColumns() {
-        assertThat(flyway.info().applied()).hasSize(1);
+    @Test void startsFromSquashedBaselineAndHasNoRetiredTablesOrDuplicateProductColumns() {
+        assertThat(flyway.info().applied()[0].getVersion().getVersion()).isEqualTo("1");
         assertThat(flyway.info().pending()).isEmpty();
         flyway.validate();
         assertThat(jdbc.queryForObject("select count(*) from information_schema.tables where table_schema='public' "
@@ -54,5 +54,7 @@ class CatalogBaselinePostgresIntegrationTest extends CatalogEntityPersistenceTes
                 + "'ck_variant_weight_range','ck_variant_length_range','ck_variant_width_range','ck_variant_height_range')", Integer.class)).isEqualTo(8);
         assertThat(jdbc.queryForObject("select count(*) from pg_indexes where schemaname='public' "
                 + "and indexname='uq_inventory_reservation_cancellation_id'", Integer.class)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("select count(*) from pg_indexes where schemaname='public' and indexname in "
+                + "('idx_product_status_created_at','idx_product_name_trgm','idx_product_variant_sku_trgm')", Integer.class)).isEqualTo(3);
     }
 }

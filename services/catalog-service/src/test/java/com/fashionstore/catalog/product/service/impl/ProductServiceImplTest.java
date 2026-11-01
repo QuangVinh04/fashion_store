@@ -12,6 +12,7 @@ import com.fashionstore.catalog.product.dto.ProductVariantRequest;
 import com.fashionstore.catalog.product.dto.ProductVariantSnapshotResponse;
 import com.fashionstore.catalog.product.exception.ProductErrorCode;
 import com.fashionstore.common.exception.AppException;
+import com.fashionstore.common.exception.ErrorCode;
 import com.fashionstore.catalog.product.mapper.ProductMapper;
 import com.fashionstore.catalog.product.entity.Brand;
 import com.fashionstore.catalog.product.entity.Category;
@@ -712,6 +713,24 @@ class ProductServiceImplTest {
                 .isInstanceOfSatisfying(AppException.class,
                         exception -> assertThat(exception.getErrorCode())
                                 .isEqualTo(ProductErrorCode.CANNOT_CHANGE_SLUG_WHEN_PUBLISHED));
+    }
+
+    @Test
+    void rejectsUpdateWhenRequestVersionIsStale() {
+        Product product = Product.builder().name("Basic Tee").slug("basic-tee").build();
+        product.setId("product-1");
+        product.setVersion(3L);
+        ProductUpdateRequest request = ProductUpdateRequest.builder()
+                .name("Better Tee")
+                .version(2L)
+                .categoryIds(List.of("category-1"))
+                .build();
+        when(productRepository.findDetailProductById("product-1")).thenReturn(Optional.of(product));
+
+        assertThatThrownBy(() -> productService.updateProduct("product-1", request))
+                .isInstanceOfSatisfying(AppException.class,
+                        exception -> assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.CONCURRENT_UPDATE));
+        verify(productRepository, never()).save(any(Product.class));
     }
 
     @Test

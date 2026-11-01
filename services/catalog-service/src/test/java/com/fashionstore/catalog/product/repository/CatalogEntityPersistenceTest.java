@@ -10,6 +10,7 @@ import com.fashionstore.catalog.media.entity.MediaType;
 import com.fashionstore.catalog.product.entity.ProductStatus;
 import com.fashionstore.catalog.product.entity.ProductType;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.OptimisticLockException;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
@@ -20,6 +21,7 @@ import java.util.LinkedHashSet;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @DataJpaTest(properties = {
         "spring.flyway.enabled=false", "spring.jpa.hibernate.ddl-auto=create-drop",
@@ -52,6 +54,18 @@ class CatalogEntityPersistenceTest {
         assertThat(actual.getThumbnailMediaId()).isEqualTo("image-id");
         assertThat(actual.getPublishedAt()).isEqualTo(publishedAt);
         assertThat(actual.getPublished()).isTrue();
+    }
+
+    @Test void staleProductWriteIsRejectedByVersionCheck() {
+        var product = Product.builder().name("Tee").slug("versioned-tee").build();
+        em.persist(product); em.flush();
+        assertThat(product.getVersion()).isZero();
+
+        em.createNativeQuery("update product set version = version + 1 where id = :id")
+                .setParameter("id", product.getId()).executeUpdate();
+        product.setName("Edited from a stale form");
+
+        assertThatThrownBy(() -> em.flush()).isInstanceOf(OptimisticLockException.class);
     }
 
     @Test void unknownHistoricalDatesRemainUnknown() {

@@ -32,6 +32,9 @@ import java.util.List;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class ProductUpdateRequest {
 
+    // Giá trị `version` mà form đã tải; khác bản hiện tại thì trả 409. Bỏ trống = không kiểm tra (client cũ).
+    Long version;
+
     @NotBlank(message = "Product name is required")
     @Size(max = 255, message = "Product name must not exceed 255 characters")
     String name;

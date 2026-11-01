@@ -68,6 +68,21 @@ class OrderSchemaPostgresIntegrationTest {
     }
 
     @Test
+    void migrationCreatesAdminOrderListIndexes() {
+        Number found =
+                (Number)
+                        entityManager
+                                .getEntityManager()
+                                .createNativeQuery(
+                                        "select count(*) from pg_indexes where schemaname = 'public' and indexname in "
+                                                + "('idx_orders_created_at','idx_orders_status_created_at','idx_order_item_order_id',"
+                                                + "'idx_orders_order_code_trgm','idx_orders_recipient_name_trgm','idx_orders_recipient_phone_trgm')")
+                                .getSingleResult();
+
+        assertThat(found.intValue()).isEqualTo(6);
+    }
+
+    @Test
     void migratedSchemaPersistsDeliveryAndWholeOrderReturn() {
         Instant deliveredAt = Instant.parse("2026-10-12T01:00:00Z");
         Order order =

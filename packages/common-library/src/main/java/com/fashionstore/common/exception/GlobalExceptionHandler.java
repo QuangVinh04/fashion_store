@@ -8,6 +8,7 @@ import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.validation.FieldError;
@@ -132,6 +133,16 @@ public class GlobalExceptionHandler {
             HttpServletRequest request
     ) {
         return response(ErrorCode.UNSUPPORTED_MEDIA_TYPE, request, null);
+    }
+
+    @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
+    public ResponseEntity<ApiErrorResponse> handleOptimisticLockFailure(
+            ObjectOptimisticLockingFailureException exception,
+            HttpServletRequest request
+    ) {
+        log.warn("Concurrent update path={} correlationId={}",
+                request.getRequestURI(), correlationId(request), exception);
+        return response(ErrorCode.CONCURRENT_UPDATE, request, null);
     }
 
     @ExceptionHandler(Exception.class)

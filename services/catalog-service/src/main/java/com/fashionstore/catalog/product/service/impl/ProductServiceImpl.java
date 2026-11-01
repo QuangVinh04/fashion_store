@@ -2,6 +2,7 @@ package com.fashionstore.catalog.product.service.impl;
 
 import com.fashionstore.common.dto.PageResponse;
 import com.fashionstore.common.exception.AppException;
+import com.fashionstore.common.exception.ErrorCode;
 import com.fashionstore.catalog.product.dto.AdminProductFilter;
 import com.fashionstore.catalog.product.dto.AssignProductAttributeRequest;
 import com.fashionstore.catalog.product.dto.ProductAdvanceSearchRequest;
@@ -106,6 +107,7 @@ public class ProductServiceImpl implements ProductService {
 
 
     @Override
+    @Transactional(readOnly = true)
     public PageResponse<List<ProductSummaryResponse>> getAllProducts(Pageable pageable) {
         Page<Product> page = productRepository.findAllByStatus(ProductStatus.PUBLISHED, pageable);
 
@@ -113,6 +115,7 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public PageResponse<List<ProductSummaryResponse>> getAllProductsForBackoffice(Pageable pageable) {
         Page<Product> page = productRepository.findAll(pageable);
         PageResponse<List<ProductSummaryResponse>> response = getPageResponse(pageable, page);
@@ -167,12 +170,14 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public PageResponse<List<ProductSummaryResponse>> searchProducts(Pageable pageable, String keyword) {
         Page<Product> page = productRepository.findAllByNameContainingAndStatus(keyword, ProductStatus.PUBLISHED, pageable);
         return getPageResponse(pageable, page);
     }
 
     @Override
+    @Transactional(readOnly = true)
     public PageResponse<List<ProductSummaryResponse>> getAllProductsByCategory(Pageable pageable, String categoryId) {
         Category category = categoryRepository.findById(categoryId)
                 .orElseThrow(() -> new AppException(ProductErrorCode.CATEGORY_NOT_FOUND));
@@ -299,6 +304,9 @@ public class ProductServiceImpl implements ProductService {
     public ProductResponse updateProduct(String productId, ProductUpdateRequest request) {
         Product product = productRepository.findDetailProductById(productId)
                 .orElseThrow(() -> new AppException(ProductErrorCode.PRODUCT_NOT_FOUND));
+        if (request.getVersion() != null && !request.getVersion().equals(product.getVersion())) {
+            throw new AppException(ErrorCode.CONCURRENT_UPDATE);
+        }
         Set<String> existingVariantIds = product.getVariants().stream()
                 .map(ProductVariant::getId).filter(Objects::nonNull).collect(Collectors.toSet());
         validateUpdateProductRequest(request, product);
@@ -516,11 +524,13 @@ public class ProductServiceImpl implements ProductService {
 
 
     @Override
+    @Transactional(readOnly = true)
     public PageResponse<List<ProductSummaryResponse>> advanceSearchWithSpecifications (Pageable pageable, String[] product) {
         return advanceSearchWithRequest(pageable, com.fashionstore.catalog.product.dto.ProductAdvanceSearchRequest.builder().search(product).build());
     }
 
     @Override
+    @Transactional(readOnly = true)
     public PageResponse<List<ProductSummaryResponse>> advanceSearchWithRequest(Pageable pageable, com.fashionstore.catalog.product.dto.ProductAdvanceSearchRequest request) {
         log.info("Search product by specifications");
 

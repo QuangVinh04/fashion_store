@@ -19,6 +19,16 @@ _(chưa có)_
 
 ## Done
 
+### Chống ghi đè khi hai admin sửa cùng một sản phẩm
+- Người yêu cầu: Claude Code (kèm task UI cho Antigravity) · 2026-11-01
+- Màn hình: apps/backoffice, form sửa sản phẩm
+- Cần:
+  - Response `ProductResponse` có thêm `version` (số nguyên).
+  - `PUT /admin/products/{productId}`: thêm field tùy chọn `version`, gửi lại đúng giá trị form đã tải. Khác bản hiện tại thì trả HTTP 409, code `9008` (`CONCURRENT_UPDATE`). Không gửi `version` thì không kiểm tra (client cũ vẫn chạy).
+  - Khi nhận 409: báo "Sản phẩm vừa được người khác sửa", tải lại dữ liệu rồi cho admin sửa lại; không tự gửi lại.
+- Lý do: tránh bản lưu sau ghi đè âm thầm bản lưu trước.
+- Trạng thái: done
+
 ### Luồng xử lý đơn thủ công của admin
 - Người yêu cầu: Claude Code (kèm task UI cho Antigravity) · 2026-11-01
 - Màn hình: apps/backoffice/src/views/orders/OrderDetail.tsx, OrderList.tsx, order-actions.ts

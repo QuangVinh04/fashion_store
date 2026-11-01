@@ -28,6 +28,7 @@ import java.util.List;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class ProductResponse {
     String id;
+    Long version;
     String name;
     String slug;
     String shortDescription;

@@ -54,6 +54,7 @@ public interface ProductMapper {
         Category firstCategory = firstCategory(product);
         return ProductResponse.builder()
                 .id(product.getId())
+                .version(product.getVersion())
                 .name(product.getName())
                 .slug(product.getSlug())
                 .shortDescription(product.getShortDescription())

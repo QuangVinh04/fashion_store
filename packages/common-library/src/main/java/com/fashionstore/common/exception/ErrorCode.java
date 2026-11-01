@@ -13,6 +13,7 @@ public enum ErrorCode implements BaseErrorCode {
     UNSUPPORTED_MEDIA_TYPE(9005, "Unsupported media type", HttpStatus.UNSUPPORTED_MEDIA_TYPE),
     UPSTREAM_SERVICE_ERROR(9006, "Upstream service request failed", HttpStatus.BAD_GATEWAY),
     RESOURCE_NOT_FOUND(9007, "Resource not found", HttpStatus.NOT_FOUND),
+    CONCURRENT_UPDATE(9008, "Resource was modified by someone else, reload and retry", HttpStatus.CONFLICT),
     INTERNAL_ERROR(9999, "Internal server error", HttpStatus.INTERNAL_SERVER_ERROR);
 
     private final int code;

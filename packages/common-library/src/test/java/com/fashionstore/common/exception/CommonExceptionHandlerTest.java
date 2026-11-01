@@ -5,6 +5,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
 import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -68,6 +69,17 @@ class CommonExceptionHandlerTest {
         assertThat(response.getBody().message())
                 .isEqualTo(ErrorCode.INTERNAL_ERROR.getMessage())
                 .doesNotContain("password");
+    }
+
+    @Test
+    void mapsOptimisticLockFailureToConflict() {
+        ResponseEntity<ApiErrorResponse> response = handler.handleOptimisticLockFailure(
+                new ObjectOptimisticLockingFailureException("Product", "product-1"),
+                request()
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(response.getBody().code()).isEqualTo(ErrorCode.CONCURRENT_UPDATE.getCode());
     }
 
     private MockHttpServletRequest request() {

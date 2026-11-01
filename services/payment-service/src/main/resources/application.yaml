@@ -73,6 +73,11 @@ spring:
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
+        # Nạp lazy theo lô (IN ...) thay vì từng dòng: danh sách phân trang không bị N+1.
+        default_batch_fetch_size: 50
+        # Fetch collection cùng phân trang khiến Hibernate cắt trang trong RAM; báo lỗi thay vì chạy chậm âm thầm.
+        query:
+          fail_on_pagination_over_collection_fetch: true
 
 app:
   outbox:
@@ -140,6 +145,11 @@ management:
     health:
       probes:
         enabled: true
+  metrics:
+    distribution:
+      # Bucket histogram để Prometheus tính p95/p99 bằng histogram_quantile.
+      percentiles-histogram:
+        http.server.requests: true
 
 logging:
   pattern:

@@ -24,10 +24,12 @@ public interface ProductRepository extends JpaRepository<Product, String>, JpaSp
 
     @Query("select pc.category.id as categoryId, count(distinct pc.product.id) as productCount from ProductCategory pc group by pc.category.id")
     java.util.List<CategoryProductCount> countDirectProductsByCategory();
-    @EntityGraph(attributePaths = {"brand", "productCategories.category"})
+    // Trang danh sách chỉ fetch quan hệ đơn; productCategories nạp theo lô (default_batch_fetch_size)
+    // vì fetch collection cùng phân trang buộc Hibernate cắt trang trong RAM.
+    @EntityGraph(attributePaths = {"brand"})
     Page<Product> findAll(Pageable pageable);
 
-    @EntityGraph(attributePaths = {"brand", "productCategories.category"})
+    @EntityGraph(attributePaths = {"brand"})
     Page<Product> findAllByStatus(ProductStatus status, Pageable pageable);
 
     // Fetch one collection here; remaining collections load within the service transaction.
@@ -43,14 +45,14 @@ public interface ProductRepository extends JpaRepository<Product, String>, JpaSp
 
     boolean existsBySlug(String slug);
 
-    @EntityGraph(attributePaths = {"brand", "productCategories.category"})
+    @EntityGraph(attributePaths = {"brand"})
     Page<Product> findAllByNameContainingAndStatus(String keyword, ProductStatus status, Pageable pageable);
 
-    @EntityGraph(attributePaths = {"brand", "productCategories.category"})
+    @EntityGraph(attributePaths = {"brand"})
     @Query("select distinct p from Product p join p.productCategories pc where pc.category.slug = :categorySlug and p.status = :status")
     Page<Product> findAllByCategorySlugAndStatus(String categorySlug, ProductStatus status, Pageable pageable);
 
-    @EntityGraph(attributePaths = {"brand", "productCategories.category"})
+    @EntityGraph(attributePaths = {"brand"})
     Page<Product> findAllByBrandSlugAndStatus(String brandSlug, ProductStatus status, Pageable pageable);
 
     @Query("select count(pc) > 0 from ProductCategory pc where pc.category.id = :categoryId")

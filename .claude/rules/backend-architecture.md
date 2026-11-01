@@ -37,7 +37,7 @@ com.fashionstore.<service>
   <Service>Application.java
 ```
 
-- **Đã migrate:** `catalog-service` (mẫu tham chiếu — `product`, `inventory`, `media`, `review`, `wishlist`), `order-service` (`cart`, `checkout`, `order`, `saga`, `returns`, `shipment`, `promotion`, `dashboard`), `payment-service` (`payment`, `wallet`); mỗi service có `shared`. identity/notification vẫn layer-first (`controller/ dto/ entity/ …` phẳng).
+- **Đã migrate:** `catalog-service` (mẫu tham chiếu — `product`, `inventory`, `media`, `review`, `wishlist`), `order-service` (`cart`, `checkout`, `order`, `saga`, `returns`, `shipment`, `promotion`, `dashboard`), `payment-service` (`payment`, `wallet`); mỗi service có `shared`. identity/notification vẫn layer-first (`controller/ dto/ entity/ …` phẳng): code mới trong hai service này giữ layer-first, không tự migrate sang feature-first nếu không được yêu cầu.
 - Trong một feature, mỗi layer một package; chỉ tạo layer feature cần. Listener/scheduler đặt trong `<feature>/event/`; outbox nằm trong `shared/outbox/`.
 - Feature chỉ dùng feature khác qua API được expose. `ModularityTest` + `src/test/resources/modulith-known-violations.txt` đóng băng các vi phạm hiện có — không thêm dòng vào file này để build pass; xóa dòng khi đã sửa vi phạm.
 - Giữ cặp `service/` interface + `service/impl/`, không thêm gì ngoài cặp này. Tuân thủ layering `controller → service/impl → repository → model`.
