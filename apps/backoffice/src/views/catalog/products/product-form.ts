@@ -110,6 +110,7 @@ export function fromProductDetail(detail: ProductDetail): ProductFormValues {
     ),
     sizeChartId: detail.sizeChartId,
     featured: detail.featured,
+    version: detail.version
   }
 }
 
@@ -161,6 +162,7 @@ export function toProductRequest(values: ProductFormValues): ProductRequest {
     ...values,
     basePrice: values.basePrice,
     price: values.basePrice,
+    version: values.version,
     weight,
     weightGram: weight,
     length,

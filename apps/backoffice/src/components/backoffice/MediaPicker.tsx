@@ -117,9 +117,12 @@ export default function MediaPicker({
               >
                 <Box
                   component='img'
-                  src={media.url || `/api/v1/files/${media.id}/content`}
+                  src={media.thumbnailUrl ?? media.url ?? `/api/v1/files/${media.id}/content`}
                   alt={media.altText || media.displayName || media.originalFilename}
-                  sx={{ width: '100%', height: 120, objectFit: 'contain' }}
+                  loading='lazy'
+                  width={120}
+                  height={120}
+                  sx={{ width: '100%', height: 120, objectFit: 'contain', aspectRatio: '1 / 1' }}
                 />
                 <Typography variant='caption' sx={{ overflowWrap: 'anywhere' }}>
                   {media.displayName || media.originalFilename}

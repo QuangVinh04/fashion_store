@@ -13,6 +13,7 @@ const publishedProduct = {
   name: 'Published shirt',
   slug: 'published-shirt',
   status: 'PUBLISHED',
+  productType: 'SHIRT',
   basePrice: 100,
   price: 100,
   categoryId: 'c1',
@@ -59,7 +60,18 @@ vi.mock('@/components/backoffice/MediaPicker', () => ({ default: () => null }))
 vi.mock('@/components/backoffice/UnsavedChangesGuard', () => ({ default: () => null }))
 
 vi.mock('@/libs/api/client', () => ({
-  api: { get: vi.fn(async () => []) }
+  api: { get: vi.fn(async () => []) },
+  ApiError: class ApiError extends Error {
+    status: number
+    code: number
+    fieldErrors?: Record<string, string>
+    constructor(status: number, code: number, message: string, fieldErrors?: Record<string, string>) {
+      super(message)
+      this.status = status
+      this.code = code
+      this.fieldErrors = fieldErrors
+    }
+  }
 }))
 
 vi.mock('@/hooks/useCatalog', () => ({
@@ -155,6 +167,38 @@ it('keeps the slug read-only while the product is published', async () => {
 
     expect(slug).not.toBeNull()
     expect(slug!.disabled).toBe(true)
+  } finally {
+    view.cleanup()
+  }
+})
+
+it('displays conflict message and reload button when 409 code 9008 is received', async () => {
+  const { ApiError } = await import('@/libs/api/client')
+
+  mocks.update.mockRejectedValueOnce(new ApiError(409, 9008, 'Conflict'))
+  const view = await renderPublishedProduct()
+
+  try {
+    const saveButton = Array.from(view.container.querySelectorAll('button')).find(
+      button => button.textContent === 'Lưu thay đổi'
+    )
+
+    expect(saveButton).toBeDefined()
+
+    await act(async () => {
+      saveButton!.click()
+    })
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 50))
+    })
+
+    expect(view.container.textContent).toContain('Sản phẩm vừa được người khác sửa')
+
+    const reloadButton = Array.from(view.container.querySelectorAll('button')).find(
+      button => button.textContent === 'Tải lại dữ liệu mới'
+    )
+
+    expect(reloadButton).toBeDefined()
   } finally {
     view.cleanup()
   }

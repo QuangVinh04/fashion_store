@@ -21,7 +21,8 @@ const messages: Record<number, string> = {
   2007: 'Bạn không có quyền thực hiện thao tác này.',
   9001: 'Dữ liệu chưa hợp lệ. Vui lòng kiểm tra các trường được đánh dấu.',
   9002: 'Dữ liệu gửi lên chưa đúng định dạng.',
-  9003: 'Bạn không có quyền thực hiện thao tác này.'
+  9003: 'Bạn không có quyền thực hiện thao tác này.',
+  9008: 'Sản phẩm vừa được người khác sửa.'
 }
 
 function vietnameseValidation(message: string): string {

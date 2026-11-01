@@ -49,7 +49,7 @@ import {
   useSizesQuery,
   useUpdateProductMutation
 } from '@/hooks/useCatalog'
-import { api } from '@/libs/api/client'
+import { api, ApiError } from '@/libs/api/client'
 import { mapFieldErrors, toVietnameseError } from '@/libs/api/errors'
 import type { Category, ProductRequest } from '@/types/catalog'
 import type { Attribute } from '@/types/catalog-metadata'
@@ -213,6 +213,12 @@ export default function ProductForm({ productId }: { productId?: string }) {
       if (publishAfter) {
         try {
           await publish.mutateAsync(result.id)
+          const fresh = await detail.refetch()
+
+          if (fresh.data) {
+            setValues(fromProductDetail(fresh.data))
+          }
+
           setNotice('Đã lưu và xuất bản sản phẩm.')
         } catch (error) {
           setSaveError(error)
@@ -227,6 +233,22 @@ export default function ProductForm({ productId }: { productId?: string }) {
     } finally {
       submitting.current = false
       setSaving(false)
+    }
+  }
+
+  const isConcurrentConflict =
+    saveError instanceof ApiError && saveError.status === 409 && saveError.code === 9008
+
+  const handleReloadFreshData = async () => {
+    if (!savedId) return
+    const fresh = await detail.refetch()
+
+    if (fresh.data) {
+      setValues(fromProductDetail(fresh.data))
+      setDirty(false)
+      setSaveError(null)
+      setErrors({})
+      setNotice('Đã tải lại dữ liệu sản phẩm mới nhất.')
     }
   }
 
@@ -374,8 +396,18 @@ export default function ProductForm({ productId }: { productId?: string }) {
         </Alert>
       )}
       {saveError && (
-        <Alert severity='error' sx={{ mb: 3 }}>
-          {toVietnameseError(saveError)}
+        <Alert
+          severity='error'
+          sx={{ mb: 3 }}
+          action={
+            isConcurrentConflict ? (
+              <Button color='inherit' size='small' onClick={() => void handleReloadFreshData()}>
+                Tải lại dữ liệu mới
+              </Button>
+            ) : undefined
+          }
+        >
+          {isConcurrentConflict ? 'Sản phẩm vừa được người khác sửa' : toVietnameseError(saveError)}
         </Alert>
       )}
       <Box

@@ -35,6 +35,7 @@ import QueryState from '@/components/backoffice/QueryState'
 import ConfirmActionDialog from '@/components/backoffice/ConfirmActionDialog'
 import { useBrandsQuery, useCategoriesQuery } from '@/hooks/useCatalog'
 import useListQueryState, { resolveListPage } from '@/hooks/useListQueryState'
+import { useDebouncedSearch } from '@/hooks/useDebouncedSearch'
 import { catalogApi } from '@/libs/api/catalog'
 import { api } from '@/libs/api/client'
 import { normalizeAdminPage } from '@/libs/api/page'
@@ -62,6 +63,7 @@ const flatten = (rows: Category[], depth = 0): { id: string; label: string }[] =
 export default function ProductList() {
   const client = useQueryClient()
   const { page, size, filters, setPage, setSize, setFilters } = useListQueryState()
+  const search = useDebouncedSearch(filters.keyword || '', keyword => setFilters({ keyword }))
   const categories = useCategoriesQuery()
   const brands = useBrandsQuery()
   const [selected, setSelected] = useState<string[]>([])
@@ -192,8 +194,8 @@ export default function ProductList() {
           <TextField
             placeholder='Tìm tên sản phẩm, slug hoặc SKU...'
             size='small'
-            value={filters.keyword || ''}
-            onChange={event => setFilters({ keyword: event.target.value })}
+            value={search.value}
+            onChange={event => search.onChange(event.target.value)}
             disabled={mutation.isPending}
             sx={{ flexGrow: 1, minWidth: { xs: '100%', sm: 260 } }}
             InputProps={{
@@ -202,12 +204,12 @@ export default function ProductList() {
                   <i className='ri-search-line text-lg text-textSecondary' />
                 </InputAdornment>
               ),
-              endAdornment: filters.keyword ? (
+              endAdornment: search.value ? (
                 <InputAdornment position='end'>
                   <IconButton
                     size='small'
                     edge='end'
-                    onClick={() => setFilters({ keyword: '' })}
+                    onClick={search.onClear}
                     aria-label='Xóa tìm kiếm'
                   >
                     <i className='ri-close-line text-lg' />

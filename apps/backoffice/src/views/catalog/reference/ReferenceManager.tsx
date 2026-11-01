@@ -39,6 +39,7 @@ import PageHeader from '@/components/backoffice/PageHeader'
 import QueryState from '@/components/backoffice/QueryState'
 import UnsavedChangesGuard from '@/components/backoffice/UnsavedChangesGuard'
 import { useCatalogReference } from '@/hooks/useCatalogReference'
+import { useDebouncedSearch } from '@/hooks/useDebouncedSearch'
 import useListQueryState, { resolveListPage } from '@/hooks/useListQueryState'
 import { referenceApi } from '@/libs/api/catalog-reference'
 import { mapFieldErrors, toVietnameseError } from '@/libs/api/errors'
@@ -49,6 +50,7 @@ const labels = { brands: 'Thương hiệu', colors: 'Màu sắc', sizes: 'Kích 
 
 export default function ReferenceManager({ resource }: { resource: ReferenceResource }) {
   const { page, size, filters, setPage, setSize, setFilters } = useListQueryState()
+  const search = useDebouncedSearch(filters.keyword || '', keyword => setFilters({ keyword }))
   const { query, save, remove } = useCatalogReference(resource, page, size)
   const queryClient = useQueryClient()
   const [draft, setDraft] = useState<ReferenceRow | null>(null)
@@ -182,17 +184,17 @@ export default function ReferenceManager({ resource }: { resource: ReferenceReso
             fullWidth
             size='small'
             placeholder={`Tìm trong danh sách ${labels[resource].toLowerCase()}...`}
-            value={filters.keyword || ''}
-            onChange={event => setFilters({ keyword: event.target.value })}
+            value={search.value}
+            onChange={event => search.onChange(event.target.value)}
             InputProps={{
               startAdornment: (
                 <InputAdornment position='start'>
                   <i className='ri-search-line text-lg text-textSecondary' />
                 </InputAdornment>
               ),
-              endAdornment: filters.keyword ? (
+              endAdornment: search.value ? (
                 <InputAdornment position='end'>
-                  <IconButton size='small' edge='end' onClick={() => setFilters({ keyword: '' })}>
+                  <IconButton size='small' edge='end' onClick={search.onClear}>
                     <i className='ri-close-line text-lg' />
                   </IconButton>
                 </InputAdornment>

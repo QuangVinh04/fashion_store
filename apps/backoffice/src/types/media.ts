@@ -3,6 +3,7 @@ export interface MediaFile {
   originalFilename: string
   displayName?: string
   url?: string
+  thumbnailUrl?: string
   contentType?: string
   mediaType: 'IMAGE' | 'VIDEO' | 'AUDIO' | 'DOCUMENT' | 'OTHER'
   status: 'PENDING' | 'TEMP' | 'ACTIVE' | 'TRASHED'

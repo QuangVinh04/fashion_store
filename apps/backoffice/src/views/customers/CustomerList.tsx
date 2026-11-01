@@ -32,6 +32,7 @@ import Avatar from '@mui/material/Avatar'
 
 import PageHeader from '@/components/backoffice/PageHeader'
 import ConfirmActionDialog from '@/components/backoffice/ConfirmActionDialog'
+import { useDebouncedSearch } from '@/hooks/useDebouncedSearch'
 import useListQueryState from '@/hooks/useListQueryState'
 import { useCustomersQuery, useUpdateCustomerStatusMutation } from '@/hooks/useCustomers'
 import type { AdminUser } from '@/types/customer'
@@ -40,6 +41,7 @@ import CustomerEditDialog from './CustomerEditDialog'
 
 export default function CustomerList() {
   const { page, size, filters, setPage, setSize, setFilters } = useListQueryState({ page: 0, size: 20 })
+  const search = useDebouncedSearch(filters.keyword || '', keyword => setFilters({ keyword }))
 
   const query = useCustomersQuery({
     page,
@@ -165,8 +167,8 @@ export default function CustomerList() {
           <TextField
             size='small'
             placeholder='Tìm họ tên, email, SĐT...'
-            value={filters.keyword || ''}
-            onChange={e => setFilters({ keyword: e.target.value })}
+            value={search.value}
+            onChange={e => search.onChange(e.target.value)}
             sx={{ flexGrow: 1, minWidth: { xs: '100%', sm: 260 } }}
             InputProps={{
               startAdornment: (
@@ -174,9 +176,9 @@ export default function CustomerList() {
                   <i className='ri-search-line text-lg text-textSecondary' />
                 </InputAdornment>
               ),
-              endAdornment: filters.keyword ? (
+              endAdornment: search.value ? (
                 <InputAdornment position='end'>
-                  <IconButton size='small' edge='end' onClick={() => setFilters({ keyword: '' })} aria-label='Xóa tìm kiếm'>
+                  <IconButton size='small' edge='end' onClick={search.onClear} aria-label='Xóa tìm kiếm'>
                     <i className='ri-close-line text-lg' />
                   </IconButton>
                 </InputAdornment>

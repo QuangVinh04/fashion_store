@@ -62,6 +62,7 @@ export interface ProductSummary {
   createdAt?: string
   updatedAt?: string
   stock?: ProductStockSummary
+  version?: number
 }
 
 export interface ProductVariant {
@@ -124,6 +125,7 @@ export interface ProductDetail {
   createdAt?: string
   updatedAt?: string
   stock?: ProductStockSummary
+  version?: number
 }
 
 export interface ProductRequest {
@@ -153,6 +155,7 @@ export interface ProductRequest {
   attributes?: ProductAttributeValue[]
   sizeChartId?: string
   featured?: boolean
+  version?: number
 }
 
 export interface ProductImage {

@@ -26,6 +26,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import ConfirmActionDialog from '@/components/backoffice/ConfirmActionDialog'
 import PageHeader from '@/components/backoffice/PageHeader'
 import QueryState from '@/components/backoffice/QueryState'
+import { useDebouncedSearch } from '@/hooks/useDebouncedSearch'
 import useListQueryState, { resolveListPage } from '@/hooks/useListQueryState'
 import { toVietnameseError } from '@/libs/api/errors'
 import { mediaApi } from '@/libs/api/media'
@@ -33,6 +34,7 @@ import type { MediaFile } from '@/types/media'
 
 export default function MediaLibrary() {
   const { page, size, filters, setPage, setFilters } = useListQueryState()
+  const search = useDebouncedSearch(filters.keyword || '', keyword => setFilters({ keyword }))
   const client = useQueryClient()
   const [action, setAction] = useState<{ media: MediaFile; kind: 'trash' | 'restore' | 'permanent' } | null>(null)
   const [edit, setEdit] = useState<MediaFile | null>(null)
@@ -115,8 +117,8 @@ export default function MediaLibrary() {
           <TextField
             size='small'
             placeholder='Tìm tên file ảnh...'
-            value={filters.keyword || ''}
-            onChange={event => setFilters({ keyword: event.target.value })}
+            value={search.value}
+            onChange={event => search.onChange(event.target.value)}
             sx={{ flexGrow: 1, minWidth: { xs: '100%', sm: 260 } }}
             InputProps={{
               startAdornment: (
@@ -124,9 +126,9 @@ export default function MediaLibrary() {
                   <i className='ri-search-line text-lg text-textSecondary' />
                 </InputAdornment>
               ),
-              endAdornment: filters.keyword ? (
+              endAdornment: search.value ? (
                 <InputAdornment position='end'>
-                  <IconButton size='small' edge='end' onClick={() => setFilters({ keyword: '' })} aria-label='Xóa tìm kiếm'>
+                  <IconButton size='small' edge='end' onClick={search.onClear} aria-label='Xóa tìm kiếm'>
                     <i className='ri-close-line text-lg' />
                   </IconButton>
                 </InputAdornment>
@@ -193,9 +195,12 @@ export default function MediaLibrary() {
                 {media.mediaType === 'IMAGE' && media.status === 'ACTIVE' ? (
                   <Box
                     component='img'
-                    src={media.url || `/api/v1/files/${media.id}/content`}
+                    src={media.thumbnailUrl ?? media.url ?? `/api/v1/files/${media.id}/content`}
                     alt={media.altText || media.originalFilename}
-                    sx={{ width: '100%', height: 150, objectFit: 'contain' }}
+                    loading='lazy'
+                    width={150}
+                    height={150}
+                    sx={{ width: '100%', height: 150, objectFit: 'contain', aspectRatio: '1 / 1' }}
                   />
                 ) : (
                   <Box sx={{ height: 150, display: 'grid', placeItems: 'center', bgcolor: 'action.hover' }}>

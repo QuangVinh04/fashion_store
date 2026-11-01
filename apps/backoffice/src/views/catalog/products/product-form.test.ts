@@ -151,4 +151,26 @@ describe('product form contract', () => {
       description: 'Mô tả chi tiết'
     })
   })
+
+  it('preserves and maps product version for optimistic locking', () => {
+    const detail = {
+      id: 'p1',
+      name: 'Áo',
+      slug: 'ao',
+      basePrice: 200,
+      price: 200,
+      categoryId: 'cat1',
+      variants: [],
+      productType: 'SHIRT',
+      version: 5
+    } as any
+
+    const values = fromProductDetail(detail)
+
+    expect(values.version).toBe(5)
+
+    const request = toProductRequest(values)
+
+    expect(request.version).toBe(5)
+  })
 })

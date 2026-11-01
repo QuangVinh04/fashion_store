@@ -39,6 +39,7 @@ import {
   useUpdateCategoryMutation,
   useDeleteCategoryMutation
 } from '@/hooks/useCatalog'
+import { useDebouncedSearch } from '@/hooks/useDebouncedSearch'
 import useListQueryState from '@/hooks/useListQueryState'
 import { mapFieldErrors, toVietnameseError } from '@/libs/api/errors'
 import type { Category, CategoryRequest } from '@/types/catalog'
@@ -52,6 +53,7 @@ export default function CategoryManager() {
     remove = useDeleteCategoryMutation()
 
   const { filters, setFilters } = useListQueryState()
+  const search = useDebouncedSearch(filters.keyword || '', keyword => setFilters({ keyword }))
   const [draft, setDraft] = useState<(CategoryRequest & { id?: string }) | null>(null)
   const [dirty, setDirty] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -143,20 +145,20 @@ export default function CategoryManager() {
             fullWidth
             placeholder='Tìm tên danh mục hoặc slug...'
             size='small'
-            value={filters.keyword || ''}
-            onChange={event => setFilters({ keyword: event.target.value })}
+            value={search.value}
+            onChange={event => search.onChange(event.target.value)}
             InputProps={{
               startAdornment: (
                 <InputAdornment position='start'>
                   <i className='ri-search-line text-lg text-textSecondary' />
                 </InputAdornment>
               ),
-              endAdornment: filters.keyword ? (
+              endAdornment: search.value ? (
                 <InputAdornment position='end'>
                   <IconButton
                     size='small'
                     edge='end'
-                    onClick={() => setFilters({ keyword: '' })}
+                    onClick={search.onClear}
                     aria-label='Xóa tìm kiếm'
                   >
                     <i className='ri-close-line text-lg' />

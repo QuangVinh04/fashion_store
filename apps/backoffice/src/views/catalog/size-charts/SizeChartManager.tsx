@@ -37,6 +37,7 @@ import PageHeader from '@/components/backoffice/PageHeader'
 import QueryState from '@/components/backoffice/QueryState'
 import ConfirmActionDialog from '@/components/backoffice/ConfirmActionDialog'
 import UnsavedChangesGuard from '@/components/backoffice/UnsavedChangesGuard'
+import { useDebouncedSearch } from '@/hooks/useDebouncedSearch'
 import useListQueryState from '@/hooks/useListQueryState'
 import { metadataApi } from '@/libs/api/catalog-metadata'
 import { mapFieldErrors, toVietnameseError } from '@/libs/api/errors'
@@ -63,6 +64,7 @@ export const genders = { MEN: 'Nam', WOMEN: 'Nữ', UNISEX: 'Unisex', KIDS: 'Tr�
 export default function SizeChartManager() {
   const client = useQueryClient()
   const { filters, setFilters } = useListQueryState()
+  const search = useDebouncedSearch(filters.keyword || '', keyword => setFilters({ keyword }))
   const query = useQuery({ queryKey: ['size-chart-admin'], queryFn: metadataApi.charts })
   const [draft, setDraft] = useState<SizeChart | null>(null)
   const [dirty, setDirty] = useState(false)
@@ -145,8 +147,8 @@ export default function SizeChartManager() {
         <Box sx={{ p: { xs: 4, sm: 5 }, display: 'flex', gap: 3, flexWrap: 'wrap', alignItems: 'center' }}>
           <TextField
             placeholder='Tìm theo tên bảng quy đổi...'
-            value={filters.keyword || ''}
-            onChange={event => setFilters({ keyword: event.target.value })}
+            value={search.value}
+            onChange={event => search.onChange(event.target.value)}
             size='small'
             sx={{ flexGrow: 1, minWidth: { xs: '100%', sm: 260 } }}
             InputProps={{
@@ -155,12 +157,12 @@ export default function SizeChartManager() {
                   <i className='ri-search-line text-lg text-textSecondary' />
                 </InputAdornment>
               ),
-              endAdornment: filters.keyword ? (
+              endAdornment: search.value ? (
                 <InputAdornment position='end'>
                   <IconButton
                     size='small'
                     edge='end'
-                    onClick={() => setFilters({ keyword: '' })}
+                    onClick={search.onClear}
                     aria-label='Xóa tìm kiếm'
                   >
                     <i className='ri-close-line text-lg' />

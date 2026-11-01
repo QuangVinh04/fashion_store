@@ -36,6 +36,7 @@ import PageHeader from '@/components/backoffice/PageHeader'
 import QueryState from '@/components/backoffice/QueryState'
 import ConfirmActionDialog from '@/components/backoffice/ConfirmActionDialog'
 import UnsavedChangesGuard from '@/components/backoffice/UnsavedChangesGuard'
+import { useDebouncedSearch } from '@/hooks/useDebouncedSearch'
 import useListQueryState, { resolveListPage } from '@/hooks/useListQueryState'
 import { metadataApi } from '@/libs/api/catalog-metadata'
 import { mapFieldErrors, toVietnameseError } from '@/libs/api/errors'
@@ -52,6 +53,7 @@ const typeLabels: Record<string, string> = {
 export default function AttributeManager() {
   const client = useQueryClient()
   const { page, size, filters, setPage, setSize, setFilters } = useListQueryState()
+  const search = useDebouncedSearch(filters.keyword || '', keyword => setFilters({ keyword }))
 
   const query = useQuery({
     queryKey: ['attribute-admin', page, size, filters.keyword],
@@ -186,20 +188,20 @@ export default function AttributeManager() {
             fullWidth
             size='small'
             placeholder='Tìm tên thuộc tính hoặc mã...'
-            value={filters.keyword || ''}
-            onChange={event => setFilters({ keyword: event.target.value })}
+            value={search.value}
+            onChange={event => search.onChange(event.target.value)}
             InputProps={{
               startAdornment: (
                 <InputAdornment position='start'>
                   <i className='ri-search-line text-lg text-textSecondary' />
                 </InputAdornment>
               ),
-              endAdornment: filters.keyword ? (
+              endAdornment: search.value ? (
                 <InputAdornment position='end'>
                   <IconButton
                     size='small'
                     edge='end'
-                    onClick={() => setFilters({ keyword: '' })}
+                    onClick={search.onClear}
                     aria-label='Xóa tìm kiếm'
                   >
                     <i className='ri-close-line text-lg' />
