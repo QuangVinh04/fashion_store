@@ -221,10 +221,9 @@ public class PromotionServiceImpl implements PromotionService {
 
     @Override
     @Transactional(readOnly = true)
-    public PageResponse<List<PromotionResponse>> getPromotions(Boolean active, Pageable pageable) {
-        Page<Promotion> page = active != null
-                ? promotionRepository.findByActive(active, pageable)
-                : promotionRepository.findAll(pageable);
+    public PageResponse<List<PromotionResponse>> getPromotions(
+            Boolean active, PromotionTarget target, Pageable pageable) {
+        Page<Promotion> page = promotionRepository.search(active, target, pageable);
 
         Map<String, long[]> counts = usageCounts(page.getContent().stream().map(Promotion::getId).toList());
         List<PromotionResponse> items = page.getContent().stream()

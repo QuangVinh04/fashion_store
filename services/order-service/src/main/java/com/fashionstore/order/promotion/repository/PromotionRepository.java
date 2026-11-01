@@ -24,7 +24,10 @@ public interface PromotionRepository extends JpaRepository<Promotion, String> {
 
     boolean existsByCodeIgnoreCase(String code);
 
-    Page<Promotion> findByActive(Boolean active, Pageable pageable);
+    @Query("select p from Promotion p where (:active is null or p.active = :active) "
+            + "and (:target is null or p.target = :target)")
+    Page<Promotion> search(
+            @Param("active") Boolean active, @Param("target") PromotionTarget target, Pageable pageable);
 
     @Query("select p from Promotion p where p.active = true and p.isPublic = true "
             + "and p.startAt <= :now and p.endAt >= :now and (:target is null or p.target = :target) "

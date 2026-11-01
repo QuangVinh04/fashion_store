@@ -303,7 +303,7 @@ export default function CheckoutPage() {
         });
       }
     } catch (e) {
-      if (e instanceof ApiError && e.code === 4017) {
+      if (e instanceof ApiError && e.code === 4037) {
         try {
           const refreshed = await store.checkout(checkout.id);
           setCheckout(refreshed);

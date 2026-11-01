@@ -77,6 +77,25 @@ describe('promotion-validation', () => {
     ).toEqual({})
   })
 
+  it('validates target SHIPPING must have scopeType ALL', () => {
+    expect(
+      validatePromotion({
+        ...validPercentPromo,
+        target: 'SHIPPING',
+        scopeType: 'PRODUCT',
+        scopeIds: 'prod-1'
+      }).scopeType
+    ).toBeDefined()
+
+    expect(
+      validatePromotion({
+        ...validPercentPromo,
+        target: 'SHIPPING',
+        scopeType: 'ALL'
+      }).scopeType
+    ).toBeUndefined()
+  })
+
   it('validates scopeIds when scopeType is PRODUCT or CATEGORY', () => {
     expect(
       validatePromotion({

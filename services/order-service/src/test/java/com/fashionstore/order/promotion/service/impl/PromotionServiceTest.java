@@ -515,15 +515,25 @@ class PromotionServiceTest {
     @Test
     void getPromotions_reportsReservedAndConfirmedCountsWithOneQuery() {
         Promotion promo = shippingPromo("SHIP20K", PromotionType.FIXED, "20000");
-        when(promotionRepository.findAll(any(Pageable.class))).thenReturn(new PageImpl<>(List.of(promo)));
+        when(promotionRepository.search(any(), any(), any(Pageable.class))).thenReturn(new PageImpl<>(List.of(promo)));
         when(couponUsageRepository.countByPromotionIdsGroupedByStatus(List.of("promo-SHIP20K"))).thenReturn(List.of(
                 new Object[] {"promo-SHIP20K", CouponUsageStatus.RESERVED, 2L},
                 new Object[] {"promo-SHIP20K", CouponUsageStatus.CONFIRMED, 5L}));
 
-        PromotionResponse response = promotionService.getPromotions(null, Pageable.unpaged()).getItems().get(0);
+        PromotionResponse response = promotionService.getPromotions(null, null, Pageable.unpaged()).getItems().get(0);
 
         assertEquals(2L, response.getReservedCount());
         assertEquals(5L, response.getConfirmedCount());
+    }
+
+    @Test
+    void getPromotions_passesActiveAndTargetFiltersToTheRepository() {
+        when(promotionRepository.search(eq(true), eq(PromotionTarget.SHIPPING), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        promotionService.getPromotions(true, PromotionTarget.SHIPPING, Pageable.unpaged());
+
+        verify(promotionRepository).search(eq(true), eq(PromotionTarget.SHIPPING), any(Pageable.class));
     }
 
     @Test

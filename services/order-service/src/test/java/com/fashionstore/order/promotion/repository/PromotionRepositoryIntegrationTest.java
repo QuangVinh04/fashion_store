@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.test.context.TestPropertySource;
 
 import java.math.BigDecimal;
@@ -49,6 +50,23 @@ class PromotionRepositoryIntegrationTest {
                 .extracting(Promotion::getCode).containsExactly("PUBLIC-PRODUCT");
         assertThat(promotionRepository.findPublicCurrentlyValid(now, null))
                 .extracting(Promotion::getCode).containsExactlyInAnyOrder("PUBLIC-PRODUCT", "PUBLIC-SHIP");
+    }
+
+    @Test
+    void search_filtersByActiveAndTargetAndIgnoresNullFilters() {
+        LocalDateTime now = LocalDateTime.now();
+        promotionRepository.save(promotion("P-ON", PromotionTarget.PRODUCT, true, true, now, now.plusDays(1)));
+        promotionRepository.save(promotion("P-OFF", PromotionTarget.PRODUCT, true, false, now, now.plusDays(1)));
+        promotionRepository.save(promotion("S-ON", PromotionTarget.SHIPPING, true, true, now, now.plusDays(1)));
+
+        assertThat(promotionRepository.search(null, null, Pageable.unpaged()).getContent())
+                .extracting(Promotion::getCode).containsExactlyInAnyOrder("P-ON", "P-OFF", "S-ON");
+        assertThat(promotionRepository.search(null, PromotionTarget.SHIPPING, Pageable.unpaged()).getContent())
+                .extracting(Promotion::getCode).containsExactly("S-ON");
+        assertThat(promotionRepository.search(true, PromotionTarget.PRODUCT, Pageable.unpaged()).getContent())
+                .extracting(Promotion::getCode).containsExactly("P-ON");
+        assertThat(promotionRepository.search(false, null, Pageable.unpaged()).getContent())
+                .extracting(Promotion::getCode).containsExactly("P-OFF");
     }
 
     @Test

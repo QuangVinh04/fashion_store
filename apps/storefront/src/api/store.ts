@@ -1,5 +1,5 @@
 import { api, json, query, type Page } from './client';
-import type { Address, Cart, Checkout, Order, OrderSummary, Payment, Product, ProductSummary, Profile, ReturnRequest, ReviewSummary, Session, SizeChartRow, WishlistItem } from './types';
+import type { Address, AvailablePromotion, Cart, Checkout, Order, OrderSummary, Payment, Product, ProductSummary, Profile, PromotionTarget, ReturnRequest, ReviewSummary, Session, SizeChartRow, WishlistItem } from './types';
 async function uploadFile(file: File, folder: string) {
   const avatar = folder === 'avatars';
   const route = avatar ? '/api/v1/files/avatars' : '/api/v1/files';
@@ -48,8 +48,9 @@ export const store = {
   cartQty: (id: string, quantity: number) => api<Cart>(`/api/v1/cart/items/${id}`, json('PUT', { quantity })),
   cartRemove: (id: string) => api<Cart>(`/api/v1/cart/items/${id}`, json('DELETE')),
   cartClear: () => api<Cart>('/api/v1/cart', json('DELETE')),
-  voucher: (code: string, subtotal: number) => api<{ valid: boolean; discountAmount: number; message?: string }>(`/api/v1/promotions/validate?${query({ code, subtotal })}`),
-  checkoutCreate: (body: { paymentMethod: string; paymentProvider: string; shippingMethod: string; addressId: string; couponCode?: string }) => api<Checkout>('/api/v1/checkouts', json('POST', body)),
+  voucher: (code: string) => api<{ valid: boolean; discountAmount: number; message?: string }>(`/api/v1/promotions/validate?${query({ code })}`),
+  availablePromotions: (target?: PromotionTarget) => api<AvailablePromotion[]>(`/api/v1/promotions/available${target ? `?target=${target}` : ''}`),
+  checkoutCreate: (body: { paymentMethod: string; paymentProvider: string; shippingMethod: string; addressId: string; couponCode?: string; shippingCouponCode?: string }) => api<Checkout>('/api/v1/checkouts', json('POST', body)),
   checkout: (id: string) => api<Checkout>(`/api/v1/checkouts/${id}`),
   checkoutUpdate: (id: string, body: Partial<Checkout>) => api<Checkout>(`/api/v1/checkouts/${id}`, json('PUT', body)),
   checkoutCancel: (id: string) => api<Checkout>(`/api/v1/checkouts/${id}/cancel`, json('POST')),

@@ -8,11 +8,26 @@ export type SizeChartRow = { id: string; sizeCode: string; chest?: number; waist
 export type Product = ProductSummary & { description?: string; shortDescription?: string; gender?: string; categoryId?: string; images: ProductImage[]; variants: Variant[]; attributes?: { id: string; name?: string; value?: string }[] };
 export type CartItem = { id: string; variantId: string; productId: string; quantity: number; unitPrice: number; totalPrice: number; productName: string; size?: string; color?: string; sku?: string; available: boolean | null };
 export type Cart = { id?: string; items: CartItem[]; totalPrice: number; totalQuantity: number };
-export type Checkout = { id: string; orderId?: string; status: string; paymentMethod: 'COD' | 'ONLINE' | 'WALLET'; paymentProvider: 'COD' | 'VNPAY' | 'PAYOS' | 'INTERNAL'; shippingMethod: 'STANDARD' | 'EXPRESS'; couponCode?: string; items: { variantId: string; productName: string; size?: string; color?: string; unitPrice: number; quantity: number; lineTotal: number }[]; subtotalAmount: number; discountAmount: number; shippingFee: number; totalAmount: number; addressId?: string };
+export type PromotionTarget = 'PRODUCT' | 'SHIPPING';
+export type AvailablePromotion = {
+  code: string;
+  description?: string;
+  target: PromotionTarget;
+  type: 'PERCENTAGE' | 'FIXED_AMOUNT';
+  value: number;
+  maxDiscount?: number;
+  minOrderValue?: number;
+  endAt?: string;
+  scopeType?: string;
+  eligible: boolean;
+  reason?: string;
+  estimatedDiscount?: number;
+};
+export type Checkout = { id: string; orderId?: string; status: string; paymentMethod: 'COD' | 'ONLINE' | 'WALLET'; paymentProvider: 'COD' | 'VNPAY' | 'PAYOS' | 'INTERNAL'; shippingMethod: 'STANDARD' | 'EXPRESS'; couponCode?: string; shippingCouponCode?: string; items: { variantId: string; productName: string; size?: string; color?: string; unitPrice: number; quantity: number; lineTotal: number }[]; subtotalAmount: number; discountAmount: number; shippingDiscountAmount?: number; shippingFee: number; totalAmount: number; addressId?: string };
 export type OrderStatus = 'PENDING' | 'CONFIRMED' | 'PROCESSING' | 'PACKED' | 'SHIPPING' | 'DELIVERED' | 'COMPLETED' | 'CANCELLED' | 'RETURNED' | 'REFUNDED';
 export type OrderSummary = { id: string; orderCode: string; status: OrderStatus; paymentMethod: string; paymentProvider: string; totalAmount: number; createdAt: string; items?: Checkout['items']; returnRequestId?: string | null; returnStatus?: string | null; returnKind?: ReturnRequest['kind']; returnRefundStatus?: ReturnRefundStatus | null; expectedRefundAmount?: number | null; actualRefundAmount?: number | null; canRequestReturn?: boolean; cancelReason?: string | null };
 export type OrderCancellation={id:string;operationId:string;status:string;reason:string;requestedAt?:string;fulfillmentStoppedAt?:string;inventoryCancelledAt?:string;refundId?:string;refundLedgerEntryId?:string;closedAt?:string;failureReason?:string;reviewOwner?:string;reviewDueAt?:string};
-export type Order = OrderSummary & { checkoutId: string; canCancel?: boolean; cancellation?: OrderCancellation; canRequestReturn?: boolean; canConfirmReceipt?: boolean; activeReturnId?: string; returnEligibleUntil?: string; deliveredAt?: string; paymentId?: string; paymentUrl?: string; cancelReason?: string; recipientName: string; recipientPhone: string; shippingAddress: string; trackingCode?: string; shippingProvider?: string; subtotalAmount: number; discountAmount: number; shippingFee: number; items: Checkout['items'] };
+export type Order = OrderSummary & { checkoutId: string; canCancel?: boolean; cancellation?: OrderCancellation; canRequestReturn?: boolean; canConfirmReceipt?: boolean; activeReturnId?: string; returnEligibleUntil?: string; deliveredAt?: string; paymentId?: string; paymentUrl?: string; cancelReason?: string; recipientName: string; recipientPhone: string; shippingAddress: string; trackingCode?: string; shippingProvider?: string; subtotalAmount: number; discountAmount: number; shippingDiscountAmount?: number; shippingFee: number; items: Checkout['items'] };
 export type Payment = { id: string; orderId: string; method: string; provider: string; status: string; amount: number; failureReason?: string; authorizationExpiresAt?: string };
 export type WishlistItem = { productId: string; name: string; slug: string; basePrice: number; salePrice?: number; thumbnailUrl?: string; brandName?: string; status: string };
 export type Review = { id: string; productId: string; userId: string; orderId: string; rating: number; comment: string; verifiedPurchase: boolean; createdAt: string };

@@ -28,8 +28,9 @@ export function couponError(error: unknown): string {
       case 4012: return 'Mã đã hết lượt';
       case 4013: return 'Đơn chưa đạt giá trị tối thiểu';
       case 4014: return 'Mã không áp dụng cho sản phẩm trong giỏ';
-      case 4018: return 'Mã này dành cho loại khác (mã sản phẩm / mã vận chuyển)';
-      case 4017: return 'Khuyến mãi vừa thay đổi, cần tải lại checkout';
+      case 4017: return 'Địa chỉ chưa đủ thông tin giao hàng, vui lòng cập nhật địa chỉ';
+      case 4037: return 'Khuyến mãi vừa thay đổi, cần tải lại checkout';
+      case 4038: return 'Mã này dành cho loại khác (mã sản phẩm / mã vận chuyển)';
     }
   }
   return customerError(error);

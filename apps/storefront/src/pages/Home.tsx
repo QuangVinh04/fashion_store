@@ -3,9 +3,10 @@ import { useState, useEffect } from "react";
 import { Link } from "react-router";
 import { ArrowRight, Truck, ShieldCheck, RefreshCw } from "lucide-react";
 import { store } from "../api/store";
+import { useAuth } from "../context/AuthContext";
 import { motion } from "motion/react";
 import { spring } from "../app/components/ui/animate-tokens";
-import type { ProductSummary } from "../api/types";
+import type { AvailablePromotion, ProductSummary } from "../api/types";
 import {
   ProductCard,
   SkeletonCard,
@@ -20,8 +21,32 @@ export default function Home() {
   const [tabProducts, setTabProducts] = useState<ProductSummary[]>([]);
   const [tabLoading, setTabLoading] = useState(false);
   const [tabError, setTabError] = useState("");
+  const { ready, isLoggedIn } = useAuth();
+  const [bannerPromotion, setBannerPromotion] = useState<AvailablePromotion | null>(null);
 
   const categories = useLoad(store.categories, []);
+
+  useEffect(() => {
+    if (!ready || !isLoggedIn) {
+      setBannerPromotion(null);
+      return;
+    }
+
+    let active = true;
+    store
+      .availablePromotions()
+      .then((promos) => {
+        if (!active) return;
+        const promo = promos.find((p) => p.eligible) || promos[0] || null;
+        setBannerPromotion(promo);
+      })
+      .catch(() => {
+        if (active) setBannerPromotion(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [ready, isLoggedIn]);
 
   useEffect(() => {
     let active = true;
@@ -139,7 +164,7 @@ export default function Home() {
                 Miễn Phí Vận Chuyển
               </p>
               <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
-                Giao nhanh toàn quốc cho đơn hàng từ 500.000 ₫
+                Giao nhanh toàn quốc với mã freeship ưu đãi
               </p>
             </div>
           </div>
@@ -255,35 +280,40 @@ export default function Home() {
       </section>
 
       {/* Promo Banner */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 py-6 md:py-8">
-        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-neutral-900 via-neutral-800 to-neutral-900 text-white p-6 sm:p-10 grid lg:grid-cols-[1fr_auto] items-center gap-6 shadow-xl border border-neutral-700/50">
-          <div className="space-y-2">
-            <span className="inline-block rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-white/90 backdrop-blur-xs">
-              Đặc Quyền Thành Viên Mới
-            </span>
-            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-white leading-snug">
-              GIẢM 30% CHO ĐƠN HÀNG ĐẦU TIÊN
-            </h2>
-            <p className="text-sm text-neutral-300 max-w-lg leading-relaxed">
-              Nhập mã ưu đãi ở bước thanh toán để nhận ngay đặc quyền chào đón từ LINO.
-            </p>
-          </div>
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-            <div className="flex items-center gap-2 rounded-xl border border-dashed border-white/30 bg-white/10 px-4 py-2.5 backdrop-blur-xs">
-              <span className="text-xs text-neutral-300">Mã voucher:</span>
-              <span className="font-mono text-base font-bold tracking-wider text-white">
-                LINOMOI
+      {bannerPromotion && (
+        <section className="max-w-7xl mx-auto px-4 sm:px-6 py-6 md:py-8">
+          <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-neutral-900 via-neutral-800 to-neutral-900 text-white p-6 sm:p-10 grid lg:grid-cols-[1fr_auto] items-center gap-6 shadow-xl border border-neutral-700/50">
+            <div className="space-y-2">
+              <span className="inline-block rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-white/90 backdrop-blur-xs">
+                {bannerPromotion.target === "SHIPPING" ? "Ưu Đãi Vận Chuyển" : "Mã Khuyến Mãi Đặc Biệt"}
               </span>
+              <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-white leading-snug">
+                {bannerPromotion.description ||
+                  (bannerPromotion.type === "PERCENTAGE"
+                    ? `GIẢM ${bannerPromotion.value}% CHO ĐƠN HÀNG`
+                    : `GIẢM ${bannerPromotion.value.toLocaleString("vi-VN")} ₫`)}
+              </h2>
+              <p className="text-sm text-neutral-300 max-w-lg leading-relaxed">
+                Nhập mã ưu đãi ở bước thanh toán để nhận ngay đặc quyền chào đón từ LINO.
+              </p>
             </div>
-            <Link
-              to="/products"
-              className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-3 text-xs font-semibold text-white shadow-lg shadow-primary/30 hover:bg-primary-hover active:scale-95 transition-all"
-            >
-              Mua Sắm Ngay <ArrowRight size={14} />
-            </Link>
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+              <div className="flex items-center gap-2 rounded-xl border border-dashed border-white/30 bg-white/10 px-4 py-2.5 backdrop-blur-xs">
+                <span className="text-xs text-neutral-300">Mã voucher:</span>
+                <span className="font-mono text-base font-bold tracking-wider text-white">
+                  {bannerPromotion.code}
+                </span>
+              </div>
+              <Link
+                to="/products"
+                className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-3 text-xs font-semibold text-white shadow-lg shadow-primary/30 hover:bg-primary-hover active:scale-95 transition-all"
+              >
+                Mua Sắm Ngay <ArrowRight size={14} />
+              </Link>
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* New Arrivals with Tabs */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 py-8 md:py-10">

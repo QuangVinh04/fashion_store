@@ -1,5 +1,10 @@
-import type { Promotion, PromotionScopeType, PromotionType } from '@/types/promotions'
+import type { Promotion, PromotionScopeType, PromotionTarget, PromotionType } from '@/types/promotions'
 import { formatOrderMoney } from '@/views/orders/order-actions'
+
+export const promotionTargetLabels: Record<PromotionTarget, string> = {
+  PRODUCT: 'Sản phẩm',
+  SHIPPING: 'Vận chuyển'
+}
 
 export const promotionTypeLabels: Record<PromotionType, string> = {
   PERCENT: 'Giảm theo %',

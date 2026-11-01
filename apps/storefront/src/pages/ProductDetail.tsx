@@ -422,7 +422,7 @@ export default function ProductDetail() {
               </button>
               <button type="button" className="pd-buy active:scale-[0.98] transition-transform" disabled={purchaseDisabled} onClick={() => void handleAddToCart(true)}>Mua ngay</button>
             </div>
-            <div className="pd-services"><p><Truck size={17} />Miễn phí vận chuyển từ 500.000 ₫</p><p><RefreshCw size={17} />Đổi trả trong 7 ngày</p></div>
+            <div className="pd-services"><p><Truck size={17} />Hỗ trợ mã giảm phí vận chuyển</p><p><RefreshCw size={17} />Đổi trả trong 7 ngày</p></div>
           </section>
         </div>
         <section className="pd-section" aria-labelledby="pd-reviews-title">

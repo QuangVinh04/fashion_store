@@ -89,6 +89,11 @@ export function validatePromotion(input: Partial<PromotionInput>): Record<string
     }
   }
 
+  // target SHIPPING requires scopeType ALL
+  if (input.target === 'SHIPPING' && input.scopeType && input.scopeType !== 'ALL') {
+    errors.scopeType = 'Mã vận chuyển phải áp dụng cho tất cả đơn hàng (ALL).'
+  }
+
   // scopeIds when scopeType !== 'ALL'
   if (input.scopeType && input.scopeType !== 'ALL') {
     const ids = (input.scopeIds || '')

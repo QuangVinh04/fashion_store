@@ -288,7 +288,19 @@ export default function OrderDetail() {
         <section className="order-panel">
           <OrderProducts order={order} returnLabel={returnRequest ? returnPresentation(returnRequest).title : undefined} refunded={returnRequest?.refundStatus === 'COMPLETED'} review={delivered ? (productId, name)=><OrderItemReview productId={productId} orderId={id} productName={name}/> : undefined}/>
           <dl className="order-facts">
-            {!cancelled && <><DetailRow label="Tổng tiền hàng">{money(order.subtotalAmount)}</DetailRow><DetailRow label="Phí vận chuyển">{money(order.shippingFee)}</DetailRow><DetailRow label="Giảm giá">−{money(order.discountAmount)}</DetailRow><DetailRow label="Thành tiền" total>{money(order.totalAmount)}</DetailRow></>}
+            {!cancelled && (
+              <>
+                <DetailRow label="Tổng tiền hàng">{money(order.subtotalAmount)}</DetailRow>
+                <DetailRow label="Phí vận chuyển">{money(order.shippingFee)}</DetailRow>
+                {order.discountAmount > 0 && (
+                  <DetailRow label="Giảm giá sản phẩm">−{money(order.discountAmount)}</DetailRow>
+                )}
+                {order.shippingDiscountAmount !== undefined && order.shippingDiscountAmount > 0 && (
+                  <DetailRow label="Giảm phí vận chuyển">−{money(order.shippingDiscountAmount)}</DetailRow>
+                )}
+                <DetailRow label="Thành tiền" total>{money(order.totalAmount)}</DetailRow>
+              </>
+            )}
             <DetailRow label="Phương thức thanh toán">{paymentLabel}</DetailRow>
             {!cancelled && <DetailRow label="Trạng thái thanh toán">{paymentStatus}</DetailRow>}
             <DetailRow label="Mã đơn hàng">{order.orderCode}</DetailRow>

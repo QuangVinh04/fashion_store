@@ -29,13 +29,14 @@ import ListResult from '@/components/backoffice/ListResult'
 import PageHeader from '@/components/backoffice/PageHeader'
 import useListQueryState from '@/hooks/useListQueryState'
 import { promotionsApi } from '@/libs/api/promotions'
-import type { Promotion } from '@/types/promotions'
+import type { Promotion, PromotionTarget } from '@/types/promotions'
 import { formatOrderMoney } from '@/views/orders/order-actions'
 import {
   formatPromotionValue,
   promotionScopeLabels,
   promotionStatusColor,
-  promotionStatusLabel
+  promotionStatusLabel,
+  promotionTargetLabels
 } from './promotion-actions'
 import PromotionFormDialog from './PromotionFormDialog'
 
@@ -66,13 +67,16 @@ export default function PromotionList() {
   const activeFilter =
     filters.active === 'true' ? true : filters.active === 'false' ? false : undefined
 
+  const targetFilter = (filters.target as PromotionTarget) || undefined
+
   const query = useQuery({
     queryKey: ['promotions', 'list', page, size, filters],
     queryFn: () =>
       promotionsApi.list({
         page,
         size,
-        active: activeFilter
+        active: activeFilter,
+        target: targetFilter
       })
   })
 
@@ -121,7 +125,7 @@ export default function PromotionList() {
             placeholder='Tìm theo mã khuyến mãi...'
             value={filters.keyword || ''}
             onChange={e => setFilters({ keyword: e.target.value })}
-            sx={{ flexGrow: 1, minWidth: { xs: '100%', sm: 260 } }}
+            sx={{ flexGrow: 1, minWidth: { xs: '100%', sm: 240 } }}
             InputProps={{
               startAdornment: (
                 <InputAdornment position='start'>
@@ -144,11 +148,23 @@ export default function PromotionList() {
           />
           <TextField
             select
+            label='Loại mã'
+            size='small'
+            value={filters.target || ''}
+            onChange={e => setFilters({ target: e.target.value })}
+            sx={{ minWidth: 180 }}
+          >
+            <MenuItem value=''>Tất cả loại mã</MenuItem>
+            <MenuItem value='PRODUCT'>Sản phẩm</MenuItem>
+            <MenuItem value='SHIPPING'>Vận chuyển</MenuItem>
+          </TextField>
+          <TextField
+            select
             label='Trạng thái kích hoạt'
             size='small'
             value={filters.active || ''}
             onChange={e => setFilters({ active: e.target.value })}
-            sx={{ minWidth: 200 }}
+            sx={{ minWidth: 180 }}
           >
             <MenuItem value=''>Tất cả trạng thái</MenuItem>
             <MenuItem value='true'>Đang kích hoạt</MenuItem>
@@ -160,12 +176,14 @@ export default function PromotionList() {
 
         <ListResult query={query} page={page} size={size} setPage={setPage} setSize={setSize}>
           <TableContainer>
-            <Table sx={{ minWidth: 950 }}>
+            <Table sx={{ minWidth: 1050 }}>
               <TableHead>
                 <TableRow>
                   <TableCell>Mã khuyến mãi</TableCell>
-                  <TableCell>Loại & Giá trị</TableCell>
+                  <TableCell>Loại</TableCell>
+                  <TableCell>Giá trị</TableCell>
                   <TableCell align='right'>Đơn tối thiểu</TableCell>
+                  <TableCell>Đã dùng</TableCell>
                   <TableCell>Thời gian áp dụng</TableCell>
                   <TableCell>Phạm vi</TableCell>
                   <TableCell>Trạng thái</TableCell>
@@ -176,6 +194,11 @@ export default function PromotionList() {
                 {displayedPromotions.map(row => {
                   const status = promotionStatusLabel(row)
                   const chipColor = promotionStatusColor(status)
+                  const promoTarget = row.target || 'PRODUCT'
+                  const confirmed = row.confirmedCount ?? 0
+                  const reserved = row.reservedCount ?? 0
+                  const total = row.totalQuota ? String(row.totalQuota) : '∞'
+                  const usageText = reserved > 0 ? `${confirmed} (+${reserved}) / ${total}` : `${confirmed} / ${total}`
 
                   return (
                     <TableRow key={row.id} hover>
@@ -183,9 +206,20 @@ export default function PromotionList() {
                         <Typography variant='body2' sx={{ fontWeight: 600, color: 'text.primary', letterSpacing: '0.5px' }}>
                           {row.code}
                         </Typography>
-                        <Typography variant='caption' color='text.secondary' sx={{ display: 'block', fontVariantNumeric: 'tabular-nums' }}>
-                          {row.totalQuota ? `Giới hạn: ${row.totalQuota} lượt` : 'Không giới hạn lượt'}
-                        </Typography>
+                        {row.description && (
+                          <Typography variant='caption' color='text.secondary' sx={{ display: 'block' }}>
+                            {row.description}
+                          </Typography>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          size='small'
+                          variant='tonal'
+                          color={promoTarget === 'SHIPPING' ? 'info' : 'primary'}
+                          label={promotionTargetLabels[promoTarget] || promoTarget}
+                          sx={{ height: 24, fontSize: '0.75rem', fontWeight: 600 }}
+                        />
                       </TableCell>
                       <TableCell>
                         <Typography variant='body2' sx={{ fontWeight: 600, color: 'primary.main', fontVariantNumeric: 'tabular-nums' }}>
@@ -195,6 +229,11 @@ export default function PromotionList() {
                       <TableCell align='right' sx={{ whiteSpace: 'nowrap' }}>
                         <Typography variant='body2' sx={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
                           {row.minOrderValue ? formatOrderMoney(row.minOrderValue, 'VND') : '—'}
+                        </Typography>
+                      </TableCell>
+                      <TableCell sx={{ whiteSpace: 'nowrap' }}>
+                        <Typography variant='body2' sx={{ fontWeight: 500, fontVariantNumeric: 'tabular-nums' }}>
+                          {usageText}
                         </Typography>
                       </TableCell>
                       <TableCell>

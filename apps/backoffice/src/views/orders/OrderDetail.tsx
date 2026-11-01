@@ -170,10 +170,19 @@ export default function OrderDetail({ id }: { id: string }) {
                     {[
                       { label: 'Tạm tính', value: money(order.subtotalAmount), isBold: false },
                       {
-                        label: 'Giảm giá',
+                        label: 'Giảm giá sản phẩm',
                         value: order.discountAmount > 0 ? `- ${money(order.discountAmount)}` : '0 ₫',
                         isBold: false
                       },
+                      ...(order.shippingDiscountAmount && order.shippingDiscountAmount > 0
+                        ? [
+                            {
+                              label: 'Giảm phí vận chuyển',
+                              value: `- ${money(order.shippingDiscountAmount)}`,
+                              isBold: false
+                            }
+                          ]
+                        : []),
                       { label: 'Phí giao hàng', value: money(order.shippingFee), isBold: false },
                       { label: 'Tổng thanh toán', value: money(order.totalAmount), isBold: true }
                     ].map(row => (

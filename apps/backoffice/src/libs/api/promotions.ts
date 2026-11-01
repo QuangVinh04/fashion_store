@@ -1,7 +1,7 @@
 import { api } from './client'
 import { normalizeAdminPage } from './page'
 import type { PageDto } from '@/types/api'
-import type { Promotion, PromotionInput } from '@/types/promotions'
+import type { Promotion, PromotionInput, PromotionTarget } from '@/types/promotions'
 
 const base = '/api/v1/admin/promotions'
 const path = (id: string) => `${base}/${encodeURIComponent(id)}`
@@ -17,7 +17,7 @@ const queryString = (params: Record<string, string | number | boolean | undefine
 }
 
 export const promotionsApi = {
-  list: async (params: { page: number; size: number; active?: boolean }) =>
+  list: async (params: { page: number; size: number; active?: boolean; target?: PromotionTarget }) =>
     normalizeAdminPage(await api.get<PageDto<Promotion>>(`${base}?${queryString(params)}`)),
   get: (id: string) => api.get<Promotion>(path(id)),
   create: (body: PromotionInput) => api.post<Promotion>(base, body),

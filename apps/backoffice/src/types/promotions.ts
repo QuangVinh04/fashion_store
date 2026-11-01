@@ -1,5 +1,6 @@
 export type PromotionType = 'PERCENT' | 'FIXED'
 export type PromotionScopeType = 'ALL' | 'PRODUCT' | 'CATEGORY'
+export type PromotionTarget = 'PRODUCT' | 'SHIPPING'
 
 export interface Promotion {
   id: string
@@ -15,6 +16,11 @@ export interface Promotion {
   scopeType: PromotionScopeType
   scopeIds?: string | null
   active: boolean
+  target?: PromotionTarget
+  description?: string | null
+  isPublic?: boolean
+  reservedCount?: number
+  confirmedCount?: number
   createdAt?: string
   updatedAt?: string
 }
@@ -32,4 +38,7 @@ export interface PromotionInput {
   scopeType: PromotionScopeType
   scopeIds?: string | null
   active?: boolean
+  target?: PromotionTarget
+  description?: string | null
+  isPublic?: boolean
 }

@@ -54,9 +54,7 @@ export default function Policy() {
                 (GHN).
               </p>
               <p>
-                <strong>Miễn phí vận chuyển:</strong> Áp dụng tự động cho mọi
-                đơn hàng có giá trị thanh toán từ <strong>500.000 ₫</strong> trở
-                lên trên toàn quốc.
+                <strong>Miễn phí vận chuyển:</strong> Áp dụng khi nhập mã giảm giá vận chuyển (freeship) hợp lệ tại bước thanh toán.
               </p>
               <p>
                 <strong>Thời gian giao hàng:</strong>

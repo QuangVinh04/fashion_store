@@ -38,7 +38,7 @@ public interface PromotionService {
 
     PromotionResponse getPromotionByCode(String code);
 
-    PageResponse<List<PromotionResponse>> getPromotions(Boolean active, Pageable pageable);
+    PageResponse<List<PromotionResponse>> getPromotions(Boolean active, PromotionTarget target, Pageable pageable);
 
     void togglePromotionActive(String id, boolean active);
 

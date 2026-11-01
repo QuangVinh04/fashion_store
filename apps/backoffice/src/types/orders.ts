@@ -37,6 +37,7 @@ export interface OrderDetail extends OrderSummary {
   trackingCode?: string
   subtotalAmount: number
   discountAmount: number
+  shippingDiscountAmount?: number
   shippingFee: number
   items: OrderItem[]
 }

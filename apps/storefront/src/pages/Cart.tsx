@@ -22,7 +22,7 @@ import { useCart } from "../context/CartContext";
 import { money } from "../api/client";
 import { Status } from "../components/StoreUI";
 
-const SHIPPING_THRESHOLD = 500000;
+
 
 export default function Cart() {
   const {
@@ -99,11 +99,6 @@ export default function Cart() {
       setBusyId("");
     }
   }
-
-  const freeShippingProgress = Math.min(
-    100,
-    Math.round((total / SHIPPING_THRESHOLD) * 100),
-  );
 
   if (!cart) {
     if (loading) {
@@ -222,50 +217,7 @@ export default function Cart() {
           </button>
         </div>
 
-        {/* Free Shipping Progress */}
-        <div className="mb-8 p-5 bg-card border border-border rounded-2xl shadow-2xs">
-          <div className="flex items-center justify-between gap-3 mb-3">
-            <div className="flex items-center gap-2.5">
-              <div className={`size-8 rounded-full flex items-center justify-center shrink-0 ${
-                total >= SHIPPING_THRESHOLD ? "bg-emerald-100 text-emerald-700" : "bg-primary/10 text-primary"
-              }`}>
-                {total >= SHIPPING_THRESHOLD ? <Check size={16} /> : <Truck size={16} />}
-              </div>
-              <p className="text-xs text-foreground">
-                {total >= SHIPPING_THRESHOLD ? (
-                  <span className="font-semibold text-emerald-700">
-                    Tuyệt vời! Đơn hàng của bạn đã đạt điều kiện MIỄN PHÍ VẬN CHUYỂN toàn quốc!
-                  </span>
-                ) : (
-                  <>
-                    Mua thêm{" "}
-                    <strong className="text-primary font-bold">
-                      {money(SHIPPING_THRESHOLD - total)}
-                    </strong>{" "}
-                    để nhận ngay{" "}
-                    <strong className="text-foreground font-semibold">
-                      MIỄN PHÍ VẬN CHUYỂN
-                    </strong>
-                  </>
-                )}
-              </p>
-            </div>
-            <span className="text-xs font-semibold text-muted-foreground hidden sm:inline tabular-nums">
-              {Math.min(100, Math.round((total / SHIPPING_THRESHOLD) * 100))}%
-            </span>
-          </div>
-
-          <div className="w-full bg-secondary h-2 rounded-full overflow-hidden relative">
-            <motion.div
-              initial={{ width: 0 }}
-              animate={{ width: `${Math.min(100, (total / SHIPPING_THRESHOLD) * 100)}%` }}
-              transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-              className={`h-full rounded-full transition-colors ${
-                total >= SHIPPING_THRESHOLD ? "bg-emerald-600" : "bg-primary"
-              }`}
-            />
-          </div>
-        </div>
+        
 
         <Status loading={loading} error={error} retry={() => void refresh()} />
 

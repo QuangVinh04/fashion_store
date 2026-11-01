@@ -41,6 +41,14 @@ it('omits empty params when listing', async () => {
   expect(fetch.mock.calls[0][0]).toBe('/api/v1/admin/promotions?page=0&size=20')
 })
 
+it('lists promotions with target filter', async () => {
+  const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ data: page })))
+
+  await promotionsApi.list({ page: 0, size: 20, target: 'SHIPPING' })
+
+  expect(fetch.mock.calls[0][0]).toBe('/api/v1/admin/promotions?page=0&size=20&target=SHIPPING')
+})
+
 it('creates a promotion with serialized input', async () => {
   const fetch = vi
     .spyOn(globalThis, 'fetch')

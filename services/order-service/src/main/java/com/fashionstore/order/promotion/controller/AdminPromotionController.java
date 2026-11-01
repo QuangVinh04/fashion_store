@@ -5,7 +5,9 @@ import com.fashionstore.common.dto.PageResponse;
 import com.fashionstore.order.promotion.dto.PromotionRequest;
 import com.fashionstore.order.promotion.dto.PromotionResponse;
 import com.fashionstore.order.promotion.service.PromotionService;
+import com.fashionstore.order.promotion.dto.PromotionTarget;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.AccessLevel;
@@ -84,12 +86,14 @@ public class AdminPromotionController {
     @GetMapping
     public ApiResponse<PageResponse<List<PromotionResponse>>> getPromotions(
             @RequestParam(required = false) Boolean active,
+            @Parameter(description = "PRODUCT hoặc SHIPPING; bỏ trống = tất cả")
+            @RequestParam(required = false) PromotionTarget target,
             @ParameterObject
             @PageableDefault(page = 0, size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
     ) {
         return ApiResponse.<PageResponse<List<PromotionResponse>>>builder()
                 .message("Get promotions successfully")
-                .data(promotionService.getPromotions(active, pageable))
+                .data(promotionService.getPromotions(active, target, pageable))
                 .build();
     }
 

@@ -85,7 +85,7 @@ export default function Root() {
       <div className="bg-primary-light px-4 py-2 text-center text-xs font-medium text-destructive flex items-center justify-center min-h-[36px]">
         <RotatingText
           texts={[
-            "MIỄN PHÍ VẬN CHUYỂN CHO ĐƠN HÀNG TỪ 500.000 ₫",
+            "ÁP DỤNG MÃ GIẢM PHÍ VẬN CHUYỂN KHI THANH TOÁN",
             "BỘ SƯU TẬP THỜI TRANG LINO 2026 MỚI NHẤT ĐÃ CẬP BẾN",
             "ĐỔI TRẢ HÀNG MIỄN PHÍ DỄ DÀNG TRONG VÒNG 7 NGÀY",
           ]}

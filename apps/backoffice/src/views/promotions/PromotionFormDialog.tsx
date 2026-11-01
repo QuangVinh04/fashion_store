@@ -13,15 +13,17 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  FormControlLabel,
   Grid,
   MenuItem,
+  Switch,
   TextField
 } from '@mui/material'
 
 import { promotionsApi } from '@/libs/api/promotions'
 import { mapFieldErrors, toVietnameseError } from '@/libs/api/errors'
-import type { Promotion, PromotionInput, PromotionScopeType, PromotionType } from '@/types/promotions'
-import { promotionScopeLabels, promotionTypeLabels } from './promotion-actions'
+import type { Promotion, PromotionInput, PromotionScopeType, PromotionTarget, PromotionType } from '@/types/promotions'
+import { promotionScopeLabels, promotionTargetLabels, promotionTypeLabels } from './promotion-actions'
 import { validatePromotion } from './promotion-validation'
 
 interface Props {
@@ -35,7 +37,10 @@ export default function PromotionFormDialog({ open, promotion, onClose, onSaved 
   const queryClient = useQueryClient()
 
   const [code, setCode] = useState('')
+  const [target, setTarget] = useState<PromotionTarget>('PRODUCT')
   const [type, setType] = useState<PromotionType>('PERCENT')
+  const [description, setDescription] = useState('')
+  const [isPublic, setIsPublic] = useState(true)
   const [value, setValue] = useState('')
   const [maxDiscount, setMaxDiscount] = useState('')
   const [minOrderValue, setMinOrderValue] = useState('')
@@ -50,6 +55,10 @@ export default function PromotionFormDialog({ open, promotion, onClose, onSaved 
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [generalError, setGeneralError] = useState<string | null>(null)
 
+  const hasUsage = Boolean(
+    promotion && (((promotion.confirmedCount ?? 0) > 0) || ((promotion.reservedCount ?? 0) > 0))
+  )
+
   useEffect(() => {
     if (!open) return
 
@@ -58,7 +67,10 @@ export default function PromotionFormDialog({ open, promotion, onClose, onSaved 
 
     if (promotion) {
       setCode(promotion.code || '')
+      setTarget(promotion.target || 'PRODUCT')
       setType(promotion.type || 'PERCENT')
+      setDescription(promotion.description || '')
+      setIsPublic(promotion.isPublic ?? true)
       setValue(promotion.value !== undefined && promotion.value !== null ? String(promotion.value) : '')
       setMaxDiscount(promotion.maxDiscount !== undefined && promotion.maxDiscount !== null ? String(promotion.maxDiscount) : '')
       setMinOrderValue(promotion.minOrderValue !== undefined && promotion.minOrderValue !== null ? String(promotion.minOrderValue) : '')
@@ -66,12 +78,15 @@ export default function PromotionFormDialog({ open, promotion, onClose, onSaved 
       setEndAt(promotion.endAt ? promotion.endAt.slice(0, 16) : '')
       setTotalQuota(promotion.totalQuota !== undefined && promotion.totalQuota !== null ? String(promotion.totalQuota) : '')
       setPerUserQuota(promotion.perUserQuota !== undefined && promotion.perUserQuota !== null ? String(promotion.perUserQuota) : '')
-      setScopeType(promotion.scopeType || 'ALL')
+      setScopeType(promotion.target === 'SHIPPING' ? 'ALL' : promotion.scopeType || 'ALL')
       setScopeIds(promotion.scopeIds || '')
       setActive(promotion.active ?? true)
     } else {
       setCode('')
+      setTarget('PRODUCT')
       setType('PERCENT')
+      setDescription('')
+      setIsPublic(true)
       setValue('')
       setMaxDiscount('')
       setMinOrderValue('')
@@ -112,8 +127,13 @@ export default function PromotionFormDialog({ open, promotion, onClose, onSaved 
   const handleSubmit = async () => {
     setGeneralError(null)
 
+    const isShipping = target === 'SHIPPING'
+
     const payload: PromotionInput = {
       code: code.trim().toUpperCase(),
+      target,
+      description: description.trim() || null,
+      isPublic,
       type,
       value: Number(value),
       maxDiscount: maxDiscount ? Number(maxDiscount) : null,
@@ -122,8 +142,8 @@ export default function PromotionFormDialog({ open, promotion, onClose, onSaved 
       endAt: endAt ? `${endAt}:00` : '',
       totalQuota: totalQuota ? Number(totalQuota) : null,
       perUserQuota: perUserQuota ? Number(perUserQuota) : null,
-      scopeType,
-      scopeIds: scopeType === 'ALL' ? null : scopeIds.trim(),
+      scopeType: isShipping ? 'ALL' : scopeType,
+      scopeIds: isShipping || scopeType === 'ALL' ? null : scopeIds.trim(),
       active
     }
 
@@ -139,6 +159,8 @@ export default function PromotionFormDialog({ open, promotion, onClose, onSaved 
     mutation.mutate(payload)
   }
 
+  const isShippingTarget = target === 'SHIPPING'
+
   return (
     <Dialog open={open} onClose={() => !mutation.isPending && onClose()} fullWidth maxWidth='md'>
       <DialogTitle>{promotion ? 'Chỉnh sửa mã khuyến mãi' : 'Tạo mã khuyến mãi mới'}</DialogTitle>
@@ -151,19 +173,50 @@ export default function PromotionFormDialog({ open, promotion, onClose, onSaved 
 
         <Box sx={{ mt: 1 }}>
           <Grid container spacing={2}>
-            <Grid item xs={12} sm={6}>
+            <Grid item xs={12} sm={4}>
+              <TextField
+                select
+                fullWidth
+                label='Loại mã'
+                value={target}
+                disabled={hasUsage}
+                onChange={e => {
+                  const nextTarget = e.target.value as PromotionTarget
+
+                  setTarget(nextTarget)
+
+                  if (nextTarget === 'SHIPPING') {
+                    setScopeType('ALL')
+                    setScopeIds('')
+                  }
+                }}
+                size='small'
+                helperText={hasUsage ? 'Mã đã có lượt dùng, không thể đổi loại mã' : undefined}
+                required
+              >
+                <MenuItem value='PRODUCT'>{promotionTargetLabels.PRODUCT}</MenuItem>
+                <MenuItem value='SHIPPING'>{promotionTargetLabels.SHIPPING}</MenuItem>
+              </TextField>
+            </Grid>
+
+            <Grid item xs={12} sm={4}>
               <TextField
                 fullWidth
                 label='Mã khuyến mãi'
                 value={code}
+                disabled={hasUsage}
                 onChange={e => setCode(e.target.value.toUpperCase())}
                 error={Boolean(errors.code)}
-                helperText={errors.code || 'Chữ in hoa, số, gạch nối hoặc gạch dưới'}
+                helperText={
+                  errors.code ||
+                  (hasUsage ? 'Mã đã có lượt dùng, không thể đổi mã' : 'Chữ in hoa, số, gạch nối hoặc gạch dưới')
+                }
                 size='small'
                 required
               />
             </Grid>
-            <Grid item xs={12} sm={6}>
+
+            <Grid item xs={12} sm={4}>
               <TextField
                 select
                 fullWidth
@@ -178,6 +231,19 @@ export default function PromotionFormDialog({ open, promotion, onClose, onSaved 
               </TextField>
             </Grid>
 
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                multiline
+                rows={2}
+                label='Mô tả khuyến mãi'
+                value={description}
+                onChange={e => setDescription(e.target.value)}
+                placeholder='Nhập mô tả khuyến mãi (hiển thị cho khách hàng)'
+                size='small'
+              />
+            </Grid>
+
             <Grid item xs={12} sm={4}>
               <TextField
                 fullWidth
@@ -186,7 +252,10 @@ export default function PromotionFormDialog({ open, promotion, onClose, onSaved 
                 value={value}
                 onChange={e => setValue(e.target.value)}
                 error={Boolean(errors.value)}
-                helperText={errors.value}
+                helperText={
+                  errors.value ||
+                  (isShippingTarget && type === 'PERCENT' ? '100% = miễn phí ship' : undefined)
+                }
                 size='small'
                 required
               />
@@ -270,23 +339,25 @@ export default function PromotionFormDialog({ open, promotion, onClose, onSaved 
               />
             </Grid>
 
-            <Grid item xs={12} sm={scopeType !== 'ALL' ? 6 : 12}>
-              <TextField
-                select
-                fullWidth
-                label='Phạm vi áp dụng'
-                value={scopeType}
-                onChange={e => setScopeType(e.target.value as PromotionScopeType)}
-                size='small'
-                required
-              >
-                <MenuItem value='ALL'>{promotionScopeLabels.ALL}</MenuItem>
-                <MenuItem value='PRODUCT'>{promotionScopeLabels.PRODUCT}</MenuItem>
-                <MenuItem value='CATEGORY'>{promotionScopeLabels.CATEGORY}</MenuItem>
-              </TextField>
-            </Grid>
+            {!isShippingTarget && (
+              <Grid item xs={12} sm={scopeType !== 'ALL' ? 6 : 12}>
+                <TextField
+                  select
+                  fullWidth
+                  label='Phạm vi áp dụng'
+                  value={scopeType}
+                  onChange={e => setScopeType(e.target.value as PromotionScopeType)}
+                  size='small'
+                  required
+                >
+                  <MenuItem value='ALL'>{promotionScopeLabels.ALL}</MenuItem>
+                  <MenuItem value='PRODUCT'>{promotionScopeLabels.PRODUCT}</MenuItem>
+                  <MenuItem value='CATEGORY'>{promotionScopeLabels.CATEGORY}</MenuItem>
+                </TextField>
+              </Grid>
+            )}
 
-            {scopeType !== 'ALL' && (
+            {!isShippingTarget && scopeType !== 'ALL' && (
               <Grid item xs={12} sm={6}>
                 <TextField
                   fullWidth
@@ -302,6 +373,13 @@ export default function PromotionFormDialog({ open, promotion, onClose, onSaved 
                 />
               </Grid>
             )}
+
+            <Grid item xs={12}>
+              <FormControlLabel
+                control={<Switch checked={isPublic} onChange={e => setIsPublic(e.target.checked)} />}
+                label='Hiện cho khách (hiển thị gợi ý tại storefront)'
+              />
+            </Grid>
           </Grid>
         </Box>
       </DialogContent>
