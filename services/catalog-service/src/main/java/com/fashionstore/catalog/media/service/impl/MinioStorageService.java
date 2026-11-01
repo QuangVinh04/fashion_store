@@ -11,6 +11,7 @@ import io.minio.GetObjectArgs;
 import io.minio.GetPresignedObjectUrlArgs;
 import io.minio.MakeBucketArgs;
 import io.minio.MinioClient;
+import io.minio.PutObjectArgs;
 import io.minio.RemoveObjectArgs;
 import io.minio.StatObjectArgs;
 import io.minio.StatObjectResponse;
@@ -20,6 +21,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
+import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.util.Map;
 import java.util.HashMap;
@@ -182,6 +184,34 @@ public class MinioStorageService implements StorageService {
                 return null;
             }
             throw new AppException(FileErrorCode.FILE_STORAGE_FAILED, exception);
+        } catch (Exception exception) {
+            throw new AppException(FileErrorCode.FILE_STORAGE_FAILED, exception);
+        }
+    }
+
+    @Override
+    public byte[] read(String storageKey) {
+        ensureBucketFor(storageKey);
+        try (InputStream is = minioClient.getObject(GetObjectArgs.builder()
+                .bucket(bucketFor(storageKey))
+                .object(storageKey)
+                .build())) {
+            return is.readAllBytes();
+        } catch (Exception exception) {
+            throw new AppException(FileErrorCode.FILE_STORAGE_FAILED, exception);
+        }
+    }
+
+    @Override
+    public void put(String storageKey, byte[] content, String contentType) {
+        if (storageKey.startsWith("evidence/")) ensureBucketFor(storageKey); else ensureBucket();
+        try (InputStream is = new ByteArrayInputStream(content)) {
+            minioClient.putObject(PutObjectArgs.builder()
+                    .bucket(bucketFor(storageKey))
+                    .object(storageKey)
+                    .stream(is, content.length, -1)
+                    .contentType(contentType)
+                    .build());
         } catch (Exception exception) {
             throw new AppException(FileErrorCode.FILE_STORAGE_FAILED, exception);
         }

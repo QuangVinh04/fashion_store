@@ -21,6 +21,20 @@ class ProductMapperTest {
     private final ProductMapper productMapper = Mappers.getMapper(ProductMapper.class);
 
     @Test
+    void summaryServesTheThumbnailVariantOfOurOwnImagesOnly() {
+        Product ours = Product.builder()
+                .thumbnailUrl("http://localhost:8087/api/v1/files/file-1/content").build();
+        Product external = Product.builder().thumbnailUrl("https://cdn.example.com/a.jpg").build();
+        Product none = Product.builder().build();
+
+        assertThat(productMapper.toProductSummaryResponse(ours).getThumbnailUrl())
+                .isEqualTo("http://localhost:8087/api/v1/files/file-1/content?variant=thumb");
+        assertThat(productMapper.toProductSummaryResponse(external).getThumbnailUrl())
+                .isEqualTo("https://cdn.example.com/a.jpg");
+        assertThat(productMapper.toProductSummaryResponse(none).getThumbnailUrl()).isNull();
+    }
+
+    @Test
     void editableSkuOverridesStayNullWhileLogisticsUsesProductDefaults() {
         Product product = Product.builder().weight(300).length(20).width(15).height(3).build();
         ProductVariant variant = ProductVariant.builder().product(product).build();

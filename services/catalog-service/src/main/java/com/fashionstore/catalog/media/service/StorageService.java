@@ -18,5 +18,10 @@ public interface StorageService {
     /** Doc toi da {@code maxBytes} byte dau tien cua object de nhan dien magic bytes / signature. */
     byte[] readPrefix(String storageKey, int maxBytes);
 
+    /** Doc toan bo object; dung cho object nho da qua gioi han upload (vd tao thumbnail). */
+    byte[] read(String storageKey);
+
+    void put(String storageKey, byte[] content, String contentType);
+
     void delete(String storageKey);
 }

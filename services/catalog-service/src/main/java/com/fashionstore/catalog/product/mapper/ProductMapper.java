@@ -29,6 +29,14 @@ import java.util.stream.Collectors;
 @Mapper(componentModel = "spring")
 public interface ProductMapper {
 
+    /**
+     * Danh sach chi can anh nho: anh do chinh media API phuc vu (/api/v1/files/{id}/content) duoc doi sang
+     * ban thu nho, anh ngoai giu nguyen. Chuoi query khop MediaFileMapper.THUMBNAIL_QUERY.
+     */
+    private static String thumbnailVariant(String url) {
+        return url != null && url.endsWith("/content") ? url + "?variant=thumb" : url;
+    }
+
     default ProductSummaryResponse toProductSummaryResponse(Product product) {
         Category firstCategory = firstCategory(product);
         return ProductSummaryResponse.builder()
@@ -42,7 +50,7 @@ public interface ProductMapper {
                 .published(product.getPublished())
                 .featured(product.getFeatured())
                 .thumbnailMediaId(product.getThumbnailMediaId())
-                .thumbnailUrl(product.getThumbnailUrl())
+                .thumbnailUrl(thumbnailVariant(product.getThumbnailUrl()))
                 .brandName(product.getBrand() == null ? null : product.getBrand().getName())
                 .categoryName(firstCategory == null ? null : firstCategory.getName())
                 .createdAt(product.getCreatedAt())

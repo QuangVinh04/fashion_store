@@ -228,7 +228,8 @@ class MediaLifecycleTransactionTest {
         @Bean MinioProperties properties() { return new MinioProperties("http://minio:9000", "http://localhost:9000", "key", "secret", "media", 900, 20L * 1024 * 1024); }
         @Bean MediaFileService mediaService(IdentityAvatarClient identity, MediaFileRepository repo, StorageService storage, MinioProperties props, CurrentUserProvider currentUser) {
             return new MediaFileServiceImpl(identity, repo, storage, currentUser,
-                    org.mapstruct.factory.Mappers.getMapper(MediaFileMapper.class), new FileStorageProperties(""), props);
+                    org.mapstruct.factory.Mappers.getMapper(MediaFileMapper.class), new FileStorageProperties(""), props,
+                    mock(com.fashionstore.catalog.media.service.ThumbnailService.class));
         }
         @Bean AvatarMediaReconciliationJob job(MediaFileRepository repo, MediaFileService service, MinioProperties props) { return new AvatarMediaReconciliationJob(repo, service, props); }
         @Bean ProcessedMessageService processed(DataSource ds) {

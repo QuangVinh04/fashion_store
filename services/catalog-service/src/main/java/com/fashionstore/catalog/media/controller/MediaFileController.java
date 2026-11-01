@@ -10,6 +10,7 @@ import com.fashionstore.catalog.media.dto.PresignUploadResponse;
 import com.fashionstore.catalog.media.entity.MediaStatus;
 import com.fashionstore.catalog.media.entity.MediaType;
 import com.fashionstore.catalog.media.service.MediaFileService;
+import io.swagger.v3.oas.annotations.Parameter;
 import jakarta.validation.Valid;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -84,9 +85,13 @@ public class MediaFileController {
 
     /** Giu nguyen duong dan cu, nhung tra 302 sang presigned GET thay vi stream qua service. */
     @GetMapping("/{id}/content")
-    public ResponseEntity<Void> getContent(@PathVariable String id) {
+    public ResponseEntity<Void> getContent(@PathVariable String id,
+                                           @Parameter(description = "thumb = bản thu nhỏ (cạnh dài 600px) nếu ảnh có; bỏ trống hoặc giá trị khác = ảnh gốc")
+                                           @RequestParam(required = false) String variant) {
+        // Gia tri la khac "thumb" thi tra anh goc, de URL cu va URL sai khong bi loi.
+        boolean thumbnail = "thumb".equals(variant);
         return ResponseEntity.status(HttpStatus.FOUND)
-                .location(URI.create(mediaFileService.resolveContentUrl(id)))
+                .location(URI.create(mediaFileService.resolveContentUrl(id, thumbnail)))
                 .build();
     }
 

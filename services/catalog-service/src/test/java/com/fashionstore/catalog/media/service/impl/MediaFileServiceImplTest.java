@@ -18,6 +18,7 @@ import com.fashionstore.catalog.media.entity.MediaType;
 import com.fashionstore.catalog.media.entity.MediaVisibility;
 import com.fashionstore.catalog.media.repository.MediaFileRepository;
 import com.fashionstore.catalog.media.service.StorageService;
+import com.fashionstore.catalog.media.service.ThumbnailService;
 import com.fashionstore.common.exception.AppException;
 import com.fashionstore.common.security.CurrentUserProvider;
 import org.junit.jupiter.api.AfterEach;
@@ -56,6 +57,8 @@ class MediaFileServiceImplTest {
     CurrentUserProvider currentUserProvider;
     @Mock
     MediaFileMapper mediaFileMapper;
+    @Mock
+    ThumbnailService thumbnailService;
 
     MediaFileServiceImpl mediaFileService;
 
@@ -75,7 +78,8 @@ class MediaFileServiceImplTest {
                         "minioadmin",
                         "fashion-media",
                         900,
-                        20L * 1024 * 1024)
+                        20L * 1024 * 1024),
+                thumbnailService
         );
         lenient().when(mediaFileMapper.toResponse(any(MediaFile.class), anyString()))
                 .thenAnswer(inv -> {
@@ -490,6 +494,57 @@ class MediaFileServiceImplTest {
                 .isInstanceOf(AppException.class)
                 .extracting(exception -> ((AppException) exception).getErrorCode())
                 .isEqualTo(FileErrorCode.FILE_ACCESS_DENIED);
+    }
+
+    @Test
+    void completeUploadKeepsTheThumbnailKeyOfAnImage() {
+        MediaFile pending = pendingFile();
+        when(currentUserProvider.getCurrentUserId()).thenReturn("user-1");
+        when(mediaFileRepository.findByIdForUpdate("file-1")).thenReturn(Optional.of(pending));
+        when(storageService.stat("2026/09/object.png"))
+                .thenReturn(new StoredObject(4096L, "image/png", "etag-1"));
+        when(thumbnailService.createFor("2026/09/object.png", "image/png"))
+                .thenReturn("2026/09/object.png.thumb.jpg");
+        when(mediaFileRepository.save(pending)).thenReturn(pending);
+
+        mediaFileService.completeUpload("file-1", null);
+
+        assertThat(pending.getThumbnailKey()).isEqualTo("2026/09/object.png.thumb.jpg");
+    }
+
+    @Test
+    void resolveContentUrlServesTheThumbnailWhenAsked() {
+        MediaFile mediaFile = pendingFile();
+        mediaFile.setStatus(MediaStatus.ACTIVE);
+        mediaFile.setThumbnailKey("2026/09/object.png.thumb.jpg");
+        when(mediaFileRepository.findById("file-1")).thenReturn(Optional.of(mediaFile));
+        when(storageService.presignDownload("2026/09/object.png.thumb.jpg")).thenReturn("thumb-url");
+
+        assertThat(mediaFileService.resolveContentUrl("file-1", true)).isEqualTo("thumb-url");
+    }
+
+    @Test
+    void resolveContentUrlFallsBackToTheOriginalWhenThereIsNoThumbnail() {
+        MediaFile mediaFile = pendingFile();
+        mediaFile.setStatus(MediaStatus.ACTIVE);
+        when(mediaFileRepository.findById("file-1")).thenReturn(Optional.of(mediaFile));
+        when(storageService.presignDownload("2026/09/object.png")).thenReturn("original-url");
+
+        assertThat(mediaFileService.resolveContentUrl("file-1", true)).isEqualTo("original-url");
+    }
+
+    @Test
+    void deletePermanentlyAlsoRemovesTheThumbnailObject() {
+        MediaFile mediaFile = pendingFile();
+        mediaFile.setThumbnailKey("2026/09/object.png.thumb.jpg");
+        when(currentUserProvider.getCurrentUserId()).thenReturn("user-1");
+        when(mediaFileRepository.findById("file-1")).thenReturn(Optional.of(mediaFile));
+
+        mediaFileService.deletePermanently("file-1");
+
+        verify(storageService).delete("2026/09/object.png");
+        verify(storageService).delete("2026/09/object.png.thumb.jpg");
+        verify(mediaFileRepository).delete(mediaFile);
     }
 
     private MediaFile pendingFile() {

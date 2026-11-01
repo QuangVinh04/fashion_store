@@ -45,7 +45,12 @@ public interface MediaFileService {
     void deletePermanently(String id);
 
     /** URL da ky de doc noi dung, dung cho redirect tu {@code /api/v1/files/{id}/content}. */
-    String resolveContentUrl(String id);
+    default String resolveContentUrl(String id) {
+        return resolveContentUrl(id, false);
+    }
+
+    /** {@code thumbnail} = true tra ban thu nho neu co, khong co thi tra anh goc. */
+    String resolveContentUrl(String id, boolean thumbnail);
 
     String resolveEvidenceUrl(String id, String ownerId);
 

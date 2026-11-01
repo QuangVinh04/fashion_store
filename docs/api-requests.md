@@ -19,6 +19,18 @@ _(chưa có)_
 
 ## Done
 
+### Ảnh thu nhỏ (thumbnail) cho danh sách sản phẩm
+- Người yêu cầu: Claude Code (kèm task UI cho Antigravity) · 2026-11-01
+- Màn hình: apps/backoffice (ProductList, MediaLibrary/MediaPicker), apps/storefront (thẻ sản phẩm)
+- Cần:
+  - Upload ảnh JPEG/PNG xong (`POST /api/v1/files/{id}/complete`), backend tự tạo bản thu nhỏ (cạnh dài 600px, JPEG). Ảnh đã nhỏ hơn 600px, WebP/GIF/AVIF/SVG hoặc ảnh cũ không có bản thu nhỏ.
+  - `MediaFileResponse` có thêm `thumbnailUrl` (null khi không có bản thu nhỏ; dùng `url` làm dự phòng).
+  - `GET /api/v1/files/{id}/content?variant=thumb` redirect sang bản thu nhỏ, tự quay về ảnh gốc nếu không có. Bỏ `variant` hoặc giá trị khác thì vẫn là ảnh gốc.
+  - `ProductSummaryResponse.thumbnailUrl` (danh sách admin và storefront) giờ đã là URL bản thu nhỏ khi ảnh do media API phục vụ; `ProductResponse` (chi tiết) và URL gửi lên khi lưu sản phẩm không đổi.
+  - Media picker/thư viện ảnh nên hiển thị `thumbnailUrl ?? url` cho ô xem trước.
+- Lý do: danh sách tải ảnh gốc (hàng MB) cho ô vài chục pixel.
+- Trạng thái: done
+
 ### Chống ghi đè khi hai admin sửa cùng một sản phẩm
 - Người yêu cầu: Claude Code (kèm task UI cho Antigravity) · 2026-11-01
 - Màn hình: apps/backoffice, form sửa sản phẩm

@@ -26,6 +26,7 @@ import com.fashionstore.catalog.media.repository.MediaFileRepository;
 import com.fashionstore.catalog.media.repository.MediaFileSpecifications;
 import com.fashionstore.catalog.media.service.MediaFileService;
 import com.fashionstore.catalog.media.service.StorageService;
+import com.fashionstore.catalog.media.service.ThumbnailService;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -70,6 +71,7 @@ public class MediaFileServiceImpl implements MediaFileService {
     MediaFileMapper mediaFileMapper;
     FileStorageProperties storageProperties;
     MinioProperties minioProperties;
+    ThumbnailService thumbnailService;
 
     @Override
     @Transactional
@@ -194,6 +196,9 @@ public class MediaFileServiceImpl implements MediaFileService {
             mediaFile.setWidth(request.getWidth());
             mediaFile.setHeight(request.getHeight());
         }
+        if (mediaFile.getPurpose() == MediaPurpose.GENERAL) {
+            mediaFile.setThumbnailKey(thumbnailService.createFor(mediaFile.getStorageKey(), contentType));
+        }
         mediaFile.setStatus(avatar ? MediaStatus.TEMP : MediaStatus.ACTIVE);
         if (avatar || evidence) mediaFile.setVisibility(MediaVisibility.PRIVATE);
 
@@ -293,13 +298,13 @@ public class MediaFileServiceImpl implements MediaFileService {
         if (mediaFile.getPurpose() != MediaPurpose.GENERAL) {
             throw new AppException(FileErrorCode.FILE_ACCESS_DENIED);
         }
-        storageService.delete(mediaFile.getStorageKey());
+        deleteObjects(mediaFile);
         mediaFileRepository.delete(mediaFile);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public String resolveContentUrl(String id) {
+    public String resolveContentUrl(String id, boolean thumbnail) {
         MediaFile mediaFile = mediaFileRepository.findById(id)
                 .orElseThrow(() -> new AppException(FileErrorCode.FILE_NOT_FOUND));
         if (mediaFile.getPurpose().isEvidence()) throw new AppException(FileErrorCode.FILE_ACCESS_DENIED);
@@ -319,7 +324,8 @@ public class MediaFileServiceImpl implements MediaFileService {
                 throw new AppException(FileErrorCode.FILE_ACCESS_DENIED);
             }
         }
-        return storageService.presignDownload(mediaFile.getStorageKey());
+        boolean serveThumbnail = thumbnail && mediaFile.getThumbnailKey() != null;
+        return storageService.presignDownload(serveThumbnail ? mediaFile.getThumbnailKey() : mediaFile.getStorageKey());
     }
 
     @Override
@@ -375,8 +381,15 @@ public class MediaFileServiceImpl implements MediaFileService {
 
     /** Object co the da nam tren storage: xoa ca hai phia de khong de lai rac. */
     private void discard(MediaFile mediaFile) {
-        storageService.delete(mediaFile.getStorageKey());
+        deleteObjects(mediaFile);
         mediaFileRepository.delete(mediaFile);
+    }
+
+    private void deleteObjects(MediaFile mediaFile) {
+        storageService.delete(mediaFile.getStorageKey());
+        if (mediaFile.getThumbnailKey() != null) {
+            storageService.delete(mediaFile.getThumbnailKey());
+        }
     }
 
     private void rejectUpload(MediaFile media) {

@@ -31,6 +31,7 @@ public class MediaFileResponse {
     String originalFilename;
     String displayName;
     String url;
+    String thumbnailUrl;
     String contentType;
     String extension;
     Long sizeBytes;

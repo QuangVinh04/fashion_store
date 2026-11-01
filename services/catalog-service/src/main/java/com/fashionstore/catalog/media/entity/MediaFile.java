@@ -87,6 +87,9 @@ public class MediaFile extends BaseEntity {
     @Column(name = "folder")
     String folder;
 
+    @Column(name = "thumbnail_key")
+    String thumbnailKey;
+
     @Column(name = "width")
     Integer width;
 

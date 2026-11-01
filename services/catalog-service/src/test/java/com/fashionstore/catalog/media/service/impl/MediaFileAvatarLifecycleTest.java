@@ -69,7 +69,8 @@ class MediaFileAvatarLifecycleTest {
     void setUp() {
         avatarMediaService = new MediaFileServiceImpl(identityAvatarClient, mediaFileRepository, storageService,
                 currentUserProvider, mediaFileMapper, new FileStorageProperties("http://localhost:8087"),
-                new com.fashionstore.catalog.media.config.MinioProperties("http://minio:9000", "http://localhost:9000", "minioadmin", "minioadmin", "fashion-media", 900, 20L * 1024 * 1024));
+                new com.fashionstore.catalog.media.config.MinioProperties("http://minio:9000", "http://localhost:9000", "minioadmin", "minioadmin", "fashion-media", 900, 20L * 1024 * 1024),
+                org.mockito.Mockito.mock(com.fashionstore.catalog.media.service.ThumbnailService.class));
 
         lenient().when(mediaFileMapper.toResponse(any(MediaFile.class), anyString()))
                 .thenAnswer(inv -> {
