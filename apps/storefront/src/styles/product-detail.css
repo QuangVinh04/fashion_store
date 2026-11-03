@@ -84,7 +84,7 @@
 .pd-size-header { padding:24px 56px 24px 16px; flex-shrink:0; }
 .pd-size-header [data-slot=sheet-title] { font-size:18px; font-weight:600; }
 .pd-size-body { padding:8px 16px 32px; overflow-y:auto; min-height:0; }
-.pd-size-tabs { display:grid; grid-template-columns:1fr 1fr; gap:4px; padding:4px; background:var(--background); border-radius:12px; box-shadow:inset 0 1px 2px #00000008; }
+.pd-size-tabs { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:4px; padding:4px; background:var(--background); border-radius:12px; box-shadow:inset 0 1px 2px #00000008; }
 .pd-size-tabs button { border:1px solid transparent; padding:3px 7px; min-height:32px; font-size:14px; font-weight:500; color:var(--muted-foreground); background:transparent; border-radius:8px; transition:background-color 180ms,color 180ms,box-shadow 180ms; }
 .pd-size-tabs button[data-state=active] { background:var(--card); color:var(--foreground); border-color:var(--border); box-shadow:0 1px 2px #00000008; }
 .pd-size-tabs button:not([data-state=active]):hover { color:var(--foreground); }
@@ -200,3 +200,473 @@
   .pr-back-short { display:inline; }
 }
 @media(prefers-reduced-motion:reduce) { .pd-fold-content,.pd-help-collapse { transition:none; } }
+
+/* SizeFinderPanel inside SizeGuide Sheet (Phase 3 - Simplified) */
+.pd-finder-box {
+  margin-bottom: 18px;
+  padding: 14px 16px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+.pd-finder-box-title {
+  margin: 0 0 10px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted-foreground);
+}
+.pd-finder-box-form {
+  margin-bottom: 2px;
+}
+.pd-finder-box-inputs {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.pd-finder-box-inputs .pd-finder-field {
+  width: 96px;
+}
+.pd-finder-box-inputs .pd-finder-label {
+  font-size: 12px;
+  color: var(--foreground);
+}
+.pd-finder-box-inputs .pd-finder-input {
+  height: 36px;
+  padding: 0 28px 0 10px;
+  font-size: 13px;
+  border-radius: 6px;
+}
+.pd-finder-pref-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 36px;
+}
+.pd-finder-pref-label {
+  font-size: 12px;
+  color: var(--muted-foreground);
+  margin-right: 2px;
+}
+.pd-finder-pref-btn {
+  display: inline-flex;
+  align-items: center;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: var(--background);
+  font-size: 12px;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  transition: all 150ms ease;
+}
+.pd-finder-pref-btn input {
+  display: none;
+}
+.pd-finder-pref-btn.is-active {
+  border-color: var(--primary);
+  background: var(--primary-light);
+  color: var(--primary);
+  font-weight: 600;
+}
+.pd-finder-submit-inline {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--foreground);
+  color: var(--background);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 150ms, transform 100ms;
+  white-space: nowrap;
+}
+.pd-finder-submit-inline:hover:not(:disabled) {
+  opacity: 0.88;
+}
+.pd-finder-submit-inline:active:not(:disabled) {
+  transform: scale(0.98);
+}
+.pd-finder-submit-inline:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Result banner in Panel - Clean & readable */
+.pd-finder-result {
+  margin-top: 12px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.pd-finder-result-summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 13px;
+  color: #166534;
+}
+.pd-finder-rec-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #15803d;
+  font-weight: 600;
+}
+.pd-finder-rec-badge strong {
+  font-size: 14px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.pd-finder-dim {
+  color: #166534;
+  opacity: 0.85;
+  font-weight: normal;
+}
+.pd-finder-alt-hint {
+  color: #166534;
+  opacity: 0.9;
+  font-size: 12.5px;
+}
+.pd-finder-detail-link {
+  border: 0;
+  background: transparent;
+  color: #15803d;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  transition: opacity 150ms;
+}
+.pd-finder-detail-link:hover {
+  opacity: 0.8;
+}
+.pd-finder-error-bar {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--destructive);
+}
+.pd-finder-neutral-msg {
+  margin: 8px 0 0;
+  font-size: 12.5px;
+  color: var(--muted-foreground);
+}
+
+/* Highlight recommended row in size table */
+.pd-size-table tr.is-recommended-row {
+  background: #f0fdf4;
+  font-weight: 600;
+}
+.pd-chart-rec-tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: #15803d;
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  vertical-align: middle;
+}
+
+/* Screen 2: FitDetailScreen */
+.pd-fitdetail-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.pd-fitdetail-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 2px;
+}
+.pd-fitdetail-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  background: transparent;
+  color: var(--primary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 6px;
+  transition: opacity 150ms;
+}
+.pd-fitdetail-back-btn:hover {
+  opacity: 0.8;
+  text-decoration: underline;
+}
+.pd-fitdetail-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--foreground);
+  outline: none;
+}
+.pd-fitdetail-intro {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+.pd-fitdetail-desc {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted-foreground);
+  line-height: 1.5;
+}
+.pd-fitdetail-placeholder {
+  padding: 20px 14px;
+  background: var(--background);
+  border: 1px dashed var(--border-strong);
+  border-radius: 10px;
+  text-align: center;
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+.pd-fitdetail-placeholder p {
+  margin: 0;
+}
+
+/* Shared form grid and MeasurementField */
+.pd-finder-clear-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  background: transparent;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 6px;
+  white-space: nowrap;
+  transition: color 150ms;
+}
+.pd-finder-clear-btn:hover {
+  color: var(--destructive);
+}
+.pd-finder-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.pd-finder-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.pd-finder-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--foreground);
+}
+.pd-finder-unit {
+  font-size: 12px;
+  font-weight: normal;
+  color: var(--muted-foreground);
+}
+.pd-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.pd-finder-input {
+  width: 100%;
+  height: 38px;
+  padding: 0 36px 0 12px;
+  border: 1.5px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--card);
+  font-size: 14px;
+  color: var(--foreground);
+  transition: border-color 150ms;
+  outline: none;
+}
+.pd-finder-input:focus {
+  border-color: var(--primary);
+}
+.pd-finder-input.is-invalid {
+  border-color: var(--destructive);
+}
+.pd-input-suffix {
+  position: absolute;
+  right: 12px;
+  font-size: 12px;
+  color: var(--muted-foreground);
+  pointer-events: none;
+}
+.pd-field-error {
+  font-size: 11px;
+  color: var(--destructive);
+  line-height: 1.3;
+  margin-top: 2px;
+}
+.pd-finder-submit-btn {
+  width: 100%;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 150ms, background-color 150ms;
+}
+.pd-finder-submit-btn:hover:not(:disabled) {
+  background: var(--primary-hover);
+}
+.pd-finder-submit-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Toolbar for SizeGuide tabs and unit */
+.pd-size-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+/* BodyFitMap (kept from F4) */
+.pd-fitmap-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  background: var(--background);
+  border-radius: 10px;
+  border: 1px solid var(--border);
+}
+.pd-fitmap-header {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pd-fitmap-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--foreground);
+}
+.pd-fitmap-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+.pd-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.pd-legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.pd-fitmap-content {
+  display: grid;
+  grid-template-columns: 140px minmax(0, 1fr);
+  gap: 16px;
+  align-items: center;
+}
+.pd-fitmap-visual {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+.pd-fitmap-svg {
+  width: 100%;
+  max-width: 140px;
+  height: auto;
+}
+.pd-fitmap-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 1.4;
+  outline: none;
+}
+.pd-fitmap-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.pd-fitmap-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-top: 4px;
+  flex-shrink: 0;
+}
+.pd-fitmap-desc {
+  color: var(--foreground);
+}
+
+@media (max-width: 390px) {
+  .pd-finder-box-inputs {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .pd-finder-box-inputs .pd-finder-field {
+    width: 100%;
+  }
+  .pd-finder-submit-inline {
+    width: 100%;
+    justify-content: center;
+  }
+  .pd-finder-result {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+  .pd-finder-grid {
+    grid-template-columns: 1fr;
+  }
+  .pd-fitmap-content {
+    grid-template-columns: 1fr;
+  }
+  .pd-fitmap-visual {
+    justify-content: center;
+  }
+  .pd-fitmap-svg {
+    max-width: 120px;
+  }
+}
+

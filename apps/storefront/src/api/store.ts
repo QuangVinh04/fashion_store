@@ -1,5 +1,5 @@
 import { api, json, query, type Page } from './client';
-import type { Address, AvailablePromotion, Cart, Checkout, Order, OrderSummary, Payment, Product, ProductSummary, Profile, PromotionTarget, ReturnRequest, ReviewSummary, Session, SizeChartRow, WishlistItem } from './types';
+import type { Address, AvailablePromotion, Cart, Checkout, Order, OrderSummary, Payment, Product, ProductSummary, Profile, PromotionTarget, ReturnRequest, ReviewSummary, Session, SizeChartRow, SizeRecommendation, SizeRecommendationParams, WishlistItem } from './types';
 async function uploadFile(file: File, folder: string) {
   const avatar = folder === 'avatars';
   const route = avatar ? '/api/v1/files/avatars' : '/api/v1/files';
@@ -36,6 +36,7 @@ export const store = {
   product: (id: string) => api<Product>(`/api/v1/products/${id}`),
   variantSnapshots: (ids: string[]) => api<{ variantId: string; productId: string }[]>(`/api/v1/products/variants/batch?${ids.map(id => `variantIds=${encodeURIComponent(id)}`).join('&')}`),
   productSizeChart: (id: string) => api<{ rows: SizeChartRow[] } | null>(`/api/v1/products/${id}/size-chart`),
+  productSizeRecommendation: (id: string, params: SizeRecommendationParams) => api<SizeRecommendation>(`/api/v1/products/${id}/size-recommendation?${query(params as Record<string, string | number | undefined | null>)}`),
   reviews: (id: string, page = 0, options: { rating?: number; sort?: string } = {}) => api<ReviewSummary>(`/api/v1/products/${id}/reviews?${query({ page, ...options })}`),
   addReview: (id: string, orderId: string, rating: number, comment: string) => api(`/api/v1/products/${id}/reviews`, json('POST', { orderId, rating, comment })),
   deleteReview: (id: string, reviewId: string) => api<void>(`/api/v1/products/${id}/reviews/${reviewId}`, json('DELETE')),

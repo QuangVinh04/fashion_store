@@ -5,6 +5,30 @@ export type ProductSummary = { id: string; name: string; slug: string; basePrice
 export type Variant = { id: string; productId: string; sku: string; price?: number; salePrice?: number; active: boolean; available?: boolean; sizeOptionId?: string; colorOptionId?: string; size?: string; color?: string; colorHex?: string; thumbnailMediaId?: string };
 export type ProductImage = { id: string; mediaId: string; colorOptionId?: string; color?: string; url?: string; altText?: string; sortOrder: number; primary: boolean };
 export type SizeChartRow = { id: string; sizeCode: string; chest?: number; waist?: number; hip?: number; shoulder?: number; length?: number; inseam?: number; heightMin?: number; heightMax?: number; weightMin?: number; weightMax?: number };
+export type SizeRecommendationFit = 'TIGHT' | 'SNUG' | 'GOOD' | 'LOOSE';
+export type SizeRecommendationRegion = 'CHEST' | 'WAIST' | 'HIP' | 'SHOULDER' | 'LENGTH' | 'INSEAM';
+export type SizeRecommendationPreference = 'SNUG' | 'REGULAR' | 'LOOSE';
+export type SizeRecommendationRegionResult = { region: SizeRecommendationRegion; fit: SizeRecommendationFit; differenceCm: number };
+export type SizeRecommendationParams = {
+  heightCm?: number;
+  weightKg?: number;
+  chestCm?: number;
+  waistCm?: number;
+  hipCm?: number;
+  shoulderCm?: number;
+  lengthCm?: number;
+  inseamCm?: number;
+  preference?: SizeRecommendationPreference;
+};
+export type SizeRecommendation = {
+  status: 'RECOMMENDED' | 'NOT_ENOUGH_DATA';
+  recommendedSize?: string;
+  alternativeSize?: string;
+  recommendedSizeAvailable?: boolean;
+  basis?: 'BODY_MEASUREMENTS' | 'HEIGHT_WEIGHT';
+  confidence?: 'HIGH' | 'MEDIUM' | 'LOW';
+  regions?: SizeRecommendationRegionResult[];
+};
 export type Product = ProductSummary & { description?: string; shortDescription?: string; gender?: string; categoryId?: string; images: ProductImage[]; variants: Variant[]; attributes?: { id: string; name?: string; value?: string }[] };
 export type CartItem = { id: string; variantId: string; productId: string; quantity: number; unitPrice: number; totalPrice: number; productName: string; size?: string; color?: string; sku?: string; available: boolean | null };
 export type Cart = { id?: string; items: CartItem[]; totalPrice: number; totalQuantity: number };
