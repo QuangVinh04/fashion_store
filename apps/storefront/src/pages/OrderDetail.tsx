@@ -200,7 +200,7 @@ export default function OrderDetail() {
   const cancelled = order?.status === "CANCELLED";
   const delivered = order && ["DELIVERED", "COMPLETED"].includes(order.status);
   const paymentLabel = order?.paymentMethod === "COD" ? "Thanh toán khi nhận hàng (COD)"
-    : order?.paymentMethod === "WALLET" ? "Ví LINO" : order?.paymentProvider === "PAYOS" ? "PayOS" : "VNPay";
+    : order?.paymentMethod === "WALLET" ? "Ví LINO" : "PayOS";
   const paymentStatus = payment?.status ? ({ COD_PENDING: "Thanh toán khi nhận hàng", PENDING: "Chờ thanh toán", COMPLETED: "Đã thanh toán", FAILED: "Chưa thanh toán thành công", CANCELLED: "Đã hủy", REFUNDED: "Đã hoàn tiền", REFUND_PENDING: "Đang hoàn tiền", REFUND_FAILED: "Đang kiểm tra hoàn tiền" } as Record<string, string>)[payment.status] || "Đang cập nhật" : paymentLoading ? "Đang cập nhật…" : "Chưa có thông tin";
   return <ProfileLayout flush>
     <ConfirmReceiptDialog open={receiptOpen} busy={receiptBusy} blocked={!order?.canConfirmReceipt || !!order?.activeReturnId || orderLoad.loading} error={receiptError} onOpenChange={setReceiptOpen} onConfirm={()=>void handleConfirmReceipt()}/>

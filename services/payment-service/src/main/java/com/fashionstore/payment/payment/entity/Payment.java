@@ -76,10 +76,6 @@ public class Payment extends AuditedEntity {
     @Column(name = "merchant_reference", unique = true, length = 100)
     String merchantReference;
 
-    /** Provider timestamp of the original payment request, required by VNPay refunds. */
-    @Column(name = "provider_transaction_date", length = 14)
-    String providerTransactionDate;
-
     /** URL được lưu để retry trả lại cùng link, không tạo giao dịch mới. */
     @Column(name = "payment_url", length = 2048)
     String paymentUrl;

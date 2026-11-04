@@ -854,7 +854,7 @@ class OrderServiceImplTest {
                         .idempotencyKey("checkout-1")
                         .checkoutId("checkout-1")
                         .paymentMethod(PaymentMethod.ONLINE)
-                        .paymentProvider(PaymentProvider.VNPAY)
+                        .paymentProvider(PaymentProvider.PAYOS)
                         .status(status)
                         .address(
                                 ShippingAddress.builder()

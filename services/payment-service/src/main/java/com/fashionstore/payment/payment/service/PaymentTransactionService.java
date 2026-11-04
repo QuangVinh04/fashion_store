@@ -434,8 +434,5 @@ public class PaymentTransactionService {
         }
         payment.setProviderAmount(payment.getAmount());
         payment.setProviderCurrency(payment.getCurrency());
-        payment.setProviderTransactionDate(
-                LocalDateTime.now(java.time.ZoneId.of("Asia/Ho_Chi_Minh"))
-                        .format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMddHHmmss")));
     }
 }

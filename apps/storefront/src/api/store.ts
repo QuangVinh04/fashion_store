@@ -65,7 +65,6 @@ export const store = {
   returnCreate: (id: string, reason: string, images: string[]) => api<ReturnRequest>(`/api/v1/orders/${id}/return-request`, json('POST', { reason, images })),
   payment: (orderId: string,signal?:AbortSignal) => api<Payment>(`/api/v1/payments/order/${orderId}`,{signal}),
   paymentInitiate: (id: string) => api<{ paymentUrl?: string }>(`/api/v1/payments/${id}/initiate`, json('POST')),
-  vnpayVerify: (params: URLSearchParams) => api(`/api/v1/payments/vnpay/return?${params.toString()}`),
   payosVerify: (params: URLSearchParams) => api(`/api/v1/payments/payos/return?${params.toString()}`),
   uploadImage: async (file: File, folder: string) => (await uploadFile(file, folder)).url,
   uploadAvatar: (file: File) => uploadFile(file, 'avatars'),

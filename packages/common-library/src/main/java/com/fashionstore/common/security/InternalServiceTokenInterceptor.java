@@ -12,7 +12,7 @@ import org.springframework.security.oauth2.client.OAuth2AuthorizedClientManager;
 
 /**
  * Gắn access token của service account (client_credentials, Keycloak) vào Feign client gọi /internal/**.
- * Chỉ khai báo trong configuration của Feign client nội bộ — không gắn cho client ra bên ngoài (GHN, VNPay...).
+ * Chỉ khai báo trong configuration của Feign client nội bộ — không gắn cho client ra bên ngoài (GHN, payOS...).
  */
 @Slf4j
 public class InternalServiceTokenInterceptor implements RequestInterceptor {

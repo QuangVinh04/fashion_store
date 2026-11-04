@@ -25,7 +25,7 @@ export default function Contact() {
     },
     {
       q: "Tôi có thể thanh toán bằng những hình thức nào?",
-      a: "LINO hỗ trợ 3 phương thức thanh toán an toàn: Thanh toán tiền mặt khi nhận hàng (COD), Thanh toán trực tuyến qua cổng VNPay (ATM / Visa / Mastercard / VNPAY-QR) và Chuyển khoản tức thì qua cổng PayOS (VietQR).",
+      a: "LINO hỗ trợ 3 phương thức thanh toán: Tiền mặt khi nhận hàng (COD), chuyển khoản qua payOS (VietQR) và thanh toán bằng số dư ví Fashion Store.",
     },
     {
       q: "Làm thế nào để tôi theo dõi tiến trình đơn hàng?",

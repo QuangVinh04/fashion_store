@@ -28,7 +28,7 @@ export default function CheckoutPage() {
 
   const [addressId, setAddressId] = useState<string>("");
   const [shippingMethod, setShippingMethod] = useState<"STANDARD" | "EXPRESS">("STANDARD");
-  const [paymentProvider, setPaymentProvider] = useState<"COD" | "VNPAY" | "PAYOS" | "INTERNAL">("COD");
+  const [paymentProvider, setPaymentProvider] = useState<"COD" | "PAYOS" | "INTERNAL">("COD");
   const [productCouponCode, setProductCouponCode] = useState<string>("");
   const [shippingCouponCode, setShippingCouponCode] = useState<string>("");
   const [productCouponError, setProductCouponError] = useState<string>("");
@@ -136,7 +136,7 @@ export default function CheckoutPage() {
     }
   }
 
-  async function handlePaymentProviderChange(newProvider: "COD" | "VNPAY" | "PAYOS" | "INTERNAL") {
+  async function handlePaymentProviderChange(newProvider: "COD" | "PAYOS" | "INTERNAL") {
     setPaymentProvider(newProvider);
     if (!checkout) return;
     const newMethod = newProvider === "COD" ? "COD" : newProvider === "INTERNAL" ? "WALLET" : "ONLINE";
@@ -295,7 +295,7 @@ export default function CheckoutPage() {
         return;
       }
 
-      // Online payment (VNPay or PayOS)
+      // Online payment (payOS): tạo link một lần rồi chuyển sang cổng thanh toán.
       setProcessingText(`Đang kết nối cổng thanh toán ${paymentProvider}...`);
       try {
         window.location.assign(order.paymentUrl || (await requestPaymentUrl(order.id, store)));
@@ -584,12 +584,6 @@ export default function CheckoutPage() {
                     icon: Truck,
                   },
                   {
-                    id: "VNPAY",
-                    title: "Cổng Thanh Toán VNPay",
-                    desc: "Hỗ trợ thẻ ATM nội địa, thẻ quốc tế Visa/Mastercard và VNPAY-QR",
-                    icon: CreditCard,
-                  },
-                  {
                     id: "PAYOS",
                     title: "Cổng Thanh Toán PayOS (VietQR)",
                     desc: "Quét mã VietQR chuyển khoản tức thì 24/7 từ bất kỳ ứng dụng ngân hàng nào",
@@ -613,7 +607,7 @@ export default function CheckoutPage() {
                         checked={isSelected}
                         onChange={() =>
                           void handlePaymentProviderChange(
-                            prov.id as "COD" | "VNPAY" | "PAYOS" | "INTERNAL",
+                            prov.id as "COD" | "PAYOS" | "INTERNAL",
                           )
                         }
                         className="mt-1 choice-control"

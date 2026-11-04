@@ -46,15 +46,15 @@ class CallbackPaymentServiceImplTest {
 
     @Test
     void returnVerifiesProviderOnlyOnceBeforeApplyingResult() {
-        when(paymentHandlerRegistry.get(PaymentProvider.VNPAY)).thenReturn(paymentHandler);
+        when(paymentHandlerRegistry.get(PaymentProvider.PAYOS)).thenReturn(paymentHandler);
         when(paymentHandler.verifyCallback(any(), any())).thenReturn(PaymentCallbackResult.builder()
                 .signatureValid(true).merchantReference("merchant-1").status(PaymentStatus.COMPLETED).build());
         when(paymentRepository.findByMerchantReference("merchant-1"))
-                .thenReturn(Optional.of(pendingPayment(PaymentProvider.VNPAY)));
+                .thenReturn(Optional.of(pendingPayment(PaymentProvider.PAYOS)));
         when(paymentStateService.isProviderAmountValid(any(), any())).thenReturn(true);
         when(paymentStateService.applyResult(any(), any())).thenReturn(
                 PaymentResponse.builder().id("pay-999").orderId("order-888").build());
-        PaymentCallbackResult result = service.verifyReturn(PaymentProvider.VNPAY, Map.of("vnp_TxnRef", "merchant-1"));
+        PaymentCallbackResult result = service.verifyReturn(PaymentProvider.PAYOS, Map.of("orderCode", "merchant-1"));
         verify(paymentHandler, times(1)).verifyCallback(any(), any());
         assertThat(result.getOrderId()).isEqualTo("order-888");
         assertThat(result.getPaymentId()).isEqualTo("pay-999");
@@ -72,18 +72,18 @@ class CallbackPaymentServiceImplTest {
 
     @Test
     void emptyRequestIsRejectedBeforeTouchingHandler() {
-        CallbackProcessResult result = service.processCallback(PaymentProvider.VNPAY, Map.of(), null);
+        CallbackProcessResult result = service.processCallback(PaymentProvider.PAYOS, Map.of(), null);
 
         assertThat(result.outcome()).isEqualTo(CallbackOutcome.INVALID_REQUEST);
     }
 
     @Test
     void invalidSignatureStopsBeforeLookup() {
-        when(paymentHandlerRegistry.get(PaymentProvider.VNPAY)).thenReturn(paymentHandler);
+        when(paymentHandlerRegistry.get(PaymentProvider.PAYOS)).thenReturn(paymentHandler);
         when(paymentHandler.verifyCallback(any(), any())).thenReturn(
                 PaymentCallbackResult.builder().signatureValid(false).build());
 
-        CallbackProcessResult result = service.processCallback(PaymentProvider.VNPAY, Map.of("vnp_TxnRef", "x"), null);
+        CallbackProcessResult result = service.processCallback(PaymentProvider.PAYOS, Map.of("orderCode", "x"), null);
 
         assertThat(result.outcome()).isEqualTo(CallbackOutcome.SIGNATURE_INVALID);
     }
@@ -112,9 +112,9 @@ class CallbackPaymentServiceImplTest {
 
     @Test
     void alreadyProcessedPaymentIsNotReappliedIdempotently() {
-        Payment payment = pendingPayment(PaymentProvider.VNPAY);
+        Payment payment = pendingPayment(PaymentProvider.PAYOS);
         payment.setStatus(PaymentStatus.COMPLETED);
-        when(paymentHandlerRegistry.get(PaymentProvider.VNPAY)).thenReturn(paymentHandler);
+        when(paymentHandlerRegistry.get(PaymentProvider.PAYOS)).thenReturn(paymentHandler);
         when(paymentHandler.verifyCallback(any(), any())).thenReturn(
                 PaymentCallbackResult.builder()
                         .signatureValid(true)
@@ -124,7 +124,7 @@ class CallbackPaymentServiceImplTest {
         when(paymentRepository.findByMerchantReference("merchant-1")).thenReturn(Optional.of(payment));
         when(paymentStateService.isProviderAmountValid(any(), any())).thenReturn(true);
 
-        CallbackProcessResult result = service.processCallback(PaymentProvider.VNPAY, Map.of("vnp_TxnRef", "merchant-1"), null);
+        CallbackProcessResult result = service.processCallback(PaymentProvider.PAYOS, Map.of("orderCode", "merchant-1"), null);
 
         assertThat(result.outcome()).isEqualTo(CallbackOutcome.ALREADY_PROCESSED);
     }

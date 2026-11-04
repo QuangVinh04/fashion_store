@@ -22,16 +22,14 @@ export function PaymentReturnContent() {
   const [searchParams] = useSearchParams();
   const location = useLocation();
 
-  const isVnpay = location.pathname.includes("vnpay");
   const isPayosCancel =
     location.pathname.includes("payos/cancel") ||
     searchParams.get("cancel") === "true";
   const isPayos =
     location.pathname.includes("payos") || searchParams.has("orderCode");
 
-  const provider=isVnpay?'VNPAY':'PAYOS';
-  const reference=searchParams.get(isVnpay?'vnp_TxnRef':'orderCode')||'';
-  const resolutionLoad=useLoad(()=>resolvePaymentReturn(provider,searchParams),[provider,reference]);
+  const reference=searchParams.get('orderCode')||'';
+  const resolutionLoad=useLoad(()=>resolvePaymentReturn(searchParams),[reference]);
   const orderId=resolutionLoad.data?.orderId||'';
   const orderLoad=useLoad(()=>orderId?store.order(orderId):Promise.resolve(null),[orderId]);
 
@@ -50,43 +48,6 @@ export function PaymentReturnContent() {
           ),
     [orderId],
   );
-
-  // VNPay checksum verification & return processing
-  useEffect(() => {
-    if (!isVnpay || !orderId || !reference) return;
-
-    let active = true;
-    const vnpCode = searchParams.get("vnp_ResponseCode");
-    setVerifyStatus("Đang kiểm tra kết quả thanh toán…");
-    store
-      .vnpayVerify(searchParams)
-      .then(() => {
-        if (active) {
-          if (vnpCode && vnpCode !== "00") {
-            setVerifyError(
-              vnpCode === "24"
-                ? "Bạn đã hủy giao dịch trên cổng VNPay."
-                : "Chưa xác nhận được thanh toán. Vui lòng kiểm tra lại đơn hàng.",
-            );
-          } else {
-            setVerifyStatus("Đã nhận phản hồi thanh toán. Đang kiểm tra đơn hàng.");
-          }
-          void paymentLoad.refresh();void resolutionLoad.refresh();void orderLoad.refresh();
-        }
-      })
-      .catch(() => {
-        if (active) {
-          setVerifyError(
-            "Chưa kiểm tra được kết quả thanh toán. Vui lòng thử lại.",
-          );
-          void paymentLoad.refresh();void resolutionLoad.refresh();void orderLoad.refresh();
-        }
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [isVnpay,orderId,reference]);
 
   // PayOS verification & return processing
   useEffect(() => {

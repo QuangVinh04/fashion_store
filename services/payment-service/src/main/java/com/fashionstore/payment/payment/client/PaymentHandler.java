@@ -8,7 +8,7 @@ import com.fashionstore.payment.payment.entity.Payment;
 import java.util.Map;
 
 /**
- * Một chiến lược duy nhất cho mỗi cổng thanh toán online (VNPay, PayOS, ...). COD không implement
+ * Một chiến lược duy nhất cho mỗi cổng thanh toán online (PayOS, ...). COD không implement
  * interface này — nó không bao giờ đi qua registry (xem {@code PaymentRequestedEventListener}).
  */
 public interface PaymentHandler {

@@ -130,7 +130,6 @@ public class PaymentServiceImpl implements PaymentService {
                     .providerTransactionId(payment.getTransactionId())
                     .providerAmount(payment.getProviderAmount())
                     .providerCurrency(payment.getProviderCurrency())
-                    .providerTransactionDate(payment.getProviderTransactionDate())
                     .build();
         }
 
@@ -173,7 +172,7 @@ public class PaymentServiceImpl implements PaymentService {
     @Override
     @Transactional(readOnly = true)
     public PaymentReturnResolutionResponse resolveReturn(PaymentProvider provider, String reference) {
-        if ((provider != PaymentProvider.PAYOS && provider != PaymentProvider.VNPAY)
+        if (provider != PaymentProvider.PAYOS
                 || reference == null || reference.isBlank() || reference.length() > 100) {
             throw new AppException(PaymentErrorCode.PAYMENT_NOT_FOUND);
         }

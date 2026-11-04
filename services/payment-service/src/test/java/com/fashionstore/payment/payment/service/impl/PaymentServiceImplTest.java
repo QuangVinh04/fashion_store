@@ -155,18 +155,18 @@ class PaymentServiceImplTest {
         Payment p = Payment.builder()
                 .orderId("order-100")
                 .userId("user-1")
-                .provider(PaymentProvider.VNPAY)
+                .provider(PaymentProvider.PAYOS)
                 .status(PaymentStatus.COMPLETED)
                 .initiationAttempts(1)
-                .merchantReference("VNP-REF-123")
+                .merchantReference("PAYOS-REF-123")
                 .build();
         p.setId("pay-1");
 
-        when(repository.findForReturnByMerchantReference("VNP-REF-123")).thenReturn(Optional.of(p));
+        when(repository.findForReturnByMerchantReference("PAYOS-REF-123")).thenReturn(Optional.of(p));
         when(currentUser.getCurrentUserId()).thenReturn("user-1");
 
         PaymentReturnResolutionResponse resolution =
-                service.resolveReturn(PaymentProvider.VNPAY, "VNP-REF-123");
+                service.resolveReturn(PaymentProvider.PAYOS, "PAYOS-REF-123");
 
         assertThat(resolution.orderId()).isEqualTo("order-100");
         assertThat(resolution.paymentId()).isEqualTo("pay-1");
@@ -205,7 +205,7 @@ class PaymentServiceImplTest {
         Payment p = Payment.builder()
                 .orderId("order-300")
                 .userId("other-user")
-                .provider(PaymentProvider.VNPAY)
+                .provider(PaymentProvider.PAYOS)
                 .status(PaymentStatus.COMPLETED)
                 .merchantReference("REF-FORBIDDEN")
                 .build();
@@ -214,7 +214,7 @@ class PaymentServiceImplTest {
         when(repository.findForReturnByMerchantReference("REF-FORBIDDEN")).thenReturn(Optional.of(p));
         when(currentUser.getCurrentUserId()).thenReturn("attacker-user");
 
-        assertThatThrownBy(() -> service.resolveReturn(PaymentProvider.VNPAY, "REF-FORBIDDEN"))
+        assertThatThrownBy(() -> service.resolveReturn(PaymentProvider.PAYOS, "REF-FORBIDDEN"))
                 .isInstanceOf(AppException.class)
                 .extracting("errorCode")
                 .isEqualTo(PaymentErrorCode.PAYMENT_NOT_FOUND);
@@ -225,7 +225,7 @@ class PaymentServiceImplTest {
         when(repository.findForReturnByMerchantReference("NOT-FOUND")).thenReturn(Optional.empty());
         when(repository.findByTransactionId("NOT-FOUND")).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.resolveReturn(PaymentProvider.VNPAY, "NOT-FOUND"))
+        assertThatThrownBy(() -> service.resolveReturn(PaymentProvider.PAYOS, "NOT-FOUND"))
                 .isInstanceOf(AppException.class)
                 .extracting("errorCode")
                 .isEqualTo(PaymentErrorCode.PAYMENT_NOT_FOUND);
@@ -238,7 +238,7 @@ class PaymentServiceImplTest {
                 .extracting("errorCode")
                 .isEqualTo(PaymentErrorCode.PAYMENT_NOT_FOUND);
 
-        assertThatThrownBy(() -> service.resolveReturn(PaymentProvider.VNPAY, "   "))
+        assertThatThrownBy(() -> service.resolveReturn(PaymentProvider.PAYOS, "   "))
                 .isInstanceOf(AppException.class)
                 .extracting("errorCode")
                 .isEqualTo(PaymentErrorCode.PAYMENT_NOT_FOUND);

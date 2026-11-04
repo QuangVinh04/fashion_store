@@ -44,8 +44,6 @@ public class SecurityConfig {
                                 "/v3/api-docs/**",
                                 "/swagger-ui/**",
                                 "/swagger-ui.html",
-                                "/api/v1/payments/vnpay/return",
-                                "/api/v1/payments/vnpay/ipn",
                                 "/api/v1/payments/payos/return",
                                 "/api/v1/payments/payos/webhook"
                         ).permitAll()

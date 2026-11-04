@@ -2,12 +2,14 @@
 
 Owns payment records, provider integration, callbacks, and payment status events.
 
+Supported providers are payOS, COD and the internal wallet. Local provider cleanup migrations normalize unsupported provider values and clear obsolete payment links and references before the application reads them.
+
 ## Code structure
 
-Follow [the Backend structure](../../docs/backend-code-structure.md): feature modules `payment` (payments, refunds, VNPay/payOS handlers, callbacks), `wallet` (accounts, ledger, top-up, wallet payments) and `shared` (outbox, Rabbit config, security, `AdminPaging`). Inside each feature, controllers accept HTTP, services own business flows, repositories/entities own persistence, clients adapt external/internal HTTP, and event classes own message entry points and outbox delivery.
+Follow [the Backend structure](../../docs/backend-code-structure.md): feature modules `payment` (payments, refunds, payOS handler, callbacks), `wallet` (accounts, ledger, top-up, wallet payments) and `shared` (outbox, Rabbit config, security, `AdminPaging`). Inside each feature, controllers accept HTTP, services own business flows, repositories/entities own persistence, clients adapt external/internal HTTP, and event classes own message entry points and outbox delivery.
 
 - PaymentServiceImpl and CallbackPaymentServiceImpl coordinate payment initiation and callbacks. PaymentTransactionService owns short database transactions around provider calls; PaymentStateServiceImpl applies verified order-payment results.
-- PaymentHandler, its registry and VNPay/payOS adapters live in client alongside VnPayFeignClient. The provider interface represents genuinely different integrations.
+- PaymentHandler, its registry and the payOS adapter live in client. Online payments use payOS; COD and wallet payments follow their own flows.
 - `wallet` is the ledger only: `WalletService` (transactional credit/debit/balance) and `WalletLedger` (same operations inside a caller's transaction, never marking it rollback-only).
 - Payment flows that use the wallet live in `payment/service`: `WalletPaymentService` (pay an order from the wallet), `WalletTopUpService` (payOS top-up), `OrderFundsRefundService` (order refunds and wallet-saga compensation credited to the wallet).
 - Outbox (OutboxEvent, repository, recorder, relay) lives in `shared/outbox`; queue/routing/consumer identities remain unchanged.
