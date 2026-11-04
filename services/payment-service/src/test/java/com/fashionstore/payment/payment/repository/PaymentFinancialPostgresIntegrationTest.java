@@ -200,7 +200,7 @@ class PaymentFinancialPostgresIntegrationTest {
         Payment payment = topUp();
         assertThat(
                         callbacks
-                                .applyVerifiedResult(PaymentProvider.VNPAY, receipt(payment, "VND"))
+                                .applyVerifiedResult(PaymentProvider.INTERNAL, receipt(payment, "VND"))
                                 .outcome())
                 .isEqualTo(CallbackOutcome.PAYMENT_NOT_FOUND);
         assertThat(balance(payment)).isZero();

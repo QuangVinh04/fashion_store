@@ -21,7 +21,7 @@ Browser
   Keycloak :8180   realm fashion-store, nơi duy nhất cấp token
   MinIO            lưu file media (catalog-service)
   GHN              vận chuyển (order-service)
-  VNPay, PayOS     cổng thanh toán online (payment-service)
+  PayOS            cổng thanh toán online (payment-service)
   SMTP             email (notification-service)
 ```
 
@@ -30,7 +30,7 @@ Browser
 | `identity-service` | hồ sơ user (JIT-provision từ Keycloak `sub`), sổ địa chỉ, quản trị user qua Keycloak Admin API |
 | `catalog-service` | sản phẩm, biến thể, thuộc tính, size chart, tồn kho, media (MinIO), review, wishlist |
 | `order-service` | giỏ hàng, checkout, đơn hàng, saga checkout và saga hủy đơn, khuyến mãi, vận chuyển GHN, đổi trả, dashboard admin |
-| `payment-service` | thanh toán COD / online (VNPay, PayOS) / ví, ví nội bộ và sổ cái, hoàn tiền vào ví |
+| `payment-service` | thanh toán COD / online (PayOS) / ví, ví nội bộ và sổ cái, hoàn tiền vào ví |
 | `notification-service` | email, thông báo in-app (lưu DB, đẩy qua WebSocket) |
 
 ## Xác thực
@@ -71,7 +71,7 @@ Browser
 | catalog | order | `/internal/v1/orders/verify-purchase` — chỉ người đã mua mới review |
 | identity | catalog | xác thực media avatar |
 | identity | Keycloak Admin API | quản trị user |
-| payment | VNPay, PayOS | tạo link, tra cứu giao dịch |
+| payment | PayOS | tạo link, tra cứu giao dịch |
 
 ## Luồng chính
 

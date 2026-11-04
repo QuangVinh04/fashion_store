@@ -140,7 +140,6 @@ class PaymentCommandServiceTest {
         assertThat(storedPayment.getMerchantReference()).isNotBlank();
         assertThat(storedPayment.getProviderAmount()).isEqualByComparingTo("450000");
         assertThat(storedPayment.getProviderCurrency()).isEqualTo("VND");
-        assertThat(storedPayment.getProviderTransactionDate()).isNotBlank();
         verifyNoInteractions(paymentHandlerRegistry);
         verify(outboxEventRecorder, never()).saveMessage(anyString(), anyString(), any(EventEnvelope.class));
     }
@@ -207,7 +206,7 @@ class PaymentCommandServiceTest {
 
     private EventEnvelope<AuthorizePaymentCommand> onlineRequest() {
         return EventEnvelope.v1(EventTypes.PAYMENT_REQUESTED, "order-1", "saga-1", new AuthorizePaymentCommand(
-                "order-1", "user-1", "ONLINE", "VNPAY", new BigDecimal("450000"), "VND", "203.0.113.9"));
+                "order-1", "user-1", "ONLINE", "PAYOS", new BigDecimal("450000"), "VND", "203.0.113.9"));
     }
 
     private void stubPaymentSave() {
@@ -254,7 +253,7 @@ class PaymentCommandServiceTest {
                 .orderId("order-1")
                 .userId("user-1")
                 .method(PaymentMethod.ONLINE)
-                .provider(PaymentProvider.VNPAY)
+                .provider(PaymentProvider.PAYOS)
                 .status(PaymentStatus.COMPLETED)
                 .amount(new BigDecimal("450000"))
                 .currency("VND")

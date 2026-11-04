@@ -10,7 +10,7 @@ import org.slf4j.MDC;
 /**
  * Chuyển correlation ID của request đang xử lý sang lời gọi Feign nội bộ, để log của order, identity,
  * catalog… nối được thành một chuỗi. Chỉ gắn cho client dùng {@link FeignGlobalConfig} (client nội bộ),
- * nên ID không rò sang GHN hay VNPay. Thread không có ID (listener, scheduler) thì không gắn gì và bên
+ * nên ID không rò sang GHN hay payOS. Thread không có ID (listener, scheduler) thì không gắn gì và bên
  * nhận tự sinh ID mới.
  */
 public class CorrelationIdFeignInterceptor implements RequestInterceptor {

@@ -467,8 +467,8 @@ public class CheckoutServiceImpl implements CheckoutService {
             throw new AppException(OrderErrorCode.PAYMENT_PROVIDER_UNSUPPORTED);
         }
 
-        PaymentProvider resolved = provider == null ? PaymentProvider.VNPAY : provider;
-        if (resolved != PaymentProvider.VNPAY && resolved != PaymentProvider.PAYOS) {
+        PaymentProvider resolved = provider == null ? PaymentProvider.PAYOS : provider;
+        if (resolved != PaymentProvider.PAYOS) {
             throw new AppException(OrderErrorCode.PAYMENT_PROVIDER_UNSUPPORTED);
         }
         return resolved;

@@ -8,14 +8,13 @@ Xử lý: `payment-service`. Bắt đầu khi nhận `payment.requested` từ ch
 2. GHN giao hàng thành công. order-service phát `order.delivered` kèm bằng chứng thu tiền: số tiền, thời điểm, mã vận đơn, shop GHN.
 3. payment-service kiểm tra bằng chứng (đúng số tiền, VND, mã hợp lệ) và chuyển payment `COMPLETED`.
 
-## Online (VNPay, PayOS)
+## Online (PayOS)
 
 1. payment-service tạo payment `PENDING`, gán sẵn mã giao dịch phía provider.
 2. Khách gọi `POST /api/v1/payments/{id}/initiate` để lấy link. payment-service phát `payment.initiated` kèm `paymentUrl`.
    - Mã giao dịch cố định từ đầu. Tạo lại link dùng đúng mã cũ, nên provider không sinh giao dịch thứ hai.
    - Quá deadline saga thì không phát link mới.
 3. Provider gọi lại:
-   - VNPay: `GET /api/v1/payments/vnpay/ipn` (server) và `/return` (browser).
    - PayOS: `POST /api/v1/payments/payos/webhook` (server) và `/return` (browser).
 4. Callback hợp lệ → `payment.completed` hoặc `payment.failed`. Callback kiểm tra chữ ký, số tiền, trạng thái đã xử lý.
 

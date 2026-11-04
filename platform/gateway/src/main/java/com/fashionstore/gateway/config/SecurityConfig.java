@@ -27,8 +27,6 @@ public class SecurityConfig {
                                 "/catalog/v3/api-docs/**",
                                 "/order/v3/api-docs/**",
                                 "/payment/v3/api-docs/**",
-                                "/api/v1/payments/vnpay/return",
-                                "/api/v1/payments/vnpay/ipn",
                                 "/api/v1/payments/payos/webhook",
                                 "/api/v1/shipping/ghn/webhook"
                         ).permitAll()

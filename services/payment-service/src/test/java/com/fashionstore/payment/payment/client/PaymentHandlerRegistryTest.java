@@ -15,13 +15,13 @@ class PaymentHandlerRegistryTest {
 
     @Test
     void resolvesHandlerByProvider() {
-        PaymentHandler vnpay = mock(PaymentHandler.class);
-        when(vnpay.provider()).thenReturn(PaymentProvider.VNPAY);
+        PaymentHandler other = mock(PaymentHandler.class);
+        when(other.provider()).thenReturn(PaymentProvider.INTERNAL);
         PaymentHandler payos = mock(PaymentHandler.class);
         when(payos.provider()).thenReturn(PaymentProvider.PAYOS);
-        PaymentHandlerRegistry registry = new PaymentHandlerRegistry(List.of(vnpay, payos));
+        PaymentHandlerRegistry registry = new PaymentHandlerRegistry(List.of(other, payos));
 
-        assertThat(registry.get(PaymentProvider.VNPAY)).isSameAs(vnpay);
+        assertThat(registry.get(PaymentProvider.INTERNAL)).isSameAs(other);
         assertThat(registry.get(PaymentProvider.PAYOS)).isSameAs(payos);
     }
 
@@ -29,7 +29,7 @@ class PaymentHandlerRegistryTest {
     void throwsWhenProviderHasNoHandler() {
         PaymentHandlerRegistry registry = new PaymentHandlerRegistry(List.of());
 
-        assertThatThrownBy(() -> registry.get(PaymentProvider.VNPAY))
+        assertThatThrownBy(() -> registry.get(PaymentProvider.PAYOS))
                 .isInstanceOf(AppException.class);
     }
 }

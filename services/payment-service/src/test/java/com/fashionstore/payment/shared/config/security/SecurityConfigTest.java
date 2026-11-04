@@ -68,8 +68,8 @@ class SecurityConfigTest {
     }
 
     @Test
-    void vnpayCallbackNeedsNoToken() throws Exception {
-        mockMvc.perform(get("/api/v1/payments/vnpay/ipn")).andExpect(status().isOk());
+    void payosReturnNeedsNoToken() throws Exception {
+        mockMvc.perform(get("/api/v1/payments/payos/return")).andExpect(status().isOk());
     }
 
     @Test
@@ -121,7 +121,7 @@ class SecurityConfigTest {
             return id;
         }
 
-        @GetMapping("/api/v1/payments/vnpay/ipn")
+        @GetMapping("/api/v1/payments/payos/return")
         String ipn() {
             return "ipn";
         }

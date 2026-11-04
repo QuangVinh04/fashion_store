@@ -5,13 +5,6 @@ springdoc:
   paths-to-match: /api/**
 
 spring:
-  cloud:
-    openfeign:
-      client:
-        config:
-          vnpay-api:
-            connectTimeout: 2000
-            readTimeout: 5000
   security:
     oauth2:
       resourceserver:
@@ -96,45 +89,12 @@ payment:
   reconciliation:
     enabled: ${PAYMENT_RECONCILIATION_ENABLED:true}
     delay-ms: ${PAYMENT_RECONCILIATION_DELAY_MS:30000}
-  vnpay:
-    pay-url: ${VNPAY_PAY_URL:https://sandbox.vnpayment.vn/paymentv2/vpcpay.html}
-    tmn-code: ${VNPAY_TMN_CODE:}
-    hash-secret: ${VNPAY_HASH_SECRET:}
-    return-url: ${VNPAY_RETURN_URL:http://localhost:8083/payment/vnpay/return}
-    api-url: ${VNPAY_API_URL:https://sandbox.vnpayment.vn}
-    server-ip: ${VNPAY_SERVER_IP:127.0.0.1}
-    expiration-minutes: ${VNPAY_EXPIRATION_MINUTES:15}
   payos:
     client-id: ${PAYOS_CLIENT_ID:}
     api-key: ${PAYOS_API_KEY:}
     checksum-key: ${PAYOS_CHECKSUM_KEY:}
     return-url: ${PAYOS_RETURN_URL:http://localhost:8083/payment/payos/success}
     cancel-url: ${PAYOS_CANCEL_URL:http://localhost:8083/payment/payos/cancel}
-
-resilience4j:
-  # Mỗi downstream một breaker riêng. UpstreamFailure (common-library): chỉ 5xx / mất kết nối / timeout mới
-  # tính là lỗi và được retry; 4xx, AppException và circuit đang mở thì không.
-  retry:
-    configs:
-      default:
-        max-attempts: 3
-        wait-duration: 500ms
-        retry-exception-predicate: com.fashionstore.common.resilience.UpstreamFailure
-    instances:
-      vnpayService:
-        base-config: default
-  circuitbreaker:
-    configs:
-      default:
-        sliding-window-size: 20
-        minimum-number-of-calls: 10
-        failure-rate-threshold: 50
-        wait-duration-in-open-state: 10s
-        permitted-number-of-calls-in-half-open-state: 5
-        record-failure-predicate: com.fashionstore.common.resilience.UpstreamFailure
-    instances:
-      vnpayService:
-        base-config: default
 
 management:
   endpoints:

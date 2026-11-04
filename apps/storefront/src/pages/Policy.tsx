@@ -114,7 +114,7 @@ export default function Policy() {
                 bên ngoài.
               </p>
               <p>
-                <strong>Thanh toán trực tuyến (VNPay / PayOS):</strong> Giao
+                <strong>Thanh toán trực tuyến (payOS):</strong> Giao
                 dịch được bảo vệ và xử lý qua cổng thanh toán bảo mật. Khách
                 hàng quét mã VietQR hoặc sử dụng thẻ ATM nội địa / thẻ quốc tế
                 Visa, Mastercard.

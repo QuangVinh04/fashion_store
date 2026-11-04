@@ -158,10 +158,10 @@ class OrderSagaServiceTest {
                         saga,
                         EventTypes.PAYMENT_INITIATED,
                         new PaymentInitiatedEvent(
-                                "order-1", "payment-1", "https://sandbox.vnpayment.vn/pay?...")),
+                                "order-1", "payment-1", "https://pay.payos.vn/web/example")),
                 "message-initiated-1");
 
-        assertEquals("https://sandbox.vnpayment.vn/pay?...", order.getPaymentUrl());
+        assertEquals("https://pay.payos.vn/web/example", order.getPaymentUrl());
         // Chỉ ghi chú thông tin, không đổi bước saga — vẫn chờ PAYMENT_COMPLETED thật.
         assertEquals(OrderSagaStep.AUTHORIZE_PAYMENT, saga.getCurrentStep());
         verify(sagaOutbox, never()).emit(any(), any());
@@ -180,7 +180,7 @@ class OrderSagaServiceTest {
                         saga,
                         EventTypes.PAYMENT_INITIATED,
                         new PaymentInitiatedEvent(
-                                "order-1", "payment-1", "https://sandbox.vnpayment.vn/pay?...")),
+                                "order-1", "payment-1", "https://pay.payos.vn/web/example")),
                 "message-initiated-2");
 
         assertNull(order.getPaymentUrl());
@@ -576,7 +576,7 @@ class OrderSagaServiceTest {
                         .idempotencyKey("checkout-1")
                         .checkoutId("checkout-1")
                         .paymentMethod(PaymentMethod.ONLINE)
-                        .paymentProvider(PaymentProvider.VNPAY)
+                        .paymentProvider(PaymentProvider.PAYOS)
                         .status(OrderStatus.PENDING)
                         .address(
                                 ShippingAddress.builder()

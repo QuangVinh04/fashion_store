@@ -6,7 +6,7 @@ import com.fashionstore.payment.payment.dto.PaymentCallbackResult;
 
 import java.util.Map;
 
-/** Dùng chung cho mọi provider dạng Passive Callback (VNPay, PayOS, ...), tham số hoá theo provider. */
+/** Dùng chung cho mọi provider dạng Passive Callback (PayOS, ...), tham số hoá theo provider. */
 public interface CallbackPaymentService {
     PaymentCallbackResult verifyReturn(PaymentProvider provider, Map<String, String> queryParams);
 

@@ -30,7 +30,6 @@ export const router = createBrowserRouter([
       { path: 'profile/orders/:id', lazy: () => import('../pages/OrderDetail').then(m => ({ element: protectedPage(createElement(m.default)) })) },
       { path: 'profile/orders/:id/return', lazy: () => import('../pages/ReturnPage').then(m => ({ element: protectedPage(createElement(m.default)) })) },
       { path: 'wishlist', lazy: () => import('../pages/Wishlist').then(m => ({ element: protectedPage(createElement(m.default)) })) },
-      { path: 'payment/vnpay/return', lazy: () => import('../pages/PaymentReturn').then(m => ({ element: protectedPage(createElement(m.default)) })) },
       { path: 'payment/payos/success', lazy: () => import('../pages/PaymentReturn').then(m => ({ element: protectedPage(createElement(m.default)) })) },
       { path: 'payment/payos/cancel', lazy: () => import('../pages/PaymentReturn').then(m => ({ element: protectedPage(createElement(m.default)) })) },
       { path: 'contact', lazy: () => import('../pages/Contact').then(m => ({ Component: m.default })) },

@@ -13,5 +13,4 @@ public class PaymentInitiationResult {
     String providerTransactionId;
     BigDecimal providerAmount;
     String providerCurrency;
-    String providerTransactionDate;
 }

@@ -525,7 +525,7 @@ function section4() {
       [
         ['controller', 'PaymentController', 'POST /payments/initiate, GET /payments/{orderId}, POST /payments/webhook'],
         ['service', 'PaymentService', 'Khởi tạo payment, xử lý kết quả, rollback khi thất bại'],
-        ['service', 'WebhookService', 'Nhận callback từ payment gateway (VNPay/Momo/Stripe)'],
+        ['service', 'WebhookService', 'Nhận callback từ payment gateway (payOS)'],
         ['client', 'OrderServiceClient', 'Cập nhật trạng thái order sau thanh toán'],
         ['entity', 'Payment', 'id, orderId, userId, amount, method, status, transactionId'],
         ['entity', 'PaymentLog', 'id, paymentId, event, payload, createdAt'],

@@ -27,7 +27,7 @@ class PaymentRepositoryIntegrationTest {
     @Autowired PaymentRepository repository;
 
     @org.junit.jupiter.params.ParameterizedTest
-    @org.junit.jupiter.params.provider.EnumSource(value = PaymentProvider.class, names = {"VNPAY", "PAYOS"})
+    @org.junit.jupiter.params.provider.EnumSource(value = PaymentProvider.class, names = {"PAYOS"})
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     void returnResolutionReadsWithoutLocking(PaymentProvider provider) {
         Payment payment = persist("order-return", "return-reference", PaymentStatus.COMPLETED, null);

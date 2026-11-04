@@ -262,6 +262,23 @@ class CheckoutServiceImplTest {
     }
 
     @Test
+    void onlineCheckoutDefaultsToPayos() {
+        when(cartService.revalidateActiveCart()).thenReturn(cart(cartItem("item-1", "variant-1", 1, "100000")));
+        CheckoutResponse response = service.createCheckout(CreateCheckoutRequest.builder()
+                .paymentMethod(PaymentMethod.ONLINE).build());
+        assertEquals(PaymentProvider.PAYOS, response.getPaymentProvider());
+    }
+
+    @Test
+    void rejectsUnsupportedOnlineProviderForNewCheckout() {
+        when(cartService.revalidateActiveCart()).thenReturn(cart(cartItem("item-1", "variant-1", 1, "100000")));
+        AppException error = assertThrows(AppException.class, () -> service.createCheckout(CreateCheckoutRequest.builder()
+                .paymentMethod(PaymentMethod.ONLINE).paymentProvider(PaymentProvider.COD).build()));
+        assertEquals(OrderErrorCode.PAYMENT_PROVIDER_UNSUPPORTED, error.getErrorCode());
+        verify(checkoutRepository, never()).save(any());
+    }
+
+    @Test
     void createsCheckoutWithPromotionDiscount() {
         Cart cart = cart(cartItem("item-1", "variant-1", 2, "100000"));
         when(cartService.revalidateActiveCart()).thenReturn(cart);
@@ -536,7 +553,7 @@ class CheckoutServiceImplTest {
                 .userId("user-1")
                 .status(status)
                 .paymentMethod(PaymentMethod.ONLINE)
-                .paymentProvider(PaymentProvider.VNPAY)
+                .paymentProvider(PaymentProvider.PAYOS)
                 .shippingMethod(ShippingMethod.STANDARD)
                 .subtotalAmount(BigDecimal.TEN)
                 .discountAmount(BigDecimal.ZERO)

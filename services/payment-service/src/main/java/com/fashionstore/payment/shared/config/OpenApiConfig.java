@@ -22,7 +22,7 @@ public class OpenApiConfig {
                 .info(new Info()
                         .title("Payment Service API")
                         .version("v1")
-                        .description("Khởi tạo thanh toán, tra cứu payment và xử lý callback từ VNPay/PayOS."))
+                        .description("Khởi tạo thanh toán, tra cứu payment và xử lý callback từ payOS."))
                 .servers(List.of(
                         new Server().url("/").description("Current request origin (API Gateway)"),
                         new Server().url("http://localhost:8080").description("API Gateway"),

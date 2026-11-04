@@ -41,6 +41,14 @@ function text(node) {
   return node?.props ? text(node.props.children) : '';
 }
 
+test('checkout offers only wallet, COD and payOS', async () => {
+  const { tree } = await render('pages/Checkout.tsx', {
+    '../hooks/useDocumentMeta': { useDocumentMeta() {} },
+    '../context/CartContext': { useCart: () => ({ cart: { items: [{ id: 'item-1', productName: 'Shirt', quantity: 1, unitPrice: 100 }], totalPrice: 100 }, loading: false, error: '' }) },
+  });
+  assert.equal(nodes(tree).filter(node => node.type === 'input' && node.props.name === 'paymentProviderSelection').length, 3);
+});
+
 test('success URL cannot claim payment success without backend confirmation', async () => {
   const { tree } = await render('pages/PaymentReturn.tsx',{},'PaymentReturnContent');
   assert.doesNotMatch(text(tree), /THANH TOÁN THÀNH CÔNG/);
@@ -69,7 +77,7 @@ test('failed payment on a cancelled order explains the cancellation and offers t
 
 test('failed payment before the order is closed says the order is being cancelled', async () => {
   const { tree } = await render('pages/PaymentReturn.tsx', {
-    '../components/StoreUI': loads({ orderId: 'o1', captureStatus: 'UNCONFIRMED' }, { id: 'o1', status: 'PENDING' }, { status: 'FAILED', provider: 'VNPAY', amount: 100 }),
+    '../components/StoreUI': loads({ orderId: 'o1', captureStatus: 'UNCONFIRMED' }, { id: 'o1', status: 'PENDING' }, { status: 'FAILED', provider: 'PAYOS', amount: 100 }),
   }, 'PaymentReturnContent');
   assert.match(text(tree), /đang được hủy/);
 });

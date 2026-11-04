@@ -123,10 +123,7 @@ public class Order extends BaseEntity {
     @Column(name = "checkout_id", nullable = false, unique = true)
     String checkoutId;
 
-    /**
-     * IP của khách lúc đặt hàng — cần lại lúc saga xin thanh toán (VNPay yêu cầu vnp_IpAddr), lúc
-     * đó đã không còn HttpServletRequest gốc nên phải snapshot ngay tại đây.
-     */
+    /** Client IP captured at checkout for payment audit context. */
     @Column(name = "client_ip", length = 45)
     String clientIp;
 
