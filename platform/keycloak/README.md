@@ -38,7 +38,11 @@ instead of relying on `issuer-uri` discovery.
 | `fashion-api` | no login flow | audience `fashion-api` + client roles |
 
 - Realm roles: `USER` (default for new users), `ADMIN` (composite of `USER`).
-- `fashion-api` client roles: `product:write`, `internal-caller` (granted to the three service accounts).
+- `fashion-api` client roles: the 22 backoffice permissions (`order:read`, `product:manage`, `wallet:adjust`, `group:manage`, ...,
+  catalog = `Permission` enum in common-library, checked by `PermissionTest`) and `internal-caller` (granted to the three service accounts).
+- Groups: `Admin` (every permission, system), `Nhân viên` (the `isStaffDefault` permissions, editable), `Customer`
+  (realm role `USER`, system). `Customer` is the realm default group, so new users join it automatically.
+- Service account `identity-service` has `realm-management` roles `view-users`, `view-clients`, `manage-users`.
 - Every client adds `fashion-api` to `aud`. The two BFF clients also put `realm_access.roles` and
   `resource_access.fashion-api.roles` into the ID token (read by the BFF `GrantedAuthoritiesMapper`).
 - Access token 5 min · SSO idle 30 min · SSO max 7 days · refresh token rotation (reuse revokes the session) · brute force lockout after 5 failures · email verification required.
@@ -52,12 +56,14 @@ Without SMTP credentials, self-registered users cannot receive the verification 
 
 **Production:** set `DEV_USERS_ENABLED=false` (all dev users are imported disabled) and override every
 `*_CLIENT_SECRET`; passwords can be changed with `DEV_ADMIN_PASSWORD` / `DEV_CUSTOMER_PASSWORD` /
-`DEV_USER_PASSWORD` (the 10 seeded `*@fashion.local` customers).
+`DEV_USER_PASSWORD` / `DEV_STAFF_PASSWORD` (the 10 seeded `*@fashion.local` customers).
 Create real admins in Keycloak afterwards. A realm is imported only once, so change an existing realm in the admin console.
 
 | email | password | roles |
 |---|---|---|
-| `admin@fashion.local` | `Admin@12345` | `ADMIN`, `fashion-api/product:write` |
+| `admin@fashion.local` | `Admin@12345` | `ADMIN`, group `Admin` |
+| `nhanvien@fashion.local` | `Staff@12345` | group `Nhân viên` |
+| `staff.nogroup@fashion.local` | `Staff@12345` | no group (backoffice shows no permission) |
 | `customer@fashion.local` | `Customer@12345` | `USER` |
 | 10 seeded customers (`nguyen.van.an@fashion.local`, …) | `User@12345` | `USER` |
 | 10 more customers from `scripts/seed/keycloak-users.json` (`truong.minh.khoa@fashion.local`, …; `luong.van.son@fashion.local` is disabled) | `User@12345` | `USER` |
@@ -83,10 +89,67 @@ curl -X POST -H "Authorization: Bearer $ADMIN_TOKEN" -H 'Content-Type: applicati
 - BCrypt hashes are **not** migrated (Keycloak has no bcrypt hash provider). Imported users get the
   `UPDATE_PASSWORD` required action. They set a new password through "Forgot password" (needs SMTP),
   or an admin sends "Update Password" from the console.
-- Realm roles are copied from `user_roles`. Permissions become `fashion-api` client roles only if they
-  are listed in the SQL (currently `product:write`).
+- Realm roles are copied from `user_roles`. Permissions are not copied as client roles: users with the legacy
+  `ADMIN` role join the `/Admin` group (the realm must already have it, see "Syncing permissions and groups"),
+  everyone else gets no group and relies on the default `Customer` group. Assign staff groups afterwards.
 - A Keycloak account created **before** migration with the same email but a different id gets
   `409 ACCOUNT_LINK_CONFLICT` from identity. Delete that Keycloak account and import the legacy user instead.
+
+## Syncing permissions and groups
+
+A realm is imported only once, so a Keycloak imported before the RBAC groups existed has neither the
+permission client roles nor the `Admin` / `Nhân viên` / `Customer` groups. Run from the repo root with
+`docker compose up -d keycloak` already running:
+
+```powershell
+.\scripts\keycloak\sync-rbac.ps1                                  # admin / admin
+.\scripts\keycloak\sync-rbac.ps1 -AdminUser admin -AdminPassword <password>
+```
+
+Run it:
+
+- once on an existing Keycloak that was imported before this change;
+- again whenever code adds a permission to `Permission` (after adding the client role to
+  `realm-fashion-store.json`) so the running realm gets the role and `Admin` gets it.
+
+It reads permissions and groups from `realm-fashion-store.json` and is idempotent: it creates missing client
+roles (never deletes extra ones); if `Admin` does not exist it creates `Admin` + `Nhân viên` and puts every user with realm role
+`ADMIN` into `Admin` (`Nhân viên` is only created together with `Admin`, so a deleted `Nhân viên` stays deleted);
+it always re-adds every permission to `Admin`; if `Customer` does not exist it creates it, maps `USER` and
+makes it the default group (existing users are not backfilled).
+
+It also grants `realm-management` `view-clients` to `service-account-identity-service` (identity-service reads the
+`fashion-api` client roles with it). On a realm imported earlier this grant is otherwise manual: Admin console → Users →
+`service-account-identity-service` → Role mapping → Assign role → `realm-management` → `view-clients`.
+
+### Manual verification checklist (not yet run against a live Keycloak)
+
+The scripts and the Keycloak client were only verified statically and with mocks. Run this once on a dev stack:
+
+1. Start Docker Desktop, then `docker compose config` and `docker compose up -d` (rebuild the services changed by
+   the RBAC work: `identity-service`, `order-service`, `catalog-service`, `payment-service`, `api-gateway`,
+   `backoffice-bff`). Wait until Keycloak is healthy.
+2. `.\scripts\keycloak\sync-rbac.ps1`. Expect no error; run it a second time and expect no changes. In the Admin
+   console (realm `fashion-store`) check the `fashion-api` client has the 22 permission roles and the groups
+   `Admin`, `Nhân viên`, `Customer` exist (Customer is a default group).
+3. In Swagger (gateway, `http://localhost:8080`) authorize as `admin@fashion.local` / `Admin@12345`, then:
+   - `GET /api/v1/admin/permissions` returns 22 items, `group:manage` has `isAssignable=false`.
+   - `POST /api/v1/admin/groups` with name `Nhân viên kho` and permissions `inventory:read`, `inventory:manage`
+     returns 200; `GET /api/v1/admin/groups` lists it with that exact Vietnamese name (check the
+     diacritics round-trip, also in the Admin console).
+   - `PUT /api/v1/admin/groups/{id}` that adds then removes a permission: the Admin console shows the role mapping
+     change both ways. Removal goes through `DELETE` with a body on the group role-mappings endpoint, so confirm
+     the permission really disappears (this is only mock-tested).
+   - `POST /api/v1/admin/staff` with a new email, `firstName`, `lastName`, a temporary password and that group
+     returns 201. `GET /api/v1/admin/groups/{id}/members` and `GET /api/v1/admin/users/{userId}` (its `groups`
+     must list the group with its permissions, i.e. `listUserGroups` returns the role data) both show the user.
+4. Log in at `http://localhost:8084` (backoffice-bff) as that staff user. Expect Keycloak to force a password
+   change on first login. After login `/bff/session` lists `inventory:read`, `inventory:manage`, `ROLE_USER`.
+5. With that staff session/token: `GET /admin/inventory` → 200; `GET /api/v1/admin/orders` → 403;
+   `GET /api/v1/admin/dashboard` → 403; `GET /api/v1/admin/dashboard/operations` → 403 (no `dashboard:read`).
+6. Back as admin: change the group's permissions and confirm the staff user is logged out (session gone) and the
+   response has an empty `notLoggedOutUserIds`; try `PUT /api/v1/admin/users/{admin id}/groups` without `Admin`
+   (expect 409 `2035`) and delete the `Nhân viên kho` group (staff user logged out again).
 
 ## Changing the realm
 

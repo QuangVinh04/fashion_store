@@ -27,6 +27,8 @@ import {
 import ConfirmActionDialog from '@/components/backoffice/ConfirmActionDialog'
 import ListResult from '@/components/backoffice/ListResult'
 import PageHeader from '@/components/backoffice/PageHeader'
+import { Permission } from '@/configs/permissions'
+import { useAuth } from '@/context/AuthContext'
 import useListQueryState from '@/hooks/useListQueryState'
 import { promotionsApi } from '@/libs/api/promotions'
 import type { Promotion, PromotionTarget } from '@/types/promotions'
@@ -57,6 +59,8 @@ function formatDateTime(isoString?: string | null): string {
 }
 
 export default function PromotionList() {
+  const { hasPermission } = useAuth()
+  const canManage = hasPermission(Permission.PROMOTION_MANAGE)
   const queryClient = useQueryClient()
   const { page, size, filters, setPage, setSize, setFilters } = useListQueryState()
 
@@ -112,9 +116,11 @@ export default function PromotionList() {
       <PageHeader
         title='Khuyến mãi & Giảm giá'
         actions={
-          <Button variant='contained' onClick={handleOpenCreate}>
-            Tạo mã mới
-          </Button>
+          canManage ? (
+            <Button variant='contained' onClick={handleOpenCreate}>
+              Tạo mã mới
+            </Button>
+          ) : undefined
         }
       />
 
@@ -258,26 +264,41 @@ export default function PromotionList() {
                       </TableCell>
                       <TableCell align='right' sx={{ whiteSpace: 'nowrap' }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 0.5 }}>
-                          <Tooltip title='Chỉnh sửa khuyến mãi'>
-                            <IconButton
-                              size='small'
-                              color='secondary'
-                              onClick={() => handleOpenEdit(row)}
-                              aria-label={'Sửa mã ' + row.code}
-                            >
-                              <i className='ri-pencil-line text-lg' />
-                            </IconButton>
-                          </Tooltip>
-                          <Tooltip title={row.active ? 'Tắt khuyến mãi' : 'Bật khuyến mãi'}>
-                            <IconButton
-                              size='small'
-                              color={row.active ? 'warning' : 'success'}
-                              onClick={() => setToggleTarget(row)}
-                              aria-label={(row.active ? 'Tắt mã ' : 'Bật mã ') + row.code}
-                            >
-                              <i className={row.active ? 'ri-toggle-fill text-xl' : 'ri-toggle-line text-xl'} />
-                            </IconButton>
-                          </Tooltip>
+                          {canManage ? (
+                            <>
+                              <Tooltip title='Chỉnh sửa khuyến mãi'>
+                                <IconButton
+                                  size='small'
+                                  color='secondary'
+                                  onClick={() => handleOpenEdit(row)}
+                                  aria-label={'Sửa mã ' + row.code}
+                                >
+                                  <i className='ri-pencil-line text-lg' />
+                                </IconButton>
+                              </Tooltip>
+                              <Tooltip title={row.active ? 'Tắt khuyến mãi' : 'Bật khuyến mãi'}>
+                                <IconButton
+                                  size='small'
+                                  color={row.active ? 'warning' : 'success'}
+                                  onClick={() => setToggleTarget(row)}
+                                  aria-label={(row.active ? 'Tắt mã ' : 'Bật mã ') + row.code}
+                                >
+                                  <i className={row.active ? 'ri-toggle-fill text-xl' : 'ri-toggle-line text-xl'} />
+                                </IconButton>
+                              </Tooltip>
+                            </>
+                          ) : (
+                            <Tooltip title='Xem chi tiết'>
+                              <IconButton
+                                size='small'
+                                color='primary'
+                                onClick={() => handleOpenEdit(row)}
+                                aria-label={'Xem mã ' + row.code}
+                              >
+                                <i className='ri-eye-line text-lg' />
+                              </IconButton>
+                            </Tooltip>
+                          )}
                         </Box>
                       </TableCell>
                     </TableRow>

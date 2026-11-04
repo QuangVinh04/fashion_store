@@ -18,6 +18,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
+import com.fashionstore.common.security.PermissionNames;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -32,17 +33,17 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
-@Tag(name = "Admin - Promotions", description = "Quản lý mã khuyến mãi (ADMIN)")
+@Tag(name = "Admin - Promotions", description = "Quản lý mã khuyến mãi (promotion:read xem, promotion:manage ghi)")
 @RestController
 @RequestMapping("/api/v1/admin/promotions")
-@PreAuthorize("hasRole('ADMIN')")
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class AdminPromotionController {
 
     PromotionService promotionService;
 
-    @Operation(summary = "Tạo mã khuyến mãi mới (ADMIN)")
+    @Operation(summary = "Tạo mã khuyến mãi mới (promotion:manage)")
+    @PreAuthorize("hasAuthority('" + PermissionNames.PROMOTION_MANAGE + "')")
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public ApiResponse<PromotionResponse> createPromotion(@Valid @RequestBody PromotionRequest request) {
@@ -52,7 +53,8 @@ public class AdminPromotionController {
                 .build();
     }
 
-    @Operation(summary = "Cập nhật mã khuyến mãi (ADMIN)")
+    @Operation(summary = "Cập nhật mã khuyến mãi (promotion:manage)")
+    @PreAuthorize("hasAuthority('" + PermissionNames.PROMOTION_MANAGE + "')")
     @PutMapping("/{id}")
     public ApiResponse<PromotionResponse> updatePromotion(
             @PathVariable String id,
@@ -64,7 +66,8 @@ public class AdminPromotionController {
                 .build();
     }
 
-    @Operation(summary = "Xem chi tiết khuyến mãi theo ID (ADMIN)")
+    @Operation(summary = "Xem chi tiết khuyến mãi theo ID (promotion:read)")
+    @PreAuthorize("hasAuthority('" + PermissionNames.PROMOTION_READ + "')")
     @GetMapping("/{id}")
     public ApiResponse<PromotionResponse> getPromotionById(@PathVariable String id) {
         return ApiResponse.<PromotionResponse>builder()
@@ -73,7 +76,8 @@ public class AdminPromotionController {
                 .build();
     }
 
-    @Operation(summary = "Xem chi tiết khuyến mãi theo code (ADMIN)")
+    @Operation(summary = "Xem chi tiết khuyến mãi theo code (promotion:read)")
+    @PreAuthorize("hasAuthority('" + PermissionNames.PROMOTION_READ + "')")
     @GetMapping("/code/{code}")
     public ApiResponse<PromotionResponse> getPromotionByCode(@PathVariable String code) {
         return ApiResponse.<PromotionResponse>builder()
@@ -82,7 +86,8 @@ public class AdminPromotionController {
                 .build();
     }
 
-    @Operation(summary = "Danh sách khuyến mãi (ADMIN)")
+    @Operation(summary = "Danh sách khuyến mãi (promotion:read)")
+    @PreAuthorize("hasAuthority('" + PermissionNames.PROMOTION_READ + "')")
     @GetMapping
     public ApiResponse<PageResponse<List<PromotionResponse>>> getPromotions(
             @RequestParam(required = false) Boolean active,
@@ -97,7 +102,8 @@ public class AdminPromotionController {
                 .build();
     }
 
-    @Operation(summary = "Bật/tắt trạng thái hoạt động của khuyến mãi (ADMIN)")
+    @Operation(summary = "Bật/tắt trạng thái hoạt động của khuyến mãi (promotion:manage)")
+    @PreAuthorize("hasAuthority('" + PermissionNames.PROMOTION_MANAGE + "')")
     @PatchMapping("/{id}/status")
     public ApiResponse<Void> togglePromotionActive(
             @PathVariable String id,

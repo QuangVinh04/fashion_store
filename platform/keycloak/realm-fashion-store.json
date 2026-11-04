@@ -88,8 +88,92 @@
     "client": {
       "fashion-api": [
         {
-          "name": "product:write",
-          "description": "Tạo/sửa/xoá sản phẩm"
+          "name": "dashboard:read",
+          "description": "Xem dashboard"
+        },
+        {
+          "name": "revenue:read",
+          "description": "Xem doanh thu"
+        },
+        {
+          "name": "order:read",
+          "description": "Xem đơn hàng"
+        },
+        {
+          "name": "order:manage",
+          "description": "Cập nhật trạng thái, hủy đơn"
+        },
+        {
+          "name": "shipment:manage",
+          "description": "Quản lý vận đơn"
+        },
+        {
+          "name": "return:read",
+          "description": "Xem yêu cầu đổi trả"
+        },
+        {
+          "name": "return:manage",
+          "description": "Xử lý yêu cầu đổi trả"
+        },
+        {
+          "name": "refund:approve",
+          "description": "Duyệt hoàn tiền"
+        },
+        {
+          "name": "product:read",
+          "description": "Xem sản phẩm"
+        },
+        {
+          "name": "product:manage",
+          "description": "Tạo, sửa, xóa sản phẩm"
+        },
+        {
+          "name": "inventory:read",
+          "description": "Xem tồn kho"
+        },
+        {
+          "name": "inventory:manage",
+          "description": "Điều chỉnh tồn kho"
+        },
+        {
+          "name": "review:read",
+          "description": "Xem đánh giá"
+        },
+        {
+          "name": "review:manage",
+          "description": "Duyệt, ẩn đánh giá"
+        },
+        {
+          "name": "promotion:read",
+          "description": "Xem khuyến mãi"
+        },
+        {
+          "name": "promotion:manage",
+          "description": "Tạo, sửa khuyến mãi"
+        },
+        {
+          "name": "customer:read",
+          "description": "Xem khách hàng"
+        },
+        {
+          "name": "customer:manage",
+          "description": "Sửa, khóa tài khoản khách hàng"
+        },
+        {
+          "name": "payment:read",
+          "description": "Xem thanh toán"
+        },
+        {
+          "name": "wallet:read",
+          "description": "Xem ví"
+        },
+        {
+          "name": "wallet:adjust",
+          "description": "Nạp, điều chỉnh ví"
+        },
+        {
+          "name": "group:manage",
+          "description": "Quản lý nhóm quyền, gán người dùng"
         },
         {
           "name": "internal-caller",
@@ -101,6 +185,74 @@
   "defaultRole": {
     "name": "default-roles-fashion-store"
   },
+  "groups": [
+    {
+      "name": "Admin",
+      "path": "/Admin",
+      "attributes": {
+        "system": ["true"]
+      },
+      "clientRoles": {
+        "fashion-api": [
+          "dashboard:read",
+          "revenue:read",
+          "order:read",
+          "order:manage",
+          "shipment:manage",
+          "return:read",
+          "return:manage",
+          "refund:approve",
+          "product:read",
+          "product:manage",
+          "inventory:read",
+          "inventory:manage",
+          "review:read",
+          "review:manage",
+          "promotion:read",
+          "promotion:manage",
+          "customer:read",
+          "customer:manage",
+          "payment:read",
+          "wallet:read",
+          "wallet:adjust",
+          "group:manage"
+        ]
+      }
+    },
+    {
+      "name": "Nhân viên",
+      "path": "/Nhân viên",
+      "clientRoles": {
+        "fashion-api": [
+          "dashboard:read",
+          "order:read",
+          "order:manage",
+          "shipment:manage",
+          "return:read",
+          "return:manage",
+          "product:read",
+          "product:manage",
+          "inventory:read",
+          "inventory:manage",
+          "review:read",
+          "review:manage",
+          "promotion:read",
+          "customer:read",
+          "payment:read",
+          "wallet:read"
+        ]
+      }
+    },
+    {
+      "name": "Customer",
+      "path": "/Customer",
+      "attributes": {
+        "system": ["true"]
+      },
+      "realmRoles": ["USER"]
+    }
+  ],
+  "defaultGroups": ["/Customer"],
   "clients": [
     {
       "clientId": "fashion-api",
@@ -400,6 +552,7 @@
         ],
         "realm-management": [
           "view-users",
+          "view-clients",
           "manage-users"
         ]
       }
@@ -423,11 +576,47 @@
         "default-roles-fashion-store",
         "ADMIN"
       ],
-      "clientRoles": {
-        "fashion-api": [
-          "product:write"
-        ]
-      }
+      "groups": ["/Admin"]
+    },
+    {
+      "id": "00000000-0000-0000-0000-000000000002",
+      "username": "nhanvien@fashion.local",
+      "email": "nhanvien@fashion.local",
+      "firstName": "Nhân Viên",
+      "lastName": "Dev",
+      "enabled": "${DEV_USERS_ENABLED:true}",
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "${DEV_STAFF_PASSWORD:Staff@12345}",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "default-roles-fashion-store"
+      ],
+      "groups": ["/Nhân viên"]
+    },
+    {
+      "id": "00000000-0000-0000-0000-000000000003",
+      "username": "staff.nogroup@fashion.local",
+      "email": "staff.nogroup@fashion.local",
+      "firstName": "Chưa Phân",
+      "lastName": "Quyền",
+      "enabled": "${DEV_USERS_ENABLED:true}",
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "${DEV_STAFF_PASSWORD:Staff@12345}",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "default-roles-fashion-store"
+      ],
+      "groups": []
     },
     {
       "id": "7cb10f2e-3068-4a3a-b15e-981dd47c1273",
@@ -446,7 +635,8 @@
       ],
       "realmRoles": [
         "default-roles-fashion-store"
-      ]
+      ],
+      "groups": ["/Customer"]
     },
     {
       "id": "00000000-0000-0000-0000-000000000011",
@@ -465,7 +655,8 @@
       ],
       "realmRoles": [
         "default-roles-fashion-store"
-      ]
+      ],
+      "groups": ["/Customer"]
     },
     {
       "id": "00000000-0000-0000-0000-000000000012",
@@ -484,7 +675,8 @@
       ],
       "realmRoles": [
         "default-roles-fashion-store"
-      ]
+      ],
+      "groups": ["/Customer"]
     },
     {
       "id": "00000000-0000-0000-0000-000000000013",
@@ -503,7 +695,8 @@
       ],
       "realmRoles": [
         "default-roles-fashion-store"
-      ]
+      ],
+      "groups": ["/Customer"]
     },
     {
       "id": "00000000-0000-0000-0000-000000000014",
@@ -522,7 +715,8 @@
       ],
       "realmRoles": [
         "default-roles-fashion-store"
-      ]
+      ],
+      "groups": ["/Customer"]
     },
     {
       "id": "00000000-0000-0000-0000-000000000015",
@@ -541,7 +735,8 @@
       ],
       "realmRoles": [
         "default-roles-fashion-store"
-      ]
+      ],
+      "groups": ["/Customer"]
     },
     {
       "id": "00000000-0000-0000-0000-000000000016",
@@ -560,7 +755,8 @@
       ],
       "realmRoles": [
         "default-roles-fashion-store"
-      ]
+      ],
+      "groups": ["/Customer"]
     },
     {
       "id": "00000000-0000-0000-0000-000000000017",
@@ -579,7 +775,8 @@
       ],
       "realmRoles": [
         "default-roles-fashion-store"
-      ]
+      ],
+      "groups": ["/Customer"]
     },
     {
       "id": "00000000-0000-0000-0000-000000000018",
@@ -598,7 +795,8 @@
       ],
       "realmRoles": [
         "default-roles-fashion-store"
-      ]
+      ],
+      "groups": ["/Customer"]
     },
     {
       "id": "00000000-0000-0000-0000-000000000019",
@@ -617,7 +815,8 @@
       ],
       "realmRoles": [
         "default-roles-fashion-store"
-      ]
+      ],
+      "groups": ["/Customer"]
     },
     {
       "id": "00000000-0000-0000-0000-000000000020",
@@ -636,7 +835,8 @@
       ],
       "realmRoles": [
         "default-roles-fashion-store"
-      ]
+      ],
+      "groups": ["/Customer"]
     },
     {
       "username": "service-account-payment-service",

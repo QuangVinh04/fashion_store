@@ -7,12 +7,13 @@ import com.fashionstore.payment.payment.repository.PaymentRepository;
 import com.fashionstore.payment.shared.util.AdminPaging;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import com.fashionstore.common.security.PermissionNames;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 @RestController @RequestMapping("/api/v1/admin/wallets") @RequiredArgsConstructor
-@PreAuthorize("hasRole('ADMIN')") @Transactional(readOnly=true)
+@PreAuthorize("hasAuthority('" + PermissionNames.WALLET_READ + "')") @Transactional(readOnly=true)
 public class AdminWalletTopUpController {
     private final PaymentRepository payments;
 

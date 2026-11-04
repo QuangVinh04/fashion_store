@@ -1,5 +1,6 @@
 package com.fashionstore.backofficebff;
 
+import com.fashionstore.common.security.PermissionNames;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -93,8 +94,17 @@ class BackofficeBffSecurityTest {
     }
 
     @Test
-    void adminApiCallRelaysAccessToken() {
+    void adminRoleWithoutPermissionIsForbiddenAndNotProxied() {
         client.mutateWith(login("ROLE_ADMIN"))
+                .get().uri("/api/v1/admin/orders").exchange()
+                .expectStatus().isForbidden();
+
+        assertThat(relayedAuthorization.get()).isNull();
+    }
+
+    @Test
+    void permissionHolderApiCallRelaysAccessToken() {
+        client.mutateWith(login(PermissionNames.PRODUCT_READ))
                 .get().uri("/api/v1/admin/orders").exchange()
                 .expectStatus().isOk();
 
@@ -102,8 +112,8 @@ class BackofficeBffSecurityTest {
     }
 
     @Test
-    void adminInventoryRouteRelaysAccessToken() {
-        client.mutateWith(login("ROLE_ADMIN"))
+    void permissionHolderInventoryRouteRelaysAccessToken() {
+        client.mutateWith(login(PermissionNames.PRODUCT_READ))
                 .get().uri("/admin/inventory").exchange()
                 .expectStatus().isOk();
 
@@ -121,7 +131,7 @@ class BackofficeBffSecurityTest {
 
     @Test
     void adminUnsafeRequestWithoutCsrfTokenIsRejected() {
-        client.mutateWith(login("ROLE_ADMIN"))
+        client.mutateWith(login(PermissionNames.PRODUCT_READ))
                 .post().uri("/api/v1/admin/promotions").exchange()
                 .expectStatus().isForbidden();
 
@@ -130,7 +140,7 @@ class BackofficeBffSecurityTest {
 
     @Test
     void adminUnsafeRequestWithCsrfTokenIsProxied() {
-        client.mutateWith(login("ROLE_ADMIN")).mutateWith(csrf())
+        client.mutateWith(login(PermissionNames.PRODUCT_READ)).mutateWith(csrf())
                 .post().uri("/api/v1/admin/promotions").exchange()
                 .expectStatus().isOk();
 
@@ -139,7 +149,7 @@ class BackofficeBffSecurityTest {
 
     @Test
     void legacyAuthEndpointsAreNotExposedEvenForAdmin() {
-        client.mutateWith(login("ROLE_ADMIN"))
+        client.mutateWith(login(PermissionNames.PRODUCT_READ))
                 .get().uri("/api/v1/auth/jwks").exchange()
                 .expectStatus().isForbidden();
 
@@ -178,36 +188,36 @@ class BackofficeBffSecurityTest {
     }
 
     // mockOidcLogin lưu authorized client (access token mặc định "access-token") cho TokenRelay
-    private OidcLoginMutator login(String role) {
+    private OidcLoginMutator login(String authority) {
         ClientRegistration keycloak = clientRegistrations.findByRegistrationId("keycloak").block();
         return mockOidcLogin()
                 .clientRegistration(keycloak)
                 .idToken(token -> token.subject("kc-user-1").claim("email", "user@fashion.local"))
-                .authorities(new SimpleGrantedAuthority(role));
+                .authorities(new SimpleGrantedAuthority(authority));
     }
 
     @Test
     void financialReadsRelayTokenAndFinancialWritesRequireCsrf() {
-        client.mutateWith(login("ROLE_ADMIN")).get().uri("/api/v1/admin/payments/order/order").exchange().expectStatus().isOk();
+        client.mutateWith(login(PermissionNames.PRODUCT_READ)).get().uri("/api/v1/admin/payments/order/order").exchange().expectStatus().isOk();
         assertThat(relayedAuthorization.get()).isEqualTo("Bearer access-token");
-        client.mutateWith(login("ROLE_ADMIN")).get().uri("/api/v1/admin/wallets/buyer").exchange().expectStatus().isOk();
+        client.mutateWith(login(PermissionNames.PRODUCT_READ)).get().uri("/api/v1/admin/wallets/buyer").exchange().expectStatus().isOk();
         assertThat(relayedAuthorization.get()).isEqualTo("Bearer access-token");
-        client.mutateWith(login("ROLE_ADMIN")).get().uri("/api/v1/admin/orders/returns/case").exchange().expectStatus().isOk();
-        assertThat(relayedAuthorization.get()).isEqualTo("Bearer access-token");
-        relayedAuthorization.set(null);
-        client.mutateWith(login("ROLE_ADMIN")).post().uri("/api/v1/admin/orders/returns/case/refund-approval").exchange().expectStatus().isForbidden();
-        assertThat(relayedAuthorization.get()).isNull();
-        client.mutateWith(login("ROLE_ADMIN")).mutateWith(csrf()).post().uri("/api/v1/admin/orders/returns/case/refund-approval").exchange().expectStatus().isOk();
+        client.mutateWith(login(PermissionNames.PRODUCT_READ)).get().uri("/api/v1/admin/orders/returns/case").exchange().expectStatus().isOk();
         assertThat(relayedAuthorization.get()).isEqualTo("Bearer access-token");
         relayedAuthorization.set(null);
-        client.mutateWith(login("ROLE_ADMIN")).post().uri("/api/v1/admin/orders/order/cod-collection").exchange().expectStatus().isForbidden();
+        client.mutateWith(login(PermissionNames.PRODUCT_READ)).post().uri("/api/v1/admin/orders/returns/case/refund-approval").exchange().expectStatus().isForbidden();
         assertThat(relayedAuthorization.get()).isNull();
-        client.mutateWith(login("ROLE_ADMIN")).mutateWith(csrf()).post().uri("/api/v1/admin/orders/order/cod-collection").exchange().expectStatus().isOk();
+        client.mutateWith(login(PermissionNames.PRODUCT_READ)).mutateWith(csrf()).post().uri("/api/v1/admin/orders/returns/case/refund-approval").exchange().expectStatus().isOk();
         assertThat(relayedAuthorization.get()).isEqualTo("Bearer access-token");
         relayedAuthorization.set(null);
-        client.mutateWith(login("ROLE_ADMIN")).post().uri("/api/v1/files/evidence/returns/presign").exchange().expectStatus().isForbidden();
+        client.mutateWith(login(PermissionNames.PRODUCT_READ)).post().uri("/api/v1/admin/orders/order/cod-collection").exchange().expectStatus().isForbidden();
         assertThat(relayedAuthorization.get()).isNull();
-        client.mutateWith(login("ROLE_ADMIN")).mutateWith(csrf()).post().uri("/api/v1/files/evidence/returns/presign").exchange().expectStatus().isOk();
+        client.mutateWith(login(PermissionNames.PRODUCT_READ)).mutateWith(csrf()).post().uri("/api/v1/admin/orders/order/cod-collection").exchange().expectStatus().isOk();
+        assertThat(relayedAuthorization.get()).isEqualTo("Bearer access-token");
+        relayedAuthorization.set(null);
+        client.mutateWith(login(PermissionNames.PRODUCT_READ)).post().uri("/api/v1/files/evidence/returns/presign").exchange().expectStatus().isForbidden();
+        assertThat(relayedAuthorization.get()).isNull();
+        client.mutateWith(login(PermissionNames.PRODUCT_READ)).mutateWith(csrf()).post().uri("/api/v1/files/evidence/returns/presign").exchange().expectStatus().isOk();
         assertThat(relayedAuthorization.get()).isEqualTo("Bearer access-token");
     }
 

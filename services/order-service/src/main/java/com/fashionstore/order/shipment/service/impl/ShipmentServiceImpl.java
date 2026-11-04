@@ -35,6 +35,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 
+import com.fashionstore.common.security.PermissionNames;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -113,7 +114,7 @@ public class ShipmentServiceImpl implements ShipmentService {
 
     @Override
     @Transactional(readOnly = true)
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('" + PermissionNames.ORDER_READ + "')")
     public ShipmentResponse getShipmentForAdmin(String orderId) {
         orderRepository
                 .findById(orderId)

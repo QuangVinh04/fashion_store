@@ -24,6 +24,8 @@ import TopSellingProducts from '@views/dashboard/TopSellingProducts'
 import type { DashboardTimeRange } from '@views/dashboard/types'
 
 // API & Hooks Imports
+import { Permission } from '@/configs/permissions'
+import { useAuth } from '@/context/AuthContext'
 import { useDashboard } from '@/hooks/useDashboard'
 import { returnsApi } from '@/libs/api/returns'
 
@@ -47,13 +49,16 @@ const getDaysFromTimeRange = (range: DashboardTimeRange): number => {
 
 const DashboardPage = () => {
   const [timeRange, setTimeRange] = useState<DashboardTimeRange>('7days')
+  const { hasPermission } = useAuth()
+  const hasReturnRead = hasPermission(Permission.RETURN_READ)
 
   const days = getDaysFromTimeRange(timeRange)
-  const { data: dashboardData, isLoading: isDashboardLoading } = useDashboard(days)
+  const { data: dashboardData, isLoading: isDashboardLoading, hasRevenue } = useDashboard(days)
 
   const { data: returnsData } = useQuery({
     queryKey: ['admin-pending-returns-count'],
     queryFn: () => returnsApi.list({ page: 0, size: 5, status: 'REQUESTED' }),
+    enabled: hasReturnRead,
     staleTime: 60_000
   })
 
@@ -110,23 +115,26 @@ const DashboardPage = () => {
         isLoading={isDashboardLoading}
       />
 
-      {/* 3. 4 Thẻ KPI động kết nối dữ liệu thật từ BE */}
+      {/* 3. Thẻ KPI động kết nối dữ liệu thật từ BE */}
       <KpiOverview
         timeRange={timeRange}
         dashboardData={dashboardData}
         isLoading={isDashboardLoading}
+        hasRevenue={hasRevenue}
       />
 
       {/* 4. Biểu đồ Doanh thu/Đơn & Tình trạng giao vận kết nối BE */}
       <Grid container spacing={4}>
-        <Grid item xs={12} lg={8}>
-          <SalesAndOrdersMixedChart
-            timeRange={timeRange}
-            revenueByDay={dashboardData?.revenueByDay}
-            isLoading={isDashboardLoading}
-          />
-        </Grid>
-        <Grid item xs={12} lg={4}>
+        {hasRevenue && (
+          <Grid item xs={12} lg={8}>
+            <SalesAndOrdersMixedChart
+              timeRange={timeRange}
+              revenueByDay={dashboardData?.revenueByDay}
+              isLoading={isDashboardLoading}
+            />
+          </Grid>
+        )}
+        <Grid item xs={12} lg={hasRevenue ? 4 : 12}>
           <ShippingAndCodOverview
             orderByStatus={dashboardData?.orderByStatus}
             isLoading={isDashboardLoading}
@@ -151,6 +159,7 @@ const DashboardPage = () => {
             timeRange={timeRange}
             products={dashboardData?.topProducts}
             isLoading={isDashboardLoading}
+            hasRevenue={hasRevenue}
           />
         </Grid>
       </Grid>

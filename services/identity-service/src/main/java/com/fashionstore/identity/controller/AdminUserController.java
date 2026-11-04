@@ -29,10 +29,10 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
-/** Phân quyền ADMIN nằm ở tầng service ({@code @PreAuthorize}). */
+/** Phân quyền (customer:read / customer:manage) nằm ở tầng service ({@code @PreAuthorize}). */
 @RestController
 @RequestMapping("/api/v1/admin/users")
-@Tag(name = "Admin Users", description = "Quản lý khách hàng (ADMIN): tra cứu, sửa thông tin cơ bản, khoá / mở khoá")
+@Tag(name = "Admin Users", description = "Quản lý khách hàng (customer:read xem, customer:manage ghi): tra cứu, sửa thông tin cơ bản, khoá / mở khoá")
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class AdminUserController {

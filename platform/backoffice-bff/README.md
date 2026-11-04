@@ -19,7 +19,7 @@ Browser ──cookie──► backoffice-bff :8084 ──TokenRelay (Bearer)─�
 | `/admin/**` | proxied to api-gateway with the same token relay for catalog administration |
 | `/**` | proxied to the SPA dev server / static host (`BACKOFFICE_UI_URL`, default `http://localhost:5173`) so SPA and BFF share one origin |
 
-Everything except `/bff/session` and `/actuator/health/**` requires `ROLE_ADMIN` **at the BFF**, so a non-admin token is never relayed. Unauthenticated `/api/**` and `/admin/**` return 401; other paths redirect to Keycloak.
+Everything except `/bff/session` and `/actuator/health/**` requires at least one backoffice permission (`Permission.authorities()`) **at the BFF**, so a token without any is never relayed. Unauthenticated `/api/**` and `/admin/**` return 401; other paths redirect to Keycloak.
 
 `/api/v1/auth/**` is denied: registration, login, password reset and account management go through Keycloak.
 

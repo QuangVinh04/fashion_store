@@ -154,23 +154,23 @@ Xem [mô hình cuối cùng và hướng dẫn áp dụng](../../docs/database/c
 Chi tiết công khai `GET /api/v1/products/{id}` (và alias `/api/v1/product/{id}`)
 chỉ trả sản phẩm `PUBLISHED`; draft/archived trả `PRODUCT_NOT_FOUND` (404).
 Endpoint bảng size theo sản phẩm dùng cùng kiểm tra này.
-Admin dùng `GET /admin/products/{productId}` và lookup riêng có quyền ADMIN,
+Admin dùng `GET /admin/products/{productId}` và lookup riêng có quyền `product:read`,
 vẫn xem được draft/archived để quản lý.
 
-Ba service cũ có ba luật `anyRequest()` khác nhau, nên thay vì trộn thành một chain, mỗi
-domain giữ một `SecurityFilterChain` riêng khoanh vùng bằng `securityMatcher`:
+Một `SecurityFilterChain` duy nhất (`shared/config/security/SecurityConfig`), quyền theo permission Keycloak
+(`fashion-api` client role, không còn `ROLE_ADMIN`):
 
-1. `mediaFilterChain` — `/api/v1/files/**`: `GET /{id}/content` public, còn lại authenticated.
-   CORS cho bước PUT nằm ở MinIO (`MINIO_API_CORS_ALLOW_ORIGIN`), không phải ở chain này —
-   browser gọi thẳng `:9000`.
-2. `inventoryFilterChain` — `/api/v1/inventory/**`, `/internal/v1/**`: `POST /check`
-   authenticated, `/internal/v1/**` cần authority `internal`, còn lại `ROLE_ADMIN`.
-3. `catalogFilterChain` — bao trùm phần còn lại: actuator health + GET catalog public,
-   `anyRequest()` `ROLE_ADMIN`.
+- Công khai: actuator health, Swagger, `GET` catalog (`/api/v1/products/**`, ...), `GET /api/v1/files/*/content`.
+- `/api/v1/files/**`, wishlist, đăng/xoá đánh giá của khách, `POST /api/v1/inventory/check`: authenticated.
+- `/internal/**`: authority `internal-caller` (service account).
+- Kho (`/api/v1/inventory/**`, `/admin/inventory/**`): `inventory:read` (GET) / `inventory:manage` (ghi).
+- Sản phẩm, thương hiệu, danh mục, thuộc tính, bảng size (`/admin/**`, `/api/v1/category/**` ghi):
+  `product:read` (GET) / `product:manage` (ghi).
+- `/api/v1/admin/reviews/**`: `review:read` (GET) / `review:manage` (ghi).
+- Còn lại: cần một permission bất kỳ, quyền cụ thể do `@PreAuthorize` ở method.
 
-JWT decode bằng `CustomJwtDecoder` (jwk-set từ identity-service), `JwtAuthenticationConverter`
-bỏ tiền tố `ROLE_` mặc định. CORS đăng ký theo path: `/api/v1/files/**` lấy bản của
-file-service (expose `Content-Disposition`), `/**` lấy bản của inventory-service.
+JWT do gateway chuyển tiếp, validate bằng resource server của `common-library`
+(`KeycloakJwtAuthoritiesConverter`). CORS đăng ký theo path ngay trong `SecurityConfig`.
 
 ## Messaging
 

@@ -1,6 +1,7 @@
 package com.fashionstore.backofficebff.config;
 
 import com.fashionstore.common.security.KeycloakJwtAuthoritiesConverter;
+import com.fashionstore.common.security.Permission;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -50,8 +51,8 @@ public class SecurityConfig {
                         .pathMatchers("/actuator/health/**", "/bff/session", "/_next/**", "/favicon.ico", "/images/**", "/access-denied").permitAll()
                         // Đăng nhập đi qua Keycloak, không mở API auth cũ cho browser
                         .pathMatchers("/api/v1/auth/**").denyAll()
-                        // Backoffice chỉ dành cho ADMIN — chặn ngay ở BFF, token không được relay
-                        .anyExchange().hasRole("ADMIN"))
+                        // Backoffice dành cho người có ít nhất một quyền backoffice — chặn ngay ở BFF, token không được relay
+                        .anyExchange().hasAnyAuthority(Permission.authorities()))
                 .oauth2Login(login -> login.authorizationRequestResolver(pkceAuthorizationRequestResolver(clientRegistrations)))
                 .logout(logout -> logout.logoutSuccessHandler(oidcLogoutSuccessHandler(clientRegistrations)))
                 // Keycloak huỷ phiên (admin bị khoá, đăng xuất ở nơi khác) -> xoá session BFF ngay

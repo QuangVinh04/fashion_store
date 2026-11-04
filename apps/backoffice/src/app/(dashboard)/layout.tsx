@@ -10,6 +10,7 @@ import Providers from '@components/Providers'
 import Navigation from '@components/layout/vertical/Navigation'
 import Navbar from '@components/layout/vertical/Navbar'
 import VerticalFooter from '@components/layout/vertical/Footer'
+import RequirePermission from '@/components/backoffice/RequirePermission'
 
 const Layout = async ({ children }: ChildrenType) => {
   // Vars
@@ -20,7 +21,7 @@ const Layout = async ({ children }: ChildrenType) => {
       <LayoutWrapper
         verticalLayout={
           <VerticalLayout navigation={<Navigation />} navbar={<Navbar />} footer={<VerticalFooter />}>
-            {children}
+            <RequirePermission>{children}</RequirePermission>
           </VerticalLayout>
         }
       />

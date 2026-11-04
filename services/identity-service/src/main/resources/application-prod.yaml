@@ -16,3 +16,6 @@ spring:
   rabbitmq:
     username: ${RABBITMQ_USERNAME}
     password: ${RABBITMQ_PASSWORD}
+  data:
+    redis:
+      password: ${REDIS_PASSWORD}

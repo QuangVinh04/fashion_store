@@ -1,6 +1,8 @@
 package com.fashionstore.order.shared.config.security;
 
 import com.fashionstore.common.autoconfigure.CommonSecurityAutoConfiguration;
+import com.fashionstore.common.security.Permission;
+import com.fashionstore.common.security.PermissionNames;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -13,16 +15,19 @@ import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RestController;
 import com.fashionstore.common.security.CurrentUserProvider;
 import org.springframework.security.access.prepost.PreAuthorize;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -43,6 +48,8 @@ class SecurityConfigTest {
         when(jwtDecoder.decode(anyString())).thenAnswer(invocation -> switch (invocation.<String>getArgument(0)) {
             case "user-token" -> jwt("USER");
             case "admin-token" -> jwt("ADMIN", "USER");
+            case "staff-token" -> staffJwt();
+            case "no-permission-token" -> jwt("ADMIN");
             case "service-token" -> serviceAccountJwt();
             default -> throw new BadJwtException("invalid");
         });
@@ -94,9 +101,27 @@ class SecurityConfigTest {
     }
 
     @Test
-    void adminTokenPassesAdminMethod() throws Exception {
-        mockMvc.perform(get("/api/v1/admin/promotions").header("Authorization", "Bearer admin-token"))
+    void roleAdminWithoutPermissionIsForbiddenOnAdminArea() throws Exception {
+        mockMvc.perform(get("/api/v1/admin/orders").header("Authorization", "Bearer no-permission-token"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void staffTokenReadsOrdersAndApprovesReturns() throws Exception {
+        mockMvc.perform(get("/api/v1/admin/orders").header("Authorization", "Bearer staff-token"))
                 .andExpect(status().isOk());
+        mockMvc.perform(post("/api/v1/admin/orders/returns/r-1/approve").header("Authorization", "Bearer staff-token"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void staffTokenLacksRefundPromotionManageAndRevenue() throws Exception {
+        mockMvc.perform(post("/api/v1/admin/orders/returns/r-1/refund").header("Authorization", "Bearer staff-token"))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/v1/admin/promotions").header("Authorization", "Bearer staff-token"))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/v1/admin/dashboard").header("Authorization", "Bearer staff-token"))
+                .andExpect(status().isForbidden());
     }
 
     @Test
@@ -128,6 +153,19 @@ class SecurityConfigTest {
                 .subject("service-account-order-service")
                 .claim("aud", List.of("fashion-api"))
                 .claim("resource_access", Map.of("fashion-api", Map.of("roles", List.of("internal-caller"))))
+                .build();
+    }
+
+    // Token nhân viên mặc định: client role = các quyền isStaffDefault
+    private static Jwt staffJwt() {
+        List<String> permissions = Arrays.stream(Permission.values())
+                .filter(Permission::isStaffDefault)
+                .map(Permission::authority)
+                .toList();
+        return Jwt.withTokenValue("token").header("alg", "none")
+                .subject("kc-staff-1")
+                .claim("aud", List.of("fashion-api"))
+                .claim("resource_access", Map.of("fashion-api", Map.of("roles", permissions)))
                 .build();
     }
 
@@ -163,10 +201,40 @@ class SecurityConfigTest {
             return currentUserProvider.getCurrentUserId();
         }
 
-        @PreAuthorize("hasRole('ADMIN')")
+        @PreAuthorize("hasAuthority('" + PermissionNames.PROMOTION_READ + "')")
         @GetMapping("/api/v1/admin/promotions")
         String promotions() {
             return "promotions";
+        }
+
+        @PreAuthorize("hasAuthority('" + PermissionNames.PROMOTION_MANAGE + "')")
+        @PostMapping("/api/v1/admin/promotions")
+        String createPromotion() {
+            return "created";
+        }
+
+        @PreAuthorize("hasAuthority('" + PermissionNames.ORDER_READ + "')")
+        @GetMapping("/api/v1/admin/orders")
+        String adminOrders() {
+            return "orders";
+        }
+
+        @PreAuthorize("hasAuthority('" + PermissionNames.RETURN_MANAGE + "')")
+        @PostMapping("/api/v1/admin/orders/returns/{id}/approve")
+        String approve() {
+            return "approved";
+        }
+
+        @PreAuthorize("hasAuthority('" + PermissionNames.REFUND_APPROVE + "')")
+        @PostMapping("/api/v1/admin/orders/returns/{id}/refund")
+        String refund() {
+            return "refunded";
+        }
+
+        @PreAuthorize("hasAuthority('" + PermissionNames.REVENUE_READ + "')")
+        @GetMapping("/api/v1/admin/dashboard")
+        String dashboard() {
+            return "dashboard";
         }
     }
 }

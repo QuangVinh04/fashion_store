@@ -49,6 +49,7 @@ import lombok.experimental.FieldDefaults;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import com.fashionstore.common.security.PermissionNames;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -279,7 +280,7 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     @Transactional
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('" + PermissionNames.ORDER_MANAGE + "')")
     public OrderResponse cancelOrderForAdmin(String orderId, CancelOrderRequest request) {
         return cancelPendingOrder(orderId, request, currentUserProvider.getCurrentUserId(), true);
     }
@@ -319,7 +320,7 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     @Transactional(readOnly = true)
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('" + PermissionNames.ORDER_READ + "')")
     public PageResponse<List<OrderSummaryResponse>> searchOrders(
             AdminOrderFilter filter, Pageable pageable) {
         Page<Order> orders =
@@ -329,7 +330,7 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     @Transactional(readOnly = true)
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('" + PermissionNames.ORDER_READ + "')")
     public OrderResponse getOrderById(String orderId) {
         Order order =
                 orderRepository
@@ -340,14 +341,14 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     @Transactional(readOnly = true)
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('" + PermissionNames.ORDER_READ + "')")
     public OrderSagaResponse getOrderSaga(String orderId) {
         return getOrderSaga(orderId, OrderSagaType.CHECKOUT);
     }
 
     @Override
     @Transactional(readOnly = true)
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('" + PermissionNames.ORDER_READ + "')")
     public OrderSagaResponse getOrderSaga(String orderId, OrderSagaType type) {
         OrderSaga saga =
                 orderSagaRepository
@@ -373,7 +374,7 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     @Transactional
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('" + PermissionNames.ORDER_MANAGE + "')")
     public OrderResponse updateOrderStatus(String orderId, UpdateOrderStatusRequest request) {
         Order order =
                 orderRepository
@@ -506,7 +507,7 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     @Transactional(readOnly = true)
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('" + PermissionNames.ORDER_READ + "')")
     public List<OrderStatusHistoryResponse> getOrderHistory(String orderId) {
         Order order =
                 orderRepository

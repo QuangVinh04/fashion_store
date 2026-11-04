@@ -21,12 +21,12 @@ class KeycloakAuthoritiesMapperTest {
         OidcIdToken idToken = new OidcIdToken("id-token", Instant.now(), Instant.now().plusSeconds(60), Map.of(
                 "sub", "kc-user-1",
                 "realm_access", Map.of("roles", List.of("ADMIN", "USER")),
-                "resource_access", Map.of("fashion-api", Map.of("roles", List.of("product:write")))));
+                "resource_access", Map.of("fashion-api", Map.of("roles", List.of("product:manage")))));
 
         Set<String> mapped = new SecurityConfig().keycloakAuthoritiesMapper()
                 .mapAuthorities(List.of(new OidcUserAuthority(idToken), new SimpleGrantedAuthority("SCOPE_openid")))
                 .stream().map(GrantedAuthority::getAuthority).collect(Collectors.toSet());
 
-        assertThat(mapped).containsExactlyInAnyOrder("ROLE_ADMIN", "ROLE_USER", "product:write");
+        assertThat(mapped).containsExactlyInAnyOrder("ROLE_ADMIN", "ROLE_USER", "product:manage");
     }
 }

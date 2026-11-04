@@ -21,7 +21,7 @@ $Databases = @(
         Database = "identity_database"
         File = "01-identity-seed.sql"
         Port = 5438
-        Label = "1/5: Identity Service (22 Users, Roles, Permissions, Addresses chuan GHN)"
+        Label = "1/5: Identity Service (22 Users, Addresses chuan GHN)"
     },
     @{
         Service = "catalog-postgres"

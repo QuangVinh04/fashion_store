@@ -17,6 +17,7 @@ import lombok.RequiredArgsConstructor;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import lombok.experimental.FieldDefaults;
+import com.fashionstore.common.security.PermissionNames;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -37,7 +38,7 @@ public class ShipmentController {
     com.fashionstore.order.returns.service.ReturnPickupService returnPickupService;
 
     @Operation(summary = "Admin tạo vận đơn GHN cho đơn hàng")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('" + PermissionNames.SHIPMENT_MANAGE + "')")
     @PostMapping("/api/v1/orders/{orderId}/shipment")
     public ApiResponse<ShipmentResponse> createShipment(
             @PathVariable String orderId,
@@ -50,12 +51,12 @@ public class ShipmentController {
     }
 
     @Operation(
-            summary = "Đồng bộ trạng thái vận đơn từ GHN (ADMIN)",
+            summary = "Đồng bộ trạng thái vận đơn từ GHN (shipment:manage)",
             description =
                     "Dùng khi đơn kẹt ở `PACKED`/`SHIPPING` do mất webhook. Lấy trạng thái thật từ GHN"
                         + " rồi áp như webhook: có thể chuyển đơn sang `SHIPPING`/`DELIVERED`. Lỗi GHN"
                         + " trả 502.")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('" + PermissionNames.SHIPMENT_MANAGE + "')")
     @PostMapping("/api/v1/admin/orders/{orderId}/shipment/sync")
     public ApiResponse<ShipmentResponse> syncShipment(@PathVariable String orderId) {
         return ApiResponse.<ShipmentResponse>builder()

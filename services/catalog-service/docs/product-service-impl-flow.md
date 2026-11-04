@@ -37,7 +37,7 @@ Không `@Transactional`, nên mapper chỉ được đọc những gì query đ�
 
 ### `getAllProductsForBackoffice(pageable)`
 `findAll(pageable)` — **không** lọc status, nên trả cả `DRAFT` và `ARCHIVED`. Đây là lý do method
-này tách riêng: endpoint `/admin/products` chịu luật `ROLE_ADMIN` của `catalogFilterChain`.
+này tách riêng: endpoint `/admin/products` cần `product:read` (GET) hoặc `product:manage` (ghi) theo `SecurityConfig`.
 
 ### `getProductById(id)`
 1. `findDetailProductById(id)` — query có fetch-join phần chi tiết (variants, images, attribute values, categories).

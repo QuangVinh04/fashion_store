@@ -1,5 +1,6 @@
 package com.fashionstore.payment.wallet.controller;
 
+import com.fashionstore.common.security.PermissionNames;
 import com.fashionstore.payment.payment.controller.AdminPaymentController;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
@@ -47,16 +48,60 @@ class AdminMoneyControllerTest {
 
     @BeforeEach
     void tokens() {
-        when(decoder.decode("admin")).thenReturn(token("admin", "ADMIN"));
-        when(decoder.decode("buyer")).thenReturn(token("buyer", "USER"));
+        when(decoder.decode("admin"))
+                .thenReturn(permissionToken("admin", PermissionNames.PAYMENT_READ, PermissionNames.WALLET_READ));
+        when(decoder.decode("wallet-reader")).thenReturn(permissionToken("wallet-reader", PermissionNames.WALLET_READ));
+        when(decoder.decode("payment-reader")).thenReturn(permissionToken("payment-reader", PermissionNames.PAYMENT_READ));
+        when(decoder.decode("role-admin")).thenReturn(realmRoleToken("role-admin", "ADMIN"));
+        when(decoder.decode("no-permission")).thenReturn(permissionToken("no-permission", PermissionNames.RETURN_READ));
+        when(decoder.decode("buyer")).thenReturn(realmRoleToken("buyer", "USER"));
     }
 
-    private Jwt token(String subject, String role) {
+    private Jwt realmRoleToken(String subject, String role) {
         return Jwt.withTokenValue(subject)
                 .header("alg", "RS256")
                 .subject(subject)
                 .claim("realm_access", Map.of("roles", List.of(role)))
                 .build();
+    }
+
+    private Jwt permissionToken(String subject, String... permissions) {
+        return Jwt.withTokenValue(subject)
+                .header("alg", "RS256")
+                .subject(subject)
+                .claim("resource_access", Map.of("fashion-api", Map.of("roles", List.of(permissions))))
+                .build();
+    }
+
+    @Test
+    void walletReaderReadsWalletsButNotPayments() throws Exception {
+        when(wallets.findAll(any(org.springframework.data.domain.Pageable.class)))
+                .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of()));
+        mvc.perform(get("/api/v1/admin/wallets").header("Authorization", "Bearer wallet-reader"))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/v1/admin/payments/order/x").header("Authorization", "Bearer wallet-reader"))
+                .andExpect(status().isForbidden());
+        verifyNoInteractions(payments);
+    }
+
+    @Test
+    void paymentReaderReadsPaymentsButNotWallets() throws Exception {
+        mvc.perform(get("/api/v1/admin/payments/order/x").header("Authorization", "Bearer payment-reader"))
+                .andExpect(status().isNotFound());
+        mvc.perform(get("/api/v1/admin/wallets").header("Authorization", "Bearer payment-reader"))
+                .andExpect(status().isForbidden());
+        verifyNoInteractions(wallets);
+    }
+
+    @Test
+    void roleAdminAndUnrelatedPermissionCannotReadAdminMoney() throws Exception {
+        for (String bearer : List.of("role-admin", "no-permission")) {
+            mvc.perform(get("/api/v1/admin/wallets").header("Authorization", "Bearer " + bearer))
+                    .andExpect(status().isForbidden());
+            mvc.perform(get("/api/v1/admin/payments/order/x").header("Authorization", "Bearer " + bearer))
+                    .andExpect(status().isForbidden());
+        }
+        verifyNoInteractions(payments, wallets);
     }
 
     @Test

@@ -57,7 +57,7 @@ spring:
             - id: identity-admin-users
               uri: ${IDENTITY_BASE_URL:http://identity-service:8082}
               predicates:
-                - Path=/api/v1/admin/users/**
+                - Path=/api/v1/admin/users/**,/api/v1/admin/permissions,/api/v1/admin/groups,/api/v1/admin/groups/**,/api/v1/admin/staff
             - id: identity-openapi
               uri: ${IDENTITY_BASE_URL:http://identity-service:8082}
               predicates:

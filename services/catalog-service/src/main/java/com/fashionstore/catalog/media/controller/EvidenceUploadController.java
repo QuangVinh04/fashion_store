@@ -5,6 +5,7 @@ import com.fashionstore.catalog.media.dto.PresignUploadResponse;
 import com.fashionstore.catalog.media.entity.MediaPurpose;
 import com.fashionstore.catalog.media.service.MediaFileService;
 import com.fashionstore.common.dto.ApiResponse;
+import com.fashionstore.common.security.PermissionNames;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -23,7 +24,7 @@ public class EvidenceUploadController {
     }
 
     @PostMapping("/payments/presign")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyAuthority('" + PermissionNames.REFUND_APPROVE + "', '" + PermissionNames.ORDER_MANAGE + "')")
     public ApiResponse<PresignUploadResponse> payments(@Valid @RequestBody PresignUploadRequest request) {
         return ApiResponse.<PresignUploadResponse>builder().data(media.presignUpload(request, MediaPurpose.PAYMENT_EVIDENCE)).build();
     }

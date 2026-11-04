@@ -30,6 +30,14 @@ spring:
     url: jdbc:postgresql://${IDENTITY_POSTGRES_HOST:localhost}:${IDENTITY_POSTGRES_PORT:5438}/${IDENTITY_POSTGRES_DB:identity_database}
     username: ${IDENTITY_POSTGRES_USER:root}
     password: ${IDENTITY_POSTGRES_PASSWORD:root}
+  data:
+    # RedisService là cách duy nhất dùng Redis và luôn fail-open: timeout thấp để Redis chết không làm chậm xử lý.
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 500ms
+      connect-timeout: 500ms
   jpa:
     hibernate:
       ddl-auto: none

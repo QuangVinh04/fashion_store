@@ -3,6 +3,8 @@ package com.fashionstore.catalog.shared.config.security;
 import com.fashionstore.common.security.ApiAccessDeniedHandler;
 import com.fashionstore.common.security.ApiAuthenticationEntryPoint;
 import com.fashionstore.common.security.KeycloakJwtAuthoritiesConverter;
+import com.fashionstore.common.security.Permission;
+import com.fashionstore.common.security.PermissionNames;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -23,6 +25,14 @@ import java.util.List;
 @EnableWebSecurity
 @EnableMethodSecurity
 public class SecurityConfig {
+
+    private static final String REVIEW_ADMIN_PATHS = "/api/v1/admin/reviews/**";
+    private static final String[] INVENTORY_PATHS = {"/api/v1/inventory/**", "/admin/inventory/**"};
+    // GET /api/v1/category/** đã permitAll ở trên nên rule này chỉ chạm tới các method ghi của danh mục
+    private static final String[] PRODUCT_ADMIN_PATHS = {
+            "/admin/products/**", "/admin/brands/**", "/admin/color-options/**", "/admin/size-options/**",
+            "/admin/product-attributes/**", "/admin/size-charts/**", "/api/v1/category/**"
+    };
 
     @Bean
     public SecurityFilterChain securityFilterChain(
@@ -46,9 +56,10 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/v1/files/*/content").permitAll()
                         .requestMatchers("/api/v1/files/**").authenticated()
 
-                        // 3. Domain Inventory: Khách xem giỏ hàng checkStock cần đăng nhập
+                        // 3. Domain Inventory: Khách xem giỏ hàng checkStock cần đăng nhập; còn lại theo quyền kho
                         .requestMatchers(HttpMethod.POST, "/api/v1/inventory/check").authenticated()
-                        .requestMatchers(HttpMethod.GET, "/api/v1/inventory/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.GET, INVENTORY_PATHS).hasAuthority(PermissionNames.INVENTORY_READ)
+                        .requestMatchers(INVENTORY_PATHS).hasAuthority(PermissionNames.INVENTORY_MANAGE)
 
                         // 4. Domain Product / Catalog: Khách xem sản phẩm, danh mục công khai
                         .requestMatchers(HttpMethod.GET,
@@ -69,8 +80,16 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/v1/products/*/reviews").authenticated()
                         .requestMatchers(HttpMethod.DELETE, "/api/v1/products/*/reviews/*").authenticated()
 
-                        // 6. Mọi thao tác còn lại (Thêm/Sửa/Xóa sản phẩm, cập nhật kho...): Bắt buộc quyền ADMIN
-                        .anyRequest().hasRole("ADMIN")
+                        // 5b. Quản trị sản phẩm/danh mục: đọc cần product:read, ghi cần product:manage
+                        .requestMatchers(HttpMethod.GET, PRODUCT_ADMIN_PATHS).hasAuthority(PermissionNames.PRODUCT_READ)
+                        .requestMatchers(PRODUCT_ADMIN_PATHS).hasAuthority(PermissionNames.PRODUCT_MANAGE)
+
+                        // 5c. Kiểm duyệt đánh giá: xem cần review:read, ghi cần review:manage (lớp phòng thủ thứ hai sau @PreAuthorize)
+                        .requestMatchers(HttpMethod.GET, REVIEW_ADMIN_PATHS).hasAuthority(PermissionNames.REVIEW_READ)
+                        .requestMatchers(REVIEW_ADMIN_PATHS).hasAuthority(PermissionNames.REVIEW_MANAGE)
+
+                        // 6. Còn lại: cần một permission, quyền cụ thể do @PreAuthorize ở method
+                        .anyRequest().hasAnyAuthority(Permission.authorities())
                 )
                 // JWT Keycloak do gateway chuyển tiếp; role qua KeycloakJwtAuthoritiesConverter (common-library)
                 .oauth2ResourceServer(resourceServer -> resourceServer

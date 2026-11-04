@@ -8,6 +8,7 @@ import com.fashionstore.catalog.review.service.ReviewService;
 import com.fashionstore.common.dto.ApiResponse;
 import com.fashionstore.common.dto.PageResponse;
 import com.fashionstore.common.exception.AppException;
+import com.fashionstore.common.security.PermissionNames;
 import com.fashionstore.common.exception.ErrorCode;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -39,7 +40,6 @@ import java.util.List;
 @Validated
 @RestController
 @RequestMapping("/api/v1/admin/reviews")
-@PreAuthorize("hasRole('ADMIN')")
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 @Tag(name = "Admin Review", description = "Quản lý đánh giá sản phẩm dành cho quản trị viên")
@@ -49,6 +49,7 @@ public class AdminReviewController {
 
     @Operation(summary = "Lấy danh sách đánh giá toàn hệ thống dành cho admin")
     @GetMapping
+    @PreAuthorize("hasAuthority('" + PermissionNames.REVIEW_READ + "')")
     public ApiResponse<PageResponse<List<ReviewResponse>>> list(
             @Parameter(description = "Từ khóa tìm kiếm theo tên sản phẩm, tên khách hoặc nội dung")
             @RequestParam(required = false)
@@ -76,6 +77,7 @@ public class AdminReviewController {
 
     @Operation(summary = "Cập nhật trạng thái kiểm duyệt (Ẩn / Hiện)")
     @PatchMapping("/{id}/status")
+    @PreAuthorize("hasAuthority('" + PermissionNames.REVIEW_MANAGE + "')")
     public ApiResponse<ReviewResponse> updateStatus(
             @PathVariable("id") String reviewId,
             @Valid @RequestBody UpdateReviewStatusRequest request
@@ -88,6 +90,7 @@ public class AdminReviewController {
 
     @Operation(summary = "Gửi hoặc cập nhật phản hồi của Shop cho đánh giá")
     @PostMapping("/{id}/reply")
+    @PreAuthorize("hasAuthority('" + PermissionNames.REVIEW_MANAGE + "')")
     public ApiResponse<ReviewResponse> reply(
             @PathVariable("id") String reviewId,
             @Valid @RequestBody ReplyReviewRequest request
@@ -100,6 +103,7 @@ public class AdminReviewController {
 
     @Operation(summary = "Xóa phản hồi của Shop")
     @DeleteMapping("/{id}/reply")
+    @PreAuthorize("hasAuthority('" + PermissionNames.REVIEW_MANAGE + "')")
     public ApiResponse<ReviewResponse> deleteReply(
             @PathVariable("id") String reviewId
     ) {
@@ -111,6 +115,7 @@ public class AdminReviewController {
 
     @Operation(summary = "Xóa đánh giá vĩnh viễn (Admin)")
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasAuthority('" + PermissionNames.REVIEW_MANAGE + "')")
     public ApiResponse<Void> deleteReview(
             @PathVariable("id") String reviewId
     ) {

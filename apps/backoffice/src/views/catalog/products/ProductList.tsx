@@ -33,6 +33,8 @@ import {
 import PageHeader from '@/components/backoffice/PageHeader'
 import QueryState from '@/components/backoffice/QueryState'
 import ConfirmActionDialog from '@/components/backoffice/ConfirmActionDialog'
+import { Permission } from '@/configs/permissions'
+import { useAuth } from '@/context/AuthContext'
 import { useBrandsQuery, useCategoriesQuery } from '@/hooks/useCatalog'
 import useListQueryState, { resolveListPage } from '@/hooks/useListQueryState'
 import { useDebouncedSearch } from '@/hooks/useDebouncedSearch'
@@ -62,6 +64,8 @@ const flatten = (rows: Category[], depth = 0): { id: string; label: string }[] =
 
 export default function ProductList() {
   const client = useQueryClient()
+  const { hasPermission } = useAuth()
+  const canManage = hasPermission(Permission.PRODUCT_MANAGE)
   const { page, size, filters, setPage, setSize, setFilters } = useListQueryState()
   const search = useDebouncedSearch(filters.keyword || '', keyword => setFilters({ keyword }))
   const categories = useCategoriesQuery()
@@ -167,14 +171,16 @@ export default function ProductList() {
       <PageHeader
         title='Sản phẩm'
         actions={
-          <Button
-            component={Link}
-            href='/products/new'
-            variant='contained'
-            startIcon={<i className='ri-add-line' />}
-          >
-            Thêm sản phẩm
-          </Button>
+          canManage ? (
+            <Button
+              component={Link}
+              href='/products/new'
+              variant='contained'
+              startIcon={<i className='ri-add-line' />}
+            >
+              Thêm sản phẩm
+            </Button>
+          ) : undefined
         }
       />
       {notice && (
@@ -336,18 +342,20 @@ export default function ProductList() {
                 <TableBody>
                   {rows.map(row => (
                     <TableRow key={row.id} hover>
-                      <TableCell padding='checkbox'>
-                        <Checkbox
-                          inputProps={{ 'aria-label': 'Chọn ' + row.name }}
-                          checked={selected.includes(row.id)}
-                          disabled={mutation.isPending}
-                          onChange={event =>
-                            setSelected(current =>
-                              event.target.checked ? [...current, row.id] : current.filter(id => id !== row.id)
-                            )
-                          }
-                        />
-                      </TableCell>
+                      {canManage && (
+                        <TableCell padding='checkbox'>
+                          <Checkbox
+                            inputProps={{ 'aria-label': 'Chọn ' + row.name }}
+                            checked={selected.includes(row.id)}
+                            disabled={mutation.isPending}
+                            onChange={event =>
+                              setSelected(current =>
+                                event.target.checked ? [...current, row.id] : current.filter(id => id !== row.id)
+                              )
+                            }
+                          />
+                        </TableCell>
+                      )}
                       <TableCell>
                         <Box sx={{ display: 'flex', gap: 3, alignItems: 'center' }}>
                           <Avatar
@@ -459,55 +467,71 @@ export default function ProductList() {
                       </TableCell>
                       <TableCell align='right' sx={{ whiteSpace: 'nowrap' }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 0.5 }}>
-                          <Tooltip title='Chỉnh sửa sản phẩm'>
-                            <IconButton
-                              size='small'
-                              color='secondary'
-                              component={Link}
-                              href={'/products/' + row.id}
-                              disabled={mutation.isPending}
-                              aria-label={'Sửa ' + row.name}
-                            >
-                              <i className='ri-pencil-line text-lg' />
-                            </IconButton>
-                          </Tooltip>
+                          {canManage ? (
+                            <>
+                              <Tooltip title='Chỉnh sửa sản phẩm'>
+                                <IconButton
+                                  size='small'
+                                  color='secondary'
+                                  component={Link}
+                                  href={'/products/' + row.id}
+                                  disabled={mutation.isPending}
+                                  aria-label={'Sửa ' + row.name}
+                                >
+                                  <i className='ri-pencil-line text-lg' />
+                                </IconButton>
+                              </Tooltip>
 
-                          {row.status !== 'ARCHIVED' && (
-                            <Tooltip title={row.status === 'PUBLISHED' ? 'Ẩn sản phẩm' : 'Xuất bản sản phẩm'}>
-                              <IconButton
-                                size='small'
-                                color={row.status === 'PUBLISHED' ? 'warning' : 'success'}
-                                disabled={mutation.isPending}
-                                onClick={() => ask(row.status === 'PUBLISHED' ? 'unpublish' : 'publish', [row])}
-                                aria-label={(row.status === 'PUBLISHED' ? 'Ẩn ' : 'Xuất bản ') + row.name}
-                              >
-                                <i className={row.status === 'PUBLISHED' ? 'ri-eye-off-line text-lg' : 'ri-eye-line text-lg'} />
-                              </IconButton>
-                            </Tooltip>
-                          )}
+                              {row.status !== 'ARCHIVED' && (
+                                <Tooltip title={row.status === 'PUBLISHED' ? 'Ẩn sản phẩm' : 'Xuất bản sản phẩm'}>
+                                  <IconButton
+                                    size='small'
+                                    color={row.status === 'PUBLISHED' ? 'warning' : 'success'}
+                                    disabled={mutation.isPending}
+                                    onClick={() => ask(row.status === 'PUBLISHED' ? 'unpublish' : 'publish', [row])}
+                                    aria-label={(row.status === 'PUBLISHED' ? 'Ẩn ' : 'Xuất bản ') + row.name}
+                                  >
+                                    <i className={row.status === 'PUBLISHED' ? 'ri-eye-off-line text-lg' : 'ri-eye-line text-lg'} />
+                                  </IconButton>
+                                </Tooltip>
+                              )}
 
-                          {row.status === 'ARCHIVED' ? (
-                            <Tooltip title='Khôi phục sản phẩm'>
-                              <IconButton
-                                size='small'
-                                color='success'
-                                disabled={mutation.isPending}
-                                onClick={() => ask('restore', [row])}
-                                aria-label={'Khôi phục ' + row.name}
-                              >
-                                <i className='ri-arrow-go-back-line text-lg' />
-                              </IconButton>
-                            </Tooltip>
+                              {row.status === 'ARCHIVED' ? (
+                                <Tooltip title='Khôi phục sản phẩm'>
+                                  <IconButton
+                                    size='small'
+                                    color='success'
+                                    disabled={mutation.isPending}
+                                    onClick={() => ask('restore', [row])}
+                                    aria-label={'Khôi phục ' + row.name}
+                                  >
+                                    <i className='ri-arrow-go-back-line text-lg' />
+                                  </IconButton>
+                                </Tooltip>
+                              ) : (
+                                <Tooltip title='Lưu trữ sản phẩm'>
+                                  <IconButton
+                                    size='small'
+                                    color='secondary'
+                                    disabled={mutation.isPending}
+                                    onClick={() => ask('archive', [row])}
+                                    aria-label={'Lưu trữ ' + row.name}
+                                  >
+                                    <i className='ri-inbox-archive-line text-lg' />
+                                  </IconButton>
+                                </Tooltip>
+                              )}
+                            </>
                           ) : (
-                            <Tooltip title='Lưu trữ sản phẩm'>
+                            <Tooltip title='Xem chi tiết'>
                               <IconButton
                                 size='small'
-                                color='secondary'
-                                disabled={mutation.isPending}
-                                onClick={() => ask('archive', [row])}
-                                aria-label={'Lưu trữ ' + row.name}
+                                color='primary'
+                                component={Link}
+                                href={'/products/' + row.id}
+                                aria-label={'Xem ' + row.name}
                               >
-                                <i className='ri-inbox-archive-line text-lg' />
+                                <i className='ri-eye-line text-lg' />
                               </IconButton>
                             </Tooltip>
                           )}

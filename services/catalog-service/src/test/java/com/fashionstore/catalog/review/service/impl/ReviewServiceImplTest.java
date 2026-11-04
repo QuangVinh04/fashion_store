@@ -16,6 +16,7 @@ import com.fashionstore.catalog.product.repository.ProductVariantRepository;
 import com.fashionstore.catalog.review.repository.ReviewRepository;
 import com.fashionstore.common.exception.AppException;
 import com.fashionstore.common.security.CurrentUserProvider;
+import com.fashionstore.common.security.PermissionNames;
 import com.fashionstore.contracts.order.dto.VerifyPurchaseResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -29,6 +30,9 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.util.List;
 import java.util.Optional;
@@ -315,6 +319,44 @@ class ReviewServiceImplTest {
                 .isInstanceOf(AppException.class)
                 .satisfies(ex -> assertThat(((AppException) ex).getErrorCode())
                         .isEqualTo(ProductErrorCode.REVIEW_ACTION_FORBIDDEN));
+
+        verify(reviewRepository, never()).delete(any());
+    }
+
+    @Test
+    void deleteReview_whenReviewManager_deletesOthersReview() {
+        Product product = Product.builder().name("Áo Khoác").build();
+        product.setId("prod-1");
+        Review review = Review.builder().product(product).userId("user-2").rating(5).build();
+        review.setId("rev-1");
+        when(reviewRepository.findById("rev-1")).thenReturn(Optional.of(review));
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
+                "staff-1", null, List.of(new SimpleGrantedAuthority(PermissionNames.REVIEW_MANAGE))));
+
+        try {
+            service.deleteReview("prod-1", "rev-1");
+        } finally {
+            SecurityContextHolder.clearContext();
+        }
+
+        verify(reviewRepository, times(1)).delete(review);
+    }
+
+    @Test
+    void deleteReview_whenRoleAdminOnly_throwsForbidden() {
+        Product product = Product.builder().name("Áo Khoác").build();
+        product.setId("prod-1");
+        Review review = Review.builder().product(product).userId("user-2").rating(5).build();
+        review.setId("rev-1");
+        when(reviewRepository.findById("rev-1")).thenReturn(Optional.of(review));
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
+                "staff-1", null, List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))));
+
+        try {
+            assertThatThrownBy(() -> service.deleteReview("prod-1", "rev-1")).isInstanceOf(AppException.class);
+        } finally {
+            SecurityContextHolder.clearContext();
+        }
 
         verify(reviewRepository, never()).delete(any());
     }

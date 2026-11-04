@@ -1,46 +1,10 @@
 -- 01-identity-seed.sql
 -- Seed cho identity_database. Sinh tự động, chạy lại nhiều lần an toàn (ON CONFLICT DO NOTHING).
+-- Quyền và nhóm nằm ở Keycloak (realm-fashion-store.json), không seed ở đây.
 -- Thời gian tính tương đối từ now() để dữ liệu luôn "mới" khi kiểm thử giao diện.
 BEGIN;
 SET client_encoding = 'UTF8';
 
-
-INSERT INTO permissions (id, name, description) VALUES
-    ('perm-01', 'product:read', 'Xem danh sách và chi tiết sản phẩm'),
-    ('perm-02', 'product:write', 'Thêm, sửa, xóa sản phẩm và biến thể'),
-    ('perm-03', 'category:read', 'Xem danh mục và thương hiệu'),
-    ('perm-04', 'category:write', 'Quản lý danh mục và thương hiệu'),
-    ('perm-05', 'order:read', 'Xem danh sách và chi tiết đơn hàng'),
-    ('perm-06', 'order:write', 'Xử lý, cập nhật trạng thái đơn hàng'),
-    ('perm-07', 'inventory:manage', 'Quản lý kho hàng và điều chỉnh tồn kho'),
-    ('perm-08', 'user:read', 'Xem thông tin khách hàng'),
-    ('perm-09', 'user:manage', 'Khóa, mở khóa và quản lý tài khoản'),
-    ('perm-10', 'promotion:manage', 'Quản lý mã giảm giá và khuyến mãi'),
-    ('perm-11', 'payment:manage', 'Tra cứu giao dịch và xử lý hoàn tiền'),
-    ('perm-12', 'report:view', 'Xem báo cáo doanh thu và vận hành')
-ON CONFLICT DO NOTHING;
-
-INSERT INTO roles (id, name, description) VALUES
-    ('00000000-0000-0000-0000-000000000001', 'USER', 'Khách hàng mua sắm'),
-    ('00000000-0000-0000-0000-000000000002', 'ADMIN', 'Quản trị viên hệ thống')
-ON CONFLICT DO NOTHING;
-
-INSERT INTO role_permissions (role_id, permission_id) VALUES
-    ('00000000-0000-0000-0000-000000000002', 'perm-01'),
-    ('00000000-0000-0000-0000-000000000002', 'perm-02'),
-    ('00000000-0000-0000-0000-000000000002', 'perm-03'),
-    ('00000000-0000-0000-0000-000000000002', 'perm-04'),
-    ('00000000-0000-0000-0000-000000000002', 'perm-05'),
-    ('00000000-0000-0000-0000-000000000002', 'perm-06'),
-    ('00000000-0000-0000-0000-000000000002', 'perm-07'),
-    ('00000000-0000-0000-0000-000000000002', 'perm-08'),
-    ('00000000-0000-0000-0000-000000000002', 'perm-09'),
-    ('00000000-0000-0000-0000-000000000002', 'perm-10'),
-    ('00000000-0000-0000-0000-000000000002', 'perm-11'),
-    ('00000000-0000-0000-0000-000000000002', 'perm-12'),
-    ('00000000-0000-0000-0000-000000000001', 'perm-01'),
-    ('00000000-0000-0000-0000-000000000001', 'perm-03')
-ON CONFLICT DO NOTHING;
 
 INSERT INTO users (id, email, password, full_name, phone, address, avatar, is_active, is_email_verified, created_at, updated_at) VALUES
     ('00000000-0000-0000-0000-000000000001', 'admin@fashion.local', NULL, 'Quản Trị Viên', '0901000001', '15 Hàng Bài, Phường Bến Nghé, Quận 1, Hồ Chí Minh', 'https://i.pravatar.cc/200?img=1', true, true, now() - interval '115200 minutes', now() - interval '57600 minutes'),
@@ -65,31 +29,6 @@ INSERT INTO users (id, email, password, full_name, phone, address, avatar, is_ac
     ('00000000-0000-0000-0000-000000000028', 'ta.duc.anh@fashion.local', NULL, 'Tạ Đức Anh', '0912345618', '77 Nguyễn Thái Học, Phường Tân Phú, Quận 7, Hồ Chí Minh', 'https://i.pravatar.cc/200?img=20', true, true, now() - interval '60480 minutes', now() - interval '30240 minutes'),
     ('00000000-0000-0000-0000-000000000029', 'ho.thu.trang@fashion.local', NULL, 'Hồ Thu Trang', '0912345619', '320 Nguyễn Văn Linh, Phường Phú Hội, Thành phố Huế, Thừa Thiên Huế', 'https://i.pravatar.cc/200?img=21', true, true, now() - interval '57600 minutes', now() - interval '28800 minutes'),
     ('00000000-0000-0000-0000-000000000030', 'luong.van.son@fashion.local', NULL, 'Lương Văn Sơn', '0912345620', '95 Hùng Vương, Phường Ô Chợ Dừa, Quận Đống Đa, Hà Nội', 'https://i.pravatar.cc/200?img=22', false, true, now() - interval '54720 minutes', now() - interval '27360 minutes')
-ON CONFLICT DO NOTHING;
-
-INSERT INTO user_roles (user_id, role_id) VALUES
-    ('00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000002'),
-    ('7cb10f2e-3068-4a3a-b15e-981dd47c1273', '00000000-0000-0000-0000-000000000001'),
-    ('00000000-0000-0000-0000-000000000011', '00000000-0000-0000-0000-000000000001'),
-    ('00000000-0000-0000-0000-000000000012', '00000000-0000-0000-0000-000000000001'),
-    ('00000000-0000-0000-0000-000000000013', '00000000-0000-0000-0000-000000000001'),
-    ('00000000-0000-0000-0000-000000000014', '00000000-0000-0000-0000-000000000001'),
-    ('00000000-0000-0000-0000-000000000015', '00000000-0000-0000-0000-000000000001'),
-    ('00000000-0000-0000-0000-000000000016', '00000000-0000-0000-0000-000000000001'),
-    ('00000000-0000-0000-0000-000000000017', '00000000-0000-0000-0000-000000000001'),
-    ('00000000-0000-0000-0000-000000000018', '00000000-0000-0000-0000-000000000001'),
-    ('00000000-0000-0000-0000-000000000019', '00000000-0000-0000-0000-000000000001'),
-    ('00000000-0000-0000-0000-000000000020', '00000000-0000-0000-0000-000000000001'),
-    ('00000000-0000-0000-0000-000000000021', '00000000-0000-0000-0000-000000000001'),
-    ('00000000-0000-0000-0000-000000000022', '00000000-0000-0000-0000-000000000001'),
-    ('00000000-0000-0000-0000-000000000023', '00000000-0000-0000-0000-000000000001'),
-    ('00000000-0000-0000-0000-000000000024', '00000000-0000-0000-0000-000000000001'),
-    ('00000000-0000-0000-0000-000000000025', '00000000-0000-0000-0000-000000000001'),
-    ('00000000-0000-0000-0000-000000000026', '00000000-0000-0000-0000-000000000001'),
-    ('00000000-0000-0000-0000-000000000027', '00000000-0000-0000-0000-000000000001'),
-    ('00000000-0000-0000-0000-000000000028', '00000000-0000-0000-0000-000000000001'),
-    ('00000000-0000-0000-0000-000000000029', '00000000-0000-0000-0000-000000000001'),
-    ('00000000-0000-0000-0000-000000000030', '00000000-0000-0000-0000-000000000001')
 ON CONFLICT DO NOTHING;
 
 INSERT INTO user_addresses (id, user_id, recipient_name, phone, province, district, ward, detail_address, is_default, province_id, district_id, ward_code, created_at, updated_at) VALUES

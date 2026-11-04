@@ -29,6 +29,8 @@ import PageHeader from '@/components/backoffice/PageHeader'
 import QueryState from '@/components/backoffice/QueryState'
 import ListResult from '@/components/backoffice/ListResult'
 import UnsavedChangesGuard from '@/components/backoffice/UnsavedChangesGuard'
+import { Permission } from '@/configs/permissions'
+import { useAuth } from '@/context/AuthContext'
 import { inventoryApi } from '@/libs/api/inventory'
 import { catalogApi } from '@/libs/api/catalog'
 import { toVietnameseError } from '@/libs/api/errors'
@@ -47,6 +49,8 @@ const ledgerLabels = {
 }
 
 export default function InventoryDetail({ id }: { id: string }) {
+  const { hasPermission } = useAuth()
+  const canManage = hasPermission(Permission.INVENTORY_MANAGE)
   const invalidate = useInventoryInvalidation()
   const query = useQuery({ queryKey: ['inventory', 'variant', id], queryFn: () => inventoryApi.getVariant(id) })
 
@@ -123,7 +127,7 @@ export default function InventoryDetail({ id }: { id: string }) {
         title={variant?.sku ? 'Kho · ' + variant.sku : 'Chi tiết tồn kho'}
         breadcrumbs={<Link href='/inventory'>Tồn kho</Link>}
         actions={
-          inventory && (
+          inventory && canManage ? (
             <>
               <Button variant='contained' onClick={() => openOperation('receive')}>
                 Nhập hàng
@@ -132,7 +136,7 @@ export default function InventoryDetail({ id }: { id: string }) {
                 Kiểm kê
               </Button>
             </>
-          )
+          ) : undefined
         }
       />
       {notice && (
@@ -207,9 +211,11 @@ return
                     helperText={thresholdError}
                     disabled={saveThreshold.isPending}
                   />
-                  <Button type='submit' variant='contained' disabled={saveThreshold.isPending}>
-                    Lưu ngưỡng
-                  </Button>
+                  {canManage && (
+                    <Button type='submit' variant='contained' disabled={saveThreshold.isPending}>
+                      Lưu ngưỡng
+                    </Button>
+                  )}
                 </Box>
               </CardContent>
             </Card>

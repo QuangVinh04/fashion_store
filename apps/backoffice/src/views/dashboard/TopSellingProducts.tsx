@@ -14,12 +14,13 @@ import Skeleton from '@mui/material/Skeleton'
 
 // Type Imports
 import type { DashboardTimeRange } from './types'
-import type { TopProductStat } from '@/types/dashboard'
+import type { TopProductStat, OperationsTopProductStat } from '@/types/dashboard'
 
 type TopSellingProductsProps = {
   timeRange?: DashboardTimeRange
-  products?: TopProductStat[]
+  products?: (TopProductStat | OperationsTopProductStat)[]
   isLoading?: boolean
+  hasRevenue?: boolean
 }
 
 const getTimeRangeLabel = (range: DashboardTimeRange) => {
@@ -48,7 +49,12 @@ const formatVndShort = (val: number) => {
   return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(val)
 }
 
-const TopSellingProducts = ({ timeRange = '7days', products = [], isLoading }: TopSellingProductsProps) => {
+const TopSellingProducts = ({
+  timeRange = '7days',
+  products = [],
+  isLoading,
+  hasRevenue = true
+}: TopSellingProductsProps) => {
   return (
     <Card className='bs-full'>
       <CardHeader
@@ -134,11 +140,13 @@ const TopSellingProducts = ({ timeRange = '7days', products = [], isLoading }: T
                   </Box>
                 </Box>
 
-                <Box sx={{ textAlign: 'right', flexShrink: 0 }}>
-                  <Typography variant='subtitle2' sx={{ fontWeight: 700, color: 'text.primary', fontSize: '0.8125rem', fontVariantNumeric: 'tabular-nums' }}>
-                    {formatVndShort(product.totalRevenue)}
-                  </Typography>
-                </Box>
+                {hasRevenue && product.totalRevenue != null && (
+                  <Box sx={{ textAlign: 'right', flexShrink: 0 }}>
+                    <Typography variant='subtitle2' sx={{ fontWeight: 700, color: 'text.primary', fontSize: '0.8125rem', fontVariantNumeric: 'tabular-nums' }}>
+                      {formatVndShort(product.totalRevenue)}
+                    </Typography>
+                  </Box>
+                )}
               </Box>
             ))
           )}

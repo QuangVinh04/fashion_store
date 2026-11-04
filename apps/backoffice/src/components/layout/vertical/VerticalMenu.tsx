@@ -20,6 +20,9 @@ import StyledVerticalNavExpandIcon from '@menu/styles/vertical/StyledVerticalNav
 import menuItemStyles from '@core/styles/vertical/menuItemStyles'
 import menuSectionStyles from '@core/styles/vertical/menuSectionStyles'
 
+import { requiredPermissionsFor } from '@/configs/routePermissions'
+import { useAuth } from '@/context/AuthContext'
+
 type RenderExpandIconProps = {
   open?: boolean
   transitionDuration?: VerticalMenuContextProps['transitionDuration']
@@ -31,12 +34,108 @@ const RenderExpandIcon = ({ open, transitionDuration }: RenderExpandIconProps) =
   </StyledVerticalNavExpandIcon>
 )
 
+type CanViewFn = (path: string) => boolean
+
+const SalesSection = ({ canView }: { canView: CanViewFn }) => {
+  const canOrders = canView('/orders')
+  const canReturns = canView('/returns')
+  const canWallets = canView('/wallets')
+  const canPromotions = canView('/promotions')
+
+  if (!canOrders && !canReturns && !canWallets && !canPromotions) return null
+
+  return (
+    <MenuSection label='Bán hàng'>
+      {(canOrders || canReturns) && (
+        <SubMenu label='Đơn hàng' icon={<i className='ri-shopping-cart-2-line' />}>
+          {canOrders && <MenuItem href='/orders'>Danh sách đơn hàng</MenuItem>}
+          {canReturns && <MenuItem href='/returns'>Yêu cầu đổi trả</MenuItem>}
+        </SubMenu>
+      )}
+      {canWallets && (
+        <MenuItem href='/wallets' icon={<i className='ri-wallet-3-line' />}>
+          Ví khách hàng
+        </MenuItem>
+      )}
+      {canPromotions && (
+        <MenuItem href='/promotions' icon={<i className='ri-coupon-3-line' />}>
+          Khuyến mãi
+        </MenuItem>
+      )}
+    </MenuSection>
+  )
+}
+
+const ProductsSection = ({ canView }: { canView: CanViewFn }) => {
+  if (!canView('/products')) return null
+
+  return (
+    <MenuSection label='Sản phẩm'>
+      <SubMenu label='Sản phẩm' icon={<i className='ri-shirt-line' />}>
+        <MenuItem href='/products'>Danh sách sản phẩm</MenuItem>
+        <MenuItem href='/categories'>Danh mục</MenuItem>
+        <MenuItem href='/sizes'>Kích cỡ</MenuItem>
+        <MenuItem href='/brands'>Thương hiệu</MenuItem>
+        <MenuItem href='/colors'>Màu sắc</MenuItem>
+        <MenuItem href='/attributes'>Thuộc tính</MenuItem>
+        <MenuItem href='/size-charts'>Bảng size</MenuItem>
+        <MenuItem href='/media'>Thư viện ảnh</MenuItem>
+      </SubMenu>
+    </MenuSection>
+  )
+}
+
+const CustomerSection = ({ canView }: { canView: CanViewFn }) => {
+  const canCustomers = canView('/customers')
+  const canReviews = canView('/reviews')
+
+  if (!canCustomers && !canReviews) return null
+
+  return (
+    <MenuSection label='Khách hàng'>
+      {canCustomers && (
+        <MenuItem href='/customers' icon={<i className='ri-user-3-line' />}>
+          Người dùng
+        </MenuItem>
+      )}
+      {canReviews && (
+        <MenuItem href='/reviews' icon={<i className='ri-star-line' />}>
+          Đánh giá
+        </MenuItem>
+      )}
+    </MenuSection>
+  )
+}
+
+const AdminSection = ({ canView }: { canView: CanViewFn }) => {
+  if (!canView('/groups')) return null
+
+  return (
+    <MenuSection label='Quản trị'>
+      <MenuItem href='/groups' icon={<i className='ri-shield-user-line' />}>
+        Nhóm & phân quyền
+      </MenuItem>
+    </MenuSection>
+  )
+}
+
 const VerticalMenu = ({ scrollMenu }: { scrollMenu: (container: any, isPerfectScrollbar: boolean) => void }) => {
   // Hooks
   const theme = useTheme()
   const { isBreakpointReached, transitionDuration } = useVerticalNav()
+  const { hasAnyPermission, canAccessBackoffice } = useAuth()
 
   const ScrollWrapper = isBreakpointReached ? 'div' : PerfectScrollbar
+
+  const canView: CanViewFn = path => {
+    const permissions = requiredPermissionsFor(path)
+
+    if (!permissions || permissions.length === 0) {
+      return canAccessBackoffice
+    }
+
+    return hasAnyPermission(permissions)
+  }
 
   return (
     // eslint-disable-next-line lines-around-comment
@@ -58,50 +157,25 @@ const VerticalMenu = ({ scrollMenu }: { scrollMenu: (container: any, isPerfectSc
         renderExpandedMenuItemIcon={{ icon: <i className='ri-circle-line' /> }}
         menuSectionStyles={menuSectionStyles(theme)}
       >
-        <MenuItem href='/' icon={<i className='ri-dashboard-line' />}>
-          Tổng quan
-        </MenuItem>
+        {canView('/') && (
+          <MenuItem href='/' icon={<i className='ri-dashboard-line' />}>
+            Tổng quan
+          </MenuItem>
+        )}
 
-        <MenuSection label='Bán hàng'>
-          <SubMenu label='Đơn hàng' icon={<i className='ri-shopping-cart-2-line' />}>
-            <MenuItem href='/orders'>Danh sách đơn hàng</MenuItem>
-            <MenuItem href='/returns'>Yêu cầu đổi trả</MenuItem>
-          </SubMenu>
-          <MenuItem href='/wallets' icon={<i className='ri-wallet-3-line' />}>
-            Ví khách hàng
-          </MenuItem>
-          <MenuItem href='/promotions' icon={<i className='ri-coupon-3-line' />}>
-            Khuyến mãi
-          </MenuItem>
-        </MenuSection>
+        <SalesSection canView={canView} />
+        <ProductsSection canView={canView} />
 
-        <MenuSection label='Sản phẩm'>
-          <SubMenu label='Sản phẩm' icon={<i className='ri-shirt-line' />}>
-            <MenuItem href='/products'>Danh sách sản phẩm</MenuItem>
-            <MenuItem href='/categories'>Danh mục</MenuItem>
-            <MenuItem href='/sizes'>Kích cỡ</MenuItem>
-            <MenuItem href='/brands'>Thương hiệu</MenuItem>
-            <MenuItem href='/colors'>Màu sắc</MenuItem>
-            <MenuItem href='/attributes'>Thuộc tính</MenuItem>
-            <MenuItem href='/size-charts'>Bảng size</MenuItem>
-            <MenuItem href='/media'>Thư viện ảnh</MenuItem>
-          </SubMenu>
-        </MenuSection>
+        {canView('/inventory') && (
+          <MenuSection label='Kho hàng'>
+            <MenuItem href='/inventory' icon={<i className='ri-archive-line' />}>
+              Tồn kho
+            </MenuItem>
+          </MenuSection>
+        )}
 
-        <MenuSection label='Kho hàng'>
-          <MenuItem href='/inventory' icon={<i className='ri-archive-line' />}>
-            Tồn kho
-          </MenuItem>
-        </MenuSection>
-
-        <MenuSection label='Khách hàng'>
-          <MenuItem href='/customers' icon={<i className='ri-user-3-line' />}>
-            Người dùng
-          </MenuItem>
-          <MenuItem href='/reviews' icon={<i className='ri-star-line' />}>
-            Đánh giá
-          </MenuItem>
-        </MenuSection>
+        <CustomerSection canView={canView} />
+        <AdminSection canView={canView} />
       </Menu>
     </ScrollWrapper>
   )

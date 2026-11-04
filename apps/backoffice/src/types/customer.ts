@@ -27,9 +27,15 @@ export interface UserAddress {
   updatedAt?: string
 }
 
+export interface GroupSummary {
+  id: string
+  name: string
+}
+
 export interface AdminUserDetail extends AdminUser {
   updatedAt?: string | null
   addresses: UserAddress[]
+  groups?: GroupSummary[]
 }
 
 export interface AdminUpdateUserRequest {

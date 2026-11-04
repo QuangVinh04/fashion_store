@@ -10,6 +10,8 @@ import { Alert, Button, Card, CardContent, CardHeader, Chip, Grid, Stack, TextFi
 import PageHeader from '@/components/backoffice/PageHeader'
 import QueryState from '@/components/backoffice/QueryState'
 import ConfirmActionDialog from '@/components/backoffice/ConfirmActionDialog'
+import { Permission } from '@/configs/permissions'
+import { useAuth } from '@/context/AuthContext'
 import { useReturn } from '@/hooks/useReturns'
 import { paymentsApi } from '@/libs/api/payments'
 import { ordersApi } from '@/libs/api/orders'
@@ -47,6 +49,9 @@ export default function ReturnDetail({ id }: { id: string }) {
 }
 
 function ReturnDetailContent({ id }: { id: string }) {
+  const { hasPermission } = useAuth()
+  const canManageReturn = hasPermission(Permission.RETURN_MANAGE)
+  const canApproveRefundPermission = hasPermission(Permission.REFUND_APPROVE)
   const { query, mutation } = useReturn(id)
   const request = query.data
   const orderId = request?.orderId || ''
@@ -76,11 +81,18 @@ function ReturnDetailContent({ id }: { id: string }) {
   const [discard, setDiscard] = useState(false)
   const busy = mutation.isPending
   const blocked = busy || query.isFetching || !!operation || !!storageError
-  const actions = request ? getReturnActions(request) : []
+  const rawActions = request ? getReturnActions(request) : []
+
+  const actions = rawActions.filter(action => {
+    if (action === 'refund') return canApproveRefundPermission
+
+    return canManageReturn
+  })
+
   const refundState = request ? getRefundState(request) : 'none'
   const refundAllowed = !!request && !payment.error && canApproveRefund(request, payment.data)
 
-  const closeUnpaid =
+  const closeUnpaid = canManageReturn &&
     !!request &&
     !request.closedAt &&
     request.kind === 'CARRIER_RETURN' &&

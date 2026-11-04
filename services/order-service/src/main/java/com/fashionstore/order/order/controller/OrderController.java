@@ -183,9 +183,9 @@ public class OrderController {
 
 
     @Operation(
-            summary = "Cập nhật trạng thái đơn (ADMIN)",
+            summary = "Cập nhật trạng thái đơn (order:manage)",
             description = """
-                    Yêu cầu role `ADMIN`. Chỉ đi theo đúng chuỗi vận hành:
+                    Yêu cầu quyền `order:manage`. Chỉ đi theo đúng chuỗi vận hành:
                     `CONFIRMED → PROCESSING → PACKED → SHIPPING → DELIVERED → COMPLETED`, và
                     `DELIVERED → RETURNED → REFUNDED`. Đơn `PENDING` đang trong saga, admin không can thiệp giữa chừng.
 

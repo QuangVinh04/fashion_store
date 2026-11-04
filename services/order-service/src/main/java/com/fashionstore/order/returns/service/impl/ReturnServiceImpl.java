@@ -51,6 +51,7 @@ import lombok.extern.slf4j.Slf4j;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import com.fashionstore.common.security.PermissionNames;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -174,7 +175,7 @@ public class ReturnServiceImpl implements ReturnService {
      */
     @Override
     @Transactional(propagation = Propagation.NEVER)
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('" + PermissionNames.RETURN_MANAGE + "')")
     public ReturnRequestResponse approveReturn(String returnRequestId) {
         String adminId = currentUserProvider.getCurrentUserId();
         TransactionTemplate transaction = new TransactionTemplate(transactionManager);
@@ -193,7 +194,7 @@ public class ReturnServiceImpl implements ReturnService {
 
     @Override
     @Transactional(propagation = Propagation.NEVER)
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('" + PermissionNames.RETURN_MANAGE + "')")
     public ReturnRequestResponse recreatePickup(String returnRequestId) {
         String adminId = currentUserProvider.getCurrentUserId();
         TransactionTemplate transaction = new TransactionTemplate(transactionManager);
@@ -432,7 +433,7 @@ public class ReturnServiceImpl implements ReturnService {
 
     @Override
     @Transactional
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('" + PermissionNames.RETURN_MANAGE + "')")
     public ReturnRequestResponse rejectReturn(String returnRequestId, RejectReturnRequest request) {
         String adminId = currentUserProvider.getCurrentUserId();
         if (request == null
@@ -497,7 +498,7 @@ public class ReturnServiceImpl implements ReturnService {
 
     @Override
     @Transactional(propagation = Propagation.NEVER)
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('" + PermissionNames.RETURN_MANAGE + "')")
     public ReturnRequestResponse receiveReturn(
             String returnRequestId, ReceiveReturnRequest request) {
         String adminId = currentUserProvider.getCurrentUserId();
@@ -587,7 +588,7 @@ public class ReturnServiceImpl implements ReturnService {
 
     @Override
     @Transactional(propagation = Propagation.NEVER)
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('" + PermissionNames.RETURN_MANAGE + "')")
     public ReturnRequestResponse cancelReturn(String returnRequestId, CancelReturnRequest request) {
         String adminId = currentUserProvider.getCurrentUserId();
         if (request == null
@@ -696,7 +697,7 @@ public class ReturnServiceImpl implements ReturnService {
 
     @Override
     @Transactional(propagation = Propagation.NEVER)
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('" + PermissionNames.REFUND_APPROVE + "')")
     public ReturnRequestResponse refundReturn(String returnRequestId, BigDecimal requestedAmount) {
         String adminId = currentUserProvider.getCurrentUserId();
         TransactionTemplate transaction = new TransactionTemplate(transactionManager);
@@ -965,7 +966,7 @@ public class ReturnServiceImpl implements ReturnService {
 
     @Override
     @Transactional(propagation = Propagation.NEVER)
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('" + PermissionNames.RETURN_MANAGE + "')")
     public ReturnRequestResponse createFulfillmentReturn(
             String orderId, ReturnRequestKind kind, CreateFulfillmentReturnRequest request) {
         String adminId = currentUserProvider.getCurrentUserId();
@@ -1128,7 +1129,7 @@ public class ReturnServiceImpl implements ReturnService {
 
     @Override
     @Transactional(propagation = Propagation.NEVER)
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('" + PermissionNames.RETURN_MANAGE + "')")
     public ReturnRequestResponse closeUnpaidCarrierReturn(
             String returnRequestId, CancelReturnRequest request) {
         String adminId = currentUserProvider.getCurrentUserId();
@@ -1206,7 +1207,7 @@ public class ReturnServiceImpl implements ReturnService {
 
     @Override
     @Transactional(propagation = Propagation.NEVER)
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('" + PermissionNames.RETURN_READ + "')")
     public String getVerificationEvidenceReadUrl(String returnRequestId, String mediaId) {
         ReturnRequest returned = returnRequestRepository.findById(returnRequestId).orElseThrow();
         if (returned.getVerificationBy() == null
@@ -1227,7 +1228,7 @@ public class ReturnServiceImpl implements ReturnService {
 
     @Override
     @Transactional(propagation = Propagation.NEVER)
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('" + PermissionNames.RETURN_READ + "')")
     public String getCustomerEvidenceReadUrl(String returnRequestId, String mediaId) {
         ReturnRequest returned =
                 returnRequestRepository
@@ -1264,7 +1265,7 @@ public class ReturnServiceImpl implements ReturnService {
 
     @Override
     @Transactional(propagation = Propagation.NEVER)
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('" + PermissionNames.RETURN_READ + "')")
     public String getQcEvidenceReadUrl(String returnRequestId, String mediaId) {
         ReturnRequest returned =
                 returnRequestRepository
@@ -1305,7 +1306,7 @@ public class ReturnServiceImpl implements ReturnService {
 
     @Override
     @Transactional(readOnly = true)
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('" + PermissionNames.RETURN_READ + "')")
     public ReturnRequestResponse getReturnRequestById(String returnRequestId) {
         ReturnRequest returnRequest =
                 returnRequestRepository
@@ -1317,7 +1318,7 @@ public class ReturnServiceImpl implements ReturnService {
 
     @Override
     @Transactional(readOnly = true)
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('" + PermissionNames.RETURN_READ + "')")
     public PageResponse<List<ReturnRequestResponse>> searchReturnRequests(
             ReturnRequestStatus status, Pageable pageable) {
         Page<ReturnRequest> page =

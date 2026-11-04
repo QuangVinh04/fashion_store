@@ -1,3 +1,9 @@
+vi.mock('@/context/AuthContext', () => ({
+  useAuth: () => ({
+    hasPermission: () => true
+  })
+}))
+
 import { act } from 'react'
 
 import { createRoot } from 'react-dom/client'
@@ -88,7 +94,7 @@ async function mount(options: { caseData?: ReturnCase; method?: string; writeSta
       </QueryClientProvider>
     )
   )
-  for (let attempt = 0; attempt < 20 && !container.textContent?.includes('Duyệt hoàn vào ví'); attempt++)
+  for (let attempt = 0; attempt < 40 && (!container.textContent?.includes('Duyệt hoàn vào ví') || Array.from(container.querySelectorAll('button')).find(b => b.textContent === 'Duyệt hoàn vào ví')?.disabled); attempt++)
     await act(async () => {
       await new Promise(resolve => setTimeout(resolve, 15))
     })

@@ -39,6 +39,8 @@ import MediaPicker from '@/components/backoffice/MediaPicker'
 import PageHeader from '@/components/backoffice/PageHeader'
 import QueryState from '@/components/backoffice/QueryState'
 import UnsavedChangesGuard from '@/components/backoffice/UnsavedChangesGuard'
+import { Permission } from '@/configs/permissions'
+import { useAuth } from '@/context/AuthContext'
 import {
   useBrandsQuery,
   useCategoriesQuery,
@@ -95,6 +97,8 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 export default function ProductForm({ productId }: { productId?: string }) {
+  const { hasPermission } = useAuth()
+  const canManage = hasPermission(Permission.PRODUCT_MANAGE)
   const [savedId, setSavedId] = useState(productId)
   const detail = useProductDetailQuery(savedId || '')
 
@@ -313,10 +317,12 @@ export default function ProductForm({ productId }: { productId?: string }) {
       >
         Xem trước
       </Button>
-      <Button variant='outlined' disabled={disabled} onClick={() => void save(false)}>
-        {pending ? 'Đang lưu…' : savedId ? 'Lưu thay đổi' : 'Lưu bản nháp'}
-      </Button>
-      {!published && (
+      {canManage && (
+        <Button variant='outlined' disabled={disabled} onClick={() => void save(false)}>
+          {pending ? 'Đang lưu…' : savedId ? 'Lưu thay đổi' : 'Lưu bản nháp'}
+        </Button>
+      )}
+      {canManage && !published && (
         <Button variant='contained' disabled={disabled} onClick={() => void save(true)}>
           Lưu và xuất bản
         </Button>

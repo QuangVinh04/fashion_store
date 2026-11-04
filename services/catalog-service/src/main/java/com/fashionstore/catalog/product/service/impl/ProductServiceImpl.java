@@ -2,6 +2,7 @@ package com.fashionstore.catalog.product.service.impl;
 
 import com.fashionstore.common.dto.PageResponse;
 import com.fashionstore.common.exception.AppException;
+import com.fashionstore.common.security.PermissionNames;
 import com.fashionstore.common.exception.ErrorCode;
 import com.fashionstore.catalog.product.dto.AdminProductFilter;
 import com.fashionstore.catalog.product.dto.AssignProductAttributeRequest;
@@ -54,6 +55,7 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -150,7 +152,7 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     @Transactional(readOnly = true)
-    @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('" + PermissionNames.PRODUCT_READ + "')")
     public ProductResponse getProductByIdForBackoffice(String id) {
         Product product = productRepository.findDetailProductById(id)
                 .orElseThrow(() -> new AppException(ProductErrorCode.PRODUCT_NOT_FOUND));

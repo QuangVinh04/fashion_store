@@ -26,6 +26,8 @@ Gộp từ product-service, inventory-service, file-service. Không tách lại.
 
 Lưu ý: API admin của product và inventory dùng prefix `/admin/...`, không có `/api/v1`.
 
+Phân quyền admin (theo path trong `SecurityConfig`): `GET` `/admin/{products,brands,color-options,size-options,product-attributes,size-charts}/**` cần `product:read`, ghi các path đó và `/api/v1/category/**` cần `product:manage`; `/admin/inventory/**` và `/api/v1/inventory/**` cần `inventory:read` (GET) / `inventory:manage` (còn lại), trừ `POST /api/v1/inventory/check` chỉ cần đăng nhập. `/api/v1/admin/reviews/**`: `review:read` / `review:manage` ở `@PreAuthorize`. `POST /api/v1/files/evidence/payments/presign` cần `order:manage` hoặc `refund:approve`. Không kiểm tra role `ADMIN`.
+
 ## Messaging
 
 Nhận (command từ order-service), trả lời bằng event:

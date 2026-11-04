@@ -2,6 +2,7 @@ package com.fashionstore.identity.mapper;
 
 
 import com.fashionstore.identity.entity.User;
+import com.fashionstore.identity.dto.group.GroupResponse;
 import com.fashionstore.identity.dto.user.AdminUpdateUserRequest;
 import com.fashionstore.identity.dto.user.AdminUserDetailResponse;
 import com.fashionstore.identity.dto.user.AdminUserResponse;
@@ -34,7 +35,7 @@ public interface UserMapper {
 
     AdminUserResponse toAdminUserResponse(User user);
 
-    AdminUserDetailResponse toAdminUserDetailResponse(User user, List<UserAddressResponse> addresses);
+    AdminUserDetailResponse toAdminUserDetailResponse(User user, List<UserAddressResponse> addresses, List<GroupResponse> groups);
 
     // PUT thay nguyên: phone null là xoá số điện thoại
     @BeanMapping(unmappedTargetPolicy = ReportingPolicy.IGNORE)

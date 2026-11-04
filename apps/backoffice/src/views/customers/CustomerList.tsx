@@ -31,6 +31,8 @@ import {
 import Avatar from '@mui/material/Avatar'
 
 import PageHeader from '@/components/backoffice/PageHeader'
+import { Permission } from '@/configs/permissions'
+import { useAuth } from '@/context/AuthContext'
 import ConfirmActionDialog from '@/components/backoffice/ConfirmActionDialog'
 import { useDebouncedSearch } from '@/hooks/useDebouncedSearch'
 import useListQueryState from '@/hooks/useListQueryState'
@@ -40,6 +42,8 @@ import CustomerDetailDialog from './CustomerDetailDialog'
 import CustomerEditDialog from './CustomerEditDialog'
 
 export default function CustomerList() {
+  const { hasPermission } = useAuth()
+  const canManageCustomer = hasPermission(Permission.CUSTOMER_MANAGE)
   const { page, size, filters, setPage, setSize, setFilters } = useListQueryState({ page: 0, size: 20 })
   const search = useDebouncedSearch(filters.keyword || '', keyword => setFilters({ keyword }))
 
@@ -341,21 +345,25 @@ export default function CustomerList() {
                           </IconButton>
                         </Tooltip>
 
-                        <Tooltip title='Sửa họ tên & SĐT'>
-                          <IconButton size='small' color='secondary' onClick={() => handleOpenEdit(customer)}>
-                            <i className='ri-edit-line text-lg' />
-                          </IconButton>
-                        </Tooltip>
+                        {canManageCustomer && (
+                          <>
+                            <Tooltip title='Sửa họ tên & SĐT'>
+                              <IconButton size='small' color='secondary' onClick={() => handleOpenEdit(customer)}>
+                                <i className='ri-edit-line text-lg' />
+                              </IconButton>
+                            </Tooltip>
 
-                        <Tooltip title={customer.isActive ? 'Khoá tài khoản' : 'Mở khoá tài khoản'}>
-                          <IconButton
-                            size='small'
-                            color={customer.isActive ? 'error' : 'success'}
-                            onClick={() => handleOpenStatusConfirm(customer)}
-                          >
-                            <i className={customer.isActive ? 'ri-lock-line text-lg' : 'ri-lock-unlock-line text-lg'} />
-                          </IconButton>
-                        </Tooltip>
+                            <Tooltip title={customer.isActive ? 'Khoá tài khoản' : 'Mở khoá tài khoản'}>
+                              <IconButton
+                                size='small'
+                                color={customer.isActive ? 'error' : 'success'}
+                                onClick={() => handleOpenStatusConfirm(customer)}
+                              >
+                                <i className={customer.isActive ? 'ri-lock-line text-lg' : 'ri-lock-unlock-line text-lg'} />
+                              </IconButton>
+                            </Tooltip>
+                          </>
+                        )}
                       </Box>
                     </TableCell>
                   </TableRow>

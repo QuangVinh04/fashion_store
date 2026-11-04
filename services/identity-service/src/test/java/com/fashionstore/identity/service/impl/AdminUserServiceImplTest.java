@@ -3,7 +3,11 @@ package com.fashionstore.identity.service.impl;
 import com.fashionstore.common.dto.PageResponse;
 import com.fashionstore.common.exception.AppException;
 import com.fashionstore.common.exception.ErrorCode;
+import com.fashionstore.common.security.PermissionNames;
 import com.fashionstore.identity.client.KeycloakAdminClient;
+import com.fashionstore.identity.client.KeycloakGroupClient;
+import com.fashionstore.identity.dto.group.GroupResponse;
+import com.fashionstore.identity.dto.group.KeycloakGroupRepresentation;
 import com.fashionstore.identity.dto.user.AdminUpdateUserRequest;
 import com.fashionstore.identity.dto.user.AdminUserDetailResponse;
 import com.fashionstore.identity.dto.user.AdminUserResponse;
@@ -15,6 +19,8 @@ import com.fashionstore.identity.mapper.UserMapperImpl;
 import com.fashionstore.identity.repository.UserAddressRepository;
 import com.fashionstore.identity.repository.UserRepository;
 import com.fashionstore.identity.service.CurrentUserProvider;
+import com.fashionstore.identity.service.GroupService;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -27,6 +33,9 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.TestingAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.util.List;
 import java.util.Optional;
@@ -59,6 +68,12 @@ class AdminUserServiceImplTest {
     @Mock
     CurrentUserProvider currentUserProvider;
 
+    @Mock
+    GroupService groupService;
+
+    @Mock
+    KeycloakGroupClient groupClient;
+
     AdminUserServiceImpl service;
 
     User customer;
@@ -66,12 +81,90 @@ class AdminUserServiceImplTest {
     @BeforeEach
     void setUp() {
         service = new AdminUserServiceImpl(userRepository, userAddressRepository, keycloakAdminClient,
-                currentUserProvider, new UserMapperImpl(), new UserAddressMapperImpl());
+                currentUserProvider, new UserMapperImpl(), new UserAddressMapperImpl(), groupService, groupClient);
         customer = User.builder().email("customer@fashion.local").fullName("Nguyen Van A").phone("0901234567").build();
         customer.setId("kc-customer");
         when(currentUserProvider.getCurrentUserId()).thenReturn("kc-admin");
         when(userRepository.findById("kc-customer")).thenReturn(Optional.of(customer));
         when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+    }
+
+    @AfterEach
+    void clearSecurityContext() {
+        SecurityContextHolder.clearContext();
+    }
+
+    private static void authenticateWith(String... authorities) {
+        SecurityContextHolder.getContext().setAuthentication(
+                new TestingAuthenticationToken("kc-admin", null, authorities));
+    }
+
+    private void markAsAdminMember() {
+        when(groupClient.listUserGroups("kc-customer")).thenReturn(List.of(
+                new KeycloakGroupRepresentation("g-admin", "Admin", null, null)));
+    }
+
+    // ----- tài khoản Admin chỉ người có group:manage được sửa / khoá -----
+
+    @Test
+    void customerManagerCannotLockOrEditAdminMember() {
+        authenticateWith(PermissionNames.CUSTOMER_MANAGE);
+        markAsAdminMember();
+
+        assertThatThrownBy(() -> service.updateStatus("kc-customer", false)).isInstanceOf(AccessDeniedException.class);
+        assertThatThrownBy(() -> service.updateUser("kc-customer", new AdminUpdateUserRequest("B", "0912345678")))
+                .isInstanceOf(AccessDeniedException.class);
+        verify(keycloakAdminClient, never()).setEnabled(anyString(), anyBoolean());
+        verify(keycloakAdminClient, never()).logout(anyString());
+        verify(userRepository, never()).save(any(User.class));
+    }
+
+    @Test
+    void groupManagerCanLockAndEditAdminMember() {
+        authenticateWith(PermissionNames.CUSTOMER_MANAGE, PermissionNames.GROUP_MANAGE);
+        markAsAdminMember();
+
+        service.updateStatus("kc-customer", false);
+        service.updateUser("kc-customer", new AdminUpdateUserRequest("B", "0912345678"));
+
+        verify(keycloakAdminClient).setEnabled("kc-customer", false);
+    }
+
+    @Test
+    void customerManagerCanStillLockNonAdminTarget() {
+        authenticateWith(PermissionNames.CUSTOMER_MANAGE);
+        when(groupClient.listUserGroups("kc-customer")).thenReturn(List.of(
+                new KeycloakGroupRepresentation("g-sales", "Bán hàng", null, null)));
+
+        service.updateStatus("kc-customer", false);
+
+        verify(keycloakAdminClient).setEnabled("kc-customer", false);
+    }
+
+    @Test
+    void customerManagerCanEditUserMissingFromKeycloak() {
+        authenticateWith(PermissionNames.CUSTOMER_MANAGE);
+        when(groupClient.listUserGroups("kc-customer")).thenThrow(new AppException(IdentityErrorCode.USER_NOT_FOUND));
+
+        service.updateUser("kc-customer", new AdminUpdateUserRequest("B", "0912345678"));
+
+        verify(userRepository).save(any(User.class));
+    }
+
+    /** Không xác định được nhóm của đích thì từ chối chứ không cho qua. */
+    @Test
+    void whenKeycloakIsDown_customerManagerWritesAreRefusedAndNothingIsWritten() {
+        authenticateWith(PermissionNames.CUSTOMER_MANAGE);
+        when(groupClient.listUserGroups("kc-customer")).thenThrow(new AppException(ErrorCode.UPSTREAM_SERVICE_ERROR));
+
+        assertThatThrownBy(() -> service.updateStatus("kc-customer", false))
+                .isInstanceOf(AppException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.UPSTREAM_SERVICE_ERROR);
+        assertThatThrownBy(() -> service.updateUser("kc-customer", new AdminUpdateUserRequest("B", "0912345678")))
+                .isInstanceOf(AppException.class);
+        verify(keycloakAdminClient, never()).setEnabled(anyString(), anyBoolean());
+        verify(userRepository, never()).save(any(User.class));
     }
 
     // ----- khoá / mở khoá -----
@@ -175,6 +268,8 @@ class AdminUserServiceImplTest {
         address.setId("addr-1");
         when(userAddressRepository.findByUserIdOrderByIsDefaultDescCreatedAtDesc("kc-customer"))
                 .thenReturn(List.of(address));
+        GroupResponse customerGroup = new GroupResponse("g-customer", "Customer", List.of(), 5, true, false);
+        when(groupService.getUserGroups("kc-customer")).thenReturn(List.of(customerGroup));
 
         AdminUserDetailResponse detail = service.getUser("kc-customer");
 
@@ -183,6 +278,28 @@ class AdminUserServiceImplTest {
         assertThat(detail.getIsActive()).isTrue();
         assertThat(detail.getAddresses()).singleElement()
                 .satisfies(a -> assertThat(a.getFullAddress()).isEqualTo("123 Le Loi, Ben Nghe, Quan 1, Ho Chi Minh"));
+        assertThat(detail.getGroups()).containsExactly(customerGroup);
+    }
+
+    @Test
+    void getUser_whenKeycloakIsUnavailable_stillReturnsProfileWithEmptyGroups() {
+        when(groupService.getUserGroups("kc-customer")).thenThrow(new AppException(ErrorCode.UPSTREAM_SERVICE_ERROR));
+
+        AdminUserDetailResponse detail = service.getUser("kc-customer");
+
+        assertThat(detail.getEmail()).isEqualTo("customer@fashion.local");
+        assertThat(detail.getAddresses()).isEmpty();
+        assertThat(detail.getGroups()).isEmpty();
+    }
+
+    @Test
+    void getUser_whenUserHasNoKeycloakAccount_stillReturnsProfileWithEmptyGroups() {
+        when(groupService.getUserGroups("kc-customer")).thenThrow(new AppException(IdentityErrorCode.USER_NOT_FOUND));
+
+        AdminUserDetailResponse detail = service.getUser("kc-customer");
+
+        assertThat(detail.getEmail()).isEqualTo("customer@fashion.local");
+        assertThat(detail.getGroups()).isEmpty();
     }
 
     @Test

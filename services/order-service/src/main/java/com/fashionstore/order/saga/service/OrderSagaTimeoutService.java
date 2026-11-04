@@ -21,6 +21,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
+import com.fashionstore.common.security.PermissionNames;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -53,7 +54,7 @@ public class OrderSagaTimeoutService {
      * trừ) chạy tiếp. Khoá Order trước Saga như mọi nơi khác.
      */
     @Transactional
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('" + PermissionNames.ORDER_MANAGE + "')")
     public void retryFailedCheckout(String orderId) {
         Order order =
                 orderRepository

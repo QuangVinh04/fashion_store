@@ -2,6 +2,7 @@ package com.fashionstore.catalog.media.service.impl;
 
 import com.fashionstore.common.dto.PageResponse;
 import com.fashionstore.common.exception.AppException;
+import com.fashionstore.common.security.PermissionNames;
 import com.fashionstore.common.exception.ErrorCode;
 import com.fashionstore.common.security.CurrentUserProvider;
 import com.fashionstore.catalog.media.config.FileStorageProperties;
@@ -319,7 +320,7 @@ public class MediaFileServiceImpl implements MediaFileService {
             boolean returnsReviewer = "returns".equals(mediaFile.getFolder())
                     && authentication != null
                     && authentication.getAuthorities().stream()
-                            .anyMatch(authority -> "ROLE_ADMIN".equals(authority.getAuthority()));
+                            .anyMatch(authority -> PermissionNames.RETURN_READ.equals(authority.getAuthority()));
             if (!owner && !returnsReviewer) {
                 throw new AppException(FileErrorCode.FILE_ACCESS_DENIED);
             }

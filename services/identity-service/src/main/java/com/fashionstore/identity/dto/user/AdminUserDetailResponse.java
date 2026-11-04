@@ -1,5 +1,6 @@
 package com.fashionstore.identity.dto.user;
 
+import com.fashionstore.identity.dto.group.GroupResponse;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -28,4 +29,5 @@ public class AdminUserDetailResponse {
     LocalDateTime createdAt;
     LocalDateTime updatedAt;
     List<UserAddressResponse> addresses;
+    List<GroupResponse> groups;
 }

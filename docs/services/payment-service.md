@@ -23,7 +23,7 @@ Mọi khoản hoàn tiền đơn đều ghi có vào ví của người mua.
 | trả tiền bằng ví | `GET /api/v1/payments/{id}/wallet-session`, `POST /api/v1/payments/{id}/wallet-confirm` |
 | callback PayOS | `GET /api/v1/payments/payos/return`, `POST /api/v1/payments/payos/webhook` |
 | ví (khách) | `GET /api/v1/wallet`, `GET /api/v1/wallet/transactions`, `POST /api/v1/wallet/top-ups`, `GET /api/v1/wallet/top-ups/{id}` |
-| admin | `/api/v1/admin/payments/**`, `/api/v1/admin/wallets/**` |
+| admin | `/api/v1/admin/payments/**` (`payment:read`), `/api/v1/admin/wallets/**` (`wallet:read`); không kiểm tra role `ADMIN`. `wallet:adjust` đã có trong danh mục nhưng chưa endpoint nào dùng |
 
 ## Messaging
 

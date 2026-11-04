@@ -1,5 +1,6 @@
 package com.fashionstore.gateway.config;
 
+import com.fashionstore.common.security.PermissionNames;
 import com.nimbusds.jose.JOSEObjectType;
 import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.JWSHeader;
@@ -175,11 +176,42 @@ class SecurityConfigTest {
             forwardedAuthorization.set(null);
             client.get().uri(path).header(HttpHeaders.AUTHORIZATION,"Bearer "+buyer).exchange().expectStatus().isForbidden();
             assertThat(forwardedAuthorization.get()).isNull();
-            String admin=sign(keycloakKey,new JWTClaimsSet.Builder(claims(KEYCLOAK_ISSUER,"fashion-api"))
-                    .claim("realm_access",java.util.Map.of("roles",java.util.List.of("ADMIN"))).build());
+            String admin=tokenWith(java.util.List.of(),java.util.List.of(PermissionNames.ORDER_READ));
             client.get().uri(path).header(HttpHeaders.AUTHORIZATION,"Bearer "+admin).exchange().expectStatus().isOk();
             assertThat(forwardedAuthorization.get()).isEqualTo("Bearer "+admin);
         }
+    }
+
+    @Test
+    void adminRolesWithoutPermissionAndInternalCallerAreForbidden() throws Exception {
+        for (String token : java.util.List.of(
+                tokenWith(java.util.List.of("USER"), java.util.List.of()),
+                tokenWith(java.util.List.of("ADMIN"), java.util.List.of()),
+                tokenWith(java.util.List.of(), java.util.List.of("internal-caller")))) {
+            forwardedAuthorization.set(null);
+            client.get().uri("/api/v1/admin/orders").header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                    .exchange().expectStatus().isForbidden();
+            client.get().uri("/admin/inventory").header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                    .exchange().expectStatus().isForbidden();
+            assertThat(forwardedAuthorization.get()).isNull();
+        }
+    }
+
+    @Test
+    void permissionHolderReachesAdminRoutes() throws Exception {
+        String token = tokenWith(java.util.List.of(), java.util.List.of(PermissionNames.ORDER_READ));
+
+        client.get().uri("/api/v1/admin/orders").header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .exchange().expectStatus().isOk();
+        client.get().uri("/admin/inventory").header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .exchange().expectStatus().isOk();
+    }
+
+    private static String tokenWith(java.util.List<String> realmRoles, java.util.List<String> apiRoles) throws Exception {
+        return sign(keycloakKey, new JWTClaimsSet.Builder(claims(KEYCLOAK_ISSUER, "fashion-api"))
+                .claim("realm_access", java.util.Map.of("roles", realmRoles))
+                .claim("resource_access", java.util.Map.of("fashion-api", java.util.Map.of("roles", apiRoles)))
+                .build());
     }
 
     private static JWTClaimsSet claims(String issuer, String audience) {

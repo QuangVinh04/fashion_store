@@ -32,7 +32,7 @@ public class OpenApiConfig {
                         .type(SecurityScheme.Type.HTTP)
                         .scheme("bearer")
                         .bearerFormat("JWT")
-                        .description("Access token; một số API quản trị yêu cầu role ADMIN")))
+                        .description("Access token; API quản trị yêu cầu permission tương ứng (vd product:manage, inventory:read)")))
                 .addSecurityItem(new SecurityRequirement().addList(BEARER_AUTH));
     }
 }

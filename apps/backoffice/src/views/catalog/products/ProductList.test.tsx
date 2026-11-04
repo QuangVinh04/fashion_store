@@ -21,6 +21,12 @@ vi.mock('@/hooks/useListQueryState', async importOriginal => ({
   ...(await importOriginal<object>()),
   default: () => state
 }))
+vi.mock('@/context/AuthContext', () => ({
+  useAuth: () => ({
+    hasPermission: (perm: string) => perm === 'product:manage'
+  })
+}))
+
 vi.mock('@/hooks/useCatalog', () => ({
   useBrandsQuery: () => ({ data: [] }),
   useCategoriesQuery: () => ({ data: [] })

@@ -1,3 +1,9 @@
+vi.mock('@/context/AuthContext', () => ({
+  useAuth: () => ({
+    hasPermission: () => true
+  })
+}))
+
 import { act } from 'react'
 
 import { createRoot } from 'react-dom/client'

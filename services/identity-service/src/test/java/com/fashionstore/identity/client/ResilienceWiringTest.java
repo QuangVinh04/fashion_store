@@ -13,6 +13,7 @@ import static org.mockito.Mockito.when;
 
 import com.fashionstore.common.exception.AppException;
 import com.fashionstore.common.exception.ErrorCode;
+import com.fashionstore.common.redis.RedisService;
 import com.fashionstore.identity.exception.IdentityErrorCode;
 import feign.FeignException;
 import feign.Request;
@@ -39,20 +40,23 @@ class ResilienceWiringTest {
 
     @Configuration
     @ImportAutoConfiguration({AopAutoConfiguration.class, CircuitBreakerAutoConfiguration.class, RetryAutoConfiguration.class})
-    @Import({KeycloakAdminClient.class, CatalogMediaClient.class})
+    @Import({KeycloakAdminClient.class, KeycloakGroupClient.class, CatalogMediaClient.class})
     static class App {}
 
     @MockitoBean KeycloakAdminFeignClient keycloakFeign;
+    @MockitoBean KeycloakGroupFeignClient groupFeign;
     @MockitoBean CatalogMediaFeignClient mediaFeign;
+    @MockitoBean RedisService redis;
 
     @Autowired KeycloakAdminClient keycloak;
+    @Autowired KeycloakGroupClient groups;
     @Autowired CatalogMediaClient media;
     @Autowired CircuitBreakerRegistry breakers;
 
     @BeforeEach
     void resetState() {
         breakers.getAllCircuitBreakers().forEach(CircuitBreaker::reset);
-        reset(keycloakFeign, mediaFeign);
+        reset(keycloakFeign, groupFeign, mediaFeign);
     }
 
     private static Request request() {
@@ -88,6 +92,30 @@ class ResilienceWiringTest {
                             a -> assertThat(a.getErrorCode()).isEqualTo(IdentityErrorCode.USER_NOT_FOUND));
         }
         verify(keycloakFeign, times(12)).updateUser(anyString(), any());
+        assertThat(breakers.circuitBreaker("keycloakAdmin").getState()).isEqualTo(CircuitBreaker.State.CLOSED);
+    }
+
+    @Test
+    void keycloakGroupApiDownIsRetriedThenSurfacesAsBadGateway() {
+        when(groupFeign.listGroups()).thenThrow(unavailable());
+        doThrow(unavailable()).when(groupFeign).deleteGroup("g1");
+        when(groupFeign.createGroup(any())).thenThrow(unavailable());
+
+        assertThatThrownBy(() -> groups.listGroups()).satisfies(ResilienceWiringTest::assertBadGateway);
+        assertThatThrownBy(() -> groups.deleteGroup("g1")).satisfies(ResilienceWiringTest::assertBadGateway);
+        assertThatThrownBy(() -> groups.createGroup("Kho")).satisfies(ResilienceWiringTest::assertBadGateway);
+        verify(groupFeign, times(3)).listGroups();
+        verify(groupFeign, times(3)).deleteGroup("g1");
+        verify(groupFeign, times(1)).createGroup(any());
+    }
+
+    @Test
+    void unknownGroupIsABusinessAnswerNotRetried() {
+        when(groupFeign.getGroup("g-x")).thenThrow(new FeignException.NotFound("nf", request(), null, null));
+
+        assertThatThrownBy(() -> groups.getGroup("g-x")).isInstanceOfSatisfying(AppException.class,
+                a -> assertThat(a.getErrorCode()).isEqualTo(IdentityErrorCode.GROUP_NOT_FOUND));
+        verify(groupFeign, times(1)).getGroup("g-x");
         assertThat(breakers.circuitBreaker("keycloakAdmin").getState()).isEqualTo(CircuitBreaker.State.CLOSED);
     }
 

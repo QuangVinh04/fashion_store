@@ -35,6 +35,8 @@ import useListQueryState from '@/hooks/useListQueryState'
 import { reviewsApi } from '@/libs/api/reviews'
 import type { FitRating, Review, ReviewStatus } from '@/types/reviews'
 import ReplyReviewDialog from './ReplyReviewDialog'
+import { Permission } from '@/configs/permissions'
+import { useAuth } from '@/context/AuthContext'
 
 function formatDate(isoString?: string | null): string {
   if (!isoString) return '—'
@@ -66,6 +68,8 @@ function renderFitChip(fit?: FitRating | null) {
 }
 
 export default function ReviewList() {
+  const { hasPermission } = useAuth()
+  const canManage = hasPermission(Permission.REVIEW_MANAGE)
   const queryClient = useQueryClient()
   const { page, size, filters, setPage, setSize, setFilters } = useListQueryState()
 
@@ -198,7 +202,7 @@ export default function ReviewList() {
                       <TableCell key={header}>{header}</TableCell>
                     )
                   )}
-                  <TableCell align='right'>Thao tác</TableCell>
+                  {canManage && <TableCell align='right'>Thao tác</TableCell>}
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -348,15 +352,19 @@ export default function ReviewList() {
                             <Typography variant='caption' color='text.secondary'>
                               {formatDate(row.repliedAt)}
                             </Typography>
-                            <Button size='small' variant='text' sx={{ p: 0, minWidth: 'auto', fontSize: '0.75rem' }} onClick={() => setReplyTarget(row)}>
-                              Sửa
-                            </Button>
+                            {canManage && (
+                              <Button size='small' variant='text' sx={{ p: 0, minWidth: 'auto', fontSize: '0.75rem' }} onClick={() => setReplyTarget(row)}>
+                                Sửa
+                              </Button>
+                            )}
                           </Box>
                         </Box>
                       ) : (
-                        <Button size='small' variant='outlined' onClick={() => setReplyTarget(row)}>
-                          Trả lời
-                        </Button>
+                        canManage && (
+                          <Button size='small' variant='outlined' onClick={() => setReplyTarget(row)}>
+                            Trả lời
+                          </Button>
+                        )
                       )}
                     </TableCell>
 
@@ -370,37 +378,39 @@ export default function ReviewList() {
                     </TableCell>
 
                     {/* Thao tác */}
-                    <TableCell align='right' sx={{ whiteSpace: 'nowrap' }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 0.5 }}>
-                        <Tooltip title={row.status === 'HIDDEN' ? 'Hiển thị đánh giá' : 'Ẩn đánh giá'}>
-                          <IconButton
-                            size='small'
-                            color={row.status === 'HIDDEN' ? 'success' : 'warning'}
-                            disabled={toggleStatusMutation.isPending}
-                            onClick={() =>
-                              toggleStatusMutation.mutate({
-                                reviewId: row.id,
-                                nextStatus: row.status === 'HIDDEN' ? 'VISIBLE' : 'HIDDEN'
-                              })
-                            }
-                            aria-label={row.status === 'HIDDEN' ? 'Hiện đánh giá' : 'Ẩn đánh giá'}
-                          >
-                            <i className={row.status === 'HIDDEN' ? 'ri-eye-line text-lg' : 'ri-eye-off-line text-lg'} />
-                          </IconButton>
-                        </Tooltip>
+                    {canManage && (
+                      <TableCell align='right' sx={{ whiteSpace: 'nowrap' }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 0.5 }}>
+                          <Tooltip title={row.status === 'HIDDEN' ? 'Hiển thị đánh giá' : 'Ẩn đánh giá'}>
+                            <IconButton
+                              size='small'
+                              color={row.status === 'HIDDEN' ? 'success' : 'warning'}
+                              disabled={toggleStatusMutation.isPending}
+                              onClick={() =>
+                                toggleStatusMutation.mutate({
+                                  reviewId: row.id,
+                                  nextStatus: row.status === 'HIDDEN' ? 'VISIBLE' : 'HIDDEN'
+                                })
+                              }
+                              aria-label={row.status === 'HIDDEN' ? 'Hiện đánh giá' : 'Ẩn đánh giá'}
+                            >
+                              <i className={row.status === 'HIDDEN' ? 'ri-eye-line text-lg' : 'ri-eye-off-line text-lg'} />
+                            </IconButton>
+                          </Tooltip>
 
-                        <Tooltip title='Xóa đánh giá'>
-                          <IconButton
-                            size='small'
-                            color='error'
-                            onClick={() => setDeleteTarget(row)}
-                            aria-label={'Xóa đánh giá của ' + (row.customerName || 'khách')}
-                          >
-                            <i className='ri-delete-bin-line text-lg' />
-                          </IconButton>
-                        </Tooltip>
-                      </Box>
-                    </TableCell>
+                          <Tooltip title='Xóa đánh giá'>
+                            <IconButton
+                              size='small'
+                              color='error'
+                              onClick={() => setDeleteTarget(row)}
+                              aria-label={'Xóa đánh giá của ' + (row.customerName || 'khách')}
+                            >
+                              <i className='ri-delete-bin-line text-lg' />
+                            </IconButton>
+                          </Tooltip>
+                        </Box>
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))}
               </TableBody>

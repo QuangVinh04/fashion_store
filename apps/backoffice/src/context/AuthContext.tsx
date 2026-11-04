@@ -1,10 +1,12 @@
 'use client'
 
-import { createContext, useContext, useEffect, useMemo, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, type ReactNode } from 'react'
 
 import { usePathname } from 'next/navigation'
 
 import { useQuery } from '@tanstack/react-query'
+
+import { BACKOFFICE_PERMISSIONS, type PermissionName } from '@/configs/permissions'
 
 export type SessionResponse = {
   authenticated: boolean
@@ -18,7 +20,9 @@ export type AuthContextType = {
   session: SessionResponse | null
   isLoading: boolean
   isAuthenticated: boolean
-  isAdmin: boolean
+  canAccessBackoffice: boolean
+  hasPermission: (permission: PermissionName) => boolean
+  hasAnyPermission: (permissions: readonly PermissionName[]) => boolean
   login: () => void
   logout: () => void
 }
@@ -45,7 +49,6 @@ async function fetchSession(): Promise<SessionResponse> {
 
   const json = await res.json()
 
-
   // BFF wraps response in ApiResponse: { code: 1000, data: { authenticated, ... } }
   return json.data || json
 }
@@ -62,9 +65,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const isAuthenticated = !!session?.authenticated
 
-  const isAdmin = useMemo(() => {
-    return !!session?.roles?.includes('ROLE_ADMIN')
-  }, [session?.roles])
+  const sessionRoles = useMemo(() => session?.roles ?? [], [session?.roles])
+
+  const canAccessBackoffice = useMemo(() => {
+    return sessionRoles.some(r => BACKOFFICE_PERMISSIONS.includes(r as PermissionName))
+  }, [sessionRoles])
+
+  const hasPermission = useCallback(
+    (permission: PermissionName) => {
+      return sessionRoles.includes(permission)
+    },
+    [sessionRoles]
+  )
+
+  const hasAnyPermission = useCallback(
+    (permissions: readonly PermissionName[]) => {
+      return permissions.some(p => sessionRoles.includes(p))
+    },
+    [sessionRoles]
+  )
 
   const login = () => {
     window.location.assign('/oauth2/authorization/keycloak')
@@ -103,10 +122,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (!isAuthenticated) {
       login()
-    } else if (!isAdmin) {
+    } else if (!canAccessBackoffice) {
       window.location.assign('/access-denied')
     }
-  }, [isLoading, isAuthenticated, isAdmin, pathname])
+  }, [isLoading, isAuthenticated, canAccessBackoffice, pathname])
 
   return (
     <AuthContext.Provider
@@ -114,7 +133,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         session: session ?? null,
         isLoading,
         isAuthenticated,
-        isAdmin,
+        canAccessBackoffice,
+        hasPermission,
+        hasAnyPermission,
         login,
         logout
       }}
@@ -131,6 +152,54 @@ export function useAuth(): AuthContextType {
     throw new Error('useAuth must be used within an AuthProvider')
   }
 
-  
-return context
+  return context
+}
+
+export interface MockAuthProviderProps {
+  children: ReactNode
+  permissions?: readonly PermissionName[] | '*'
+  isAuthenticated?: boolean
+  canAccessBackoffice?: boolean
+}
+
+export function MockAuthProvider({
+  children,
+  permissions = '*',
+  isAuthenticated = true,
+  canAccessBackoffice = true
+}: MockAuthProviderProps) {
+  const hasPermission = (permission: PermissionName): boolean => {
+    if (permissions === '*') return true
+
+    return permissions.includes(permission)
+  }
+
+  const hasAnyPermission = (required: readonly PermissionName[]): boolean => {
+    if (permissions === '*') return true
+
+    return required.some(p => permissions.includes(p))
+  }
+
+  return (
+    <AuthContext.Provider
+      value={{
+        session: {
+          authenticated: isAuthenticated,
+          userId: 'mock-user',
+          name: 'Mock User',
+          email: 'mock@example.com',
+          roles: permissions === '*' ? [] : [...permissions]
+        },
+        isLoading: false,
+        isAuthenticated,
+        canAccessBackoffice,
+        hasPermission,
+        hasAnyPermission,
+        login: () => {},
+        logout: () => {}
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  )
 }

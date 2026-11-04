@@ -19,6 +19,7 @@ import com.fashionstore.order.saga.repository.OrderSagaRepository;
 
 import lombok.RequiredArgsConstructor;
 
+import com.fashionstore.common.security.PermissionNames;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -68,7 +69,7 @@ public class OrderCancellationService {
         return orderService.getMyOrderById(orderId);
     }
 
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('" + PermissionNames.ORDER_MANAGE + "')")
     @Transactional(propagation = Propagation.NEVER)
     public OrderResponse requestAdmin(String orderId, CancelOrderRequest request) {
         Order order = orders.findById(orderId)
@@ -94,7 +95,7 @@ public class OrderCancellationService {
         return orderService.getOrderById(orderId);
     }
 
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('" + PermissionNames.ORDER_MANAGE + "')")
     @Transactional(propagation = Propagation.NEVER)
     public OrderResponse retryAdmin(String orderId, CancelOrderRequest request) {
         OrderSaga cancellationSaga = sagas.findByOrderIdAndType(orderId, OrderSagaType.CANCELLATION)
@@ -110,7 +111,7 @@ public class OrderCancellationService {
         return orderService.getOrderById(orderId);
     }
 
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('" + PermissionNames.ORDER_MANAGE + "')")
     @Transactional(propagation = Propagation.NEVER)
     public OrderResponse verifyCarrier(
             String orderId, String cancellationId, VerifyCancellationCarrierRequest request) {

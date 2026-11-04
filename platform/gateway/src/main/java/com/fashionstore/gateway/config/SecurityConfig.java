@@ -1,5 +1,6 @@
 package com.fashionstore.gateway.config;
 
+import com.fashionstore.common.security.Permission;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -31,7 +32,7 @@ public class SecurityConfig {
                                 "/api/v1/shipping/ghn/webhook"
                         ).permitAll()
                         .pathMatchers("/internal/**").denyAll()
-                        .pathMatchers("/api/v1/admin/**", "/admin/**").hasRole("ADMIN")
+                        .pathMatchers("/api/v1/admin/**", "/admin/**").hasAnyAuthority(Permission.authorities())
                         .pathMatchers(HttpMethod.GET,
                                 "/api/v1/product/**",
                                 "/api/v1/products/**",

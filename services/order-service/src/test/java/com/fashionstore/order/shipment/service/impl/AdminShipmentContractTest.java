@@ -6,6 +6,7 @@ import static org.mockito.Mockito.*;
 
 import com.fashionstore.common.exception.AppException;
 import com.fashionstore.common.security.CurrentUserProvider;
+import com.fashionstore.common.security.PermissionNames;
 import com.fashionstore.order.shared.client.CatalogClient;
 import com.fashionstore.order.shipment.client.GhnClient;
 import com.fashionstore.order.order.entity.Order;
@@ -83,7 +84,7 @@ class AdminShipmentContractTest {
     @BeforeEach
     void resetMocks() {
         reset(shipments, orders, users);
-        authenticate("ADMIN");
+        authenticate(PermissionNames.ORDER_READ);
     }
 
     @AfterEach
@@ -91,13 +92,13 @@ class AdminShipmentContractTest {
         SecurityContextHolder.clearContext();
     }
 
-    private void authenticate(String role) {
+    private void authenticate(String authority) {
         SecurityContextHolder.getContext()
                 .setAuthentication(
                         UsernamePasswordAuthenticationToken.authenticated(
                                 "test",
                                 "",
-                                java.util.List.of(new SimpleGrantedAuthority("ROLE_" + role))));
+                                java.util.List.of(new SimpleGrantedAuthority(authority))));
     }
 
     @Test
@@ -113,7 +114,15 @@ class AdminShipmentContractTest {
 
     @Test
     void customerCannotUseAdminRead() {
-        authenticate("CUSTOMER");
+        authenticate("ROLE_CUSTOMER");
+        assertThatThrownBy(() -> service.getShipmentForAdmin("ord"))
+                .isInstanceOf(AccessDeniedException.class);
+        verifyNoInteractions(orders, shipments);
+    }
+
+    @Test
+    void roleAdminWithoutPermissionCannotUseAdminRead() {
+        authenticate("ROLE_ADMIN");
         assertThatThrownBy(() -> service.getShipmentForAdmin("ord"))
                 .isInstanceOf(AccessDeniedException.class);
         verifyNoInteractions(orders, shipments);
@@ -130,7 +139,7 @@ class AdminShipmentContractTest {
 
     @Test
     void ownerReadStillHidesAnotherCustomersShipment() {
-        authenticate("CUSTOMER");
+        authenticate("ROLE_CUSTOMER");
         when(users.getCurrentUserId()).thenReturn("mine");
         when(orders.findById("ord"))
                 .thenReturn(Optional.of(Order.builder().userId("other").build()));

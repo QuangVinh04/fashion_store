@@ -7,6 +7,7 @@ import com.fashionstore.order.shipment.dto.VerifiedGhnShipment;
 
 import lombok.RequiredArgsConstructor;
 
+import com.fashionstore.common.security.PermissionNames;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 
@@ -25,7 +26,7 @@ public class ShipmentSyncService {
     private final GhnClient ghnClient;
     private final Clock clock;
 
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('" + PermissionNames.SHIPMENT_MANAGE + "')")
     public ShipmentResponse syncFromCarrier(String orderId) {
         ShipmentResponse shipment = shipmentService.getShipmentForAdmin(orderId);
         String carrierCode =

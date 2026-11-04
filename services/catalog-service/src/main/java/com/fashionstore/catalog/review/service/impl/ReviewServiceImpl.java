@@ -19,6 +19,7 @@ import com.fashionstore.common.dto.PageResponse;
 import com.fashionstore.common.exception.AppException;
 import com.fashionstore.common.exception.ErrorCode;
 import com.fashionstore.common.security.CurrentUserProvider;
+import com.fashionstore.common.security.PermissionNames;
 import com.fashionstore.contracts.order.dto.VerifyPurchaseRequest;
 import com.fashionstore.contracts.order.dto.VerifyPurchaseResponse;
 import lombok.AccessLevel;
@@ -253,9 +254,9 @@ public class ReviewServiceImpl implements ReviewService {
         }
 
         String currentUserId = currentUserProvider.getCurrentUserId();
-        boolean isAdmin = hasRole("ROLE_ADMIN") || hasRole("ADMIN");
+        boolean canManageReviews = hasAuthority(PermissionNames.REVIEW_MANAGE);
 
-        if (!review.getUserId().equals(currentUserId) && !isAdmin) {
+        if (!review.getUserId().equals(currentUserId) && !canManageReviews) {
             throw new AppException(ProductErrorCode.REVIEW_ACTION_FORBIDDEN);
         }
 
@@ -263,13 +264,13 @@ public class ReviewServiceImpl implements ReviewService {
         log.info("[Review] Deleted review {} for product {}", reviewId, productId);
     }
 
-    private boolean hasRole(String role) {
+    private boolean hasAuthority(String authority) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth == null || auth.getAuthorities() == null) {
             return false;
         }
         return auth.getAuthorities().stream()
-                .anyMatch(a -> a.getAuthority().equalsIgnoreCase(role));
+                .anyMatch(a -> a.getAuthority().equals(authority));
     }
 
     private ReviewResponse toResponse(Review review) {

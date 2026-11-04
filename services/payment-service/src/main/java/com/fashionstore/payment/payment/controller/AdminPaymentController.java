@@ -2,6 +2,7 @@ package com.fashionstore.payment.payment.controller;
 import com.fashionstore.payment.shared.util.AdminPaging;
 import com.fashionstore.common.dto.ApiResponse;
 import com.fashionstore.common.exception.*;
+import com.fashionstore.common.security.PermissionNames;
 import com.fashionstore.payment.payment.dto.AdminPaymentResponse;
 import com.fashionstore.payment.payment.dto.AdminRefundResponse;
 import com.fashionstore.payment.payment.repository.PaymentRefundRepository;
@@ -13,7 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 @RestController @RequestMapping("/api/v1/admin/payments") @RequiredArgsConstructor
-@PreAuthorize("hasRole('ADMIN')")
+@PreAuthorize("hasAuthority('" + PermissionNames.PAYMENT_READ + "')")
 public class AdminPaymentController {
     private final PaymentRepository payments;
     private final PaymentRefundRepository refunds;

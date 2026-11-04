@@ -14,6 +14,8 @@ import {
 } from '@mui/material'
 
 import QueryState from '@/components/backoffice/QueryState'
+import { Permission } from '@/configs/permissions'
+import { useAuth } from '@/context/AuthContext'
 import { toVietnameseError } from '@/libs/api/errors'
 import type { OrderDetail, Shipment } from '@/types/orders'
 import {
@@ -54,6 +56,8 @@ export function OrderShipmentSection({
   onOpenCreateShipment,
   onNotice
 }: Props) {
+  const { hasPermission } = useAuth()
+  const canManageShipment = hasPermission(Permission.SHIPMENT_MANAGE)
   const [syncError, setSyncError] = useState<unknown>(null)
 
   const trackingCode = shipment.data?.trackingCode || shipment.data?.ghnOrderCode || order.trackingCode || ''
@@ -133,7 +137,7 @@ export function OrderShipmentSection({
                 </Alert>
               )}
 
-              {['PACKED', 'SHIPPING'].includes(order.status) && (
+              {canManageShipment && ['PACKED', 'SHIPPING'].includes(order.status) && (
                 <Box sx={{ mt: 1 }}>
                   <Button
                     variant='outlined'
@@ -147,7 +151,8 @@ export function OrderShipmentSection({
                 </Box>
               )}
 
-              {order.status === 'PROCESSING' &&
+              {canManageShipment &&
+                order.status === 'PROCESSING' &&
                 shipment.data.status === 'CANCELLED' &&
                 !order.cancellation &&
                 !order.shipmentCreationPending && (

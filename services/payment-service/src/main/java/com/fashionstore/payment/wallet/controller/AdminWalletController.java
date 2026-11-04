@@ -8,12 +8,13 @@ import com.fashionstore.payment.wallet.repository.WalletAccountRepository;
 import com.fashionstore.payment.wallet.repository.WalletLedgerEntryRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.*;
+import com.fashionstore.common.security.PermissionNames;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 @RestController @RequestMapping("/api/v1/admin/wallets") @RequiredArgsConstructor
-@PreAuthorize("hasRole('ADMIN')") @Transactional(readOnly=true)
+@PreAuthorize("hasAuthority('" + PermissionNames.WALLET_READ + "')") @Transactional(readOnly=true)
 public class AdminWalletController {
     private final WalletAccountRepository wallets;
     private final WalletLedgerEntryRepository entries;

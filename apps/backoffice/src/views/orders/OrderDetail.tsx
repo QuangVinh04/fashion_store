@@ -26,6 +26,8 @@ import {
 import PageHeader from '@/components/backoffice/PageHeader'
 import QueryState from '@/components/backoffice/QueryState'
 import ConfirmActionDialog from '@/components/backoffice/ConfirmActionDialog'
+import { Permission } from '@/configs/permissions'
+import { useAuth } from '@/context/AuthContext'
 import { useOrder } from '@/hooks/useOrders'
 import { ordersApi } from '@/libs/api/orders'
 import { ApiError } from '@/libs/api/client'
@@ -55,6 +57,10 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 }
 
 export default function OrderDetail({ id }: { id: string }) {
+  const { hasPermission } = useAuth()
+  const canManageOrder = hasPermission(Permission.ORDER_MANAGE)
+  const canManageShipment = hasPermission(Permission.SHIPMENT_MANAGE)
+  const canReadPayment = hasPermission(Permission.PAYMENT_READ)
   const { query, history, shipment, status, createShipment, syncShipment } = useOrder(id)
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false)
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false)
@@ -93,7 +99,7 @@ export default function OrderDetail({ id }: { id: string }) {
                 sx={{ fontWeight: 600 }}
               />
 
-              {order.status === 'CONFIRMED' && !order.cancellation && (
+              {order.status === 'CONFIRMED' && !order.cancellation && canManageOrder && (
                 <>
                   <Button
                     variant='contained'
@@ -117,7 +123,7 @@ export default function OrderDetail({ id }: { id: string }) {
                 </>
               )}
 
-              {order.status === 'PROCESSING' && !order.cancellation && (
+              {order.status === 'PROCESSING' && !order.cancellation && (canManageShipment || canManageOrder) && (
                 <Button
                   variant='contained'
                   disabled={pending || query.isFetching}
@@ -236,10 +242,10 @@ export default function OrderDetail({ id }: { id: string }) {
                 />
 
                 {/* 4. Thanh toán & Hoàn tiền */}
-                <OrderPaymentPanel orderId={id} />
+                {canReadPayment && <OrderPaymentPanel orderId={id} />}
 
                 {/* 5. Hủy đơn (Danger Zone / Luồng ngoại lệ) */}
-                <OrderCancellationPanel key={id} order={order} onRefresh={handleRefreshAll} />
+                {canManageOrder && <OrderCancellationPanel key={id} order={order} onRefresh={handleRefreshAll} />}
 
                 {/* 6. Chẩn đoán kỹ thuật */}
                 <Accordion expanded={diagnosticsOpen} onChange={(_, expanded) => setDiagnosticsOpen(expanded)}>

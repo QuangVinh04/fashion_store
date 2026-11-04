@@ -1,6 +1,7 @@
 package com.fashionstore.catalog.shared.config.security;
 
 import com.fashionstore.common.autoconfigure.CommonSecurityAutoConfiguration;
+import com.fashionstore.common.security.PermissionNames;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -12,9 +13,12 @@ import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -22,8 +26,11 @@ import java.util.Map;
 
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 // Chuỗi security thật + converter Keycloak thật; chỉ JwtDecoder được giả lập
@@ -42,7 +49,12 @@ class SecurityConfigTest {
     void tokens() {
         when(jwtDecoder.decode(anyString())).thenAnswer(invocation -> switch (invocation.<String>getArgument(0)) {
             case "user-token" -> jwt("USER");
-            case "admin-token" -> jwt("ADMIN", "USER");
+            case "admin-token" -> permissionJwt(PermissionNames.INVENTORY_READ);
+            case "inventory-read-token" -> permissionJwt(PermissionNames.INVENTORY_READ);
+            case "product-manage-token" -> permissionJwt(PermissionNames.PRODUCT_MANAGE);
+            case "review-read-token" -> permissionJwt(PermissionNames.REVIEW_READ);
+            case "review-manage-token" -> permissionJwt(PermissionNames.REVIEW_MANAGE);
+            case "role-admin-only-token" -> jwt("ADMIN");
             case "service-token" -> serviceAccountJwt();
             default -> throw new BadJwtException("invalid");
         });
@@ -82,6 +94,74 @@ class SecurityConfigTest {
     void adminTokenReachesAdminEndpoint() throws Exception {
         mockMvc.perform(get("/api/v1/inventory/variants/v-1").header("Authorization", "Bearer admin-token"))
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    void inventoryReadTokenCanReadButNotWriteInventory() throws Exception {
+        mockMvc.perform(get("/admin/inventory").header("Authorization", "Bearer inventory-read-token"))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/admin/inventory/variants/x/receipts").header("Authorization", "Bearer inventory-read-token"))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(put("/api/v1/inventory/variants/x").header("Authorization", "Bearer inventory-read-token"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void inventoryReadTokenCannotWriteProducts() throws Exception {
+        mockMvc.perform(post("/admin/products").header("Authorization", "Bearer inventory-read-token"))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/admin/products").header("Authorization", "Bearer inventory-read-token"))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/v1/category/").header("Authorization", "Bearer inventory-read-token"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void productManageTokenCanWriteAndReadProductsButNotInventory() throws Exception {
+        mockMvc.perform(post("/admin/products").header("Authorization", "Bearer product-manage-token"))
+                .andExpect(status().isOk());
+        mockMvc.perform(delete("/admin/brands/b-1").header("Authorization", "Bearer product-manage-token"))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/v1/category/").header("Authorization", "Bearer product-manage-token"))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/admin/inventory/variants/x/receipts").header("Authorization", "Bearer product-manage-token"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void reviewReadTokenCanListButNotModerateReviews() throws Exception {
+        mockMvc.perform(get("/api/v1/admin/reviews").header("Authorization", "Bearer review-read-token"))
+                .andExpect(status().isOk());
+        mockMvc.perform(patch("/api/v1/admin/reviews/r-1").header("Authorization", "Bearer review-read-token"))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(delete("/api/v1/admin/reviews/r-1").header("Authorization", "Bearer review-read-token"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void reviewManageTokenCanModerateReviews() throws Exception {
+        mockMvc.perform(patch("/api/v1/admin/reviews/r-1").header("Authorization", "Bearer review-manage-token"))
+                .andExpect(status().isOk());
+        mockMvc.perform(delete("/api/v1/admin/reviews/r-1").header("Authorization", "Bearer review-manage-token"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void unrelatedPermissionIsForbiddenOnAdminReviews() throws Exception {
+        mockMvc.perform(get("/api/v1/admin/reviews").header("Authorization", "Bearer inventory-read-token"))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(patch("/api/v1/admin/reviews/r-1").header("Authorization", "Bearer inventory-read-token"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void roleAdminWithoutPermissionIsForbiddenEverywhere() throws Exception {
+        mockMvc.perform(post("/admin/products").header("Authorization", "Bearer role-admin-only-token"))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/admin/inventory").header("Authorization", "Bearer role-admin-only-token"))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/v1/admin/reviews").header("Authorization", "Bearer role-admin-only-token"))
+                .andExpect(status().isForbidden());
     }
 
     @Test
@@ -130,6 +210,14 @@ class SecurityConfigTest {
                 .build();
     }
 
+    private static Jwt permissionJwt(String... permissions) {
+        return Jwt.withTokenValue("token").header("alg", "none")
+                .subject("kc-staff-1")
+                .claim("aud", List.of("fashion-api"))
+                .claim("resource_access", Map.of("fashion-api", Map.of("roles", List.of(permissions))))
+                .build();
+    }
+
     private static Jwt jwt(String... realmRoles) {
         return Jwt.withTokenValue("token").header("alg", "none")
                 .subject("kc-user-1")
@@ -153,6 +241,56 @@ class SecurityConfigTest {
 
         @GetMapping("/api/v1/inventory/variants/{id}")
         String inventory(@PathVariable String id) {
+            return id;
+        }
+
+        @GetMapping("/admin/inventory")
+        String adminInventory() {
+            return "ok";
+        }
+
+        @PostMapping("/admin/inventory/variants/{id}/receipts")
+        String receipt(@PathVariable String id) {
+            return id;
+        }
+
+        @PutMapping("/api/v1/inventory/variants/{id}")
+        String updateStock(@PathVariable String id) {
+            return id;
+        }
+
+        @GetMapping("/admin/products")
+        String adminProducts() {
+            return "ok";
+        }
+
+        @PostMapping("/admin/products")
+        String createProduct() {
+            return "ok";
+        }
+
+        @DeleteMapping("/admin/brands/{id}")
+        String deleteBrand(@PathVariable String id) {
+            return id;
+        }
+
+        @PostMapping("/api/v1/category/")
+        String createCategory() {
+            return "ok";
+        }
+
+        @GetMapping("/api/v1/admin/reviews")
+        String adminReviews() {
+            return "ok";
+        }
+
+        @PatchMapping("/api/v1/admin/reviews/{id}")
+        String moderateReview(@PathVariable String id) {
+            return id;
+        }
+
+        @DeleteMapping("/api/v1/admin/reviews/{id}")
+        String deleteReview(@PathVariable String id) {
             return id;
         }
 

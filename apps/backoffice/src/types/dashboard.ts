@@ -18,6 +18,23 @@ export interface TopProductStat {
   totalRevenue: number
 }
 
+export interface OperationsTopProductStat {
+  variantId?: string
+  productId?: string
+  productName: string
+  totalQuantitySold: number
+  totalRevenue?: number
+}
+
+export interface OperationsDashboardData {
+  totalOrders: number
+  orderByStatus: OrderStatusCount[]
+  lowStockCount: number
+  topProducts: OperationsTopProductStat[]
+  totalRevenue?: number
+  revenueByDay?: RevenueByDay[]
+}
+
 export interface AdminDashboardData {
   totalRevenue: number
   totalOrders: number

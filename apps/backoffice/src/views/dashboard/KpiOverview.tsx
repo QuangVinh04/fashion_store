@@ -10,7 +10,7 @@ import Skeleton from '@mui/material/Skeleton'
 
 // Component Imports
 import type { DashboardTimeRange } from './types'
-import type { AdminDashboardData } from '@/types/dashboard'
+import type { AdminDashboardData, OperationsDashboardData } from '@/types/dashboard'
 
 type KpiCardItem = {
   title: string
@@ -25,8 +25,9 @@ type KpiCardItem = {
 
 type KpiOverviewProps = {
   timeRange?: DashboardTimeRange
-  dashboardData?: AdminDashboardData
+  dashboardData?: AdminDashboardData | OperationsDashboardData
   isLoading?: boolean
+  hasRevenue?: boolean
 }
 
 const formatVndShort = (val: number) => {
@@ -41,23 +42,27 @@ const formatVndShort = (val: number) => {
   return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(val)
 }
 
-const getKpiCards = (dashboardData?: AdminDashboardData): KpiCardItem[] => {
+const getKpiCards = (dashboardData?: AdminDashboardData | OperationsDashboardData, hasRevenue: boolean = true): KpiCardItem[] => {
   if (!dashboardData) {
-    return [
-      {
+    const defaultCards: KpiCardItem[] = []
+
+    if (hasRevenue) {
+      defaultCards.push({
         title: 'Tổng doanh thu',
         stats: '0 ₫',
         trend: 'neutral',
         trendNumber: '0 đơn chốt',
         accentIcon: 'ri-money-dollar-circle-line'
-      },
+      })
+    }
+
+    defaultCards.push(
       {
         title: 'Tổng đơn hàng',
         stats: '0 đơn',
         trend: 'neutral',
         trendNumber: 'Đã hoàn tất',
-        extraIcon: 'ri-price-tag-3-line',
-        extraLabel: 'AOV: 0 ₫',
+        ...(hasRevenue ? { extraIcon: 'ri-price-tag-3-line', extraLabel: 'AOV: 0 ₫' } : {}),
         accentIcon: 'ri-shopping-bag-3-line'
       },
       {
@@ -76,7 +81,9 @@ const getKpiCards = (dashboardData?: AdminDashboardData): KpiCardItem[] => {
         subtitle: 'Không thiếu hàng',
         accentIcon: 'ri-alarm-warning-line'
       }
-    ]
+    )
+
+    return defaultCards
   }
 
   const revenue = Number(dashboardData.totalRevenue) || 0
@@ -85,21 +92,25 @@ const getKpiCards = (dashboardData?: AdminDashboardData): KpiCardItem[] => {
   const returnedCount = dashboardData.orderByStatus.find(s => s.status === 'RETURNED')?.count || 0
   const lowStock = Number(dashboardData.lowStockCount) || 0
 
-  return [
-    {
+  const cards: KpiCardItem[] = []
+
+  if (hasRevenue) {
+    cards.push({
       title: 'Tổng doanh thu',
       stats: formatVndShort(revenue),
       trend: 'positive',
       trendNumber: `${orders} đơn chốt`,
       accentIcon: 'ri-money-dollar-circle-line'
-    },
+    })
+  }
+
+  cards.push(
     {
       title: 'Tổng đơn hàng',
       stats: `${orders} đơn`,
       trend: 'positive',
       trendNumber: 'Thành công',
-      extraIcon: 'ri-price-tag-3-line',
-      extraLabel: `AOV: ${formatVndShort(aov)}`,
+      ...(hasRevenue ? { extraIcon: 'ri-price-tag-3-line', extraLabel: `AOV: ${formatVndShort(aov)}` } : {}),
       accentIcon: 'ri-shopping-bag-3-line'
     },
     {
@@ -118,11 +129,13 @@ const getKpiCards = (dashboardData?: AdminDashboardData): KpiCardItem[] => {
       subtitle: lowStock > 0 ? 'Cần nhập hàng ngay' : 'Kho an toàn',
       accentIcon: 'ri-alarm-warning-line'
     }
-  ]
+  )
+
+  return cards
 }
 
-const KpiOverview = ({ dashboardData, isLoading }: KpiOverviewProps) => {
-  const cards = getKpiCards(dashboardData)
+const KpiOverview = ({ dashboardData, isLoading, hasRevenue = true }: KpiOverviewProps) => {
+  const cards = getKpiCards(dashboardData, hasRevenue)
 
   return (
     <Grid container spacing={4}>

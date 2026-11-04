@@ -3,6 +3,7 @@ package com.fashionstore.order.shared.config.security;
 import com.fashionstore.common.security.ApiAccessDeniedHandler;
 import com.fashionstore.common.security.ApiAuthenticationEntryPoint;
 import com.fashionstore.common.security.KeycloakJwtAuthoritiesConverter;
+import com.fashionstore.common.security.Permission;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -39,7 +40,7 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, "/api/v1/shipping/ghn/webhook").permitAll()
                 .requestMatchers("/internal/**").hasAuthority(KeycloakJwtAuthoritiesConverter.INTERNAL_CALLER)
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
+                .requestMatchers("/api/v1/admin/**").hasAnyAuthority(Permission.authorities())
                 .anyRequest().authenticated()
         );
         // JWT Keycloak do gateway chuyển tiếp; role qua KeycloakJwtAuthoritiesConverter (common-library)

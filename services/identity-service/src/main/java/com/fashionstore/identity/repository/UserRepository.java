@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Optional;
 
@@ -21,6 +22,8 @@ public interface UserRepository extends JpaRepository<User, String>, JpaSpecific
     Optional<User> findByIdForUpdate(@Param("id") String id);
 
     // id = Keycloak sub (không để Hibernate sinh UUID) — JPA save() không nhận id gán sẵn với @GeneratedValue
+    // Transaction riêng của method: createStaff gọi ngoài transaction (cần bù trừ Keycloak khi lỗi)
+    @Transactional
     @Modifying
     @Query(value = """
             insert into users (id, email, full_name, is_active, is_email_verified, created_at, updated_at)

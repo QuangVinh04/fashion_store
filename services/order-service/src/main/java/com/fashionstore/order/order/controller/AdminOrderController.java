@@ -40,14 +40,14 @@ import java.time.LocalDate;
 import java.util.List;
 
 /**
- * Khu vực vận hành. Phân quyền ADMIN nằm ở tầng service ({@code @PreAuthorize}) để logic và luật
+ * Khu vực vận hành. Phân quyền theo permission nằm ở tầng service ({@code @PreAuthorize}) để logic và luật
  * truy cập đi cùng nhau, controller chỉ định tuyến.
  */
 @Tag(
         name = "Admin - Orders",
         description =
                 """
-Khu vực vận hành, mọi endpoint yêu cầu role `ADMIN` (kiểm ở tầng service bằng `@PreAuthorize`).
+Khu vực vận hành, mỗi endpoint yêu cầu một permission (vd `order:read`, kiểm ở tầng service bằng `@PreAuthorize`).
 Token thiếu quyền nhận 403.""")
 @RestController
 @RequestMapping("/api/v1/admin/orders")
@@ -80,7 +80,7 @@ public class AdminOrderController {
     }
 
     @Operation(
-            summary = "Thử lại saga checkout đã FAILED (ADMIN)",
+            summary = "Thử lại saga checkout đã FAILED (order:manage)",
             description =
                     """
 Saga checkout FAILED nghĩa là một bước bù trừ hoặc chốt kho đã cạn lần thử hoặc bị từ chối, đơn vẫn
@@ -119,7 +119,7 @@ hoặc bước hiện tại không có command để phát lại (409).""")
     }
 
     @Operation(
-            summary = "Tìm và lọc đơn (ADMIN)",
+            summary = "Tìm và lọc đơn (order:read)",
             description =
                     "Mặc định 20 đơn/trang, mới nhất trước. Các filter kết hợp bằng AND; bỏ trống tất"
                         + " cả là quét toàn bộ đơn.")
@@ -166,7 +166,7 @@ hoặc bước hiện tại không có command để phát lại (409).""")
     }
 
     @Operation(
-            summary = "Xem một đơn bất kỳ (ADMIN)",
+            summary = "Xem một đơn bất kỳ (order:read)",
             description = "Mã lỗi: `4001` không tìm thấy đơn (404).")
     @GetMapping("/{orderId}")
     public ApiResponse<OrderResponse> getOrderById(@PathVariable String orderId) {
@@ -180,7 +180,7 @@ hoặc bước hiện tại không có command để phát lại (409).""")
      * Chỗ duy nhất state saga lộ ra ngoài, dùng khi cần chẩn đoán một saga đang kẹt hoặc đã FAILED.
      */
     @Operation(
-            summary = "Trạng thái saga của một đơn (ADMIN)",
+            summary = "Trạng thái saga của một đơn (order:read)",
             description =
                     """
 Chỗ duy nhất state của saga lộ ra ngoài: bước hiện tại, deadline của bước, mã/lý do thất bại,
@@ -198,7 +198,7 @@ Mã lỗi: `4007` đơn này không có saga, ví dụ đơn tạo trước khi 
     }
 
     @Operation(
-            summary = "Xem lịch sử trạng thái của một đơn (ADMIN)",
+            summary = "Xem lịch sử trạng thái của một đơn (order:read)",
             description = "Trả về danh sách các lần đổi trạng thái của đơn hàng, mới nhất trước.")
     @GetMapping("/{orderId}/history")
     public ApiResponse<List<OrderStatusHistoryResponse>> getOrderHistory(

@@ -1,6 +1,7 @@
 package com.fashionstore.payment.shared.config.security;
 
 import com.fashionstore.common.autoconfigure.CommonSecurityAutoConfiguration;
+import com.fashionstore.common.security.PermissionNames;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -41,6 +42,7 @@ class SecurityConfigTest {
         when(jwtDecoder.decode(anyString())).thenAnswer(invocation -> switch (invocation.<String>getArgument(0)) {
             case "user-token" -> jwt("USER");
             case "admin-token" -> jwt("ADMIN", "USER");
+            case "wallet-reader-token" -> permissionJwt(PermissionNames.WALLET_READ);
             // Service account thật: client_credentials mang client role `internal-caller` của fashion-api
             case "service-token" -> serviceAccountJwt();
             // Realm role trùng tên KHÔNG phải service account
@@ -97,6 +99,22 @@ class SecurityConfigTest {
                 .andExpect(status().isOk());
     }
 
+    @Test
+    void adminPathsNeedAPermissionNotTheAdminRole() throws Exception {
+        mockMvc.perform(get("/api/v1/admin/wallets").header("Authorization", "Bearer admin-token"))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/v1/admin/wallets").header("Authorization", "Bearer wallet-reader-token"))
+                .andExpect(status().isOk());
+    }
+
+    private static Jwt permissionJwt(String permission) {
+        return Jwt.withTokenValue("token").header("alg", "none")
+                .subject("kc-staff-1")
+                .claim("aud", List.of("fashion-api"))
+                .claim("resource_access", Map.of("fashion-api", Map.of("roles", List.of(permission))))
+                .build();
+    }
+
     private static Jwt serviceAccountJwt() {
         return Jwt.withTokenValue("token").header("alg", "none")
                 .subject("service-account-order-service")
@@ -119,6 +137,11 @@ class SecurityConfigTest {
         @GetMapping("/internal/wallets/{id}/refund")
         String internalRefund(@PathVariable String id) {
             return id;
+        }
+
+        @GetMapping("/api/v1/admin/wallets")
+        String adminWallets() {
+            return "wallets";
         }
 
         @GetMapping("/api/v1/payments/payos/return")

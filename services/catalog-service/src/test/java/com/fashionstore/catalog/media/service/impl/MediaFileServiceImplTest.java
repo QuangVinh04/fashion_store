@@ -292,13 +292,13 @@ class MediaFileServiceImplTest {
     }
 
     @Test
-    void adminCanViewPrivateReturnEvidence() {
+    void returnReaderCanViewPrivateReturnEvidence() {
         MediaFile mediaFile = pendingFile();
         mediaFile.setStatus(MediaStatus.ACTIVE);
         mediaFile.setVisibility(MediaVisibility.PRIVATE);
         mediaFile.setFolder("returns");
         SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
-                "admin-1", null, List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))));
+                "admin-1", null, List.of(new SimpleGrantedAuthority("return:read"))));
         when(mediaFileRepository.findById("file-1")).thenReturn(Optional.of(mediaFile));
         when(storageService.presignDownload("2026/09/object.png")).thenReturn("signed-url");
 
@@ -306,13 +306,29 @@ class MediaFileServiceImplTest {
     }
 
     @Test
-    void adminCannotViewOtherPrivateFiles() {
+    void roleAdminWithoutReturnReadCannotViewReturnEvidence() {
+        MediaFile mediaFile = pendingFile();
+        mediaFile.setStatus(MediaStatus.ACTIVE);
+        mediaFile.setVisibility(MediaVisibility.PRIVATE);
+        mediaFile.setFolder("returns");
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
+                "admin-1", null, List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))));
+        when(mediaFileRepository.findById("file-1")).thenReturn(Optional.of(mediaFile));
+
+        assertThatThrownBy(() -> mediaFileService.resolveContentUrl("file-1"))
+                .isInstanceOf(AppException.class)
+                .extracting(exception -> ((AppException) exception).getErrorCode())
+                .isEqualTo(FileErrorCode.FILE_ACCESS_DENIED);
+    }
+
+    @Test
+    void returnReaderCannotViewOtherPrivateFiles() {
         MediaFile mediaFile = pendingFile();
         mediaFile.setStatus(MediaStatus.ACTIVE);
         mediaFile.setVisibility(MediaVisibility.PRIVATE);
         mediaFile.setFolder("avatars");
         SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
-                "admin-1", null, List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))));
+                "admin-1", null, List.of(new SimpleGrantedAuthority("return:read"))));
         when(mediaFileRepository.findById("file-1")).thenReturn(Optional.of(mediaFile));
 
         assertThatThrownBy(() -> mediaFileService.resolveContentUrl("file-1"))

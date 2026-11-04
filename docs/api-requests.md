@@ -25,6 +25,84 @@ Mẫu:
 
 ## Done
 
+### Phân quyền theo nhóm và tạo tài khoản nhân viên
+- Người yêu cầu: Claude Code (kèm task UI cho Antigravity) · 2026-11-04
+- Màn hình: apps/backoffice (menu, màn "Nhóm & phân quyền", chi tiết user, form "Tạo nhân viên", dashboard)
+- Backend đã xong (identity, order, catalog, payment, gateway, backoffice-bff; Swagger "Admin Groups", "Admin Staff" và các endpoint đổi quyền đã cập nhật). Frontend chưa làm.
+- **Quyền (22 authority, cố định theo code).** `/bff/session` trả chúng trong `roles`, cùng `ROLE_USER` / `ROLE_ADMIN` (vd `["order:manage","order:read","ROLE_USER"]`; `ROLE_ADMIN` chỉ xuất hiện nếu user còn realm role `ADMIN`). `ROLE_ADMIN` không còn cho quyền gì: vào backoffice = có ít nhất một quyền trong bảng dưới, không có thì BFF chặn như trước. Nhãn tiếng Việt và khu vực lấy từ `GET /api/v1/admin/permissions`, không hardcode.
+
+  | khu vực | quyền | cần cho |
+  |---|---|---|
+  | Dashboard | `dashboard:read` | `GET /api/v1/admin/dashboard/operations` |
+  | | `revenue:read` | `GET /api/v1/admin/dashboard` (có doanh thu) |
+  | Đơn hàng | `order:read` | danh sách, chi tiết, lịch sử, saga của `/api/v1/admin/orders/**`; `GET /api/v1/admin/orders/{id}/shipment` |
+  | | `order:manage` | đổi trạng thái, hủy, retry saga hủy/checkout, xác minh carrier; presign bằng chứng `payments` |
+  | Vận chuyển | `shipment:manage` | `POST /api/v1/orders/{id}/shipment`, `POST /api/v1/admin/orders/{id}/shipment/sync` |
+  | Đổi trả | `return:read` | xem yêu cầu đổi trả, URL bằng chứng |
+  | | `return:manage` | duyệt, từ chối, nhận hàng, hủy, tạo lại pickup, mở/đóng carrier return |
+  | | `refund:approve` (tiền) | hoàn tiền đổi trả; presign bằng chứng `payments` |
+  | Sản phẩm | `product:read` | `GET` `/admin/products`, `/admin/brands`, `/admin/color-options`, `/admin/size-options`, `/admin/product-attributes`, `/admin/size-charts` |
+  | | `product:manage` | ghi các path trên và `/api/v1/category` (tạo/sửa/xóa danh mục) |
+  | Tồn kho | `inventory:read` · `inventory:manage` | `GET` / ghi `/admin/inventory/**`, `/api/v1/inventory/**` |
+  | Đánh giá | `review:read` · `review:manage` | `GET` / ghi `/api/v1/admin/reviews/**` |
+  | Khuyến mãi | `promotion:read` · `promotion:manage` | `GET` / ghi `/api/v1/admin/promotions/**` |
+  | Khách hàng | `customer:read` | `GET /api/v1/admin/users`, `GET /api/v1/admin/users/{id}` |
+  | | `customer:manage` | `PUT /api/v1/admin/users/{id}`, `PATCH /api/v1/admin/users/{id}/status` (nếu đích thuộc nhóm `Admin` thì cần thêm `group:manage`, không thì 403) |
+  | Thanh toán, ví | `payment:read` | `/api/v1/admin/payments/**` |
+  | | `wallet:read` | `/api/v1/admin/wallets/**` |
+  | | `wallet:adjust` (tiền) | hiện chưa endpoint nào kiểm tra (để dành cho điều chỉnh ví), vẫn tick được |
+  | Phân quyền | `group:manage` | mọi endpoint ở mục "Endpoint mới". `isAssignable=false`: không bao giờ tick cho nhóm tự tạo, chỉ nhóm `Admin` có |
+
+  Quyền tiền/nhạy cảm: `revenue:read`, `refund:approve`, `promotion:manage`, `customer:manage`, `wallet:adjust`, `group:manage` (nhóm `Nhân viên` mặc định không có).
+- **Quyền ghi kéo theo quyền đọc.** Server tự thêm quyền đọc khi lưu nhóm và trả danh sách đã chuẩn hóa (tick `order:manage` thì response có thêm `order:read`). UI nên tự tick và hiển thị quyền đọc kéo theo để khớp response, không để admin thấy quyền "tự nhiên xuất hiện": `order:manage`, `shipment:manage` → `order:read`; `return:manage`, `refund:approve` → `return:read`; `product:manage` → `product:read`; `inventory:manage` → `inventory:read`; `review:manage` → `review:read`; `promotion:manage` → `promotion:read`; `customer:manage` → `customer:read`; `wallet:adjust` → `wallet:read`; `revenue:read` → `dashboard:read`. Gỡ quyền đọc kéo theo thì server tự thêm lại. Không có chiều ngược (đọc không kéo theo ghi).
+- **Endpoint mới (identity-service; các endpoint dưới đều cần `group:manage`, trừ `groups` trong `GET /api/v1/admin/users/{id}` cần `customer:read`; response bọc `ApiResponse`).**
+  - `GET /api/v1/admin/permissions` → `PermissionResponse[]` = `{ authority, area, label, isAssignable }`.
+  - `GET /api/v1/admin/groups` → `GroupResponse[]` = `{ id, name, permissions: string[], memberCount, isSystem, isEditable }`. `Admin`, `Customer` là nhóm hệ thống (`isSystem=true`, `isEditable=false`: chỉ xem, không sửa/xóa). Nhóm `Nhân viên` có sẵn nhưng sửa/xóa được như nhóm tự tạo. `memberCount` đếm đủ mọi thành viên (kể cả `Customer`); chỉ là `null` khi nhóm nằm trong `groups` của một user (`GET /users/{id}`, `PUT /users/{id}/groups`); `POST /staff` vẫn trả số đếm. Số đếm được cache 5 phút và xóa ngay khi thêm/gỡ thành viên qua API này; riêng `Customer` có thể chậm tối đa 5 phút vì khách tự đăng ký không đi qua identity-service.
+  - `POST /api/v1/admin/groups` body `GroupRequest` = `{ name (bắt buộc, ≤ 100 ký tự), permissions: string[] (bắt buộc) }` → `GroupChangeResponse` = `{ group: GroupResponse, notLoggedOutUserIds: string[] }`. Tên được trim; trùng nhóm khác hoặc `Admin`/`Customer` (không phân biệt hoa thường) → `2031`. `permissions` chứa quyền lạ hoặc `group:manage` → `2033`.
+  - `PUT /api/v1/admin/groups/{id}` cùng body, cùng response. Đổi quyền thì mọi thành viên bị đăng xuất; chỉ đổi tên thì không.
+  - `DELETE /api/v1/admin/groups/{id}` → `data` là `string[]` = `notLoggedOutUserIds` (mọi thành viên bị đăng xuất).
+  - `GET /api/v1/admin/groups/{id}/members?keyword=&page=&size=` (mặc định `size=20`; `keyword` tuỳ chọn, khớp một phần email / username / họ tên, không phân biệt hoa thường) → `PageResponse` của `GroupMemberResponse` = `{ userId, email, fullName, isActive }`. Lấy từ identity DB, người chưa từng đăng nhập lấy từ Keycloak nên thường không còn `null`.
+  - `GET /api/v1/admin/groups/{id}/candidates?keyword=` → `GroupMemberResponse[]`: tối đa 20 người trong Keycloak (kể cả chưa từng đăng nhập) khớp `keyword`, đã bỏ người đang thuộc nhóm. `keyword` rỗng trả `[]`. Chỉ cần `group:manage` (không cần `customer:read`). Nhóm `Customer` → `2036`.
+  - `POST /api/v1/admin/groups/{id}/members` và `DELETE /api/v1/admin/groups/{id}/members`, body `GroupMembersRequest` = `{ userIds: string[] }` (1–100 id) → `GroupMembersChangeResponse` = `{ succeededUserIds: string[], failures: { userId, code, message }[], notLoggedOutUserIds: string[] }`. Kết quả theo từng người, một người lỗi không chặn người khác: UI phải hiện cả phần thành công lẫn từng lỗi. Người đã trong nhóm (khi thêm) / không có trong nhóm (khi gỡ) tính thành công, không bị đăng xuất. Nhóm `Customer` bị từ chối cả request (`2036`, HTTP 400). Gỡ khỏi `Admin` có thể lỗi từng người: `2035` (tự rời), `2034` (còn một admin). `2001`: người dùng không có trong Keycloak.
+  - `PUT /api/v1/admin/users/{userId}/groups` body `UpdateUserGroupsRequest` = `{ groupIds: string[] }` (bắt buộc; đặt lại toàn bộ nhóm) → `UserGroupsResponse` = `{ groups: GroupResponse[], notLoggedOutUserIds: string[] }`. `Customer` luôn có và không chọn được: UI ẩn `Customer` khỏi danh sách chọn; gửi `Customer` bị `2036`; membership `Customer` hiện có được giữ (response vẫn có nhóm `Customer`). Gỡ thành viên cuối khỏi `Admin` → `2034`; admin tự gỡ mình khỏi `Admin` → `2035`. Thêm/gỡ người khác của `Admin` thì được. Admin duy nhất tự gỡ mình nhận `2035` (kiểm tra tự rời trước); gỡ người khác khi `Admin` chỉ còn một thành viên nhận `2034`.
+  - `POST /api/v1/admin/staff` (HTTP **201**) body `CreateStaffRequest` = `{ email (hợp lệ), firstName, lastName, temporaryPassword, groupIds (≥ 1, không chứa Customer) }`, tất cả bắt buộc → `StaffResponse` = `{ id, email, fullName, groups: GroupResponse[] }` (không bao giờ trả mật khẩu; `fullName` = "firstName lastName"). Nhân viên bị bắt đổi mật khẩu ở lần đăng nhập đầu, email coi như đã xác minh, vẫn thuộc `Customer` (mua hàng được). Form dùng hai ô họ và tên riêng.
+  - `GET /api/v1/admin/users/{id}` (cần `customer:read`) có thêm `groups: GroupResponse[]`. Keycloak không khả dụng hoặc user chưa có tài khoản Keycloak thì `groups` là `[]`, phần còn lại của chi tiết vẫn trả bình thường.
+- **`notLoggedOutUserIds`.** Đổi nhóm/quyền có hiệu lực ngay vì backend đăng xuất người bị ảnh hưởng (họ phải đăng nhập lại). Id nào chưa đăng xuất được (Keycloak lỗi) nằm trong `notLoggedOutUserIds`; thay đổi vẫn được lưu. UI cảnh báo "N người chưa bị đăng xuất, quyền cũ còn hiệu lực tối đa vài phút" khi mảng không rỗng; mảng rỗng là bình thường. Nếu admin sửa nhóm chứa chính mình thì phiên của họ cũng bị đăng xuất.
+- **Dashboard.** `GET /api/v1/admin/dashboard` (response giữ nguyên) giờ cần `revenue:read`. Mới: `GET /api/v1/admin/dashboard/operations?lowStockThreshold=10` cần `dashboard:read` → `{ totalOrders, orderByStatus, lowStockCount, topProducts }`, `topProducts[]` = `{ variantId, productName, totalQuantitySold }` theo số lượng, **không có doanh thu**. Tham số `days` (mặc định 30) hiện chưa được dùng. Gọi `/operations` khi user không có `revenue:read` và ẩn thẻ/biểu đồ doanh thu.
+- **Evidence presign.** `POST /api/v1/files/evidence/payments/presign` giờ nhận `order:manage` hoặc `refund:approve` (trước đây cần `ROLE_ADMIN`), vì bằng chứng thu tiền COD / xác minh carrier là việc của nhân viên xử lý đơn.
+- **Mã lỗi mới (identity-service, `2030`–`2039`).**
+
+  | mã | HTTP | message |
+  |---|---|---|
+  | `2030` | 404 | Nhóm không tồn tại |
+  | `2031` | 409 | Tên nhóm đã được dùng |
+  | `2032` | 409 | Nhóm hệ thống không thể sửa hoặc xoá |
+  | `2033` | 400 | Quyền không hợp lệ hoặc không được gán cho nhóm |
+  | `2034` | 409 | Phải còn ít nhất một quản trị viên |
+  | `2035` | 409 | Không thể tự rời nhóm Admin của chính mình |
+  | `2036` | 400 | Không thể gán nhóm Customer cho nhân viên |
+  | `2037` | 409 | Email đã được dùng cho một tài khoản khác |
+  | `2038` | 400 | Keycloak từ chối thông tin tài khoản (mật khẩu không đạt chính sách hoặc dữ liệu không hợp lệ) |
+  | `2039` | 400 | Nhân viên phải thuộc ít nhất một nhóm |
+
+  Mã có sẵn liên quan: `2020` (409, `ACCOUNT_LINK_CONFLICT`) khi tạo nhân viên mà email còn thuộc một dòng identity cũ; `2001` (404) khi gán nhóm cho user chưa có tài khoản Keycloak.
+- **Gợi ý ẩn UI theo quyền** (ẩn hẳn, không chỉ disable; backend vẫn trả 403 nếu gọi thẳng):
+
+  | khu vực UI | hiện khi có | nút/hành động cần thêm |
+  |---|---|---|
+  | Dashboard | `dashboard:read` hoặc `revenue:read` | có `revenue:read` → `/dashboard`, ngược lại `/dashboard/operations` |
+  | Đơn hàng | `order:read` | đổi trạng thái, hủy, retry, xác minh carrier: `order:manage`; tạo/đồng bộ vận đơn: `shipment:manage` |
+  | Đổi trả | `return:read` | duyệt/từ chối/nhận/hủy: `return:manage`; hoàn tiền: `refund:approve` |
+  | Sản phẩm, danh mục, thương hiệu, size, màu, thuộc tính | `product:read` | tạo/sửa/xóa: `product:manage` |
+  | Tồn kho | `inventory:read` | điều chỉnh: `inventory:manage` |
+  | Đánh giá | `review:read` | duyệt/ẩn/trả lời/xóa: `review:manage` |
+  | Khuyến mãi | `promotion:read` | tạo/sửa/bật tắt: `promotion:manage` |
+  | Khách hàng | `customer:read` | sửa/khóa: `customer:manage`; chọn nhóm: `group:manage` |
+  | Thanh toán, ví | `payment:read` / `wallet:read` | |
+  | Nhóm & phân quyền, Tạo nhân viên | `group:manage` | |
+- **Việc cho Antigravity:** (1) màn "Nhóm & phân quyền": danh sách nhóm, tạo/sửa với checkbox quyền gom theo `area`, quyền `isAssignable=false` không tick được, tự tick quyền đọc kéo theo, nhóm `isEditable=false` chỉ xem; (2) chi tiết user: chọn nhóm (bỏ `Customer`); (3) form "Tạo nhân viên"; (4) ẩn menu/nút theo `roles` của `/bff/session`; (5) dashboard chọn endpoint theo `revenue:read`; (6) xử lý `notLoggedOutUserIds` và mã lỗi `2030`–`2039`.
+- Trạng thái: done (backend), chờ frontend
+
 ### Gợi ý size theo chiều cao/cân nặng hoặc số đo cơ thể
 - Người yêu cầu: Claude Code (kèm task UI cho Antigravity) · 2026-11-02
 - Màn hình: apps/storefront (`ProductDetail`, cạnh `SizeGuide`)

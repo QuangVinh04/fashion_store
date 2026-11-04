@@ -32,10 +32,12 @@ Gộp từ cart-service. Không tách lại.
 | đơn (khách) | `POST /api/v1/orders/{checkoutId}` (đặt đơn), `GET /api/v1/orders/**`, `POST /api/v1/orders/{id}/cancel`, `POST /api/v1/orders/{id}/confirm-receipt`, `/api/v1/orders/{id}/return-request/**` |
 | đơn (admin) | `/api/v1/admin/orders/**`: danh sách, chi tiết, lịch sử, saga, hủy, retry saga/hủy, xác minh carrier |
 | đổi trả (admin) | `/api/v1/admin/orders/returns/**` |
-| vận chuyển | `POST/GET /api/v1/orders/{orderId}/shipment` (admin), `POST /api/v1/shipping/ghn/webhook`, `/api/v1/shipping/locations/**` |
+| vận chuyển | `POST /api/v1/orders/{orderId}/shipment` (`shipment:manage`), `GET /api/v1/orders/{orderId}/shipment` (khách), `GET /api/v1/admin/orders/{orderId}/shipment` (`order:read`), `POST /api/v1/shipping/ghn/webhook`, `/api/v1/shipping/locations/**` |
 | khuyến mãi | `GET /api/v1/promotions/validate` (mã sản phẩm, tính trên giỏ), `GET /api/v1/promotions/available?target=` (mã công khai kèm `eligible`), `/api/v1/admin/promotions/**` |
-| dashboard | `/api/v1/admin/dashboard` |
+| dashboard | `GET /api/v1/admin/dashboard` (`revenue:read`), `GET /api/v1/admin/dashboard/operations` (`dashboard:read`, không có doanh thu) |
 | nội bộ | `POST /internal/v1/orders/verify-purchase` |
+
+Phân quyền admin: `SecurityConfig` cho `/api/v1/admin/**` qua khi có ít nhất một quyền backoffice; quyền cụ thể ở `@PreAuthorize` từng method. `order:read` / `order:manage` (đơn, saga hủy, xác minh carrier), `shipment:manage` (tạo/đồng bộ vận đơn), `return:read` / `return:manage` / `refund:approve` (đổi trả, hoàn tiền), `promotion:read` / `promotion:manage`, `revenue:read` / `dashboard:read` (dashboard). Không kiểm tra role `ADMIN`.
 
 ## Messaging
 

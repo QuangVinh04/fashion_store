@@ -4,6 +4,7 @@ import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
+import com.fashionstore.common.security.PermissionNames;
 import com.fashionstore.order.shared.config.security.SecurityConfig;
 import com.fashionstore.order.returns.dto.ReturnRequestResponse;
 import com.fashionstore.order.returns.service.ReturnService;
@@ -46,8 +47,81 @@ class AdminReturnControllerTest {
                         Jwt.withTokenValue("admin-token")
                                 .header("alg", "RS256")
                                 .subject("admin")
+                                .claim(
+                                        "resource_access",
+                                        permissions(
+                                                PermissionNames.RETURN_READ,
+                                                PermissionNames.RETURN_MANAGE,
+                                                PermissionNames.REFUND_APPROVE))
+                                .build());
+        when(decoder.decode("staff-token"))
+                .thenReturn(
+                        Jwt.withTokenValue("staff-token")
+                                .header("alg", "RS256")
+                                .subject("staff")
+                                .claim(
+                                        "resource_access",
+                                        permissions(
+                                                PermissionNames.RETURN_READ,
+                                                PermissionNames.RETURN_MANAGE))
+                                .build());
+        when(decoder.decode("reader-token"))
+                .thenReturn(
+                        Jwt.withTokenValue("reader-token")
+                                .header("alg", "RS256")
+                                .subject("reader")
+                                .claim("resource_access", permissions(PermissionNames.RETURN_READ))
+                                .build());
+        when(decoder.decode("no-permission-token"))
+                .thenReturn(
+                        Jwt.withTokenValue("no-permission-token")
+                                .header("alg", "RS256")
+                                .subject("legacy-admin")
                                 .claim("realm_access", Map.of("roles", List.of("ADMIN")))
                                 .build());
+    }
+
+    private static Map<String, Object> permissions(String... names) {
+        return Map.of("fashion-api", Map.of("roles", List.of(names)));
+    }
+
+    @Test
+    void roleAdminWithoutPermissionCannotReadReturns() throws Exception {
+        mvc.perform(
+                        get("/api/v1/admin/orders/returns/r1")
+                                .header("Authorization", "Bearer no-permission-token"))
+                .andExpect(status().isForbidden());
+        verifyNoInteractions(returnService);
+    }
+
+    @Test
+    void staffCanApproveButCannotRefund() throws Exception {
+        mvc.perform(
+                        post("/api/v1/admin/orders/returns/r1/refund")
+                                .header("Authorization", "Bearer staff-token"))
+                .andExpect(status().isForbidden());
+        mvc.perform(
+                        post("/api/v1/admin/orders/returns/r1/approve")
+                                .header("Authorization", "Bearer staff-token")
+                                .contentType("application/json")
+                                .content("{}"))
+                .andExpect(status().isOk());
+        verify(returnService, never()).refundReturn(any(), any());
+    }
+
+    @Test
+    void readerCanReadButCannotApprove() throws Exception {
+        mvc.perform(
+                        get("/api/v1/admin/orders/returns/r1")
+                                .header("Authorization", "Bearer reader-token"))
+                .andExpect(status().isOk());
+        mvc.perform(
+                        post("/api/v1/admin/orders/returns/r1/approve")
+                                .header("Authorization", "Bearer reader-token")
+                                .contentType("application/json")
+                                .content("{}"))
+                .andExpect(status().isForbidden());
+        verify(returnService, never()).approveReturn(any());
     }
 
     @Test

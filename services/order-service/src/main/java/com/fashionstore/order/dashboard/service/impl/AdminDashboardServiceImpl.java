@@ -5,6 +5,8 @@ import com.fashionstore.common.redis.CacheRegion;
 import com.fashionstore.common.redis.RedisService;
 import com.fashionstore.order.shared.client.CatalogClient;
 import com.fashionstore.order.dashboard.dto.AdminDashboardResponse;
+import com.fashionstore.order.dashboard.dto.OperationsDashboardResponse;
+import com.fashionstore.order.dashboard.dto.TopProductQuantityResponse;
 import com.fashionstore.order.order.dto.OrderStatusCountResponse;
 import com.fashionstore.order.dashboard.dto.RevenueByDayResponse;
 import com.fashionstore.order.order.dto.TopProductResponse;
@@ -17,6 +19,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
+import com.fashionstore.common.security.PermissionNames;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -46,6 +49,8 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
     private static final CacheRegion<AdminDashboardResponse> DASHBOARD = new CacheRegion<>(
             "dashboard", new TypeReference<AdminDashboardResponse>() {}, Duration.ofMinutes(1));
 
+    private static final int TOP_PRODUCT_LIMIT = 10;
+
     private static final Set<OrderStatus> REVENUE_STATUSES = Set.of(
             OrderStatus.CONFIRMED,
             OrderStatus.PROCESSING,
@@ -56,13 +61,39 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
     );
 
     @Override
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('" + PermissionNames.REVENUE_READ + "')")
     @Transactional(readOnly = true)
     public AdminDashboardResponse getDashboardStats(int days, int lowStockThreshold) {
         int windowDays = days > 0 ? days : DEFAULT_DAYS;
-        int threshold = lowStockThreshold > 0 ? lowStockThreshold : DEFAULT_LOW_STOCK_THRESHOLD;
+        int threshold = resolveLowStockThreshold(lowStockThreshold);
         return redis.getOrLoad(DASHBOARD, () -> loadDashboardStats(windowDays, threshold),
                 String.valueOf(windowDays), String.valueOf(threshold));
+    }
+
+    @Override
+    @PreAuthorize("hasAuthority('" + PermissionNames.DASHBOARD_READ + "')")
+    @Transactional(readOnly = true)
+    public OperationsDashboardResponse getOperationsStats(int days, int lowStockThreshold) {
+        return loadOperationsStats(resolveLowStockThreshold(lowStockThreshold));
+    }
+
+    private OperationsDashboardResponse loadOperationsStats(int lowStockThreshold) {
+        List<TopProductQuantityResponse> topProducts = findTopProducts().stream()
+                .map(top -> new TopProductQuantityResponse(top.getVariantId(), top.getProductName(), top.getTotalQuantitySold()))
+                .toList();
+        return new OperationsDashboardResponse(
+                orderRepository.count(),
+                orderRepository.countOrdersByStatus(),
+                catalogClient.getLowStockCount(lowStockThreshold),
+                topProducts);
+    }
+
+    private int resolveLowStockThreshold(int lowStockThreshold) {
+        return lowStockThreshold > 0 ? lowStockThreshold : DEFAULT_LOW_STOCK_THRESHOLD;
+    }
+
+    private List<TopProductResponse> findTopProducts() {
+        return orderItemRepository.findTopSellingProducts(REVENUE_STATUSES, PageRequest.of(0, TOP_PRODUCT_LIMIT));
     }
 
     private AdminDashboardResponse loadDashboardStats(int days, int lowStockThreshold) {
@@ -89,10 +120,7 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                 })
                 .toList();
 
-        List<TopProductResponse> topProducts = orderItemRepository.findTopSellingProducts(
-                REVENUE_STATUSES,
-                PageRequest.of(0, 10)
-        );
+        List<TopProductResponse> topProducts = findTopProducts();
 
         long lowStockCount = catalogClient.getLowStockCount(lowStockThreshold);
 

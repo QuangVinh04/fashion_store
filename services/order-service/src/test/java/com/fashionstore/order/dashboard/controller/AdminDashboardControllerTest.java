@@ -2,6 +2,8 @@ package com.fashionstore.order.dashboard.controller;
 
 import com.fashionstore.common.exception.GlobalExceptionHandler;
 import com.fashionstore.order.dashboard.dto.AdminDashboardResponse;
+import com.fashionstore.order.dashboard.dto.OperationsDashboardResponse;
+import com.fashionstore.order.dashboard.dto.TopProductQuantityResponse;
 import com.fashionstore.order.order.dto.OrderStatusCountResponse;
 import com.fashionstore.order.dashboard.dto.RevenueByDayResponse;
 import com.fashionstore.order.order.dto.TopProductResponse;
@@ -19,6 +21,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -65,5 +68,35 @@ class AdminDashboardControllerTest {
                 .andExpect(jsonPath("$.data.topProducts[0].productName").value("Áo Polo Nam"));
 
         verify(adminDashboardService).getDashboardStats(eq(30), eq(10));
+    }
+
+    @Test
+    void getOperations_returns200WithoutAnyRevenueField() throws Exception {
+        OperationsDashboardResponse response = new OperationsDashboardResponse(
+                100L,
+                List.of(new OrderStatusCountResponse(OrderStatus.CONFIRMED, 50L)),
+                5L,
+                List.of(new TopProductQuantityResponse("var-1", "Áo Polo Nam", 80L)));
+        when(adminDashboardService.getOperationsStats(eq(30), eq(10))).thenReturn(response);
+
+        String body = mockMvc.perform(get("/api/v1/admin/dashboard/operations")
+                        .param("days", "30")
+                        .param("lowStockThreshold", "10"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.totalOrders").value(100))
+                .andExpect(jsonPath("$.data.lowStockCount").value(5))
+                .andExpect(jsonPath("$.data.topProducts[0].productName").value("Áo Polo Nam"))
+                .andExpect(jsonPath("$.data.topProducts[0].totalQuantitySold").value(80))
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(body).doesNotContainIgnoringCase("revenue");
+    }
+
+    @Test
+    void getOperations_usesDefaultParams() throws Exception {
+        when(adminDashboardService.getOperationsStats(eq(30), eq(10)))
+                .thenReturn(new OperationsDashboardResponse(0L, List.of(), 0L, List.of()));
+
+        mockMvc.perform(get("/api/v1/admin/dashboard/operations")).andExpect(status().isOk());
     }
 }

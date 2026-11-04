@@ -18,6 +18,7 @@ import {
 
 import CustomAvatar from '@core/components/mui/Avatar'
 import { useCustomerDetailQuery } from '@/hooks/useCustomers'
+import UserGroupsEditor from '@/views/groups/UserGroupsEditor'
 
 type Props = {
   customerId: string | null
@@ -133,7 +134,14 @@ export default function CustomerDetailDialog({ customerId, open, onClose }: Prop
 
             <Divider />
 
-            {/* 2. Sổ địa chỉ giao hàng */}
+            {/* 2. Nhóm phân quyền */}
+            <Box>
+              <UserGroupsEditor userId={customer.id} initialGroups={customer.groups || []} />
+            </Box>
+
+            <Divider />
+
+            {/* 3. Sổ địa chỉ giao hàng */}
             <Box>
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
                 <Typography variant='subtitle2' sx={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5 }}>
@@ -186,7 +194,7 @@ export default function CustomerDetailDialog({ customerId, open, onClose }: Prop
 
             <Divider />
 
-            {/* 3. Liên kết nghiệp vụ nhanh */}
+            {/* 4. Liên kết nghiệp vụ nhanh */}
             <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
               <Button
                 component={Link}

@@ -2,6 +2,7 @@ package com.fashionstore.order.dashboard.controller;
 
 import com.fashionstore.common.dto.ApiResponse;
 import com.fashionstore.order.dashboard.dto.AdminDashboardResponse;
+import com.fashionstore.order.dashboard.dto.OperationsDashboardResponse;
 import com.fashionstore.order.dashboard.service.AdminDashboardService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -26,7 +27,7 @@ public class AdminDashboardController {
 
     AdminDashboardService adminDashboardService;
 
-    @Operation(summary = "Lấy dữ liệu tổng quan kinh doanh (ADMIN)",
+    @Operation(summary = "Lấy dữ liệu tổng quan kinh doanh (revenue:read)",
             description = "Trả về doanh thu theo ngày, số lượng đơn theo trạng thái, top 10 sản phẩm bán chạy và số lượng variant sắp hết hàng.")
     @GetMapping
     public ApiResponse<AdminDashboardResponse> getDashboard(
@@ -38,6 +39,21 @@ public class AdminDashboardController {
         return ApiResponse.<AdminDashboardResponse>builder()
                 .message("Get dashboard statistics successfully")
                 .data(adminDashboardService.getDashboardStats(days, lowStockThreshold))
+                .build();
+    }
+
+    @Operation(summary = "Lấy dữ liệu vận hành (không gồm doanh thu)",
+            description = "Trả về tổng số đơn, số đơn theo trạng thái, số lượng bán của top 10 sản phẩm và số lượng variant sắp hết hàng. Không có trường doanh thu nào.")
+    @GetMapping("/operations")
+    public ApiResponse<OperationsDashboardResponse> getOperations(
+            @Parameter(description = "Hiện chưa được sử dụng, giữ để đồng nhất với /api/v1/admin/dashboard (mặc định: 30)")
+            @RequestParam(defaultValue = "30") @Min(value = 1, message = "days must be at least 1") int days,
+            @Parameter(description = "Ngưỡng tồn kho cảnh báo sắp hết hàng (mặc định: 10)")
+            @RequestParam(defaultValue = "10") @Min(value = 0, message = "lowStockThreshold must be at least 0") int lowStockThreshold
+    ) {
+        return ApiResponse.<OperationsDashboardResponse>builder()
+                .message("Get operations dashboard statistics successfully")
+                .data(adminDashboardService.getOperationsStats(days, lowStockThreshold))
                 .build();
     }
 }

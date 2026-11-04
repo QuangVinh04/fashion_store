@@ -5,6 +5,7 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.fashionstore.common.redis.RedisService;
 import com.fashionstore.order.shared.client.CatalogClient;
 import com.fashionstore.order.dashboard.dto.AdminDashboardResponse;
+import com.fashionstore.order.dashboard.dto.OperationsDashboardResponse;
 import com.fashionstore.order.order.dto.OrderStatusCountResponse;
 import com.fashionstore.order.order.dto.TopProductResponse;
 import com.fashionstore.order.order.entity.OrderStatus;
@@ -134,5 +135,30 @@ class AdminDashboardServiceImplTest {
         assertThat(second).isEqualTo(first);
         verify(orderRepository, times(1)).count();
         verify(catalogClient, times(1)).getLowStockCount(10);
+    }
+
+    @Test
+    void getOperationsStats_matchesDashboardStatsWithoutRevenue() {
+        when(orderRepository.calculateTotalRevenue(any())).thenReturn(new BigDecimal("15000000"));
+        when(orderRepository.count()).thenReturn(50L);
+        when(orderRepository.countOrdersByStatus()).thenReturn(List.of(
+                new OrderStatusCountResponse(OrderStatus.CONFIRMED, 20L),
+                new OrderStatusCountResponse(OrderStatus.DELIVERED, 30L)
+        ));
+        when(orderRepository.findRevenueByDay(any(), any(LocalDateTime.class))).thenReturn(List.of());
+        when(orderItemRepository.findTopSellingProducts(any(), any(Pageable.class)))
+                .thenReturn(List.of(new TopProductResponse("var-1", "Áo Polo", 50L, new BigDecimal("10000000"))));
+        when(catalogClient.getLowStockCount(10)).thenReturn(4L);
+
+        AdminDashboardResponse full = service.getDashboardStats(30, 10);
+        OperationsDashboardResponse operations = service.getOperationsStats(30, 10);
+
+        assertThat(operations.totalOrders()).isEqualTo(full.getTotalOrders());
+        assertThat(operations.orderByStatus()).isEqualTo(full.getOrderByStatus());
+        assertThat(operations.lowStockCount()).isEqualTo(full.getLowStockCount());
+        assertThat(operations.topProducts()).hasSize(1);
+        assertThat(operations.topProducts().get(0).variantId()).isEqualTo("var-1");
+        assertThat(operations.topProducts().get(0).productName()).isEqualTo("Áo Polo");
+        assertThat(operations.topProducts().get(0).totalQuantitySold()).isEqualTo(50L);
     }
 }

@@ -23,6 +23,7 @@ import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
+import com.fashionstore.common.security.PermissionNames;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
@@ -31,12 +32,12 @@ import java.util.List;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/admin/orders/returns")
-@PreAuthorize("hasRole('ADMIN')")
 @Tag(name = "Admin - Returns")
 public class AdminReturnController {
 
     private final ReturnService returnService;
 
+    @PreAuthorize("hasAuthority('" + PermissionNames.RETURN_MANAGE + "')")
     @PostMapping("/lost/{orderId}")
     public ApiResponse<ReturnRequestResponse> openLostRefund(
             @PathVariable String orderId,
@@ -48,6 +49,7 @@ public class AdminReturnController {
                 .build();
     }
 
+    @PreAuthorize("hasAuthority('" + PermissionNames.RETURN_MANAGE + "')")
     @PostMapping("/carrier/{orderId}")
     public ApiResponse<ReturnRequestResponse> openCarrierReturn(
             @PathVariable String orderId,
@@ -59,6 +61,7 @@ public class AdminReturnController {
                 .build();
     }
 
+    @PreAuthorize("hasAuthority('" + PermissionNames.RETURN_MANAGE + "')")
     @PostMapping("/{id}/close-without-refund")
     public ApiResponse<ReturnRequestResponse> closeWithoutRefund(
             @PathVariable String id, @Valid @RequestBody CancelReturnRequest request) {
@@ -67,6 +70,7 @@ public class AdminReturnController {
                 .build();
     }
 
+    @PreAuthorize("hasAuthority('" + PermissionNames.RETURN_READ + "')")
     @GetMapping("/{id}/verification-evidence/{mediaId}/url")
     public ApiResponse<String> verificationEvidenceUrl(
             @PathVariable String id, @PathVariable String mediaId) {
@@ -75,6 +79,7 @@ public class AdminReturnController {
                 .build();
     }
 
+    @PreAuthorize("hasAuthority('" + PermissionNames.RETURN_READ + "')")
     @GetMapping("/{id}/customer-evidence/{mediaId}/url")
     public ApiResponse<String> customerEvidenceUrl(
             @PathVariable String id, @PathVariable String mediaId) {
@@ -83,6 +88,7 @@ public class AdminReturnController {
                 .build();
     }
 
+    @PreAuthorize("hasAuthority('" + PermissionNames.RETURN_READ + "')")
     @GetMapping("/{id}/qc-evidence/{mediaId}/url")
     public ApiResponse<String> qcEvidenceUrl(
             @PathVariable String id, @PathVariable String mediaId) {
@@ -92,6 +98,7 @@ public class AdminReturnController {
     }
 
     @Operation(summary = "Tìm kiếm danh sách yêu cầu hoàn trả")
+    @PreAuthorize("hasAuthority('" + PermissionNames.RETURN_READ + "')")
     @GetMapping
     public ApiResponse<PageResponse<List<ReturnRequestResponse>>> search(
             @RequestParam(required = false) ReturnRequestStatus status,
@@ -104,6 +111,7 @@ public class AdminReturnController {
     }
 
     @Operation(summary = "Chi tiết yêu cầu hoàn trả")
+    @PreAuthorize("hasAuthority('" + PermissionNames.RETURN_READ + "')")
     @GetMapping("/{id}")
     public ApiResponse<ReturnRequestResponse> get(@PathVariable String id) {
         return ApiResponse.<ReturnRequestResponse>builder()
@@ -124,6 +132,7 @@ theo shop nên GHN không tạo đơn trùng. Gọi lại trên yêu cầu đã 
 Mã lỗi: `4019` không có yêu cầu (404) · `4002` đơn không còn `DELIVERED` (400) · `4021` yêu cầu đã xử lý
 (đã từ chối/hủy) (400) · `4017` địa chỉ lấy hàng thiếu phường/tỉnh (400) · `4035` chưa cấu hình kho nhận
 hàng trả (503) · `4025` yêu cầu đổi trạng thái trong lúc gọi GHN (409) · 502 GHN lỗi.""")
+    @PreAuthorize("hasAuthority('" + PermissionNames.RETURN_MANAGE + "')")
     @PostMapping("/{id}/approve")
     public ApiResponse<ReturnRequestResponse> approve(@PathVariable String id) {
         return ApiResponse.<ReturnRequestResponse>builder()
@@ -132,6 +141,7 @@ hàng trả (503) · `4025` yêu cầu đổi trạng thái trong lúc gọi GHN
     }
 
     @Operation(summary = "Từ chối yêu cầu hoàn trả")
+    @PreAuthorize("hasAuthority('" + PermissionNames.RETURN_MANAGE + "')")
     @PostMapping("/{id}/reject")
     public ApiResponse<ReturnRequestResponse> reject(
             @PathVariable String id, @Valid @RequestBody RejectReturnRequest request) {
@@ -141,6 +151,7 @@ hàng trả (503) · `4025` yêu cầu đổi trạng thái trong lúc gọi GHN
     }
 
     @Operation(summary = "Tạo lại lượt lấy hàng trả sau khi GHN hủy / quá hạn")
+    @PreAuthorize("hasAuthority('" + PermissionNames.RETURN_MANAGE + "')")
     @PostMapping("/{id}/recreate-pickup")
     public ApiResponse<ReturnRequestResponse> recreatePickup(@PathVariable String id) {
         return ApiResponse.<ReturnRequestResponse>builder()
@@ -149,6 +160,7 @@ hàng trả (503) · `4025` yêu cầu đổi trạng thái trong lúc gọi GHN
     }
 
     @Operation(summary = "Xác nhận đã nhận kiện hàng trả về")
+    @PreAuthorize("hasAuthority('" + PermissionNames.RETURN_MANAGE + "')")
     @PostMapping("/{id}/receive")
     public ApiResponse<ReturnRequestResponse> receive(
             @PathVariable String id, @Valid @RequestBody ReceiveReturnRequest request) {
@@ -158,6 +170,7 @@ hàng trả (503) · `4025` yêu cầu đổi trạng thái trong lúc gọi GHN
     }
 
     @Operation(summary = "Cancel a return before the warehouse receives it")
+    @PreAuthorize("hasAuthority('" + PermissionNames.RETURN_MANAGE + "')")
     @PostMapping("/{id}/cancel")
     public ApiResponse<ReturnRequestResponse> cancel(
             @PathVariable String id, @Valid @RequestBody CancelReturnRequest request) {
@@ -167,6 +180,7 @@ hàng trả (503) · `4025` yêu cầu đổi trạng thái trong lúc gọi GHN
     }
 
     @Operation(summary = "Hoàn tiền vào ví khách hàng")
+    @PreAuthorize("hasAuthority('" + PermissionNames.REFUND_APPROVE + "')")
     @PostMapping("/{id}/refund")
     public org.springframework.http.ResponseEntity<ApiResponse<ReturnRequestResponse>> refund(
             @PathVariable String id, @RequestBody(required = false) RefundReturnRequest request) {
