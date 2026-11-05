@@ -268,8 +268,8 @@
     {
       "clientId": "storefront-bff",
       "name": "Storefront BFF",
-      "rootUrl": "http://localhost:8083",
-      "baseUrl": "http://localhost:8083",
+      "rootUrl": "${STOREFRONT_BFF_PUBLIC_URL:http://localhost:8083}",
+      "baseUrl": "${STOREFRONT_BFF_PUBLIC_URL:http://localhost:8083}",
       "enabled": true,
       "publicClient": false,
       "clientAuthenticatorType": "client-secret",
@@ -279,14 +279,14 @@
       "directAccessGrantsEnabled": false,
       "serviceAccountsEnabled": false,
       "redirectUris": [
-        "http://localhost:8083/login/oauth2/code/keycloak"
+        "${STOREFRONT_BFF_PUBLIC_URL:http://localhost:8083}/login/oauth2/code/keycloak"
       ],
       "webOrigins": [
         "+"
       ],
       "attributes": {
         "pkce.code.challenge.method": "S256",
-        "post.logout.redirect.uris": "http://localhost:8083/*",
+        "post.logout.redirect.uris": "${STOREFRONT_BFF_PUBLIC_URL:http://localhost:8083}/*",
         "backchannel.logout.url": "${STOREFRONT_BFF_BACKCHANNEL_LOGOUT_URL:http://storefront-bff:8083/logout/connect/back-channel/keycloak}",
         "backchannel.logout.session.required": "true"
       },
@@ -342,14 +342,14 @@
       "directAccessGrantsEnabled": false,
       "serviceAccountsEnabled": false,
       "redirectUris": [
-        "http://localhost:8084/login/oauth2/code/keycloak"
+        "${BACKOFFICE_BFF_PUBLIC_URL:http://localhost:8084}/login/oauth2/code/keycloak"
       ],
       "webOrigins": [
         "+"
       ],
       "attributes": {
         "pkce.code.challenge.method": "S256",
-        "post.logout.redirect.uris": "http://localhost:8084/*",
+        "post.logout.redirect.uris": "${BACKOFFICE_BFF_PUBLIC_URL:http://localhost:8084}/*",
         "login_theme": "backoffice",
         "backchannel.logout.url": "${BACKOFFICE_BFF_BACKCHANNEL_LOGOUT_URL:http://backoffice-bff:8084/logout/connect/back-channel/keycloak}",
         "backchannel.logout.session.required": "true"
@@ -397,7 +397,7 @@
     {
       "clientId": "swagger-ui",
       "name": "Swagger UI",
-      "enabled": true,
+      "enabled": "${SWAGGER_UI_CLIENT_ENABLED:true}",
       "publicClient": true,
       "standardFlowEnabled": true,
       "implicitFlowEnabled": false,

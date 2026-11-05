@@ -8,6 +8,7 @@ reports/
 .superpowers/
 
 .env
+.env.prod
 ### STS ###
 .apt_generated
 .classpath
