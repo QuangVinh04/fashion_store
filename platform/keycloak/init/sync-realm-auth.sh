@@ -18,7 +18,7 @@ $KCADM config credentials --server "${KEYCLOAK_URL:-http://keycloak:8080}" --rea
 $KCADM update "realms/$REALM" \
     -s 'passwordPolicy=length(8) and upperCase(1) and lowerCase(1) and digits(1) and notUsername and notEmail and passwordHistory(3)' \
     -s eventsEnabled=true -s eventsExpiration=2592000 -s adminEventsEnabled=true \
-    -s "eventsListeners=${KEYCLOAK_EVENT_LISTENERS:-[\"jboss-logging\"]}"
+    -s "eventsListeners=${KEYCLOAK_EVENT_LISTENERS:-[\"jboss-logging\",\"fashion-rabbit\"]}"
 
 flow_id() {
     $KCADM get authentication/flows -r "$REALM" --fields id,alias --format csv --noquotes \

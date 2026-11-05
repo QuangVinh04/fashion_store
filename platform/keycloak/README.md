@@ -73,6 +73,33 @@ defaults are dev-only: `STOREFRONT_BFF_CLIENT_SECRET`, `BACKOFFICE_BFF_CLIENT_SE
 `CATALOG_SERVICE_CLIENT_SECRET`, `IDENTITY_SERVICE_CLIENT_SECRET`, `PAYMENT_SERVICE_CLIENT_SECRET`, `MAIL_*`.
 Without SMTP credentials, self-registered users cannot receive the verification email.
 
+## Event Listener SPI: Keycloak báo cho hệ thống (`event-listener/`)
+
+Keycloak là nơi tạo user, nên identity-service chỉ biết user ở request đầu tiên (JIT). Provider `fashion-rabbit`
+(`platform/keycloak/event-listener`, jar chạy bên trong Keycloak) đẩy event sang RabbitMQ để identity tạo / đồng bộ dòng `users` ngay.
+
+| Keycloak | Routing key (`EventTypes`) | identity-service |
+|---|---|---|
+| user event `REGISTER` | `keycloak.user.registered` | tạo `users` (id = `sub`, tên = họ + tên, email chưa xác minh) |
+| admin sửa user (admin event `USER`/`UPDATE`), user event `UPDATE_EMAIL` | `keycloak.user.email-updated` | đồng bộ email nếu khác |
+
+Vì sao đổi email chỉ đến từ admin: realm đặt `registrationEmailAsUsername` và `editUsernameAllowed=false`, user không tự sửa email được
+(Account API trả 204 nhưng email không đổi; đã thử trên Keycloak thật). `UPDATE_PROFILE` không mang email nên bị bỏ qua.
+Admin event cũng không mang email: provider đọc email hiện tại từ user, nên event này có thể phát cả khi email không đổi (consumer idempotent).
+
+```bash
+./mvnw -pl platform/keycloak/event-listener -am package -DskipTests   # tạo target/keycloak-rabbit-event-listener.jar
+docker compose up -d --build keycloak                                 # platform/keycloak/Dockerfile copy jar vào /opt/keycloak/providers
+```
+
+- Cấu hình RabbitMQ qua biến môi trường Keycloak `KC_SPI_EVENTS_LISTENER__FASHION_RABBIT__{HOST,PORT,USERNAME,PASSWORD,VHOST}` (đã có trong compose; prod bắt buộc `RABBITMQ_USERNAME`/`RABBITMQ_PASSWORD`).
+- Listener được bật trong realm (`eventsListeners`) và được `keycloak-init` giữ lại. Chưa build jar thì Keycloak chỉ log cảnh báo, vẫn chạy.
+- Event chỉ được gửi **sau khi transaction của Keycloak commit** và ở thread riêng: RabbitMQ chậm hay chết không làm chậm / lỗi đăng nhập.
+- **At-most-once**: Keycloak không có outbox, event mất nếu RabbitMQ chết lúc đó. JIT ở request đầu tiên của user là đường dự phòng.
+- `emailVerified` từ event luôn là `false` (event không mang cờ này). Identity chỉ ghi cờ khi tạo user hoặc khi email đổi.
+- Sai tham số exchange làm RabbitMQ trả `PRECONDITION_FAILED` cho mọi service, nên provider khai báo `fashion.events` y hệt `RabbitTopology`; test đối chiếu hai bên.
+- API của SPI (`eventsListener` là SPI nội bộ) có thể đổi giữa các bản Keycloak: nâng cấp image thì đổi `keycloak.version` trong pom của module và build lại.
+
 ## Dev users (dev only)
 
 **Production:** `docker-compose.prod.yml` sets `DEV_USERS_ENABLED=false` (all dev users are imported disabled);
@@ -170,7 +197,13 @@ It also grants `realm-management` `view-clients` to `service-account-identity-se
 `fashion-api` client roles with it). On a realm imported earlier this grant is otherwise manual: Admin console → Users →
 `service-account-identity-service` → Role mapping → Assign role → `realm-management` → `view-clients`.
 
-### Manual verification checklist (not yet run against a live Keycloak)
+### Manual verification checklist
+
+Đã chạy trên Keycloak 26.7.4 thật (2026-11-05): `sync-rbac.ps1` chạy hai lần không lỗi, lần hai không đổi gì; realm có 22 permission + `internal-caller`
+và 3 group; qua identity-service với token admin: `GET /permissions` (22, `group:manage` không gán được), tạo nhóm `Nhân viên kho` (tên tiếng Việt giữ nguyên dấu),
+thêm rồi bớt permission (`DELETE` kèm body hoạt động), tạo nhân viên, liệt kê thành viên và quyền của nhóm; token customer nhận 403.
+**Chưa chạy**: bước 4–6 (đăng nhập qua backoffice-bff, đổi quyền thì staff bị logout), vì cần gateway + BFF + UI.
+Các bước cũ bên dưới giữ nguyên để chạy lại khi cần.
 
 The scripts and the Keycloak client were only verified statically and with mocks. Run this once on a dev stack:
 
