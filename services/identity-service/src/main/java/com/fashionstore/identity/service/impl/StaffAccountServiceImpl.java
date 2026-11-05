@@ -1,7 +1,8 @@
 package com.fashionstore.identity.service.impl;
 
+import static com.fashionstore.identity.service.impl.PreAuthorizeExpressions.GROUP_MANAGE;
+
 import com.fashionstore.common.exception.AppException;
-import com.fashionstore.common.security.PermissionNames;
 import com.fashionstore.identity.client.KeycloakGroupClient;
 import com.fashionstore.identity.dto.group.GroupResponse;
 import com.fashionstore.identity.dto.group.KeycloakGroupRepresentation;
@@ -29,7 +30,6 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class StaffAccountServiceImpl implements StaffAccountService {
 
-    private static final String GROUP_MANAGE = "hasAuthority('" + PermissionNames.GROUP_MANAGE + "')";
     private static final String FULL_NAME_SEPARATOR = " ";
 
     private final KeycloakGroupClient groupClient;
@@ -69,9 +69,7 @@ public class StaffAccountServiceImpl implements StaffAccountService {
             throw new AppException(IdentityErrorCode.STAFF_GROUP_REQUIRED);
         }
         List<KeycloakGroupRepresentation> groups = request.groupIds().stream().map(groupClient::getGroup).toList();
-        if (groups.stream().anyMatch(group -> SystemGroups.CUSTOMER.equals(group.name()))) {
-            throw new AppException(IdentityErrorCode.CUSTOMER_GROUP_NOT_ASSIGNABLE);
-        }
+        groups.forEach(GroupPermissionPolicy::requireAssignable);
         return groups;
     }
 

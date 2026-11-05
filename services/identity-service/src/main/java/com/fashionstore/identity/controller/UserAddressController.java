@@ -1,19 +1,25 @@
 package com.fashionstore.identity.controller;
 
 import com.fashionstore.common.dto.ApiResponse;
-import com.fashionstore.identity.dto.user.UpdateProfileRequest;
 import com.fashionstore.identity.dto.user.UserAddressRequest;
 import com.fashionstore.identity.dto.user.UserAddressResponse;
-import com.fashionstore.identity.dto.user.UserProfileResponse;
 import com.fashionstore.identity.service.UserAddressService;
-import com.fashionstore.identity.service.UserService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import org.springframework.http.HttpStatus;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
@@ -25,6 +31,7 @@ import java.util.List;
 public class UserAddressController {
 
     UserAddressService userAddressService;
+
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public ApiResponse<UserAddressResponse> createAddress(@Valid @RequestBody UserAddressRequest request) {

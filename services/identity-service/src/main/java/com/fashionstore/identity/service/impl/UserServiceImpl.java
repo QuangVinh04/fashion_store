@@ -27,6 +27,8 @@ import java.util.UUID;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class UserServiceImpl implements UserService {
 
+    private static final long INITIAL_AVATAR_REVISION = 0L;
+
     UserMapper userMapper;
     CurrentUserProvider currentUserProvider;
     CatalogMediaClient catalogMediaClient;
@@ -45,21 +47,13 @@ public class UserServiceImpl implements UserService {
     public UserProfileResponse updateMyProfile(UpdateProfileRequest request) {
         User user = currentUserProvider.getCurrentUserForUpdate();
         String userId = user.getId();
-        String requestedMediaId = request.getAvatarMediaId();
+        // Lấy trước khi mapper ghi đè: event cần biết ảnh cũ để dọn.
         String previousMediaId = user.getAvatarMediaId();
-
-        CatalogMediaClient.MediaResponse media = null;
-        if (requestedMediaId != null && !requestedMediaId.isBlank()
-                && !requestedMediaId.equals(previousMediaId)) {
-            var response = catalogMediaClient.getById(requestedMediaId, userId);
-            media = response == null ? null : response.getData();
-            if (media == null) throw new AppException(IdentityErrorCode.AVATAR_MEDIA_INVALID);
-            media.validateTemporaryAvatar(userId, requestedMediaId);
-        }
+        CatalogMediaClient.MediaResponse media = loadNewAvatar(request.getAvatarMediaId(), previousMediaId, userId);
 
         userMapper.updateUserFromRequest(request, user);
         if (media != null) {
-            long revision = (user.getAvatarRevision() == null ? 0L : user.getAvatarRevision()) + 1;
+            long revision = (user.getAvatarRevision() == null ? INITIAL_AVATAR_REVISION : user.getAvatarRevision()) + 1;
             user.setAvatarMediaId(media.id());
             user.setAvatar(media.url());
             user.setAvatarRevision(revision);
@@ -69,5 +63,19 @@ public class UserServiceImpl implements UserService {
                     EventTypes.PROFILE_AVATAR_CHANGED, userId, UUID.randomUUID().toString(), event));
         }
         return userMapper.toUserResponse(userRepository.save(user));
+    }
+
+    /** Trả null khi request không đổi ảnh đại diện. */
+    private CatalogMediaClient.MediaResponse loadNewAvatar(
+            String requestedMediaId, String previousMediaId, String userId) {
+        if (requestedMediaId == null || requestedMediaId.isBlank() || requestedMediaId.equals(previousMediaId)) {
+            return null;
+        }
+        var response = catalogMediaClient.getById(requestedMediaId, userId);
+        if (response == null || response.getData() == null) {
+            throw new AppException(IdentityErrorCode.AVATAR_MEDIA_INVALID);
+        }
+        response.getData().validateTemporaryAvatar(userId, requestedMediaId);
+        return response.getData();
     }
 }

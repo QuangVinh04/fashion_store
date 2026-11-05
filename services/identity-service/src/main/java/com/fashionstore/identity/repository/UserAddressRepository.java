@@ -1,8 +1,6 @@
 package com.fashionstore.identity.repository;
 
-import com.fashionstore.identity.entity.User;
 import com.fashionstore.identity.entity.UserAddress;
-import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;

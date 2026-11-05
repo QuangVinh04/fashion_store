@@ -7,6 +7,7 @@ import com.fashionstore.identity.repository.UserRepository;
 import com.fashionstore.identity.service.UserProvisioningService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.oauth2.core.oidc.StandardClaimNames;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -23,8 +24,8 @@ public class UserProvisioningServiceImpl implements UserProvisioningService {
     @Override
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void provision(Jwt jwt) {
-        String email = jwt.getClaimAsString("email");
-        boolean emailVerified = Boolean.TRUE.equals(jwt.getClaimAsBoolean("email_verified"));
+        String email = jwt.getClaimAsString(StandardClaimNames.EMAIL);
+        boolean emailVerified = Boolean.TRUE.equals(jwt.getClaimAsBoolean(StandardClaimNames.EMAIL_VERIFIED));
         userRepository.findById(jwt.getSubject()).ifPresentOrElse(
                 user -> syncEmail(user, email, emailVerified),
                 () -> create(jwt, email, emailVerified));
@@ -36,7 +37,7 @@ public class UserProvisioningServiceImpl implements UserProvisioningService {
             throw new AppException(IdentityErrorCode.USER_NOT_FOUND);
         }
         ensureEmailFree(email);
-        String name = jwt.getClaimAsString("name");
+        String name = jwt.getClaimAsString(StandardClaimNames.NAME);
         userRepository.insertProvisionedUser(jwt.getSubject(), email, name != null ? name : email, emailVerified);
         log.info("Provisioned identity user {} from Keycloak", jwt.getSubject());
     }

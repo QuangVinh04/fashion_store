@@ -11,6 +11,7 @@ import com.fashionstore.identity.dto.group.GroupResponse;
 import com.fashionstore.identity.dto.group.PermissionResponse;
 import com.fashionstore.identity.dto.group.UpdateUserGroupsRequest;
 import com.fashionstore.identity.dto.group.UserGroupsResponse;
+import com.fashionstore.identity.service.GroupMembershipService;
 import com.fashionstore.identity.service.GroupService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -42,6 +43,7 @@ public class AdminGroupController {
             nằm trong `notLoggedOutUserIds` (thay đổi vẫn được giữ; access token cũ hết hạn sau tối đa 5 phút).""";
 
     private final GroupService groupService;
+    private final GroupMembershipService groupMembershipService;
 
     @Operation(summary = "Danh mục quyền",
             description = "`isAssignable=false` (ví dụ `group:manage`) không được gán cho nhóm tự tạo.")
@@ -112,7 +114,7 @@ public class AdminGroupController {
             @ParameterObject @PageableDefault(size = 20) Pageable pageable) {
         return ApiResponse.<PageResponse<List<GroupMemberResponse>>>builder()
                 .message("Lấy danh sách thành viên thành công")
-                .data(groupService.listMembers(id, keyword, pageable))
+                .data(groupMembershipService.listMembers(id, keyword, pageable))
                 .build();
     }
 
@@ -126,7 +128,7 @@ public class AdminGroupController {
                                                                    @RequestParam(required = false) String keyword) {
         return ApiResponse.<List<GroupMemberResponse>>builder()
                 .message("Tìm người dùng thành công")
-                .data(groupService.searchCandidates(id, keyword))
+                .data(groupMembershipService.searchCandidates(id, keyword))
                 .build();
     }
 
@@ -142,7 +144,7 @@ public class AdminGroupController {
                                                               @Valid @RequestBody GroupMembersRequest request) {
         return ApiResponse.<GroupMembersChangeResponse>builder()
                 .message("Thêm thành viên vào nhóm")
-                .data(groupService.addMembers(id, request))
+                .data(groupMembershipService.addMembers(id, request))
                 .build();
     }
 
@@ -157,7 +159,7 @@ public class AdminGroupController {
                                                                  @Valid @RequestBody GroupMembersRequest request) {
         return ApiResponse.<GroupMembersChangeResponse>builder()
                 .message("Gỡ thành viên khỏi nhóm")
-                .data(groupService.removeMembers(id, request))
+                .data(groupMembershipService.removeMembers(id, request))
                 .build();
     }
 
@@ -173,7 +175,7 @@ public class AdminGroupController {
                                                             @Valid @RequestBody UpdateUserGroupsRequest request) {
         return ApiResponse.<UserGroupsResponse>builder()
                 .message("Cập nhật nhóm của người dùng thành công")
-                .data(groupService.updateUserGroups(userId, request))
+                .data(groupMembershipService.updateUserGroups(userId, request))
                 .build();
     }
 }

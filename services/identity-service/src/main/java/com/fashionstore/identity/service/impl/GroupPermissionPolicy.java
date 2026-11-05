@@ -23,7 +23,9 @@ import static com.fashionstore.common.security.PermissionNames.WALLET_READ;
 
 import com.fashionstore.common.exception.AppException;
 import com.fashionstore.common.security.Permission;
+import com.fashionstore.identity.dto.group.KeycloakGroupRepresentation;
 import com.fashionstore.identity.exception.IdentityErrorCode;
+import com.fashionstore.identity.service.SystemGroups;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
@@ -46,6 +48,13 @@ final class GroupPermissionPolicy {
             Map.entry(REVENUE_READ, DASHBOARD_READ));
 
     private GroupPermissionPolicy() {
+    }
+
+    /** Nhóm Customer chứa mọi khách hàng nên không gán thủ công cho nhân viên. */
+    static void requireAssignable(KeycloakGroupRepresentation group) {
+        if (SystemGroups.CUSTOMER.equals(group.name())) {
+            throw new AppException(IdentityErrorCode.CUSTOMER_GROUP_NOT_ASSIGNABLE);
+        }
     }
 
     /** Kiểm tra trên tập được yêu cầu rồi mới thêm quyền kéo theo; trả tập đã chuẩn hoá. */

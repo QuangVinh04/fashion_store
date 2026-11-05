@@ -18,7 +18,9 @@ import com.fashionstore.identity.client.KeycloakGroupClient;
 import com.fashionstore.identity.dto.group.KeycloakGroupRepresentation;
 import com.fashionstore.identity.repository.UserRepository;
 import com.fashionstore.identity.service.CurrentUserProvider;
+import com.fashionstore.identity.service.GroupMembershipService;
 import com.fashionstore.identity.service.GroupService;
+import com.fashionstore.identity.service.impl.GroupMembershipServiceImpl;
 import com.fashionstore.identity.service.impl.GroupServiceImpl;
 import java.lang.reflect.Method;
 import java.util.List;
@@ -52,7 +54,7 @@ class AdminGroupControllerTest {
 
     @Configuration
     @EnableMethodSecurity
-    @Import(GroupServiceImpl.class)
+    @Import({GroupServiceImpl.class, GroupMembershipServiceImpl.class})
     static class Config {
     }
 
@@ -71,11 +73,14 @@ class AdminGroupControllerTest {
     @Autowired
     GroupService groupService;
 
+    @Autowired
+    GroupMembershipService groupMembershipService;
+
     MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
-        mockMvc = MockMvcBuilders.standaloneSetup(new AdminGroupController(groupService))
+        mockMvc = MockMvcBuilders.standaloneSetup(new AdminGroupController(groupService, groupMembershipService))
                 .setCustomArgumentResolvers(new PageableHandlerMethodArgumentResolver())
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
@@ -125,8 +130,13 @@ class AdminGroupControllerTest {
 
     @Test
     void everyServiceMethodExceptAddToGroupByNameRequiresGroupManageOrCustomerRead() throws Exception {
-        for (Method declared : GroupService.class.getDeclaredMethods()) {
-            Method implemented = GroupServiceImpl.class.getMethod(declared.getName(), declared.getParameterTypes());
+        assertEveryMethodGuarded(GroupService.class, GroupServiceImpl.class);
+        assertEveryMethodGuarded(GroupMembershipService.class, GroupMembershipServiceImpl.class);
+    }
+
+    private static void assertEveryMethodGuarded(Class<?> contract, Class<?> implementation) throws Exception {
+        for (Method declared : contract.getDeclaredMethods()) {
+            Method implemented = implementation.getMethod(declared.getName(), declared.getParameterTypes());
             PreAuthorize guard = implemented.getAnnotation(PreAuthorize.class);
             if (declared.getName().equals("addToGroupByName")) {
                 assertThat(guard).isNull();

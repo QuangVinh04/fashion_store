@@ -1,5 +1,8 @@
 package com.fashionstore.identity.service.impl;
 
+import static com.fashionstore.identity.service.impl.PreAuthorizeExpressions.CUSTOMER_MANAGE;
+import static com.fashionstore.identity.service.impl.PreAuthorizeExpressions.CUSTOMER_READ;
+
 import com.fashionstore.common.dto.PageResponse;
 import com.fashionstore.common.exception.AppException;
 import com.fashionstore.common.security.PermissionNames;
@@ -42,6 +45,9 @@ import java.util.List;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class AdminUserServiceImpl implements AdminUserService {
 
+    private static final String ADMIN_ACCOUNT_EDIT_DENIED =
+            "Chỉ người có quyền quản lý nhóm mới được sửa tài khoản quản trị viên";
+
     UserRepository userRepository;
     UserAddressRepository userAddressRepository;
     KeycloakAdminClient keycloakAdminClient;
@@ -52,7 +58,7 @@ public class AdminUserServiceImpl implements AdminUserService {
     KeycloakGroupClient groupClient;
 
     @Override
-    @PreAuthorize("hasAuthority('" + PermissionNames.CUSTOMER_READ + "')")
+    @PreAuthorize(CUSTOMER_READ)
     @Transactional(readOnly = true)
     public PageResponse<List<AdminUserResponse>> searchUsers(String keyword, Boolean isActive, Pageable pageable) {
         Page<User> users = userRepository.findAll(matches(keyword, isActive), pageable);
@@ -66,7 +72,7 @@ public class AdminUserServiceImpl implements AdminUserService {
     }
 
     @Override
-    @PreAuthorize("hasAuthority('" + PermissionNames.CUSTOMER_READ + "')")
+    @PreAuthorize(CUSTOMER_READ)
     @Transactional(readOnly = true)
     public AdminUserDetailResponse getUser(String userId) {
         User user = findUser(userId);
@@ -81,14 +87,14 @@ public class AdminUserServiceImpl implements AdminUserService {
     private List<GroupResponse> groupsOrEmpty(String userId) {
         try {
             return groupService.getUserGroups(userId);
-        } catch (AppException e) {
-            log.warn("[AdminUser] groups unavailable for user {}: {}", userId, e.getMessage());
+        } catch (AppException groupsFailure) {
+            log.warn("[AdminUser] groups unavailable for user {}: {}", userId, groupsFailure.getMessage());
             return List.of();
         }
     }
 
     @Override
-    @PreAuthorize("hasAuthority('" + PermissionNames.CUSTOMER_MANAGE + "')")
+    @PreAuthorize(CUSTOMER_MANAGE)
     public AdminUserResponse updateUser(String userId, AdminUpdateUserRequest request) {
         User user = findUser(userId);
         requireGroupManageForAdminTarget(userId);
@@ -101,7 +107,7 @@ public class AdminUserServiceImpl implements AdminUserService {
      * Không có {@code @Transactional}: không giữ transaction DB trong lúc gọi Keycloak.
      */
     @Override
-    @PreAuthorize("hasAuthority('" + PermissionNames.CUSTOMER_MANAGE + "')")
+    @PreAuthorize(CUSTOMER_MANAGE)
     public AdminUserResponse updateStatus(String userId, boolean active) {
         if (userId.equals(currentUserProvider.getCurrentUserId())) {
             throw new AppException(IdentityErrorCode.CANNOT_CHANGE_OWN_STATUS);
@@ -130,7 +136,7 @@ public class AdminUserServiceImpl implements AdminUserService {
             return;
         }
         if (isInAdminGroup(userId)) {
-            throw new AccessDeniedException("Chỉ người có quyền quản lý nhóm mới được sửa tài khoản quản trị viên");
+            throw new AccessDeniedException(ADMIN_ACCOUNT_EDIT_DENIED);
         }
     }
 
@@ -139,11 +145,11 @@ public class AdminUserServiceImpl implements AdminUserService {
         try {
             return groupClient.listUserGroups(userId).stream()
                     .anyMatch(group -> SystemGroups.ADMIN.equals(group.name()));
-        } catch (AppException e) {
-            if (e.getErrorCode() == IdentityErrorCode.USER_NOT_FOUND) {
+        } catch (AppException lookupFailure) {
+            if (lookupFailure.getErrorCode() == IdentityErrorCode.USER_NOT_FOUND) {
                 return false;
             }
-            throw e;
+            throw lookupFailure;
         }
     }
 

@@ -2,28 +2,20 @@ package com.fashionstore.identity.service.impl;
 
 import com.fashionstore.common.exception.AppException;
 import com.fashionstore.identity.exception.IdentityErrorCode;
-import com.fashionstore.identity.dto.user.UpdateProfileRequest;
 import com.fashionstore.identity.dto.user.UserAddressRequest;
 import com.fashionstore.identity.dto.user.UserAddressResponse;
-import com.fashionstore.identity.dto.user.UserProfileResponse;
-import com.fashionstore.identity.entity.User;
 import com.fashionstore.identity.entity.UserAddress;
 import com.fashionstore.identity.mapper.UserAddressMapper;
-import com.fashionstore.identity.mapper.UserMapper;
 import com.fashionstore.identity.repository.UserAddressRepository;
-import com.fashionstore.identity.repository.UserRepository;
 import com.fashionstore.identity.service.CurrentUserProvider;
 import com.fashionstore.identity.service.UserAddressService;
-import com.fashionstore.identity.service.UserService;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
-import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -33,7 +25,6 @@ public class UserAddressServiceImpl implements UserAddressService {
     UserAddressRepository userAddressRepository;
     CurrentUserProvider currentUserProvider;
     UserAddressMapper userAddressMapper;
-
 
     @Override
     @Transactional
