@@ -116,6 +116,7 @@ Không làm các việc sau nếu người dùng không yêu cầu rõ:
 Áp cho code mới và file đang sửa trong task. Không dọn lại file ngoài phạm vi task. Luật riêng theo ngôn ngữ: `.claude/rules/code-style.md` (Java), `.agents/rules/code-style.md` (TypeScript/React).
 
 - **Hàm ngắn.** Mục tiêu ≤ 40 dòng mỗi hàm, ≤ 400 dòng mỗi file. Thêm code vào file đã vượt ngưỡng: tách phần mình viết ra hàm hoặc class riêng.
+- **Chỉ tách hàm khi có lý do.** Tách khi hàm vượt ngưỡng hoặc lồng quá 2 tầng, đoạn code có tên gọi tự nhiên, hoặc được dùng lại / cần test riêng. Không tách hàm 1–3 dòng chỉ gọi một lần. Hàm đang dưới ngưỡng thì chỉ sửa chỗ vi phạm, không tách thêm.
 - **Lồng tối đa 2 tầng.** Dùng early return và guard clause thay cho `if` lồng nhau.
 - **Tên rõ nghĩa.** Viết đủ từ. Không viết tắt tự chế (`cfg`, `req`, `tmp`, `data2`). Boolean bắt đầu bằng `is`/`has`/`can`.
 - **Comment chỉ giải thích tại sao.** Không comment lại điều code đã nói. Không để code bị comment-out.
