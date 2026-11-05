@@ -78,7 +78,9 @@ public class SecurityConfig {
                         // 5. Wishlist & Review tương tác: Yêu cầu đăng nhập
                         .requestMatchers("/api/v1/wishlist/**").authenticated()
                         .requestMatchers(HttpMethod.POST, "/api/v1/products/*/reviews").authenticated()
+                        .requestMatchers(HttpMethod.PUT, "/api/v1/products/*/reviews/*").authenticated()
                         .requestMatchers(HttpMethod.DELETE, "/api/v1/products/*/reviews/*").authenticated()
+                        .requestMatchers("/api/v1/reviews/**").authenticated()
 
                         // 5b. Quản trị sản phẩm/danh mục: đọc cần product:read, ghi cần product:manage
                         .requestMatchers(HttpMethod.GET, PRODUCT_ADMIN_PATHS).hasAuthority(PermissionNames.PRODUCT_READ)

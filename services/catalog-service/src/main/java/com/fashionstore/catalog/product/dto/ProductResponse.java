@@ -60,6 +60,8 @@ public class ProductResponse {
     Integer widthMm;
     Integer heightMm;
 
+    BigDecimal ratingAverage;
+    Integer reviewCount;
     String thumbnailMediaId;
     String thumbnailUrl;
     String sizeChartId;

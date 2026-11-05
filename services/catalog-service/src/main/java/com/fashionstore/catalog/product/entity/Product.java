@@ -99,6 +99,15 @@ public class Product extends BaseEntity {
     @Column(name = "height")
     Integer height;
 
+    // Do review cập nhật qua ProductReviewTarget.updateRating; không sửa qua form sản phẩm.
+    @Column(name = "rating_average", nullable = false, precision = 2, scale = 1)
+    @Builder.Default
+    BigDecimal ratingAverage = BigDecimal.ZERO;
+
+    @Column(name = "review_count", nullable = false)
+    @Builder.Default
+    Integer reviewCount = 0;
+
     @Column(name = "thumbnail_media_id", length = 36)
     String thumbnailMediaId;
 

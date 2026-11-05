@@ -30,6 +30,8 @@ public class ProductSummaryResponse {
     ProductStatus status;
     Boolean published;
     Boolean featured;
+    BigDecimal ratingAverage;
+    Integer reviewCount;
     String thumbnailMediaId;
     String thumbnailUrl;
     String brandName;

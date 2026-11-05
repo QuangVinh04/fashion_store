@@ -1,25 +1,25 @@
 package com.fashionstore.catalog.review.service.impl;
 
+import com.fashionstore.catalog.media.api.ReviewImage;
+import com.fashionstore.catalog.media.api.ReviewImages;
+import com.fashionstore.catalog.product.api.ProductReviewTarget;
 import com.fashionstore.catalog.review.client.IdentityUserClient;
 import com.fashionstore.catalog.review.client.OrderClient;
 import com.fashionstore.catalog.review.dto.CreateReviewRequest;
 import com.fashionstore.catalog.review.dto.ProductReviewSummaryResponse;
 import com.fashionstore.catalog.review.dto.ReviewResponse;
-import com.fashionstore.catalog.product.entity.Product;
-import com.fashionstore.catalog.product.entity.ProductVariant;
+import com.fashionstore.catalog.review.dto.UpdateReviewRequest;
 import com.fashionstore.catalog.review.entity.Review;
 import com.fashionstore.catalog.review.entity.ReviewMedia;
 import com.fashionstore.catalog.review.entity.ReviewStatus;
-import com.fashionstore.catalog.product.exception.ProductErrorCode;
-import com.fashionstore.catalog.product.repository.ProductRepository;
-import com.fashionstore.catalog.product.repository.ProductVariantRepository;
+import com.fashionstore.catalog.review.exception.ReviewErrorCode;
+import com.fashionstore.catalog.review.mapper.ReviewMapper;
 import com.fashionstore.catalog.review.repository.ReviewRepository;
 import com.fashionstore.catalog.review.service.ReviewService;
 import com.fashionstore.common.dto.PageResponse;
 import com.fashionstore.common.exception.AppException;
 import com.fashionstore.common.exception.ErrorCode;
 import com.fashionstore.common.security.CurrentUserProvider;
-import com.fashionstore.common.security.PermissionNames;
 import com.fashionstore.contracts.order.dto.VerifyPurchaseRequest;
 import com.fashionstore.contracts.order.dto.VerifyPurchaseResponse;
 import lombok.AccessLevel;
@@ -29,17 +29,16 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.HashMap;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
+import java.util.Set;
+import java.util.TreeMap;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -47,312 +46,188 @@ import java.util.Optional;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class ReviewServiceImpl implements ReviewService {
 
+    private static final int MIN_RATING = 1;
+    private static final int MAX_RATING = 5;
+
     ReviewRepository reviewRepository;
-    ProductRepository productRepository;
-    ProductVariantRepository productVariantRepository;
+    ProductReviewTarget productReviewTarget;
+    ReviewImages reviewImages;
     OrderClient orderClient;
     CurrentUserProvider currentUserProvider;
     IdentityUserClient identityUserClient;
+    ProductRatingSync productRatingSync;
+    ReviewMapper reviewMapper;
 
     @Override
     @Transactional
     public ReviewResponse createReview(String productId, CreateReviewRequest request) {
-        String userId = currentUserProvider.getCurrentUserId();
-        if (userId == null || userId.isBlank()) {
-            throw new AppException(ErrorCode.UNAUTHENTICATED);
+        String userId = requireUserId();
+        productReviewTarget.requireExists(productId);
+        String orderId = verifiedOrderId(userId, productId, request.getOrderId());
+        if (reviewRepository.existsByProductIdAndUserIdAndOrderId(productId, userId, orderId)) {
+            throw new AppException(ReviewErrorCode.REVIEW_ALREADY_EXISTS);
         }
-
-        Product product = productRepository.findById(productId)
-                .orElseThrow(() -> new AppException(ProductErrorCode.PRODUCT_NOT_FOUND));
-
-        List<String> variantIds = productVariantRepository.findByProductId(productId)
-                .stream()
-                .map(ProductVariant::getId)
-                .toList();
-
-        VerifyPurchaseResponse verifyResult = orderClient.verifyPurchase(
-                new VerifyPurchaseRequest(userId, request.getOrderId(), variantIds)
-        );
-
-        if (!verifyResult.purchased()) {
-            throw new AppException(ProductErrorCode.REVIEW_NOT_ELIGIBLE);
-        }
-
-        String verifiedOrderId = verifyResult.orderId();
-
-        if (reviewRepository.existsByProductIdAndUserIdAndOrderId(productId, userId, verifiedOrderId)) {
-            throw new AppException(ProductErrorCode.REVIEW_ALREADY_EXISTS);
-        }
-
+        List<ReviewImage> images = reviewImages.requireOwned(userId, nullToEmpty(request.getMediaIds()));
         Review review = Review.builder()
-                .product(product)
+                .productId(productId)
                 .userId(userId)
-                .orderId(verifiedOrderId)
+                .orderId(orderId)
+                .reviewerName(reviewerName(userId))
                 .rating(request.getRating())
-                .comment(request.getComment() != null ? request.getComment().trim() : null)
+                .comment(trim(request.getComment()))
                 .verifiedPurchase(true)
                 .status(ReviewStatus.VISIBLE)
                 .fitRating(request.getFitRating())
                 .customerHeight(request.getCustomerHeight())
                 .customerWeight(request.getCustomerWeight())
-                .mediaList(new ArrayList<>())
                 .build();
-
-        if (request.getMediaUrls() != null && !request.getMediaUrls().isEmpty()) {
-            int order = 0;
-            for (String url : request.getMediaUrls()) {
-                if (url != null && !url.isBlank()) {
-                    ReviewMedia media = ReviewMedia.builder()
-                            .review(review)
-                            .url(url.trim())
-                            .mediaType("IMAGE")
-                            .displayOrder(order++)
-                            .build();
-                    review.getMediaList().add(media);
-                }
-            }
-        }
-
+        replaceImages(review, images);
         try {
             review = reviewRepository.saveAndFlush(review);
-        } catch (DataIntegrityViolationException e) {
-            log.warn("[Review] Concurrent duplicate review attempt for product {} user {} order {}",
-                    productId, userId, verifiedOrderId);
-            throw new AppException(ProductErrorCode.REVIEW_ALREADY_EXISTS);
+        } catch (DataIntegrityViolationException concurrentDuplicate) {
+            log.warn("[Review] Concurrent duplicate review for product {} user {} order {}", productId, userId, orderId);
+            throw new AppException(ReviewErrorCode.REVIEW_ALREADY_EXISTS);
         }
+        productRatingSync.refresh(productId);
+        log.info("[Review] User {} created review {} for product {} in order {}", userId, review.getId(), productId, orderId);
+        return reviewMapper.toResponse(review, productName(productId));
+    }
 
-        log.info("[Review] User {} created review {} for product {} in order {}",
-                userId, review.getId(), productId, verifiedOrderId);
+    @Override
+    @Transactional
+    public ReviewResponse updateReview(String productId, String reviewId, UpdateReviewRequest request) {
+        String userId = requireUserId();
+        Review review = findOwnReview(productId, reviewId, userId);
+        List<ReviewImage> images = reviewImages.requireOwned(userId, nullToEmpty(request.mediaIds()));
+        review.setRating(request.rating());
+        review.setComment(trim(request.comment()));
+        review.setFitRating(request.fitRating());
+        review.setCustomerHeight(request.customerHeight());
+        review.setCustomerWeight(request.customerWeight());
+        replaceImages(review, images);
+        review = reviewRepository.save(review);
+        productRatingSync.refresh(productId);
+        log.info("[Review] User {} updated review {}", userId, reviewId);
+        return reviewMapper.toResponse(review, productName(productId));
+    }
 
-        return toResponse(review);
+    @Override
+    @Transactional
+    public void deleteReview(String productId, String reviewId) {
+        String userId = requireUserId();
+        Review review = findOwnReview(productId, reviewId, userId);
+        reviewRepository.delete(review);
+        productRatingSync.refresh(productId);
+        log.info("[Review] User {} deleted review {} of product {}", userId, reviewId, productId);
     }
 
     @Override
     @Transactional(readOnly = true)
     public ProductReviewSummaryResponse getProductReviews(String productId, Integer ratingFilter, Pageable pageable) {
-        if (!productRepository.existsById(productId)) {
-            throw new AppException(ProductErrorCode.PRODUCT_NOT_FOUND);
-        }
-
-        Page<Review> page = (ratingFilter != null && ratingFilter >= 1 && ratingFilter <= 5)
-                ? reviewRepository.findByProductIdAndRatingAndStatus(productId, ratingFilter, ReviewStatus.VISIBLE, pageable)
-                : reviewRepository.findByProductIdAndStatus(productId, ReviewStatus.VISIBLE, pageable);
-
-        Double avg = reviewRepository.getAverageRatingByProductId(productId);
-        double averageRating = avg != null ? Math.round(avg * 10.0) / 10.0 : 0.0;
-        long totalReviews = reviewRepository.countByProductIdAndStatus(productId, ReviewStatus.VISIBLE);
-
-        Map<Integer, Long> ratingCounts = new HashMap<>();
-        for (int i = 1; i <= 5; i++) {
-            ratingCounts.put(i, 0L);
-        }
-        List<Object[]> grouped = reviewRepository.countReviewsGroupByRating(productId);
-        for (Object[] row : grouped) {
-            if (row != null && row.length >= 2 && row[0] != null && row[1] != null) {
-                Integer r = ((Number) row[0]).intValue();
-                Long count = ((Number) row[1]).longValue();
-                ratingCounts.put(r, count);
-            }
-        }
-
-        List<ReviewResponse> items = page.getContent().stream()
-                .map(this::toPublicResponse)
-                .toList();
-
-        PageResponse<List<ReviewResponse>> pageResponse = PageResponse.<List<ReviewResponse>>builder()
-                .pageNo(pageable.getPageNumber())
-                .pageSize(pageable.getPageSize())
-                .totalPage(page.getTotalPages())
-                .items(items)
-                .build();
-
+        productReviewTarget.requireExists(productId);
+        Page<Review> page = ratingFilter == null
+                ? reviewRepository.findByProductIdAndStatus(productId, ReviewStatus.VISIBLE, pageable)
+                : reviewRepository.findByProductIdAndRatingAndStatus(productId, ratingFilter, ReviewStatus.VISIBLE, pageable);
+        ReviewRepository.RatingStats stats = reviewRepository.getVisibleStats(productId);
         return ProductReviewSummaryResponse.builder()
-                .averageRating(averageRating)
-                .totalReviews(totalReviews)
-                .ratingCounts(ratingCounts)
-                .reviews(pageResponse)
+                .averageRating(roundedAverage(stats.getAverage()))
+                .totalReviews(stats.getTotal())
+                .ratingCounts(ratingCounts(productId))
+                .reviews(toPage(page, page.getContent().stream().map(reviewMapper::toPublicResponse).toList()))
                 .build();
     }
 
     @Override
     @Transactional(readOnly = true)
-    public PageResponse<List<ReviewResponse>> getAdminReviews(String keyword, Integer rating, ReviewStatus status, Pageable pageable) {
-        Page<Review> page = reviewRepository.findAllForAdmin(keyword, rating, status, pageable);
+    public PageResponse<List<ReviewResponse>> getMyReviews(String orderId, Pageable pageable) {
+        String userId = requireUserId();
+        Page<Review> page = orderId == null
+                ? reviewRepository.findByUserId(userId, pageable)
+                : reviewRepository.findByUserIdAndOrderId(userId, orderId, pageable);
+        Map<String, String> productNames = productReviewTarget.namesByIds(
+                page.getContent().stream().map(Review::getProductId).collect(Collectors.toSet()));
+        return toPage(page, page.getContent().stream()
+                .map(review -> reviewMapper.toResponse(review, productNames.get(review.getProductId())))
+                .toList());
+    }
 
-        Map<String, Optional<IdentityUserClient.UserInfoResponse>> userCache = new HashMap<>();
-        List<ReviewResponse> items = page.getContent().stream()
-                .map(r -> toAdminResponse(r, userCache))
-                .toList();
+    private String requireUserId() {
+        String userId = currentUserProvider.getCurrentUserId();
+        if (userId == null || userId.isBlank()) {
+            throw new AppException(ErrorCode.UNAUTHENTICATED);
+        }
+        return userId;
+    }
 
+    private String verifiedOrderId(String userId, String productId, String requestedOrderId) {
+        VerifyPurchaseResponse result = orderClient.verifyPurchase(
+                new VerifyPurchaseRequest(userId, requestedOrderId, productReviewTarget.variantIds(productId)));
+        if (!result.purchased()) {
+            throw new AppException(ReviewErrorCode.REVIEW_NOT_ELIGIBLE);
+        }
+        return result.orderId();
+    }
+
+    private Review findOwnReview(String productId, String reviewId, String userId) {
+        Review review = reviewRepository.findById(reviewId)
+                .filter(found -> found.getProductId().equals(productId))
+                .orElseThrow(() -> new AppException(ReviewErrorCode.REVIEW_NOT_FOUND));
+        if (!review.getUserId().equals(userId)) {
+            throw new AppException(ReviewErrorCode.REVIEW_ACTION_FORBIDDEN);
+        }
+        return review;
+    }
+
+    // Snapshot lúc viết: trang công khai không phải gọi identity cho từng đánh giá.
+    private String reviewerName(String userId) {
+        return identityUserClient.getUserById(userId).map(IdentityUserClient.UserInfoResponse::fullName).orElse(null);
+    }
+
+    private static void replaceImages(Review review, List<ReviewImage> images) {
+        review.getMediaList().clear();
+        for (int index = 0; index < images.size(); index++) {
+            ReviewImage image = images.get(index);
+            review.getMediaList().add(ReviewMedia.builder()
+                    .review(review)
+                    .mediaId(image.mediaId())
+                    .url(image.url())
+                    .displayOrder(index)
+                    .build());
+        }
+    }
+
+    private String productName(String productId) {
+        return productReviewTarget.namesByIds(Set.of(productId)).get(productId);
+    }
+
+    private Map<Integer, Long> ratingCounts(String productId) {
+        Map<Integer, Long> counts = new TreeMap<>();
+        for (int rating = MIN_RATING; rating <= MAX_RATING; rating++) {
+            counts.put(rating, 0L);
+        }
+        reviewRepository.countVisibleByRating(productId).forEach(row -> counts.put(row.getRating(), row.getTotal()));
+        return counts;
+    }
+
+    private static double roundedAverage(Double average) {
+        return average == null ? 0.0 : BigDecimal.valueOf(average).setScale(1, RoundingMode.HALF_UP).doubleValue();
+    }
+
+    private static PageResponse<List<ReviewResponse>> toPage(Page<Review> page, List<ReviewResponse> items) {
         return PageResponse.<List<ReviewResponse>>builder()
-                .pageNo(pageable.getPageNumber())
-                .pageSize(pageable.getPageSize())
+                .pageNo(page.getNumber())
+                .pageSize(page.getSize())
                 .totalPage(page.getTotalPages())
                 .totalElements(page.getTotalElements())
                 .items(items)
                 .build();
     }
 
-    @Override
-    @Transactional
-    public ReviewResponse updateReviewStatus(String reviewId, ReviewStatus status) {
-        Review review = reviewRepository.findById(reviewId)
-                .orElseThrow(() -> new AppException(ProductErrorCode.REVIEW_NOT_FOUND));
-
-        review.setStatus(status);
-        review = reviewRepository.save(review);
-        log.info("[Review] Updated review {} status to {}", reviewId, status);
-        return toAdminResponse(review);
+    private static <T> List<T> nullToEmpty(List<T> values) {
+        return values == null ? List.of() : values;
     }
 
-    @Override
-    @Transactional
-    public ReviewResponse replyReview(String reviewId, String replyComment) {
-        Review review = reviewRepository.findById(reviewId)
-                .orElseThrow(() -> new AppException(ProductErrorCode.REVIEW_NOT_FOUND));
-
-        String staffId = currentUserProvider.getCurrentUserId();
-        review.setReplyComment(replyComment);
-        review.setRepliedAt(LocalDateTime.now());
-        review.setRepliedBy(staffId);
-        review = reviewRepository.save(review);
-        log.info("[Review] Staff {} replied to review {}", staffId, reviewId);
-        return toAdminResponse(review);
-    }
-
-    @Override
-    @Transactional
-    public ReviewResponse deleteReply(String reviewId) {
-        Review review = reviewRepository.findById(reviewId)
-                .orElseThrow(() -> new AppException(ProductErrorCode.REVIEW_NOT_FOUND));
-
-        review.setReplyComment(null);
-        review.setRepliedAt(null);
-        review.setRepliedBy(null);
-        review = reviewRepository.save(review);
-        log.info("[Review] Deleted reply for review {}", reviewId);
-        return toAdminResponse(review);
-    }
-
-    @Override
-    @Transactional
-    public void adminDeleteReview(String reviewId) {
-        Review review = reviewRepository.findById(reviewId)
-                .orElseThrow(() -> new AppException(ProductErrorCode.REVIEW_NOT_FOUND));
-        reviewRepository.delete(review);
-        log.info("[Review] Admin deleted review {}", reviewId);
-    }
-
-    @Override
-    @Transactional
-    public void deleteReview(String productId, String reviewId) {
-        Review review = reviewRepository.findById(reviewId)
-                .orElseThrow(() -> new AppException(ProductErrorCode.REVIEW_NOT_FOUND));
-
-        if (!review.getProduct().getId().equals(productId)) {
-            throw new AppException(ProductErrorCode.REVIEW_NOT_FOUND);
-        }
-
-        String currentUserId = currentUserProvider.getCurrentUserId();
-        boolean canManageReviews = hasAuthority(PermissionNames.REVIEW_MANAGE);
-
-        if (!review.getUserId().equals(currentUserId) && !canManageReviews) {
-            throw new AppException(ProductErrorCode.REVIEW_ACTION_FORBIDDEN);
-        }
-
-        reviewRepository.delete(review);
-        log.info("[Review] Deleted review {} for product {}", reviewId, productId);
-    }
-
-    private boolean hasAuthority(String authority) {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth == null || auth.getAuthorities() == null) {
-            return false;
-        }
-        return auth.getAuthorities().stream()
-                .anyMatch(a -> a.getAuthority().equals(authority));
-    }
-
-    private ReviewResponse toResponse(Review review) {
-        List<String> mediaUrls = review.getMediaList() != null
-                ? review.getMediaList().stream().map(ReviewMedia::getUrl).toList()
-                : List.of();
-
-        return ReviewResponse.builder()
-                .id(review.getId())
-                .productId(review.getProduct() != null ? review.getProduct().getId() : null)
-                .productName(review.getProduct() != null ? review.getProduct().getName() : null)
-                .userId(review.getUserId())
-                .orderId(review.getOrderId())
-                .rating(review.getRating())
-                .comment(review.getComment())
-                .verifiedPurchase(review.getVerifiedPurchase())
-                .status(review.getStatus())
-                .replyComment(review.getReplyComment())
-                .repliedAt(review.getRepliedAt())
-                .repliedBy(review.getRepliedBy())
-                .fitRating(review.getFitRating())
-                .customerHeight(review.getCustomerHeight())
-                .customerWeight(review.getCustomerWeight())
-                .mediaUrls(mediaUrls)
-                .createdAt(review.getCreatedAt())
-                .build();
-    }
-
-    private ReviewResponse toAdminResponse(Review review) {
-        return toAdminResponse(review, null);
-    }
-
-    private ReviewResponse toAdminResponse(Review review, Map<String, Optional<IdentityUserClient.UserInfoResponse>> userCache) {
-        ReviewResponse res = toResponse(review);
-        if (review.getUserId() != null) {
-            Optional<IdentityUserClient.UserInfoResponse> userOpt;
-            if (userCache != null) {
-                userOpt = userCache.computeIfAbsent(review.getUserId(), identityUserClient::getUserById);
-            } else {
-                userOpt = identityUserClient.getUserById(review.getUserId());
-            }
-            userOpt.ifPresent(user -> {
-                res.setCustomerName(user.fullName());
-                res.setCustomerEmail(user.email());
-                res.setCustomerPhone(user.phone());
-            });
-        }
-        return res;
-    }
-
-    private ReviewResponse toPublicResponse(Review review) {
-        List<String> mediaUrls = review.getMediaList() != null
-                ? review.getMediaList().stream().map(ReviewMedia::getUrl).toList()
-                : List.of();
-
-        return ReviewResponse.builder()
-                .id(review.getId())
-                .productId(review.getProduct() != null ? review.getProduct().getId() : null)
-                .userId(maskUserId(review.getUserId()))
-                .orderId(null)
-                .rating(review.getRating())
-                .comment(review.getComment())
-                .verifiedPurchase(review.getVerifiedPurchase())
-                .status(review.getStatus())
-                .replyComment(review.getReplyComment())
-                .repliedAt(review.getRepliedAt())
-                .fitRating(review.getFitRating())
-                .customerHeight(review.getCustomerHeight())
-                .customerWeight(review.getCustomerWeight())
-                .mediaUrls(mediaUrls)
-                .createdAt(review.getCreatedAt())
-                .build();
-    }
-
-    private String maskUserId(String userId) {
-        if (userId == null || userId.isBlank()) {
-            return "Anonymous";
-        }
-        int len = userId.length();
-        if (len <= 2) {
-            return userId.charAt(0) + "***";
-        }
-        return userId.charAt(0) + "***" + userId.charAt(len - 1);
+    private static String trim(String value) {
+        return value == null ? null : value.trim();
     }
 }

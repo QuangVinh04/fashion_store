@@ -1,15 +1,11 @@
 package com.fashionstore.catalog.review.entity;
 
-import com.fashionstore.catalog.product.entity.Product;
 import com.fashionstore.common.persistence.BaseEntity;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
@@ -34,15 +30,17 @@ import java.util.List;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class Review extends BaseEntity {
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "product_id", nullable = false)
-    Product product;
+    @Column(name = "product_id", nullable = false)
+    String productId;
 
     @Column(name = "user_id", nullable = false, length = 36)
     String userId;
 
     @Column(name = "order_id", nullable = false, length = 36)
     String orderId;
+
+    @Column(name = "reviewer_name", length = 100)
+    String reviewerName;
 
     @Column(nullable = false)
     Integer rating;

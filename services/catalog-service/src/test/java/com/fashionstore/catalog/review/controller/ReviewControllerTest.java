@@ -3,6 +3,7 @@ package com.fashionstore.catalog.review.controller;
 import com.fashionstore.catalog.review.dto.CreateReviewRequest;
 import com.fashionstore.catalog.review.dto.ProductReviewSummaryResponse;
 import com.fashionstore.catalog.review.dto.ReviewResponse;
+import com.fashionstore.catalog.review.dto.UpdateReviewRequest;
 import com.fashionstore.catalog.review.service.ReviewService;
 import com.fashionstore.common.dto.PageResponse;
 import com.fashionstore.common.exception.GlobalExceptionHandler;
@@ -28,6 +29,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -132,6 +134,45 @@ class ReviewControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void updateReview_validRequest_returns200() throws Exception {
+        UpdateReviewRequest request = new UpdateReviewRequest(4, "Đã giặt vẫn đẹp", List.of("m-1"), null, null, null);
+        when(reviewService.updateReview(eq("prod-1"), eq("rev-100"), any(UpdateReviewRequest.class)))
+                .thenReturn(ReviewResponse.builder().id("rev-100").rating(4).build());
+
+        mockMvc.perform(put("/api/v1/products/prod-1/reviews/rev-100")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.rating").value(4));
+    }
+
+    @Test
+    void updateReview_withTooManyImages_returns400() throws Exception {
+        List<String> elevenImages = java.util.stream.IntStream.range(0, 11).mapToObj(index -> "m-" + index).toList();
+        UpdateReviewRequest request = new UpdateReviewRequest(4, null, elevenImages, null, null, null);
+
+        mockMvc.perform(put("/api/v1/products/prod-1/reviews/rev-100")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void getMyReviews_passesOrderFilter() throws Exception {
+        MockMvc myReviews = MockMvcBuilders.standaloneSetup(new MyReviewController(reviewService))
+                .setCustomArgumentResolvers(new org.springframework.data.web.PageableHandlerMethodArgumentResolver())
+                .setControllerAdvice(new GlobalExceptionHandler())
+                .build();
+        when(reviewService.getMyReviews(eq("ord-1"), any())).thenReturn(PageResponse.<List<ReviewResponse>>builder()
+                .items(List.of(ReviewResponse.builder().id("rev-100").productId("prod-1").build()))
+                .build());
+
+        myReviews.perform(get("/api/v1/reviews/me").param("orderId", "ord-1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[0].productId").value("prod-1"));
     }
 
     @Test

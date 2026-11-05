@@ -4,12 +4,10 @@ import com.fashionstore.catalog.review.dto.ReplyReviewRequest;
 import com.fashionstore.catalog.review.dto.ReviewResponse;
 import com.fashionstore.catalog.review.dto.UpdateReviewStatusRequest;
 import com.fashionstore.catalog.review.entity.ReviewStatus;
-import com.fashionstore.catalog.review.service.ReviewService;
+import com.fashionstore.catalog.review.service.AdminReviewService;
 import com.fashionstore.common.dto.ApiResponse;
 import com.fashionstore.common.dto.PageResponse;
-import com.fashionstore.common.exception.AppException;
 import com.fashionstore.common.security.PermissionNames;
-import com.fashionstore.common.exception.ErrorCode;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -24,7 +22,6 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -37,7 +34,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
-@Validated
 @RestController
 @RequestMapping("/api/v1/admin/reviews")
 @RequiredArgsConstructor
@@ -45,7 +41,7 @@ import java.util.List;
 @Tag(name = "Admin Review", description = "Quản lý đánh giá sản phẩm dành cho quản trị viên")
 public class AdminReviewController {
 
-    ReviewService reviewService;
+    AdminReviewService adminReviewService;
 
     @Operation(summary = "Lấy danh sách đánh giá toàn hệ thống dành cho admin")
     @GetMapping
@@ -66,12 +62,9 @@ public class AdminReviewController {
             @PageableDefault(page = 0, size = 20, sort = "createdAt", direction = Sort.Direction.DESC)
             Pageable pageable
     ) {
-        if (rating != null && (rating < 1 || rating > 5)) {
-            throw new AppException(ErrorCode.VALIDATION_FAILED);
-        }
         return ApiResponse.<PageResponse<List<ReviewResponse>>>builder()
                 .message("Get admin reviews successfully")
-                .data(reviewService.getAdminReviews(keyword, rating, status, pageable))
+                .data(adminReviewService.getReviews(keyword, rating, status, pageable))
                 .build();
     }
 
@@ -84,7 +77,7 @@ public class AdminReviewController {
     ) {
         return ApiResponse.<ReviewResponse>builder()
                 .message("Review status updated successfully")
-                .data(reviewService.updateReviewStatus(reviewId, request.getStatus()))
+                .data(adminReviewService.updateStatus(reviewId, request.getStatus()))
                 .build();
     }
 
@@ -97,7 +90,7 @@ public class AdminReviewController {
     ) {
         return ApiResponse.<ReviewResponse>builder()
                 .message("Reply posted successfully")
-                .data(reviewService.replyReview(reviewId, request.getReply()))
+                .data(adminReviewService.reply(reviewId, request.getReply()))
                 .build();
     }
 
@@ -109,17 +102,17 @@ public class AdminReviewController {
     ) {
         return ApiResponse.<ReviewResponse>builder()
                 .message("Reply deleted successfully")
-                .data(reviewService.deleteReply(reviewId))
+                .data(adminReviewService.deleteReply(reviewId))
                 .build();
     }
 
-    @Operation(summary = "Xóa đánh giá vĩnh viễn (Admin)")
+    @Operation(summary = "Xóa đánh giá vĩnh viễn (Admin)", description = "Muốn giữ dấu vết thì ẩn (`PATCH /{id}/status`) thay vì xoá.")
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAuthority('" + PermissionNames.REVIEW_MANAGE + "')")
     public ApiResponse<Void> deleteReview(
             @PathVariable("id") String reviewId
     ) {
-        reviewService.adminDeleteReview(reviewId);
+        adminReviewService.delete(reviewId);
         return ApiResponse.<Void>builder()
                 .message("Review deleted successfully by admin")
                 .build();

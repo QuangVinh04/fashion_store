@@ -4,7 +4,7 @@ import com.fashionstore.catalog.review.dto.ReplyReviewRequest;
 import com.fashionstore.catalog.review.dto.ReviewResponse;
 import com.fashionstore.catalog.review.dto.UpdateReviewStatusRequest;
 import com.fashionstore.catalog.review.entity.ReviewStatus;
-import com.fashionstore.catalog.review.service.ReviewService;
+import com.fashionstore.catalog.review.service.AdminReviewService;
 import com.fashionstore.common.dto.PageResponse;
 import com.fashionstore.common.exception.GlobalExceptionHandler;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -39,7 +39,7 @@ class AdminReviewControllerTest {
     private ObjectMapper objectMapper = new ObjectMapper();
 
     @Mock
-    private ReviewService reviewService;
+    private AdminReviewService reviewService;
 
     @BeforeEach
     void setUp() {
@@ -71,7 +71,7 @@ class AdminReviewControllerTest {
                         .build()))
                 .build();
 
-        when(reviewService.getAdminReviews(eq("Polo"), eq(5), eq(ReviewStatus.VISIBLE), any(Pageable.class))).thenReturn(response);
+        when(reviewService.getReviews(eq("Polo"), eq(5), eq(ReviewStatus.VISIBLE), any(Pageable.class))).thenReturn(response);
 
         mockMvc.perform(get("/api/v1/admin/reviews")
                         .param("keyword", "Polo")
@@ -94,7 +94,7 @@ class AdminReviewControllerTest {
                 .status(ReviewStatus.HIDDEN)
                 .build();
 
-        when(reviewService.updateReviewStatus("rev-1", ReviewStatus.HIDDEN)).thenReturn(response);
+        when(reviewService.updateStatus("rev-1", ReviewStatus.HIDDEN)).thenReturn(response);
 
         mockMvc.perform(patch("/api/v1/admin/reviews/rev-1/status")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -110,7 +110,7 @@ class AdminReviewControllerTest {
                 .replyComment("Cảm ơn quý khách")
                 .build();
 
-        when(reviewService.replyReview("rev-1", "Cảm ơn quý khách")).thenReturn(response);
+        when(reviewService.reply("rev-1", "Cảm ơn quý khách")).thenReturn(response);
 
         mockMvc.perform(post("/api/v1/admin/reviews/rev-1/reply")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -137,7 +137,7 @@ class AdminReviewControllerTest {
         mockMvc.perform(delete("/api/v1/admin/reviews/rev-1"))
                 .andExpect(status().isOk());
 
-        verify(reviewService).adminDeleteReview("rev-1");
+        verify(reviewService).delete("rev-1");
     }
 
     @Test

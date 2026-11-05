@@ -10,9 +10,14 @@ import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.math.BigDecimal;
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 
 @Repository
@@ -57,6 +62,23 @@ public interface ProductRepository extends JpaRepository<Product, String>, JpaSp
 
     @Query("select count(pc) > 0 from ProductCategory pc where pc.category.id = :categoryId")
     boolean existsByCategoryId(String categoryId);
+
+    interface ProductName {
+        String getId();
+
+        String getName();
+    }
+
+    @Query("SELECT p.id AS id, p.name AS name FROM Product p WHERE p.id IN :ids")
+    List<ProductName> findNamesByIds(@Param("ids") Collection<String> ids);
+
+    @Query("SELECT p.id FROM Product p WHERE LOWER(p.name) LIKE LOWER(CONCAT('%', :keyword, '%'))")
+    List<String> findIdsByNameContaining(@Param("keyword") String keyword);
+
+    // Bulk JPQL update không tăng @Version.
+    @Modifying(flushAutomatically = true)
+    @Query("UPDATE Product p SET p.ratingAverage = :average, p.reviewCount = :count WHERE p.id = :id")
+    int updateRating(@Param("id") String id, @Param("average") BigDecimal average, @Param("count") int count);
 }
 
 

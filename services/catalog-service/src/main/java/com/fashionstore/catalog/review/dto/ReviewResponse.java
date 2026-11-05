@@ -41,4 +41,5 @@ public class ReviewResponse {
     Integer customerWeight;
     List<String> mediaUrls;
     LocalDateTime createdAt;
+    LocalDateTime updatedAt;
 }

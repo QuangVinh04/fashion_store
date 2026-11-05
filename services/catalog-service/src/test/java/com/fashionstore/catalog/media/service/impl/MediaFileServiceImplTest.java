@@ -168,6 +168,35 @@ class MediaFileServiceImplTest {
     }
 
     @Test
+    void reviewImagePresignIsPublicInReviewsFolder() {
+        when(currentUserProvider.getCurrentUserId()).thenReturn("user-1");
+        when(storageService.presignUpload(anyString(), eq("image/png")))
+                .thenReturn(new PresignedUpload("http://localhost:9000/fashion-media/key?sig=x", 900));
+        when(mediaFileRepository.save(any(MediaFile.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        PresignUploadRequest request = presignRequest();
+        request.setVisibility(MediaVisibility.PRIVATE);
+
+        mediaFileService.presignUpload(request, MediaPurpose.REVIEW_IMAGE);
+
+        ArgumentCaptor<MediaFile> captor = ArgumentCaptor.forClass(MediaFile.class);
+        verify(mediaFileRepository).save(captor.capture());
+        assertThat(captor.getValue().getPurpose()).isEqualTo(MediaPurpose.REVIEW_IMAGE);
+        assertThat(captor.getValue().getVisibility()).isEqualTo(MediaVisibility.PUBLIC);
+        assertThat(captor.getValue().getFolder()).isEqualTo("reviews");
+        assertThat(captor.getValue().getStorageKey()).startsWith("reviews/");
+    }
+
+    @Test
+    void reviewImagePresignRejectsFilesLargerThanCustomerImageLimit() {
+        PresignUploadRequest request = presignRequest();
+        request.setSizeBytes(MediaFileServiceImpl.MAX_AVATAR_BYTES + 1);
+
+        assertThatThrownBy(() -> mediaFileService.presignUpload(request, MediaPurpose.REVIEW_IMAGE))
+                .isInstanceOf(AppException.class);
+        verify(mediaFileRepository, never()).save(any());
+    }
+
+    @Test
     void presignUploadRejectsContentTypeOutsideAllowList() {
         PresignUploadRequest request = presignRequest();
         request.setContentType("text/html");

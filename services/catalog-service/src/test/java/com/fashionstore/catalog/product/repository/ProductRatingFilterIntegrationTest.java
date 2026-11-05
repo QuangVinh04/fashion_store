@@ -1,10 +1,8 @@
 package com.fashionstore.catalog.product.repository;
 
 import com.fashionstore.catalog.product.entity.Product;
-import com.fashionstore.catalog.review.entity.Review;
 import com.fashionstore.catalog.product.entity.ProductStatus;
 import com.fashionstore.catalog.product.entity.ProductType;
-import com.fashionstore.catalog.review.entity.ReviewStatus;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -13,7 +11,6 @@ import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.data.domain.PageRequest;
 
 import java.math.BigDecimal;
-import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 
 @DataJpaTest(properties = {
@@ -28,18 +25,13 @@ class ProductRatingFilterIntegrationTest {
     @Autowired EntityManager em;
 
     @Test
-    void averageVisibleRatingCombinesWithTypePriceAndPagination() {
-        Product boundary = product("boundary", ProductType.SHIRT, 200);
-        review(boundary, 5, ReviewStatus.VISIBLE); review(boundary, 3, ReviewStatus.VISIBLE);
-        Product hiddenIgnored = product("hidden-ignored", ProductType.SHIRT, 200);
-        review(hiddenIgnored, 5, ReviewStatus.VISIBLE); review(hiddenIgnored, 1, ReviewStatus.HIDDEN);
-        Product tooLow = product("too-low", ProductType.SHIRT, 200);
-        review(tooLow, 4, ReviewStatus.VISIBLE); review(tooLow, 3, ReviewStatus.VISIBLE);
-        Product wrongType = product("wrong-type", ProductType.JEANS, 200);
-        review(wrongType, 5, ReviewStatus.VISIBLE);
-        Product expensive = product("expensive", ProductType.SHIRT, 900);
-        review(expensive, 5, ReviewStatus.VISIBLE);
-        product("unreviewed", ProductType.SHIRT, 200);
+    void storedAverageRatingCombinesWithTypePriceAndPagination() {
+        Product boundary = product("boundary", ProductType.SHIRT, 200, "4.0");
+        Product high = product("high", ProductType.SHIRT, 200, "4.8");
+        product("too-low", ProductType.SHIRT, 200, "3.9");
+        product("wrong-type", ProductType.JEANS, 200, "5.0");
+        product("expensive", ProductType.SHIRT, 900, "5.0");
+        product("unreviewed", ProductType.SHIRT, 200, "0.0");
         em.flush();
 
         var criteria = new ProductSpecificationsBuilder()
@@ -50,15 +42,26 @@ class ProductRatingFilterIntegrationTest {
         var second = products.findAll(criteria, PageRequest.of(1, 1));
         assertThat(first.getTotalElements()).isEqualTo(2);
         assertThat(java.util.stream.Stream.concat(first.stream(), second.stream()).map(Product::getId).toList())
-                .containsExactlyInAnyOrder(boundary.getId(), hiddenIgnored.getId());
+                .containsExactlyInAnyOrder(boundary.getId(), high.getId());
     }
 
-    private Product product(String name, ProductType type, int price) {
-        return products.saveAndFlush(Product.builder().name(name).slug(name).productType(type)
-                .status(ProductStatus.PUBLISHED).basePrice(BigDecimal.valueOf(price)).build());
+    @Test
+    void updateRatingStoresStatsWithoutBumpingVersion() {
+        Product product = product("rated", ProductType.SHIRT, 200, "0.0");
+        Long version = product.getVersion();
+
+        products.updateRating(product.getId(), new BigDecimal("4.5"), 2);
+        em.clear();
+
+        Product reloaded = products.findById(product.getId()).orElseThrow();
+        assertThat(reloaded.getRatingAverage()).isEqualByComparingTo("4.5");
+        assertThat(reloaded.getReviewCount()).isEqualTo(2);
+        assertThat(reloaded.getVersion()).isEqualTo(version);
     }
-    private void review(Product product, int rating, ReviewStatus status) {
-        em.persist(Review.builder().product(product).userId(UUID.randomUUID().toString())
-                .orderId(UUID.randomUUID().toString()).rating(rating).status(status).build());
+
+    private Product product(String name, ProductType type, int price, String ratingAverage) {
+        return products.saveAndFlush(Product.builder().name(name).slug(name).productType(type)
+                .status(ProductStatus.PUBLISHED).basePrice(BigDecimal.valueOf(price))
+                .ratingAverage(new BigDecimal(ratingAverage)).build());
     }
 }

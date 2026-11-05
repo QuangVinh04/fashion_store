@@ -36,6 +36,9 @@ public class ReviewMedia {
     @JoinColumn(name = "review_id", nullable = false)
     Review review;
 
+    @Column(name = "media_id", length = 36)
+    String mediaId;
+
     @Column(nullable = false, length = 1000)
     String url;
 

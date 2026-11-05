@@ -3,6 +3,7 @@ package com.fashionstore.catalog.review.dto;
 import com.fashionstore.catalog.review.entity.FitRating;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.AccessLevel;
@@ -34,7 +35,7 @@ public class CreateReviewRequest {
     String comment;
 
     @Size(max = 10, message = "Tối đa 10 hình ảnh đánh giá")
-    List<@Size(max = 1000, message = "URL ảnh không được vượt quá 1000 ký tự") String> mediaUrls;
+    List<@NotBlank(message = "Mã ảnh không được trống") String> mediaIds;
 
     FitRating fitRating;
 

@@ -1,22 +1,26 @@
 package com.fashionstore.catalog.review.service.impl;
 
+import com.fashionstore.catalog.media.api.ReviewImage;
+import com.fashionstore.catalog.media.api.ReviewImages;
+import com.fashionstore.catalog.product.api.ProductReviewTarget;
 import com.fashionstore.catalog.review.client.IdentityUserClient;
 import com.fashionstore.catalog.review.client.OrderClient;
 import com.fashionstore.catalog.review.dto.CreateReviewRequest;
 import com.fashionstore.catalog.review.dto.ProductReviewSummaryResponse;
 import com.fashionstore.catalog.review.dto.ReviewResponse;
-import com.fashionstore.catalog.product.entity.Product;
-import com.fashionstore.catalog.product.entity.ProductVariant;
-import com.fashionstore.catalog.review.entity.Review;
+import com.fashionstore.catalog.review.dto.UpdateReviewRequest;
 import com.fashionstore.catalog.review.entity.FitRating;
+import com.fashionstore.catalog.review.entity.Review;
+import com.fashionstore.catalog.review.entity.ReviewMedia;
 import com.fashionstore.catalog.review.entity.ReviewStatus;
-import com.fashionstore.catalog.product.exception.ProductErrorCode;
-import com.fashionstore.catalog.product.repository.ProductRepository;
-import com.fashionstore.catalog.product.repository.ProductVariantRepository;
+import com.fashionstore.catalog.review.exception.ReviewErrorCode;
+import com.fashionstore.catalog.review.mapper.ReviewMapper;
 import com.fashionstore.catalog.review.repository.ReviewRepository;
+import com.fashionstore.common.dto.PageResponse;
 import com.fashionstore.common.exception.AppException;
+import com.fashionstore.common.exception.ErrorCode;
 import com.fashionstore.common.security.CurrentUserProvider;
-import com.fashionstore.common.security.PermissionNames;
+import com.fashionstore.contracts.order.dto.VerifyPurchaseRequest;
 import com.fashionstore.contracts.order.dto.VerifyPurchaseResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -26,23 +30,20 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
-import org.springframework.data.domain.Page;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.core.context.SecurityContextHolder;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -51,354 +52,298 @@ import static org.mockito.Mockito.when;
 class ReviewServiceImplTest {
 
     @Mock
-    private ReviewRepository reviewRepository;
-
+    ReviewRepository reviewRepository;
     @Mock
-    private ProductRepository productRepository;
-
+    ProductReviewTarget productReviewTarget;
     @Mock
-    private ProductVariantRepository productVariantRepository;
-
+    ReviewImages reviewImages;
     @Mock
-    private OrderClient orderClient;
-
+    OrderClient orderClient;
     @Mock
-    private CurrentUserProvider currentUserProvider;
-
+    CurrentUserProvider currentUserProvider;
     @Mock
-    private IdentityUserClient identityUserClient;
+    IdentityUserClient identityUserClient;
+    @Mock
+    ProductRatingSync productRatingSync;
 
-    private ReviewServiceImpl service;
+    ReviewServiceImpl service;
 
     @BeforeEach
     void setUp() {
-        service = new ReviewServiceImpl(
-                reviewRepository,
-                productRepository,
-                productVariantRepository,
-                orderClient,
-                currentUserProvider,
-                identityUserClient
-        );
+        service = new ReviewServiceImpl(reviewRepository, productReviewTarget, reviewImages, orderClient,
+                currentUserProvider, identityUserClient, productRatingSync, new ReviewMapper());
         when(currentUserProvider.getCurrentUserId()).thenReturn("user-1");
+        when(productReviewTarget.variantIds("prod-1")).thenReturn(List.of("var-1"));
+        when(productReviewTarget.namesByIds(Set.of("prod-1"))).thenReturn(Map.of("prod-1", "Áo Polo"));
+        when(reviewRepository.saveAndFlush(any(Review.class))).thenAnswer(inv -> withId(inv.getArgument(0), "rev-1"));
+        when(reviewRepository.save(any(Review.class))).thenAnswer(inv -> inv.getArgument(0));
     }
 
     @Test
-    void createReview_whenEligibleAndNotReviewed_createsReviewSuccessfully() {
-        Product product = Product.builder().name("Áo Polo").build();
-        product.setId("prod-1");
-
-        ProductVariant variant = ProductVariant.builder().sku("POLO-M").build();
-        variant.setId("var-1");
-
-        when(productRepository.findById("prod-1")).thenReturn(Optional.of(product));
-        when(productVariantRepository.findByProductId("prod-1")).thenReturn(List.of(variant));
+    void createReview_storesReviewWithOwnedImagesReviewerNameAndRefreshesRating() {
         when(orderClient.verifyPurchase(any())).thenReturn(new VerifyPurchaseResponse(true, "order-100"));
-        when(reviewRepository.existsByProductIdAndUserIdAndOrderId("prod-1", "user-1", "order-100")).thenReturn(false);
-        when(reviewRepository.saveAndFlush(any(Review.class))).thenAnswer(inv -> {
-            Review r = inv.getArgument(0);
-            r.setId("rev-1");
-            return r;
-        });
-
+        when(reviewImages.requireOwned("user-1", List.of("m-1")))
+                .thenReturn(List.of(new ReviewImage("m-1", "http://cdn/api/v1/files/m-1/content")));
+        when(identityUserClient.getUserById("user-1")).thenReturn(Optional.of(
+                new IdentityUserClient.UserInfoResponse("user-1", "a@example.com", "Nguyễn Văn A", "0901")));
         CreateReviewRequest request = CreateReviewRequest.builder()
-                .rating(5)
-                .comment("Chất vải thoáng mát, đường may kỹ càng")
-                .fitRating(FitRating.TRUE_TO_SIZE)
-                .customerHeight(170)
-                .customerWeight(65)
-                .mediaUrls(List.of("http://example.com/photo1.jpg"))
-                .build();
+                .rating(5).comment("  Vải mát  ").fitRating(FitRating.TRUE_TO_SIZE)
+                .customerHeight(170).customerWeight(65).mediaIds(List.of("m-1")).build();
 
         ReviewResponse response = service.createReview("prod-1", request);
 
-        assertThat(response).isNotNull();
+        ArgumentCaptor<Review> saved = ArgumentCaptor.forClass(Review.class);
+        verify(reviewRepository).saveAndFlush(saved.capture());
+        assertThat(saved.getValue().getProductId()).isEqualTo("prod-1");
+        assertThat(saved.getValue().getOrderId()).isEqualTo("order-100");
+        assertThat(saved.getValue().getReviewerName()).isEqualTo("Nguyễn Văn A");
+        assertThat(saved.getValue().getComment()).isEqualTo("Vải mát");
+        assertThat(saved.getValue().getMediaList()).extracting(ReviewMedia::getMediaId).containsExactly("m-1");
+        verify(productRatingSync).refresh("prod-1");
         assertThat(response.getId()).isEqualTo("rev-1");
-        assertThat(response.getProductId()).isEqualTo("prod-1");
-        assertThat(response.getUserId()).isEqualTo("user-1");
-        assertThat(response.getOrderId()).isEqualTo("order-100");
-        assertThat(response.getRating()).isEqualTo(5);
-        assertThat(response.getComment()).isEqualTo("Chất vải thoáng mát, đường may kỹ càng");
-        assertThat(response.getVerifiedPurchase()).isTrue();
-        assertThat(response.getStatus()).isEqualTo(ReviewStatus.VISIBLE);
-        assertThat(response.getFitRating()).isEqualTo(FitRating.TRUE_TO_SIZE);
-        assertThat(response.getCustomerHeight()).isEqualTo(170);
-        assertThat(response.getCustomerWeight()).isEqualTo(65);
-        assertThat(response.getMediaUrls()).containsExactly("http://example.com/photo1.jpg");
-
-        ArgumentCaptor<Review> captor = ArgumentCaptor.forClass(Review.class);
-        verify(reviewRepository, times(1)).saveAndFlush(captor.capture());
-        assertThat(captor.getValue().getRating()).isEqualTo(5);
-        assertThat(captor.getValue().getVerifiedPurchase()).isTrue();
-        assertThat(captor.getValue().getMediaList()).hasSize(1);
+        assertThat(response.getProductName()).isEqualTo("Áo Polo");
+        assertThat(response.getMediaUrls()).containsExactly("http://cdn/api/v1/files/m-1/content");
     }
 
     @Test
-    void createReview_whenConcurrentRaceCondition_throwsReviewAlreadyExists() {
-        Product product = Product.builder().name("Áo Polo").build();
-        product.setId("prod-1");
-
-        when(productRepository.findById("prod-1")).thenReturn(Optional.of(product));
-        when(productVariantRepository.findByProductId("prod-1")).thenReturn(List.of());
+    void createReview_asksOrderServiceWithTheProductVariants() {
         when(orderClient.verifyPurchase(any())).thenReturn(new VerifyPurchaseResponse(true, "order-100"));
-        when(reviewRepository.existsByProductIdAndUserIdAndOrderId("prod-1", "user-1", "order-100")).thenReturn(false);
-        when(reviewRepository.saveAndFlush(any(Review.class)))
-                .thenThrow(new org.springframework.dao.DataIntegrityViolationException("duplicate key"));
 
-        CreateReviewRequest request = CreateReviewRequest.builder().rating(5).build();
+        service.createReview("prod-1", CreateReviewRequest.builder().orderId("order-100").rating(4).build());
 
-        assertThatThrownBy(() -> service.createReview("prod-1", request))
-                .isInstanceOf(AppException.class)
-                .satisfies(ex -> assertThat(((AppException) ex).getErrorCode())
-                        .isEqualTo(ProductErrorCode.REVIEW_ALREADY_EXISTS));
+        verify(orderClient).verifyPurchase(new VerifyPurchaseRequest("user-1", "order-100", List.of("var-1")));
     }
 
     @Test
-    void createReview_whenOrderClientFails_propagatesException() {
-        Product product = Product.builder().name("Áo Polo").build();
-        product.setId("prod-1");
+    void createReview_whenProductMissing_stopsBeforeAskingOrderService() {
+        org.mockito.Mockito.doThrow(new AppException(ErrorCode.RESOURCE_NOT_FOUND))
+                .when(productReviewTarget).requireExists("missing");
 
-        when(productRepository.findById("prod-1")).thenReturn(Optional.of(product));
-        when(productVariantRepository.findByProductId("prod-1")).thenReturn(List.of());
-        when(orderClient.verifyPurchase(any()))
-                .thenThrow(new AppException(com.fashionstore.common.exception.ErrorCode.UPSTREAM_SERVICE_ERROR));
-
-        CreateReviewRequest request = CreateReviewRequest.builder().rating(5).build();
-
-        assertThatThrownBy(() -> service.createReview("prod-1", request))
-                .isInstanceOf(AppException.class)
-                .satisfies(ex -> assertThat(((AppException) ex).getErrorCode())
-                        .isEqualTo(com.fashionstore.common.exception.ErrorCode.UPSTREAM_SERVICE_ERROR));
+        assertThatThrownBy(() -> service.createReview("missing", CreateReviewRequest.builder().rating(5).build()))
+                .isInstanceOf(AppException.class);
+        verify(orderClient, never()).verifyPurchase(any());
     }
 
     @Test
-    void createReview_whenNotEligible_throwsReviewNotEligible() {
-        Product product = Product.builder().name("Áo Thun").build();
-        product.setId("prod-1");
-
-        when(productRepository.findById("prod-1")).thenReturn(Optional.of(product));
-        when(productVariantRepository.findByProductId("prod-1")).thenReturn(List.of());
+    void createReview_whenNotPurchased_throwsNotEligible() {
         when(orderClient.verifyPurchase(any())).thenReturn(new VerifyPurchaseResponse(false, null));
 
-        CreateReviewRequest request = CreateReviewRequest.builder().rating(5).build();
-
-        assertThatThrownBy(() -> service.createReview("prod-1", request))
-                .isInstanceOf(AppException.class)
-                .satisfies(ex -> assertThat(((AppException) ex).getErrorCode())
-                        .isEqualTo(ProductErrorCode.REVIEW_NOT_ELIGIBLE));
-
-        verify(reviewRepository, never()).saveAndFlush(any());
+        assertThatThrownBy(() -> service.createReview("prod-1", CreateReviewRequest.builder().rating(5).build()))
+                .extracting(error -> ((AppException) error).getErrorCode())
+                .isEqualTo(ReviewErrorCode.REVIEW_NOT_ELIGIBLE);
     }
 
     @Test
-    void createReview_whenAlreadyReviewed_throwsReviewAlreadyExists() {
-        Product product = Product.builder().name("Quần Jean").build();
-        product.setId("prod-1");
-
-        when(productRepository.findById("prod-1")).thenReturn(Optional.of(product));
-        when(productVariantRepository.findByProductId("prod-1")).thenReturn(List.of());
+    void createReview_whenAlreadyReviewed_throwsAlreadyExists() {
         when(orderClient.verifyPurchase(any())).thenReturn(new VerifyPurchaseResponse(true, "order-100"));
         when(reviewRepository.existsByProductIdAndUserIdAndOrderId("prod-1", "user-1", "order-100")).thenReturn(true);
 
-        CreateReviewRequest request = CreateReviewRequest.builder().rating(4).build();
-
-        assertThatThrownBy(() -> service.createReview("prod-1", request))
-                .isInstanceOf(AppException.class)
-                .satisfies(ex -> assertThat(((AppException) ex).getErrorCode())
-                        .isEqualTo(ProductErrorCode.REVIEW_ALREADY_EXISTS));
-
+        assertThatThrownBy(() -> service.createReview("prod-1", CreateReviewRequest.builder().rating(5).build()))
+                .extracting(error -> ((AppException) error).getErrorCode())
+                .isEqualTo(ReviewErrorCode.REVIEW_ALREADY_EXISTS);
         verify(reviewRepository, never()).saveAndFlush(any());
     }
 
     @Test
-    void getProductReviews_computesSummaryAndReturnsPaginated() {
-        Product product = Product.builder().name("Váy Nữ").build();
-        product.setId("prod-1");
+    void createReview_whenConcurrentDuplicate_throwsAlreadyExistsWithoutRefreshingRating() {
+        when(orderClient.verifyPurchase(any())).thenReturn(new VerifyPurchaseResponse(true, "order-100"));
+        when(reviewRepository.saveAndFlush(any(Review.class))).thenThrow(new DataIntegrityViolationException("dup"));
 
-        Review r1 = Review.builder().product(product).userId("user-1").rating(5).comment("Đẹp").status(ReviewStatus.VISIBLE).build();
-        r1.setId("rev-1");
-        Review r2 = Review.builder().product(product).userId("user-2").rating(4).comment("Khá ổn").status(ReviewStatus.VISIBLE).build();
-        r2.setId("rev-2");
-
-        when(productRepository.existsById("prod-1")).thenReturn(true);
-        when(reviewRepository.findByProductIdAndStatus(eq("prod-1"), eq(ReviewStatus.VISIBLE), any(Pageable.class)))
-                .thenReturn(new PageImpl<>(List.of(r1, r2), PageRequest.of(0, 10), 2));
-        when(reviewRepository.getAverageRatingByProductId("prod-1")).thenReturn(4.5);
-        when(reviewRepository.countByProductIdAndStatus("prod-1", ReviewStatus.VISIBLE)).thenReturn(2L);
-        when(reviewRepository.countReviewsGroupByRating("prod-1")).thenReturn(List.of(
-                new Object[]{5, 1L},
-                new Object[]{4, 1L}
-        ));
-
-        ProductReviewSummaryResponse response = service.getProductReviews("prod-1", null, PageRequest.of(0, 10));
-
-        assertThat(response).isNotNull();
-        assertThat(response.getAverageRating()).isEqualTo(4.5);
-        assertThat(response.getTotalReviews()).isEqualTo(2L);
-        assertThat(response.getRatingCounts()).containsEntry(5, 1L);
-        assertThat(response.getRatingCounts()).containsEntry(4, 1L);
-        assertThat(response.getRatingCounts()).containsEntry(3, 0L);
-        assertThat(response.getReviews().getItems()).hasSize(2);
-        assertThat(response.getReviews().getItems().get(0).getUserId()).isEqualTo("u***1");
-        assertThat(response.getReviews().getItems().get(0).getOrderId()).isNull();
+        assertThatThrownBy(() -> service.createReview("prod-1", CreateReviewRequest.builder().rating(5).build()))
+                .extracting(error -> ((AppException) error).getErrorCode())
+                .isEqualTo(ReviewErrorCode.REVIEW_ALREADY_EXISTS);
+        verify(productRatingSync, never()).refresh(any());
     }
 
     @Test
-    void updateReviewStatus_updatesAndReturnsAdminResponse() {
-        Review review = Review.builder().userId("user-123").status(ReviewStatus.VISIBLE).build();
-        review.setId("rev-1");
+    void createReview_whenOrderServiceFails_propagatesUpstreamError() {
+        when(orderClient.verifyPurchase(any())).thenThrow(new AppException(ErrorCode.UPSTREAM_SERVICE_ERROR));
 
+        assertThatThrownBy(() -> service.createReview("prod-1", CreateReviewRequest.builder().rating(5).build()))
+                .extracting(error -> ((AppException) error).getErrorCode())
+                .isEqualTo(ErrorCode.UPSTREAM_SERVICE_ERROR);
+    }
+
+    @Test
+    void createReview_whenIdentityUnavailable_keepsReviewWithoutName() {
+        when(orderClient.verifyPurchase(any())).thenReturn(new VerifyPurchaseResponse(true, "order-100"));
+        when(identityUserClient.getUserById("user-1")).thenReturn(Optional.empty());
+
+        service.createReview("prod-1", CreateReviewRequest.builder().rating(5).build());
+
+        ArgumentCaptor<Review> saved = ArgumentCaptor.forClass(Review.class);
+        verify(reviewRepository).saveAndFlush(saved.capture());
+        assertThat(saved.getValue().getReviewerName()).isNull();
+    }
+
+    @Test
+    void updateReview_replacesContentAndImagesThenRefreshesRating() {
+        Review review = review("rev-1", "user-1");
+        review.getMediaList().add(ReviewMedia.builder().review(review).mediaId("old").url("old-url").build());
         when(reviewRepository.findById("rev-1")).thenReturn(Optional.of(review));
-        when(reviewRepository.save(any(Review.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(reviewImages.requireOwned("user-1", List.of("m-2")))
+                .thenReturn(List.of(new ReviewImage("m-2", "url-2")));
 
-        ReviewResponse response = service.updateReviewStatus("rev-1", ReviewStatus.HIDDEN);
+        ReviewResponse response = service.updateReview("prod-1", "rev-1",
+                new UpdateReviewRequest(2, "Phai màu", List.of("m-2"), FitRating.RUNS_SMALL, null, null));
 
-        assertThat(response).isNotNull();
-        assertThat(response.getStatus()).isEqualTo(ReviewStatus.HIDDEN);
-        verify(reviewRepository).save(review);
+        assertThat(review.getRating()).isEqualTo(2);
+        assertThat(review.getComment()).isEqualTo("Phai màu");
+        assertThat(review.getFitRating()).isEqualTo(FitRating.RUNS_SMALL);
+        assertThat(review.getMediaList()).extracting(ReviewMedia::getMediaId).containsExactly("m-2");
+        assertThat(response.getMediaUrls()).containsExactly("url-2");
+        verify(productRatingSync).refresh("prod-1");
     }
 
     @Test
-    void replyReview_setsReplyCommentAndStaffId() {
-        Review review = Review.builder().userId("user-123").build();
-        review.setId("rev-1");
+    void updateReview_whenNotOwner_throwsForbidden() {
+        when(reviewRepository.findById("rev-1")).thenReturn(Optional.of(review("rev-1", "user-2")));
 
-        when(reviewRepository.findById("rev-1")).thenReturn(Optional.of(review));
-        when(reviewRepository.save(any(Review.class))).thenAnswer(inv -> inv.getArgument(0));
-
-        ReviewResponse response = service.replyReview("rev-1", "Cảm ơn bạn đã phản hồi");
-
-        assertThat(response).isNotNull();
-        assertThat(response.getReplyComment()).isEqualTo("Cảm ơn bạn đã phản hồi");
-        assertThat(response.getRepliedBy()).isEqualTo("user-1");
-        assertThat(response.getRepliedAt()).isNotNull();
+        assertThatThrownBy(() -> service.updateReview("prod-1", "rev-1",
+                new UpdateReviewRequest(5, null, null, null, null, null)))
+                .extracting(error -> ((AppException) error).getErrorCode())
+                .isEqualTo(ReviewErrorCode.REVIEW_ACTION_FORBIDDEN);
+        verify(reviewRepository, never()).save(any());
     }
 
     @Test
-    void deleteReply_clearsReplyFields() {
-        Review review = Review.builder().userId("user-123").replyComment("Cũ").build();
-        review.setId("rev-1");
+    void updateReview_whenReviewBelongsToAnotherProduct_throwsNotFound() {
+        when(reviewRepository.findById("rev-1")).thenReturn(Optional.of(review("rev-1", "user-1")));
 
-        when(reviewRepository.findById("rev-1")).thenReturn(Optional.of(review));
-        when(reviewRepository.save(any(Review.class))).thenAnswer(inv -> inv.getArgument(0));
-
-        ReviewResponse response = service.deleteReply("rev-1");
-
-        assertThat(response).isNotNull();
-        assertThat(response.getReplyComment()).isNull();
-        assertThat(response.getRepliedAt()).isNull();
-        assertThat(response.getRepliedBy()).isNull();
+        assertThatThrownBy(() -> service.updateReview("prod-2", "rev-1",
+                new UpdateReviewRequest(5, null, null, null, null, null)))
+                .extracting(error -> ((AppException) error).getErrorCode())
+                .isEqualTo(ReviewErrorCode.REVIEW_NOT_FOUND);
     }
 
     @Test
-    void deleteReview_whenOwner_deletesSuccessfully() {
-        Product product = Product.builder().name("Áo Khoác").build();
-        product.setId("prod-1");
-
-        Review review = Review.builder().product(product).userId("user-1").rating(5).build();
-        review.setId("rev-1");
-
+    void deleteReview_whenOwner_deletesAndRefreshesRating() {
+        Review review = review("rev-1", "user-1");
         when(reviewRepository.findById("rev-1")).thenReturn(Optional.of(review));
 
         service.deleteReview("prod-1", "rev-1");
 
-        verify(reviewRepository, times(1)).delete(review);
+        verify(reviewRepository).delete(review);
+        verify(productRatingSync).refresh("prod-1");
     }
 
     @Test
-    void deleteReview_whenNotOwnerAndNotAdmin_throwsForbidden() {
-        Product product = Product.builder().name("Áo Khoác").build();
-        product.setId("prod-1");
-
-        Review review = Review.builder().product(product).userId("user-2").rating(5).build();
-        review.setId("rev-1");
-
-        when(reviewRepository.findById("rev-1")).thenReturn(Optional.of(review));
+    void deleteReview_whenNotOwner_throwsForbiddenEvenForStaff() {
+        when(reviewRepository.findById("rev-1")).thenReturn(Optional.of(review("rev-1", "user-2")));
 
         assertThatThrownBy(() -> service.deleteReview("prod-1", "rev-1"))
-                .isInstanceOf(AppException.class)
-                .satisfies(ex -> assertThat(((AppException) ex).getErrorCode())
-                        .isEqualTo(ProductErrorCode.REVIEW_ACTION_FORBIDDEN));
-
-        verify(reviewRepository, never()).delete(any());
+                .extracting(error -> ((AppException) error).getErrorCode())
+                .isEqualTo(ReviewErrorCode.REVIEW_ACTION_FORBIDDEN);
+        verify(reviewRepository, never()).delete(any(Review.class));
     }
 
     @Test
-    void deleteReview_whenReviewManager_deletesOthersReview() {
-        Product product = Product.builder().name("Áo Khoác").build();
-        product.setId("prod-1");
-        Review review = Review.builder().product(product).userId("user-2").rating(5).build();
-        review.setId("rev-1");
-        when(reviewRepository.findById("rev-1")).thenReturn(Optional.of(review));
-        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
-                "staff-1", null, List.of(new SimpleGrantedAuthority(PermissionNames.REVIEW_MANAGE))));
+    void getProductReviews_summarisesVisibleReviewsAndMasksReviewer() {
+        Review review = review("rev-1", "user-123456");
+        review.setReviewerName("Nguyễn Văn Anh");
+        review.setOrderId("order-100");
+        PageRequest pageable = PageRequest.of(0, 10);
+        when(reviewRepository.findByProductIdAndStatus("prod-1", ReviewStatus.VISIBLE, pageable))
+                .thenReturn(new PageImpl<>(List.of(review), pageable, 1));
+        when(reviewRepository.getVisibleStats("prod-1")).thenReturn(stats(3, 4.3333));
+        when(reviewRepository.countVisibleByRating("prod-1"))
+                .thenReturn(List.of(ratingCount(5, 2), ratingCount(3, 1)));
 
-        try {
-            service.deleteReview("prod-1", "rev-1");
-        } finally {
-            SecurityContextHolder.clearContext();
-        }
+        ProductReviewSummaryResponse summary = service.getProductReviews("prod-1", null, pageable);
 
-        verify(reviewRepository, times(1)).delete(review);
+        assertThat(summary.getAverageRating()).isEqualTo(4.3);
+        assertThat(summary.getTotalReviews()).isEqualTo(3L);
+        assertThat(summary.getRatingCounts()).containsEntry(5, 2L).containsEntry(4, 0L).containsEntry(3, 1L);
+        ReviewResponse item = summary.getReviews().getItems().get(0);
+        assertThat(item.getCustomerName()).isEqualTo("N***h");
+        assertThat(item.getUserId()).isEqualTo("u***6");
+        assertThat(item.getOrderId()).isNull();
     }
 
     @Test
-    void deleteReview_whenRoleAdminOnly_throwsForbidden() {
-        Product product = Product.builder().name("Áo Khoác").build();
-        product.setId("prod-1");
-        Review review = Review.builder().product(product).userId("user-2").rating(5).build();
-        review.setId("rev-1");
-        when(reviewRepository.findById("rev-1")).thenReturn(Optional.of(review));
-        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
-                "staff-1", null, List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))));
+    void getProductReviews_filtersByRating() {
+        PageRequest pageable = PageRequest.of(0, 10);
+        when(reviewRepository.findByProductIdAndRatingAndStatus("prod-1", 5, ReviewStatus.VISIBLE, pageable))
+                .thenReturn(new PageImpl<>(List.of(), pageable, 0));
+        when(reviewRepository.getVisibleStats("prod-1")).thenReturn(stats(0, null));
 
-        try {
-            assertThatThrownBy(() -> service.deleteReview("prod-1", "rev-1")).isInstanceOf(AppException.class);
-        } finally {
-            SecurityContextHolder.clearContext();
-        }
+        ProductReviewSummaryResponse summary = service.getProductReviews("prod-1", 5, pageable);
 
-        verify(reviewRepository, never()).delete(any());
+        assertThat(summary.getAverageRating()).isEqualTo(0.0);
+        assertThat(summary.getRatingCounts()).hasSize(5);
     }
 
     @Test
-    void getAdminReviews_returnsEnrichedUserDetailsAndProductName() {
-        Product product = Product.builder().name("Áo Sơ Mi Nam").build();
-        product.setId("prod-10");
+    void getMyReviews_returnsOwnReviewsOfTheOrderWithProductNames() {
+        Review review = review("rev-1", "user-1");
+        review.setOrderId("order-100");
+        review.setStatus(ReviewStatus.HIDDEN);
+        PageRequest pageable = PageRequest.of(0, 20);
+        when(reviewRepository.findByUserIdAndOrderId("user-1", "order-100", pageable))
+                .thenReturn(new PageImpl<>(List.of(review), pageable, 1));
 
-        Review review = Review.builder()
-                .product(product)
-                .userId("customer-uuid-123")
-                .orderId("order-uuid-456")
-                .rating(5)
-                .comment("Hàng chuẩn đẹp")
-                .verifiedPurchase(true)
-                .status(ReviewStatus.VISIBLE)
-                .build();
-        review.setId("rev-10");
+        PageResponse<List<ReviewResponse>> page = service.getMyReviews("order-100", pageable);
 
-        Page<Review> page = new PageImpl<>(List.of(review), PageRequest.of(0, 20), 1);
-        when(reviewRepository.findAllForAdmin(eq("Sơ Mi"), eq(5), eq(ReviewStatus.VISIBLE), any(Pageable.class))).thenReturn(page);
-        when(identityUserClient.getUserById("customer-uuid-123")).thenReturn(Optional.of(
-                new IdentityUserClient.UserInfoResponse("customer-uuid-123", "nguyen@example.com", "Nguyễn Văn A", "0901234567")
-        ));
+        assertThat(page.getTotalElements()).isEqualTo(1L);
+        ReviewResponse item = page.getItems().get(0);
+        assertThat(item.getProductName()).isEqualTo("Áo Polo");
+        assertThat(item.getOrderId()).isEqualTo("order-100");
+        assertThat(item.getStatus()).isEqualTo(ReviewStatus.HIDDEN);
+    }
 
-        com.fashionstore.common.dto.PageResponse<List<ReviewResponse>> result =
-                service.getAdminReviews("Sơ Mi", 5, ReviewStatus.VISIBLE, PageRequest.of(0, 20));
+    @Test
+    void getMyReviews_withoutOrderReturnsAllOwnReviews() {
+        PageRequest pageable = PageRequest.of(0, 20);
+        when(reviewRepository.findByUserId("user-1", pageable)).thenReturn(new PageImpl<>(List.of(), pageable, 0));
 
-        assertThat(result).isNotNull();
-        assertThat(result.getTotalElements()).isEqualTo(1L);
-        assertThat(result.getItems()).hasSize(1);
+        assertThat(service.getMyReviews(null, pageable).getItems()).isEmpty();
+    }
 
-        ReviewResponse response = result.getItems().get(0);
-        assertThat(response.getId()).isEqualTo("rev-10");
-        assertThat(response.getProductId()).isEqualTo("prod-10");
-        assertThat(response.getProductName()).isEqualTo("Áo Sơ Mi Nam");
-        assertThat(response.getUserId()).isEqualTo("customer-uuid-123");
-        assertThat(response.getCustomerName()).isEqualTo("Nguyễn Văn A");
-        assertThat(response.getCustomerEmail()).isEqualTo("nguyen@example.com");
-        assertThat(response.getCustomerPhone()).isEqualTo("0901234567");
-        assertThat(response.getRating()).isEqualTo(5);
-        assertThat(response.getStatus()).isEqualTo(ReviewStatus.VISIBLE);
+    @Test
+    void customerActionsRequireLogin() {
+        when(currentUserProvider.getCurrentUserId()).thenReturn(null);
+
+        assertThatThrownBy(() -> service.getMyReviews(null, PageRequest.of(0, 20)))
+                .extracting(error -> ((AppException) error).getErrorCode())
+                .isEqualTo(ErrorCode.UNAUTHENTICATED);
+    }
+
+    static Review review(String id, String userId) {
+        Review review = Review.builder().productId("prod-1").userId(userId).rating(5)
+                .status(ReviewStatus.VISIBLE).mediaList(new ArrayList<>()).build();
+        return withId(review, id);
+    }
+
+    static Review withId(Review review, String id) {
+        review.setId(id);
+        return review;
+    }
+
+    static ReviewRepository.RatingStats stats(long total, Double average) {
+        return new ReviewRepository.RatingStats() {
+            @Override
+            public long getTotal() {
+                return total;
+            }
+
+            @Override
+            public Double getAverage() {
+                return average;
+            }
+        };
+    }
+
+    static ReviewRepository.RatingCount ratingCount(int rating, long total) {
+        return new ReviewRepository.RatingCount() {
+            @Override
+            public int getRating() {
+                return rating;
+            }
+
+            @Override
+            public long getTotal() {
+                return total;
+            }
+        };
     }
 }

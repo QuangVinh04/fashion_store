@@ -85,6 +85,7 @@ public class MediaFileServiceImpl implements MediaFileService {
     public PresignUploadResponse presignUpload(PresignUploadRequest request, MediaPurpose purpose) {
         boolean avatar = purpose == MediaPurpose.AVATAR;
         boolean evidence = purpose.isEvidence();
+        boolean review = purpose == MediaPurpose.REVIEW_IMAGE;
         String contentType = resolveContentType(request.getContentType());
         if (!ALLOWED_CONTENT_TYPES.contains(contentType)) {
             throw new AppException(FileErrorCode.FILE_TYPE_NOT_ALLOWED);
@@ -96,10 +97,10 @@ public class MediaFileServiceImpl implements MediaFileService {
         if (sizeBytes > minioProperties.maxUploadBytes()) {
             throw new AppException(FileErrorCode.FILE_TOO_LARGE);
         }
-        if ((avatar || evidence) && !AVATAR_CONTENT_TYPES.contains(contentType)) {
+        if (purpose.isCustomerImage() && !AVATAR_CONTENT_TYPES.contains(contentType)) {
             throw new AppException(FileErrorCode.FILE_TYPE_NOT_ALLOWED);
         }
-        if ((avatar || evidence) && sizeBytes > MAX_AVATAR_BYTES) {
+        if (purpose.isCustomerImage() && sizeBytes > MAX_AVATAR_BYTES) {
             throw new AppException(FileErrorCode.FILE_TOO_LARGE);
         }
 
@@ -114,7 +115,8 @@ public class MediaFileServiceImpl implements MediaFileService {
                 .replaceAll("[^A-Za-z0-9]", "").toLowerCase(Locale.ROOT));
         String storedFilename = UUID.randomUUID() + (extension == null ? "" : "." + extension);
         LocalDate today = LocalDate.now();
-        String storageKey = (evidence ? "evidence/" : avatar ? "avatars/" : "") + "%d/%02d/%s".formatted(today.getYear(), today.getMonthValue(), storedFilename);
+        String folder = evidence ? "evidence" : avatar ? "avatars" : review ? "reviews" : null;
+        String storageKey = (folder == null ? "" : folder + "/") + "%d/%02d/%s".formatted(today.getYear(), today.getMonthValue(), storedFilename);
 
         MediaFile mediaFile = MediaFile.builder()
                 .ownerId(currentUserProvider.getCurrentUserId())
@@ -129,9 +131,10 @@ public class MediaFileServiceImpl implements MediaFileService {
                 .status(MediaStatus.PENDING)
                 .purpose(purpose)
                 .expiresAt(avatar ? LocalDateTime.now().plusHours(24) : null)
-                .visibility(avatar || evidence ? MediaVisibility.PRIVATE : (request.getVisibility() == null ? MediaVisibility.PUBLIC : request.getVisibility()))
+                .visibility(avatar || evidence ? MediaVisibility.PRIVATE
+                        : review || request.getVisibility() == null ? MediaVisibility.PUBLIC : request.getVisibility())
                 .altText(cleanNullable(request.getAltText()))
-                .folder(evidence ? "evidence" : avatar ? "avatars" : cleanFolder(request.getFolder()))
+                .folder(folder != null ? folder : cleanFolder(request.getFolder()))
                 .tags(normalizeTags(request.getTags()))
                 .build();
 
@@ -173,18 +176,19 @@ public class MediaFileServiceImpl implements MediaFileService {
         if (stored == null) {
             throw new AppException(FileErrorCode.FILE_UPLOAD_NOT_COMPLETED);
         }
-        if (stored.sizeBytes() <= 0 || stored.sizeBytes() > (avatar || evidence ? MAX_AVATAR_BYTES : minioProperties.maxUploadBytes())) {
+        boolean customerImage = mediaFile.getPurpose().isCustomerImage();
+        if (stored.sizeBytes() <= 0 || stored.sizeBytes() > (customerImage ? MAX_AVATAR_BYTES : minioProperties.maxUploadBytes())) {
             rejectUpload(mediaFile);
             throw new AppException(FileErrorCode.FILE_TOO_LARGE);
         }
 
         String contentType = resolveContentType(stored.contentType());
-        if (!(avatar || evidence ? AVATAR_CONTENT_TYPES : ALLOWED_CONTENT_TYPES).contains(contentType)) {
+        if (!(customerImage ? AVATAR_CONTENT_TYPES : ALLOWED_CONTENT_TYPES).contains(contentType)) {
             rejectUpload(mediaFile);
             throw new AppException(FileErrorCode.FILE_TYPE_NOT_ALLOWED);
         }
 
-        if ((avatar || evidence) && (!contentType.equals(mediaFile.getContentType())
+        if (customerImage && (!contentType.equals(mediaFile.getContentType())
                 || !matchesSignature(contentType, storageService.readPrefix(mediaFile.getStorageKey(), 32)))) {
             rejectUpload(mediaFile);
             throw new AppException(FileErrorCode.FILE_TYPE_NOT_ALLOWED);

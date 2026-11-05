@@ -10,7 +10,7 @@ Gộp từ product-service, inventory-service, file-service. Không tách lại.
 | `product` | sản phẩm, biến thể, danh mục, thương hiệu, màu, size, thuộc tính, size chart. Trạng thái `DRAFT → PUBLISHED → ARCHIVED` |
 | `inventory` | tồn kho theo biến thể, giữ kho (reservation) cho đơn, sổ cái tồn kho, ngưỡng sắp hết hàng |
 | `media` | upload qua presigned URL lên MinIO. Mục đích: `GENERAL`, `AVATAR`, `RETURN_EVIDENCE`, `PAYMENT_EVIDENCE` |
-| `review` | đánh giá sản phẩm. Chỉ người đã mua (hỏi order-service) |
+| `review` | đánh giá sản phẩm. Chỉ người đã mua (hỏi order-service). Ảnh là media `REVIEW_IMAGE` của chính khách. Mỗi lần ghi tính lại `product.rating_average` / `review_count` (khoá advisory theo sản phẩm). Dùng product/media qua `product.api` / `media.api` |
 | `wishlist` | danh sách yêu thích |
 
 ## API chính
@@ -21,7 +21,7 @@ Gộp từ product-service, inventory-service, file-service. Không tách lại.
 | sản phẩm (admin) | `/admin/products/**`, `/admin/brands`, `/admin/color-options`, `/admin/size-options`, `/admin/product-attributes/**`, `/admin/size-charts/**` |
 | tồn kho | `/api/v1/inventory/**`, `/admin/inventory/**`, `/internal/inventory/low-stock/count` |
 | media | `/api/v1/files/**`, `/api/v1/files/avatars/**`, `/api/v1/files/evidence/**`, `/internal/v1/media/**` |
-| review | `/api/v1/products/{id}/reviews`, `/api/v1/admin/reviews/**` |
+| review | `/api/v1/products/{id}/reviews` (GET công khai; POST, PUT, DELETE của chủ đánh giá), `/api/v1/reviews/me`, `/api/v1/admin/reviews/**`, ảnh: `/api/v1/files/reviews/presign` |
 | wishlist | `/api/v1/wishlist/**` |
 
 Lưu ý: API admin của product và inventory dùng prefix `/admin/...`, không có `/api/v1`.
