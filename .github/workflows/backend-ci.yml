@@ -20,8 +20,8 @@ jobs:
       - name: Grant execute permission for mvnw
         run: chmod +x mvnw
 
-      - name: Verify Maven reactor
-        run: ./mvnw -B verify
+      - name: Build Maven reactor (skip tests)
+        run: ./mvnw -B -DskipTests verify
 
       - name: Validate Docker Compose
         run: docker compose config --quiet

@@ -17,6 +17,8 @@ class CancellationSagaUniquenessPostgresIntegrationTest {
     private static final String DATABASE = "order_test";
     private static final String PASSWORD = "test-only-password";
     private static final int POSTGRES_PORT = 5432;
+    private static final String POSTGRES_READY_LOG = ".*database system is ready to accept connections.*\\s";
+    private static final int POSTGRES_READY_LOG_COUNT = 2;
 
     @Test
     void oneOrderCanHaveCheckoutAndCancellationButNotTwoCancellations() {
@@ -25,7 +27,8 @@ class CancellationSagaUniquenessPostgresIntegrationTest {
                 .withEnv("POSTGRES_USER", DATABASE)
                 .withEnv("POSTGRES_PASSWORD", PASSWORD)
                 .withExposedPorts(POSTGRES_PORT)
-                .waitingFor(Wait.forListeningPort())) {
+                // The image starts a temporary init server first, so the port opens before the real server is ready.
+                .waitingFor(Wait.forLogMessage(POSTGRES_READY_LOG, POSTGRES_READY_LOG_COUNT))) {
             postgres.start();
             String url = "jdbc:postgresql://" + postgres.getHost() + ":"
                     + postgres.getMappedPort(POSTGRES_PORT) + "/" + DATABASE;
