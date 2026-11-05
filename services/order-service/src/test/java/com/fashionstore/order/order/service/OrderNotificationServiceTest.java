@@ -244,6 +244,18 @@ class OrderNotificationServiceTest {
     }
 
     @Test
+    void returnProgressNotifiesInAppOnly() {
+        Order order = Order.builder().userId("buyer-1").orderCode("ORD-44")
+                .recipientEmail("buyer@example.com").build();
+        order.setId("order-44");
+
+        notificationService.sendReturnProgressNotification(order, "Đã lấy hàng trả", "Shipper đã lấy hàng.");
+
+        verify(outboxEventRecorder).saveMessage(eq("order-44"), eq(EventTypes.NOTIFICATION_IN_APP_REQUESTED), any());
+        verify(outboxEventRecorder, never()).saveMessage(anyString(), eq(EventTypes.NOTIFICATION_EMAIL_REQUESTED), any());
+    }
+
+    @Test
     void anonymousCheckoutDoesNotEmitInAppNotification() {
         Order order = Order.builder().userId("anon:checkout-1").orderCode("ORD-43")
                 .recipientEmail("guest@example.com").build();

@@ -164,7 +164,7 @@ public class OrderNotificationService {
         log.info("[OrderNotification] Emitted order-cancelled email event for orderId={}", order.getId());
     }
 
-    /** Báo khách một mốc của yêu cầu trả hàng (duyệt, từ chối, nhận hàng, hủy, hoàn tiền). */
+    /** Báo khách mốc quyết định của yêu cầu trả hàng (duyệt, từ chối, QC không đạt, hủy, hoàn tiền): in-app và email. */
     public void sendReturnStatusNotification(Order order, String title, String message) {
         if (order == null) return;
         sendInApp(order, "RETURN_STATUS", title, "Đơn #" + order.getOrderCode() + ": " + message);
@@ -195,6 +195,12 @@ public class OrderNotificationService {
 
         outboxEventRecorder.saveMessage(order.getId(), EventTypes.NOTIFICATION_EMAIL_REQUESTED, envelope);
         log.info("[OrderNotification] Emitted return-status email event for orderId={}", order.getId());
+    }
+
+    /** Mốc trung gian của trả hàng (lấy hàng, đã nhận hàng đạt QC): chỉ in-app, email để dành cho mốc quyết định. */
+    public void sendReturnProgressNotification(Order order, String title, String message) {
+        if (order == null) return;
+        sendInApp(order, "RETURN_STATUS", title, "Đơn #" + order.getOrderCode() + ": " + message);
     }
 
     private void sendInApp(Order order, String type, String title, String message) {

@@ -396,7 +396,7 @@ public class ReturnPickupService {
                     && !reason.isBlank()
                     && shipment.getStatus() == ReturnShipmentStatus.READY_TO_PICK) {
                 record(order, "RETURN_PICKUP_ATTEMPT_FAILED", "GHN", reason.trim());
-                notifications.sendReturnStatusNotification(
+                notifications.sendReturnProgressNotification(
                         order,
                         "Lấy hàng trả chưa thành công",
                         "Shipper chưa lấy được hàng (" + reason.trim() + "). GHN sẽ liên hệ lại.");
@@ -446,7 +446,7 @@ public class ReturnPickupService {
         shipment.setFailureReason(reason.length() > 500 ? reason.substring(0, 500) : reason);
         shipment.setFailedAt(at);
         record(order, "RETURN_PICKUP_FAILED", actor, reason);
-        notifications.sendReturnStatusNotification(
+        notifications.sendReturnProgressNotification(
                 order,
                 "Lấy hàng trả chưa thành công",
                 "GHN chưa lấy được hàng của bạn. Chúng tôi sẽ liên hệ để sắp xếp lại lượt lấy hàng.");
@@ -472,7 +472,7 @@ public class ReturnPickupService {
         }
         returns.save(returned);
         record(order, "RETURN_PICKED_UP", "GHN", "GHN đã lấy hàng trả tại khách");
-        notifications.sendReturnStatusNotification(
+        notifications.sendReturnProgressNotification(
                 order,
                 "Đã lấy hàng trả",
                 "Shipper đã lấy hàng của bạn. Chúng tôi sẽ hoàn tiền sau khi kho nhận và kiểm tra hàng.");

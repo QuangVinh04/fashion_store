@@ -1081,6 +1081,12 @@ class ReturnServiceImplTest {
 
         assertThat(response.getStatus()).isEqualTo(ReturnRequestStatus.RECEIVED);
         assertThat(request.getReceivedAt()).isNotNull();
+        verify(notifications)
+                .sendReturnProgressNotification(
+                        org.mockito.ArgumentMatchers.eq(order),
+                        org.mockito.ArgumentMatchers.anyString(),
+                        org.mockito.ArgumentMatchers.contains("đạt kiểm tra"));
+        verify(notifications, never()).sendReturnStatusNotification(any(), any(), any());
     }
 
     // ----- lịch sử ghi đúng trạng thái order -----

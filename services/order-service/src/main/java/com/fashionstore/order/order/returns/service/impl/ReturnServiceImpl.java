@@ -299,7 +299,7 @@ public class ReturnServiceImpl implements ReturnService {
                                         + previousCode
                                         + ")")
                         .build());
-        notifyCustomer(
+        notifyCustomerProgress(
                 returnRequest,
                 "Đã đặt lại lượt lấy hàng trả",
                 "Shipper GHN sẽ liên hệ lấy hàng tại địa chỉ giao hàng của bạn (mã vận đơn "
@@ -574,14 +574,7 @@ public class ReturnServiceImpl implements ReturnService {
                                                             ? "Return received, QC passed"
                                                             : "Return received, QC failed")
                                             .build());
-                            notifyCustomer(
-                                    returned,
-                                    "Đã nhận hàng trả",
-                                    request.qcPassed()
-                                            ? "Hàng trả đạt kiểm tra chất lượng. Chúng tôi sẽ hoàn"
-                                                    + " tiền cho bạn trong thời gian sớm nhất."
-                                            : "Hàng trả không đạt kiểm tra chất lượng. Bộ phận"
-                                                    + " CSKH sẽ liên hệ với bạn để xử lý.");
+                            notifyReceived(returned, request.qcPassed());
                             return toResponse(returned);
                         });
     }
@@ -693,6 +686,27 @@ public class ReturnServiceImpl implements ReturnService {
         if (returned.getKind() == ReturnRequestKind.CUSTOMER_RETURN) {
             notifications.sendReturnStatusNotification(returned.getOrder(), title, message);
         }
+    }
+
+    private void notifyCustomerProgress(ReturnRequest returned, String title, String message) {
+        if (returned.getKind() == ReturnRequestKind.CUSTOMER_RETURN) {
+            notifications.sendReturnProgressNotification(returned.getOrder(), title, message);
+        }
+    }
+
+    // QC đạt thì tiền sắp về, email hoàn tiền sẽ báo; QC không đạt là khách mất tiền nên gửi cả email.
+    private void notifyReceived(ReturnRequest returned, boolean isQcPassed) {
+        if (isQcPassed) {
+            notifyCustomerProgress(
+                    returned,
+                    "Đã nhận hàng trả",
+                    "Hàng trả đạt kiểm tra chất lượng. Chúng tôi sẽ hoàn tiền cho bạn trong thời gian sớm nhất.");
+            return;
+        }
+        notifyCustomer(
+                returned,
+                "Đã nhận hàng trả",
+                "Hàng trả không đạt kiểm tra chất lượng. Bộ phận CSKH sẽ liên hệ với bạn để xử lý.");
     }
 
     @Override

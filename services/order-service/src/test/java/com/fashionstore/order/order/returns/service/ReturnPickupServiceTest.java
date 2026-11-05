@@ -161,7 +161,7 @@ class ReturnPickupServiceTest {
         assertThat(shipment.getPickedAt()).isEqualTo(NOW);
         assertThat(returned.getStatus()).isEqualTo(ReturnRequestStatus.IN_TRANSIT);
         assertThat(actions()).containsExactly("RETURN_PICKED_UP");
-        verify(notifications).sendReturnStatusNotification(eq(order), anyString(), anyString());
+        verify(notifications).sendReturnProgressNotification(eq(order), anyString(), anyString());
     }
 
     @Test
@@ -214,7 +214,7 @@ class ReturnPickupServiceTest {
         service.handleGhnCallback(callback("picked"));
 
         assertThat(actions()).containsExactly("RETURN_PICKED_UP");
-        verify(notifications, org.mockito.Mockito.times(1)).sendReturnStatusNotification(any(), any(), any());
+        verify(notifications, org.mockito.Mockito.times(1)).sendReturnProgressNotification(any(), any(), any());
     }
 
     @Test
@@ -234,7 +234,7 @@ class ReturnPickupServiceTest {
         assertThat(returned.getClosedAt()).isNull();
         assertThat(actions()).containsExactly("RETURN_PICKUP_FAILED");
         verify(receipts, never()).completeAfterReturnClosed(any(), any(), any(), any());
-        verify(notifications).sendReturnStatusNotification(eq(order), anyString(), anyString());
+        verify(notifications).sendReturnProgressNotification(eq(order), anyString(), anyString());
     }
 
     @Test
@@ -283,7 +283,7 @@ class ReturnPickupServiceTest {
         assertThat(shipment.getStatus()).isEqualTo(ReturnShipmentStatus.READY_TO_PICK);
         assertThat(returned.getStatus()).isEqualTo(ReturnRequestStatus.APPROVED);
         assertThat(actions()).containsExactly("RETURN_PICKUP_ATTEMPT_FAILED");
-        verify(notifications).sendReturnStatusNotification(eq(order), anyString(), contains("Khách hẹn lại"));
+        verify(notifications).sendReturnProgressNotification(eq(order), anyString(), contains("Khách hẹn lại"));
     }
 
     @Test
