@@ -7,7 +7,7 @@ import com.fashionstore.common.security.Permission;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
+import org.springframework.data.redis.connection.ReactiveRedisConnectionFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.config.web.server.OidcBackChannelServerLogoutHandler;
 import org.springframework.security.config.web.server.ServerHttpSecurity;
@@ -77,10 +77,10 @@ public class SecurityConfig {
     // nên back-channel logout (admin khoá tài khoản) luôn huỷ được session. TTL = SSO max lifespan của realm (7 ngày).
     @Bean
     ReactiveOidcSessionRegistry oidcSessionRegistry(
-            ReactiveStringRedisTemplate redis,
+            ReactiveRedisConnectionFactory redisConnectionFactory,
             ObjectMapper objectMapper,
             @Value("${spring.session.redis.namespace}") String sessionNamespace) {
-        return new RedisReactiveOidcSessionRegistry(redis, objectMapper, sessionNamespace + ":oidc", Duration.ofDays(7));
+        return RedisReactiveOidcSessionRegistry.create(redisConnectionFactory, objectMapper, sessionNamespace + ":oidc", Duration.ofDays(7));
     }
 
     @Bean

@@ -33,7 +33,8 @@ public final class EventTypes {
     public static final String NOTIFICATION_EMAIL_REQUESTED = "notification.email.requested";
     public static final String NOTIFICATION_IN_APP_REQUESTED = "notification.in-app.requested";
     public static final String PROFILE_AVATAR_CHANGED = "profile.avatar.changed";
-    // Do Keycloak Event Listener SPI (platform/keycloak/event-listener) phát, identity-service tiêu thụ
+    // Do Keycloak Event Listener SPI (platform/keycloak/event-listener) phát, identity-service tiêu thụ.
+    // EMAIL_UPDATED = "user vừa được sửa, đây là email hiện tại": có thể phát cả khi email không đổi, consumer phải idempotent.
     public static final String KEYCLOAK_USER_REGISTERED = "keycloak.user.registered";
     public static final String KEYCLOAK_USER_EMAIL_UPDATED = "keycloak.user.email-updated";
 

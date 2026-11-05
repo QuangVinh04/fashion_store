@@ -16,7 +16,8 @@
   "eventsEnabled": true,
   "eventsExpiration": 2592000,
   "eventsListeners": [
-    "jboss-logging"
+    "jboss-logging",
+    "fashion-rabbit"
   ],
   "adminEventsEnabled": true,
   "adminEventsDetailsEnabled": false,

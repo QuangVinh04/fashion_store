@@ -3,6 +3,7 @@ package com.fashionstore.common.security;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.connection.ReactiveRedisConnectionFactory;
 import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
 import org.springframework.security.oauth2.client.oidc.authentication.logout.OidcLogoutToken;
 import org.springframework.security.oauth2.client.oidc.server.session.ReactiveOidcSessionRegistry;
@@ -42,7 +43,16 @@ public class RedisReactiveOidcSessionRegistry implements ReactiveOidcSessionRegi
     private final String namespace;
     private final Duration ttl;
 
-    public RedisReactiveOidcSessionRegistry(
+    /**
+     * Dựng template bên trong common-library: code của service/platform không được import template của Spring Data
+     * Redis (RedisUsageTest), nên BFF chỉ truyền {@link ReactiveRedisConnectionFactory} do Spring Boot cấu hình sẵn.
+     */
+    public static RedisReactiveOidcSessionRegistry create(
+            ReactiveRedisConnectionFactory connectionFactory, ObjectMapper objectMapper, String namespace, Duration ttl) {
+        return new RedisReactiveOidcSessionRegistry(new ReactiveStringRedisTemplate(connectionFactory), objectMapper, namespace, ttl);
+    }
+
+    RedisReactiveOidcSessionRegistry(
             ReactiveStringRedisTemplate redis, ObjectMapper objectMapper, String namespace, Duration ttl) {
         this.redis = redis;
         this.objectMapper = objectMapper;

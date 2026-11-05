@@ -24,6 +24,7 @@
         <module>platform/gateway</module>
         <module>platform/storefront-bff</module>
         <module>platform/backoffice-bff</module>
+        <module>platform/keycloak/event-listener</module>
         <module>services/identity-service</module>
         <module>services/notification-service</module>
         <module>services/catalog-service</module>
