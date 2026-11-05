@@ -56,17 +56,18 @@ Bảng `sid → session` nằm trong Redis (`RedisReactiveOidcSessionRegistry`, 
 nên BFF restart hoặc chạy nhiều instance vẫn huỷ đúng session. Bản `InMemoryReactiveOidcSessionRegistry` trước đây mất bảng này khi restart.
 ID token thô không được lưu; chỉ lưu issuer, audience, subject, `sid` và header CSRF mà handler logout cần.
 
-### Backoffice bắt buộc OTP (`keycloak-init`)
+### Backoffice bắt buộc OTP
 
-Client `backoffice-bff` dùng flow đăng nhập riêng `backoffice-browser` (mật khẩu + OTP, cả hai REQUIRED, **không có bước cookie SSO**):
-phiên đăng nhập storefront không bỏ qua được OTP. Lần đầu vào backoffice, tài khoản chưa có OTP bị buộc quét QR (Google Authenticator, Authy…).
-Dev user `admin@fashion.local` cũng vậy.
+Client `backoffice-bff` dùng flow đăng nhập riêng `backoffice-browser` (mật khẩu + OTP, cả hai REQUIRED, **không có bước cookie SSO**).
+Cả flow (`authenticationFlows`) lẫn việc gán cho client (`authenticationFlowBindingOverrides` của `backoffice-bff`, tham chiếu flow bằng **id**) nằm trong `realm-fashion-store.json`.
+Lần đầu vào backoffice, tài khoản chưa có OTP bị buộc quét QR (Google Authenticator, Authy…); dev user `admin@fashion.local` cũng vậy.
 
-Flow này **không nằm trong `realm-fashion-store.json`**: import tạo client trước flow nên `authenticationFlowBindingOverrides` bị bỏ qua im lặng.
-Service `keycloak-init` (`platform/keycloak/init/sync-realm-auth.sh`) tạo flow, gán override, và đồng bộ lại password policy + events.
-Nó chạy sau mỗi lần `docker compose up`, idempotent, nên realm đã import từ trước cũng nhận.
+Đã kiểm trên Keycloak 26.7.4 thật bằng cách đăng nhập từng bước: admin vào **storefront** chỉ cần mật khẩu; vào **backoffice** bị buộc OTP; đăng nhập storefront trước rồi vào backoffice **vẫn bị hỏi OTP** (SSO không bỏ qua được).
 
-Kiểm tra bằng kcadm: `--fields authenticationFlowBindingOverrides` luôn in `{}` (kcadm cắt nội dung map); đọc cả client (không `--fields`) mới thấy giá trị.
+- Realm chỉ được import khi chưa tồn tại: muốn áp dụng cho Keycloak đã chạy thì xóa volume `keycloak_postgres_data` (dev) hoặc sửa trong Admin console (prod).
+- OTP được bắt ở bước đăng nhập của client `backoffice-bff`, **không gắn vào token**. Token lấy qua client khác (storefront-bff, swagger-ui ở dev) không qua OTP.
+- Ghi override bằng **alias** của flow thì Keycloak không khởi động (`Unable to resolve auth flow binding override`); phải dùng id.
+- Kiểm bằng kcadm: `--fields authenticationFlowBindingOverrides` luôn in `{}` (kcadm cắt nội dung map); đọc cả client (không `--fields`) mới thấy giá trị.
 
 Client secrets and SMTP come from env (placeholders `${VAR:default}` in the realm file),
 defaults are dev-only: `STOREFRONT_BFF_CLIENT_SECRET`, `BACKOFFICE_BFF_CLIENT_SECRET`, `ORDER_SERVICE_CLIENT_SECRET`,
@@ -93,7 +94,7 @@ docker compose up -d --build keycloak                                 # platform
 ```
 
 - Cấu hình RabbitMQ qua biến môi trường Keycloak `KC_SPI_EVENTS_LISTENER__FASHION_RABBIT__{HOST,PORT,USERNAME,PASSWORD,VHOST}` (đã có trong compose; prod bắt buộc `RABBITMQ_USERNAME`/`RABBITMQ_PASSWORD`).
-- Listener được bật trong realm (`eventsListeners`) và được `keycloak-init` giữ lại. Chưa build jar thì Keycloak chỉ log cảnh báo, vẫn chạy.
+- Listener được bật trong realm (`eventsListeners` của `realm-fashion-store.json`). Chưa build jar thì Keycloak chỉ log cảnh báo, vẫn chạy.
 - Event chỉ được gửi **sau khi transaction của Keycloak commit** và ở thread riêng: RabbitMQ chậm hay chết không làm chậm / lỗi đăng nhập.
 - **At-most-once**: Keycloak không có outbox, event mất nếu RabbitMQ chết lúc đó. JIT ở request đầu tiên của user là đường dự phòng.
 - `emailVerified` từ event luôn là `false` (event không mang cờ này). Identity chỉ ghi cờ khi tạo user hoặc khi email đổi.

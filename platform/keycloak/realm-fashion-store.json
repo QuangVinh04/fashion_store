@@ -261,6 +261,32 @@
     }
   ],
   "defaultGroups": ["/Customer"],
+  "authenticationFlows": [
+    {
+      "id": "2989badd-1833-49ee-aa2c-6d4ef4343bf8",
+      "alias": "backoffice-browser",
+      "description": "Backoffice: mật khẩu + OTP bắt buộc, không có bước cookie SSO nên phiên storefront không bỏ qua được OTP",
+      "providerId": "basic-flow",
+      "topLevel": true,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "auth-username-password-form",
+          "authenticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 10,
+          "userSetupAllowed": false
+        },
+        {
+          "authenticator": "auth-otp-form",
+          "authenticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 20,
+          "userSetupAllowed": false
+        }
+      ]
+    }
+  ],
   "clients": [
     {
       "clientId": "fashion-api",
@@ -342,6 +368,9 @@
       "clientId": "backoffice-bff",
       "name": "Backoffice BFF",
       "enabled": true,
+      "authenticationFlowBindingOverrides": {
+        "browser": "2989badd-1833-49ee-aa2c-6d4ef4343bf8"
+      },
       "publicClient": false,
       "clientAuthenticatorType": "client-secret",
       "secret": "${BACKOFFICE_BFF_CLIENT_SECRET:dev-backoffice-bff-secret}",

@@ -308,23 +308,6 @@ services:
     networks:
       - fashion-network
 
-  # Cấu hình xác thực mà import realm không làm được (flow OTP backoffice, events, password policy); idempotent, chạy xong thoát
-  keycloak-init:
-    image: quay.io/keycloak/keycloak:26.7.4
-    entrypoint: ["/bin/bash", "/opt/keycloak/init/sync-realm-auth.sh"]
-    environment:
-      KEYCLOAK_URL: http://keycloak:8080
-      KEYCLOAK_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USERNAME:-admin}
-      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
-    depends_on:
-      keycloak:
-        condition: service_healthy
-    restart: "no"
-    volumes:
-      - ./platform/keycloak/init:/opt/keycloak/init:ro
-    networks:
-      - fashion-network
-
   rabbitmq:
     image: rabbitmq:3.13-management
     environment:
