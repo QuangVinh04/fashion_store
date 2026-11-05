@@ -14,6 +14,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.MediaType;
 import org.springframework.security.oauth2.client.oidc.server.session.ReactiveOidcSessionRegistry;
@@ -43,6 +44,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Admin khoá tài khoản → Keycloak gọi back-channel logout → BFF phải xoá đúng session của user đó.
  * Chạy server thật (handler tự gọi lại chính BFF qua HTTP) với JWKS giả thay cho Keycloak.
  */
+@Import(InMemoryOidcSessionRegistryTestConfig.class)
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = "spring.autoconfigure.exclude="
                 + "com.fashionstore.common.autoconfigure.CommonRedisAutoConfiguration,"
