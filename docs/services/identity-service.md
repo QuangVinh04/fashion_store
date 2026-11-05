@@ -46,4 +46,4 @@ Không login user, không cấp token.
 
 ## Bảng chính
 
-`users`, `user_addresses`, `roles`, `permissions`, `user_roles`, `role_permissions`, `outbox_event`.
+`users`, `user_addresses`, `outbox_event`.

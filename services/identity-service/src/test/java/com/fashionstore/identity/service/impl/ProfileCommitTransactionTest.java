@@ -8,7 +8,6 @@ import com.fashionstore.identity.service.UserProvisioningService;
 import com.fashionstore.identity.config.messaging.NotificationOutbox;
 import com.fashionstore.identity.dto.user.UpdateProfileRequest;
 import com.fashionstore.identity.entity.*;
-import com.fashionstore.identity.entity.Role;
 import com.fashionstore.identity.mapper.UserMapper;
 import com.fashionstore.identity.repository.*;
 import com.fashionstore.contracts.common.EventEnvelope;
@@ -133,7 +132,7 @@ class ProfileCommitTransactionTest {
         @Bean LocalContainerEntityManagerFactoryBean entityManagerFactory(DataSource ds) {
             var factory = new LocalContainerEntityManagerFactoryBean();
             factory.setDataSource(ds);
-            factory.setManagedTypes(PersistenceManagedTypes.of(User.class.getName(), Role.class.getName(), Permission.class.getName(), OutboxEvent.class.getName()));
+            factory.setManagedTypes(PersistenceManagedTypes.of(User.class.getName(), OutboxEvent.class.getName()));
             factory.setJpaVendorAdapter(new HibernateJpaVendorAdapter());
             factory.setJpaPropertyMap(Map.of("hibernate.hbm2ddl.auto", "create-drop"));
             return factory;

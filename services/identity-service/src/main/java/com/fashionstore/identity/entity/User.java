@@ -3,10 +3,6 @@ package com.fashionstore.identity.entity;
 import com.fashionstore.common.persistence.AuditedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.JoinTable;
-import jakarta.persistence.ManyToMany;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
@@ -15,9 +11,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.FieldDefaults;
-
-import java.util.HashSet;
-import java.util.Set;
 
 @Getter
 @Setter
@@ -53,14 +46,5 @@ public class User extends AuditedEntity {
     @Builder.Default
     @Column(nullable = false)
     Boolean isEmailVerified = false;
-
-    @ManyToMany(fetch = FetchType.LAZY)
-    @JoinTable(
-            name = "user_roles",
-            joinColumns = @JoinColumn(name = "user_id"),
-            inverseJoinColumns = @JoinColumn(name = "role_id")
-    )
-    @Builder.Default
-    Set<Role> roles = new HashSet<>();
 
 }

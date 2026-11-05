@@ -5,8 +5,8 @@
 --
 -- Mật khẩu BCrypt KHÔNG được chuyển (Keycloak không có hash provider bcrypt): user phải đặt lại mật khẩu
 -- (required action UPDATE_PASSWORD, hoặc admin gửi email "Update Password").
--- Quyền nằm ở nhóm Keycloak, không phải client role của user: user có role cũ ADMIN vào nhóm /Admin, còn lại
--- không vào nhóm nào (Customer là default group nên user mới import tự vào). Realm phải có nhóm Admin trước khi import.
+-- Bảng role cũ (user_roles, roles) đã bị drop ở V2: user import không vào nhóm nào ngoài Customer (default group),
+-- admin cũ phải được gán nhóm /Admin bằng tay sau khi import.
 --
 -- Cách chạy: xem platform/keycloak/README.md, mục "Migrating legacy identity users".
 select json_build_object(
@@ -19,23 +19,8 @@ select json_build_object(
         'enabled', u.is_active,
         'emailVerified', u.is_email_verified,
         'requiredActions', json_build_array('UPDATE_PASSWORD'),
-        'realmRoles', (
-            select json_agg(role_name)
-            from (
-                select r.name as role_name
-                from user_roles ur
-                join roles r on r.id = ur.role_id
-                where ur.user_id = u.id
-                union
-                select 'default-roles-fashion-store'
-            ) realm_roles
-        ),
-        'groups', coalesce((
-            select json_agg('/Admin'::text)
-            from user_roles ur
-            join roles r on r.id = ur.role_id
-            where ur.user_id = u.id and r.name = 'ADMIN'
-        ), '[]'::json)
+        'realmRoles', json_build_array('default-roles-fashion-store'),
+        'groups', '[]'::json
     )), '[]'::json)
 )
 from users u

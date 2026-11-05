@@ -89,9 +89,8 @@ curl -X POST -H "Authorization: Bearer $ADMIN_TOKEN" -H 'Content-Type: applicati
 - BCrypt hashes are **not** migrated (Keycloak has no bcrypt hash provider). Imported users get the
   `UPDATE_PASSWORD` required action. They set a new password through "Forgot password" (needs SMTP),
   or an admin sends "Update Password" from the console.
-- Realm roles are copied from `user_roles`. Permissions are not copied as client roles: users with the legacy
-  `ADMIN` role join the `/Admin` group (the realm must already have it, see "Syncing permissions and groups"),
-  everyone else gets no group and relies on the default `Customer` group. Assign staff groups afterwards.
+- Legacy roles are not copied: identity dropped `roles`/`user_roles` (Flyway `V2`). Imported users only get the
+  default `Customer` group. Put former admins into `/Admin` and assign staff groups afterwards.
 - A Keycloak account created **before** migration with the same email but a different id gets
   `409 ACCOUNT_LINK_CONFLICT` from identity. Delete that Keycloak account and import the legacy user instead.
 
