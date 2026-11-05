@@ -131,7 +131,9 @@ class ProdProfileSecretsTest {
             if (!Files.exists(prodFile)) {
                 continue;
             }
-            Map<String, Object> prod = flatten(prodFile);
+            // Giá trị cố định cho prod (vd cookie secure) không phụ thuộc biến môi trường
+            Map<String, Object> prod = new TreeMap<>(flatten(prodFile));
+            prod.values().removeIf(value -> !(value instanceof String text && REQUIRED.matcher(text).matches()));
 
             var missing = new org.springframework.mock.env.MockEnvironment();
             addYaml(loader, missing, prodFile);
@@ -150,6 +152,17 @@ class ProdProfileSecretsTest {
             addYaml(loader, supplied, prodFile);
             addYaml(loader, supplied, resources.resolve("application.yaml"));
             prod.keySet().forEach(key -> assertThat(supplied.getProperty(key)).isEqualTo("value-of-" + key));
+        }
+    }
+
+    /** Production đứng sau reverse proxy TLS: cookie chỉ đi qua HTTPS, redirect_uri OAuth2 dựng từ X-Forwarded-*. */
+    @Test
+    void theBffProdProfileForcesSecureCookiesAndTrustsTheProxyHeaders() throws IOException {
+        for (String module : List.of("platform/storefront-bff", "platform/backoffice-bff")) {
+            Map<String, Object> prod =
+                    flatten(root().resolve(module).resolve("src/main/resources/application-prod.yaml"));
+            assertThat(prod.get("server.reactive.session.cookie.secure")).as(module).isEqualTo(true);
+            assertThat(prod.get("server.forward-headers-strategy")).as(module).isEqualTo("framework");
         }
     }
 
