@@ -1,11 +1,13 @@
 package com.fashionstore.gateway.config;
 
+import com.fashionstore.common.security.KeycloakJwtAuthoritiesConverter;
 import com.fashionstore.common.security.Permission;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
-import org.springframework.security.config.Customizer;
 import org.springframework.security.config.web.server.ServerHttpSecurity;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
+import org.springframework.security.oauth2.server.resource.authentication.ReactiveJwtAuthenticationConverterAdapter;
 import org.springframework.security.web.server.SecurityWebFilterChain;
 
 @Configuration
@@ -15,8 +17,8 @@ public class SecurityConfig {
     // token được chuyển tiếp nguyên vẹn, mỗi service tự kiểm tra lại
     @Bean
     SecurityWebFilterChain securityWebFilterChain(ServerHttpSecurity http) {
-        var keycloak = new org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter();
-        keycloak.setJwtGrantedAuthoritiesConverter(new com.fashionstore.common.security.KeycloakJwtAuthoritiesConverter());
+        JwtAuthenticationConverter keycloak = new JwtAuthenticationConverter();
+        keycloak.setJwtGrantedAuthoritiesConverter(new KeycloakJwtAuthoritiesConverter());
         return http
                 .authorizeExchange(authorize -> authorize
                         .pathMatchers(
@@ -48,7 +50,7 @@ public class SecurityConfig {
                         .pathMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .anyExchange().authenticated())
                 .oauth2ResourceServer(resourceServer -> resourceServer.jwt(jwt -> jwt.jwtAuthenticationConverter(
-                        new org.springframework.security.oauth2.server.resource.authentication.ReactiveJwtAuthenticationConverterAdapter(keycloak))))
+                        new ReactiveJwtAuthenticationConverterAdapter(keycloak))))
                 .csrf(ServerHttpSecurity.CsrfSpec::disable)
                 .build();
     }

@@ -12,7 +12,14 @@
   "resetPasswordAllowed": true,
   "rememberMe": true,
   "editUsernameAllowed": false,
-  "passwordPolicy": "length(8) and notUsername and notEmail",
+  "passwordPolicy": "length(8) and upperCase(1) and lowerCase(1) and digits(1) and notUsername and notEmail and passwordHistory(3)",
+  "eventsEnabled": true,
+  "eventsExpiration": 2592000,
+  "eventsListeners": [
+    "jboss-logging"
+  ],
+  "adminEventsEnabled": true,
+  "adminEventsDetailsEnabled": false,
   "bruteForceProtected": true,
   "permanentLockout": false,
   "failureFactor": 5,

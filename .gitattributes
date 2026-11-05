@@ -1,3 +1,4 @@
 /mvnw text eol=lf
 *.cmd text eol=crlf
 .agents/** text eol=lf
+*.sh text eol=lf

@@ -46,6 +46,20 @@ instead of relying on `issuer-uri` discovery.
 - Every client adds `fashion-api` to `aud`. The two BFF clients also put `realm_access.roles` and
   `resource_access.fashion-api.roles` into the ID token (read by the BFF `GrantedAuthoritiesMapper`).
 - Access token 5 min · SSO idle 30 min · SSO max 7 days · refresh token rotation (reuse revokes the session) · brute force lockout after 5 failures · email verification required.
+- Password policy: ≥ 8 ký tự, có chữ hoa, chữ thường, số, không trùng username/email, không dùng lại 3 mật khẩu gần nhất.
+- Events: user event và admin event được ghi (giữ 30 ngày), xem ở Admin console → Events. `eventsListeners` mặc định `jboss-logging`.
+
+### Backoffice bắt buộc OTP (`keycloak-init`)
+
+Client `backoffice-bff` dùng flow đăng nhập riêng `backoffice-browser` (mật khẩu + OTP, cả hai REQUIRED, **không có bước cookie SSO**):
+phiên đăng nhập storefront không bỏ qua được OTP. Lần đầu vào backoffice, tài khoản chưa có OTP bị buộc quét QR (Google Authenticator, Authy…).
+Dev user `admin@fashion.local` cũng vậy.
+
+Flow này **không nằm trong `realm-fashion-store.json`**: import tạo client trước flow nên `authenticationFlowBindingOverrides` bị bỏ qua im lặng.
+Service `keycloak-init` (`platform/keycloak/init/sync-realm-auth.sh`) tạo flow, gán override, và đồng bộ lại password policy + events.
+Nó chạy sau mỗi lần `docker compose up`, idempotent, nên realm đã import từ trước cũng nhận.
+
+Kiểm tra bằng kcadm: `--fields authenticationFlowBindingOverrides` luôn in `{}` (kcadm cắt nội dung map); đọc cả client (không `--fields`) mới thấy giá trị.
 
 Client secrets and SMTP come from env (placeholders `${VAR:default}` in the realm file),
 defaults are dev-only: `STOREFRONT_BFF_CLIENT_SECRET`, `BACKOFFICE_BFF_CLIENT_SECRET`, `ORDER_SERVICE_CLIENT_SECRET`,
