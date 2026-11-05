@@ -25,7 +25,5 @@ export const reviewsApi = {
   deleteReply: (reviewId: string) =>
     api.delete<Review>(`${base}/${encodeURIComponent(reviewId)}/reply`),
   removeAdmin: (reviewId: string) =>
-    api.delete<void>(`${base}/${encodeURIComponent(reviewId)}`),
-  remove: (productId: string, reviewId: string) =>
-    api.delete<void>(`/api/v1/products/${encodeURIComponent(productId)}/reviews/${encodeURIComponent(reviewId)}`)
+    api.delete<void>(`${base}/${encodeURIComponent(reviewId)}`)
 }

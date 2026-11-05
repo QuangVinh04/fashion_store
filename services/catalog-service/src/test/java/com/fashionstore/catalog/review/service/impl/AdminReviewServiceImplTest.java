@@ -120,6 +120,7 @@ class AdminReviewServiceImplTest {
         assertThat(review.getRepliedBy()).isEqualTo("staff-1");
         assertThat(review.getRepliedAt()).isNotNull();
         verify(productRatingSync, never()).refresh(any());
+        assertThat(review.getEditedAt()).isNull();
     }
 
     @Test

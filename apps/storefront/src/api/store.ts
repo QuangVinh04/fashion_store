@@ -1,5 +1,5 @@
 import { api, json, query, type Page } from './client';
-import type { Address, AvailablePromotion, Cart, Checkout, Order, OrderSummary, Payment, Product, ProductSummary, Profile, PromotionTarget, ReturnRequest, ReviewSummary, Session, SizeChartRow, SizeRecommendation, SizeRecommendationParams, WishlistItem } from './types';
+import type { Address, AvailablePromotion, Cart, Checkout, Order, OrderSummary, Payment, Product, ProductSummary, Profile, PromotionTarget, ReturnRequest, Review, ReviewInput, ReviewSummary, ReviewUpdateInput, Session, SizeChartRow, SizeRecommendation, SizeRecommendationParams, WishlistItem } from './types';
 async function uploadFile(file: File, folder: string) {
   const avatar = folder === 'avatars';
   const route = avatar ? '/api/v1/files/avatars' : '/api/v1/files';
@@ -15,6 +15,27 @@ async function uploadFile(file: File, folder: string) {
   if (!put.ok) throw new Error('Không tải được ảnh lên kho lưu trữ.');
   const completed = await api<{ id: string; url: string; status: string }>(`${route}/${signed.mediaId}/complete`, json('POST', {}));
   if (!completed.url || (avatar && completed.status !== 'TEMP')) throw new Error('Ảnh chưa được xác nhận tải lên thành công.');
+  return { mediaId: completed.id, url: completed.url };
+}
+
+export async function uploadReviewImage(file: File): Promise<{ mediaId: string; url: string }> {
+  if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size <= 0 || file.size > 5242880) {
+    throw new Error('Chỉ chấp nhận ảnh JPEG, PNG hoặc WebP dung lượng ≤ 5 MiB');
+  }
+  const signed = await api<{ mediaId: string; uploadUrl: string; contentType?: string; uploadHeaders?: Record<string, string> }>(
+    '/api/v1/files/reviews/presign',
+    json('POST', { filename: file.name, contentType: file.type, sizeBytes: file.size })
+  );
+  const headers = signed.uploadHeaders ?? (signed.contentType ? { 'Content-Type': signed.contentType } : { 'Content-Type': file.type });
+  const put = await fetch(signed.uploadUrl, { method: 'PUT', body: file, headers });
+  if (!put.ok) throw new Error('Không tải được ảnh lên kho lưu trữ.');
+  const completed = await api<{ id: string; url: string; purpose: string; status: string; visibility: string }>(
+    `/api/v1/files/${encodeURIComponent(signed.mediaId)}/complete`,
+    json('POST', {})
+  );
+  if (completed.id !== signed.mediaId || completed.purpose !== 'REVIEW_IMAGE' || completed.status !== 'ACTIVE') {
+    throw new Error('Xác thực ảnh đánh giá thất bại');
+  }
   return { mediaId: completed.id, url: completed.url };
 }
 
@@ -38,7 +59,9 @@ export const store = {
   productSizeChart: (id: string) => api<{ rows: SizeChartRow[] } | null>(`/api/v1/products/${id}/size-chart`),
   productSizeRecommendation: (id: string, params: SizeRecommendationParams) => api<SizeRecommendation>(`/api/v1/products/${id}/size-recommendation?${query(params as Record<string, string | number | undefined | null>)}`),
   reviews: (id: string, page = 0, options: { rating?: number; sort?: string } = {}) => api<ReviewSummary>(`/api/v1/products/${id}/reviews?${query({ page, ...options })}`),
-  addReview: (id: string, orderId: string, rating: number, comment: string) => api(`/api/v1/products/${id}/reviews`, json('POST', { orderId, rating, comment })),
+  myReviews: (orderId?: string, page = 0, size = 50) => api<Page<Review>>(`/api/v1/reviews/me?${query({ orderId, page, size })}`),
+  addReview: (id: string, body: ReviewInput) => api<Review>(`/api/v1/products/${id}/reviews`, json('POST', body)),
+  updateReview: (id: string, reviewId: string, body: ReviewUpdateInput) => api<Review>(`/api/v1/products/${id}/reviews/${reviewId}`, json('PUT', body)),
   deleteReview: (id: string, reviewId: string) => api<void>(`/api/v1/products/${id}/reviews/${reviewId}`, json('DELETE')),
   wishlist: (page = 0) => api<Page<WishlistItem>>(`/api/v1/wishlist?${query({ page })}`),
   wishCheck: (id: string) => api<{ inWishlist: boolean }>(`/api/v1/wishlist/check/${id}`),
@@ -68,4 +91,5 @@ export const store = {
   payosVerify: (params: URLSearchParams) => api(`/api/v1/payments/payos/return?${params.toString()}`),
   uploadImage: async (file: File, folder: string) => (await uploadFile(file, folder)).url,
   uploadAvatar: (file: File) => uploadFile(file, 'avatars'),
+  uploadReviewImage,
 };

@@ -33,9 +33,9 @@ Mẫu:
   - `PUT /api/v1/products/{id}/reviews/{reviewId}` (chủ đánh giá) body `{ rating, comment, mediaIds, fitRating, customerHeight, customerWeight }`, thay nguyên: trường bỏ trống là xoá. Lỗi `1035` (404), `1038` (403).
   - `GET /api/v1/reviews/me?orderId=&page=&size=` (đăng nhập) → `PageResponse<ReviewResponse>` đánh giá của chính mình, kể cả đang ẩn (`status`), có `productName`, `orderId`. Truyền `orderId` để biết sản phẩm nào trong đơn đã đánh giá (so `productId`) → hiện nút "Viết đánh giá" / "Sửa đánh giá".
   - `DELETE /api/v1/products/{id}/reviews/{reviewId}` giờ chỉ cho chủ đánh giá. Nhân viên xoá qua `DELETE /api/v1/admin/reviews/{id}` (như cũ).
-  - `GET /api/v1/products/{id}/reviews`: mỗi đánh giá có `customerName` đã che (`N***h`, không có tên → `Khách hàng`), `updatedAt`. `userId` vẫn bị che.
+  - `GET /api/v1/products/{id}/reviews`: mỗi đánh giá có `customerName` đã che (`N***h`, không có tên → `Khách hàng`), `updatedAt`, `editedAt` (chỉ có khi khách đã sửa; dùng cho nhãn "(đã sửa)"). `userId` vẫn bị che.
   - Danh sách và chi tiết sản phẩm (`ProductSummaryResponse`, `ProductResponse`) có `ratingAverage` (1 chữ số thập phân, `0` nếu chưa có đánh giá) và `reviewCount`, chỉ tính đánh giá đang hiện. Filter `minRating` của advance-search dùng số này.
-- Việc cho Antigravity: (1) form đánh giá upload ảnh theo 3 bước trên, gửi `mediaIds`; (2) nút sửa đánh giá + `PUT`; (3) trong chi tiết đơn gọi `/reviews/me?orderId=` để đánh dấu sản phẩm đã đánh giá thay vì chờ lỗi `1036`; (4) hiện sao + số đánh giá trên thẻ sản phẩm; (5) hiện `customerName` trong danh sách đánh giá.
+- Task UI chi tiết cho Antigravity: `docs/storefront-review-tasks.md` (R1–R6 storefront, B1 backoffice).
 - Trạng thái: done (backend), chờ frontend
 
 ### Phân quyền theo nhóm và tạo tài khoản nhân viên

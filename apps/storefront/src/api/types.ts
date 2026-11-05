@@ -1,7 +1,7 @@
 export type Session = { authenticated: boolean; userId?: string; email?: string; name?: string; roles: string[] };
 export type Profile = { id: string; email: string; fullName: string; phone: string; address: string; avatar: string; avatarUrl?: string | null; avatarMediaId?: string | null; isEmailVerified: boolean };
 export type Address = { id: string; recipientName: string; phone: string; province: string; district?: string; ward: string; detailAddress: string; provinceId?: number; wardId?: number; districtId?: number; wardCode?: string; isDefault: boolean; fullAddress?: string };
-export type ProductSummary = { id: string; name: string; slug: string; basePrice: number; salePrice?: number; price: number; status: string; published: boolean; thumbnailMediaId?: string; thumbnailUrl?: string; brandName?: string; categoryName?: string };
+export type ProductSummary = { id: string; name: string; slug: string; basePrice: number; salePrice?: number; price: number; status: string; published: boolean; thumbnailMediaId?: string; thumbnailUrl?: string; brandName?: string; categoryName?: string; ratingAverage?: number; reviewCount?: number };
 export type Variant = { id: string; productId: string; sku: string; price?: number; salePrice?: number; active: boolean; available?: boolean; sizeOptionId?: string; colorOptionId?: string; size?: string; color?: string; colorHex?: string; thumbnailMediaId?: string };
 export type ProductImage = { id: string; mediaId: string; colorOptionId?: string; color?: string; url?: string; altText?: string; sortOrder: number; primary: boolean };
 export type SizeChartRow = { id: string; sizeCode: string; chest?: number; waist?: number; hip?: number; shoulder?: number; length?: number; inseam?: number; heightMin?: number; heightMax?: number; weightMin?: number; weightMax?: number };
@@ -54,7 +54,38 @@ export type OrderCancellation={id:string;operationId:string;status:string;reason
 export type Order = OrderSummary & { checkoutId: string; canCancel?: boolean; cancellation?: OrderCancellation; canRequestReturn?: boolean; canConfirmReceipt?: boolean; activeReturnId?: string; returnEligibleUntil?: string; deliveredAt?: string; paymentId?: string; paymentUrl?: string; cancelReason?: string; recipientName: string; recipientPhone: string; shippingAddress: string; trackingCode?: string; shippingProvider?: string; subtotalAmount: number; discountAmount: number; shippingDiscountAmount?: number; shippingFee: number; items: Checkout['items'] };
 export type Payment = { id: string; orderId: string; method: string; provider: string; status: string; amount: number; failureReason?: string; authorizationExpiresAt?: string };
 export type WishlistItem = { productId: string; name: string; slug: string; basePrice: number; salePrice?: number; thumbnailUrl?: string; brandName?: string; status: string };
-export type Review = { id: string; productId: string; userId: string; orderId: string; rating: number; comment: string; verifiedPurchase: boolean; createdAt: string };
+export type FitRating = 'TRUE_TO_SIZE' | 'RUNS_SMALL' | 'RUNS_LARGE';
+export type ReviewInput = {
+  orderId: string;
+  rating: number;
+  comment?: string;
+  mediaIds?: string[];
+  fitRating?: FitRating;
+  customerHeight?: number;
+  customerWeight?: number;
+};
+export type ReviewUpdateInput = Omit<ReviewInput, 'orderId'>;
+export type Review = {
+  id: string;
+  productId: string;
+  productName?: string;
+  userId: string;
+  customerName: string;
+  orderId?: string;
+  rating: number;
+  comment?: string;
+  verifiedPurchase: boolean;
+  status: 'VISIBLE' | 'HIDDEN';
+  replyComment?: string;
+  repliedAt?: string;
+  fitRating?: FitRating;
+  customerHeight?: number;
+  customerWeight?: number;
+  mediaUrls: string[];
+  createdAt: string;
+  updatedAt?: string;
+  editedAt?: string;
+};
 export type ReviewSummary = { averageRating: number; totalReviews: number; ratingCounts: Record<number, number>; reviews: import('./client').Page<Review> };
 export type ReturnRefundStatus = 'NOT_STARTED' | 'PROCESSING' | 'COMPLETED' | 'REVIEW_REQUIRED';
 export type ReturnRequest = { kind?: 'CUSTOMER_RETURN' | 'CARRIER_RETURN' | 'VERIFIED_LOSS'; refundStatus?: ReturnRefundStatus; refundDestination?: string; expectedRefundAmount?: string | null; actualRefundAmount?: string | null; currency?: string | null; refundedAt?: string | null; refundStartedAt?: string | null; refundFailureReason?: string | null; returnTrackingCode?: string | null; returnShippingProvider?: string | null; returnShipmentStatus?: string | null; sendBackBy?: string | null; id: string; orderId: string; orderCode?: string; userId?: string; reason: string; images: string[]; status: string; rejectReason?: string; reviewedBy?: string; reviewedAt?: string; approvedAt?: string; receivedAt?: string; closedAt?: string; approvedRefundAmount?: string; refundLedgerEntryId?: string; createdAt?: string; updatedAt?: string; actions?: string[]; history?: { operationId: string; action: string; actorId: string; occurredAt: string; resultStatus: string; reason?: string; mediaIds: string[] }[]; returnShipment?: { trackingCode?: string; provider?: string; handedOffAt?: string }; disposition?: { status: string; feePayer: string; customerAgreed: boolean; trackingCode?: string; deliveredAt?: string; reason?: string } };

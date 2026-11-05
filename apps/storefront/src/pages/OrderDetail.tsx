@@ -1,5 +1,5 @@
 import { customerError } from "../api/client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Link, useLocation, useParams } from "react-router";
 import { AlertCircle, ArrowLeft, Check, Copy, Star, Clock, CreditCard } from "lucide-react";
 import { store } from "../api/store";
@@ -7,10 +7,11 @@ import { walletCheckoutPath } from "../api/wallet-payment";
 import { canPayOnline, paymentDeadline, paymentLinkMessage, requestPaymentUrl } from "../api/payment-link";
 import { money } from "../api/client";
 import { loadOrderPayment, loadOrderShipment } from "../api/order-resources";
-import type { Order, Payment, ReturnRequest } from "../api/types";
+import type { Order, Payment, ReturnRequest, Review } from "../api/types";
 import OrderActivityTimeline from "../components/OrderActivityTimeline";
 import ProfileLayout from "../components/ProfileLayout";
-import { Status, StatusBadge, useLoad } from "../components/StoreUI";
+import { StarRating, Status, StatusBadge, useLoad } from "../components/StoreUI";
+import OrderItemReview from "../components/reviews/OrderItemReview";
 import ConfirmReceiptDialog from "../components/orders/ConfirmReceiptDialog";
 import OrderCancellationActions from "../components/orders/OrderCancellationActions";
 import { confirmReceipt,loadReturnRequest,RETURN_LABEL } from "../api/return-actions";
@@ -199,6 +200,30 @@ export default function OrderDetail() {
 
   const cancelled = order?.status === "CANCELLED";
   const delivered = order && ["DELIVERED", "COMPLETED"].includes(order.status);
+  const [reviewsMap, setReviewsMap] = useState<Record<string, Review>>({});
+  const [reviewsError, setReviewsError] = useState('');
+  const [reviewsLoading, setReviewsLoading] = useState(false);
+  const loadReviews = useCallback(async () => {
+    if (!id || !delivered) return;
+    try {
+      setReviewsLoading(true);
+      setReviewsError('');
+      const res = await store.myReviews(id);
+      const map: Record<string, Review> = {};
+      for (const r of res.items) {
+        if (r.productId) map[r.productId] = r;
+      }
+      setReviewsMap(map);
+    } catch (err) {
+      setReviewsError(customerError(err) || 'Không thể tải thông tin đánh giá.');
+    } finally {
+      setReviewsLoading(false);
+    }
+  }, [id, delivered]);
+
+  useEffect(() => {
+    if (delivered) void loadReviews();
+  }, [delivered, loadReviews]);
   const paymentLabel = order?.paymentMethod === "COD" ? "Thanh toán khi nhận hàng (COD)"
     : order?.paymentMethod === "WALLET" ? "Ví LINO" : "PayOS";
   const paymentStatus = payment?.status ? ({ COD_PENDING: "Thanh toán khi nhận hàng", PENDING: "Chờ thanh toán", COMPLETED: "Đã thanh toán", FAILED: "Chưa thanh toán thành công", CANCELLED: "Đã hủy", REFUNDED: "Đã hoàn tiền", REFUND_PENDING: "Đang hoàn tiền", REFUND_FAILED: "Đang kiểm tra hoàn tiền" } as Record<string, string>)[payment.status] || "Đang cập nhật" : paymentLoading ? "Đang cập nhật…" : "Chưa có thông tin";
@@ -286,7 +311,40 @@ export default function OrderDetail() {
           </div>
         </section>}
         <section className="order-panel">
-          <OrderProducts order={order} returnLabel={returnRequest ? returnPresentation(returnRequest).title : undefined} refunded={returnRequest?.refundStatus === 'COMPLETED'} review={delivered ? (productId, name)=><OrderItemReview productId={productId} orderId={id} productName={name}/> : undefined}/>
+          {reviewsError && (
+            <div
+              role="alert"
+              className="mx-6 mt-4 p-3.5 rounded-xl text-xs sm:text-sm font-medium flex items-center justify-between gap-2.5 bg-destructive/10 text-destructive border border-destructive/20"
+            >
+              <div className="flex items-center gap-2">
+                <AlertCircle size={16} className="shrink-0" />
+                <span>{reviewsError}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => void loadReviews()}
+                className="underline hover:no-underline font-semibold store-button text-xs"
+              >
+                Thử lại
+              </button>
+            </div>
+          )}
+          <OrderProducts
+            order={order}
+            returnLabel={returnRequest ? returnPresentation(returnRequest).title : undefined}
+            refunded={returnRequest?.refundStatus === 'COMPLETED'}
+            review={delivered ? (productId, name) => (
+              <OrderItemReview
+                productId={productId}
+                orderId={id}
+                productName={name}
+                review={reviewsMap[productId]}
+                onRefresh={loadReviews}
+                reviewsError={reviewsError}
+                onRetry={loadReviews}
+              />
+            ) : undefined}
+          />
           <dl className="order-facts">
             {!cancelled && (
               <>
@@ -311,112 +369,4 @@ export default function OrderDetail() {
       </>}
     </article>
   </ProfileLayout>;
-}
-
-function OrderItemReview({
-  productId,
-  orderId,
-  productName,
-}: {
-  productId: string;
-  orderId: string;
-  productName: string;
-}) {
-  const [open, setOpen] = useState(false);
-  const [rating, setRating] = useState(5);
-  const [comment, setComment] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [feedback, setFeedback] = useState<string>("");
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!comment.trim()) return;
-    setBusy(true);
-    setFeedback("");
-    try {
-      await store.addReview(productId, orderId, rating, comment.trim());
-      setFeedback("Cảm ơn bạn! Đánh giá đã được gửi thành công.");
-      setTimeout(() => setOpen(false), 2500);
-    } catch (err) {
-      setFeedback(customerError(err) || "Gửi đánh giá không thành công.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <div className="border border-border p-3 bg-background">
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        className="text-xs font-semibold text-foreground hover:text-primary flex items-center gap-1.5 store-button"
-      >
-        <Star size={13} /> {open ? "Đóng đánh giá" : "Đánh giá sản phẩm này"}
-      </button>
-
-      {open && (
-        <form onSubmit={handleSubmit} className="mt-3 space-y-3">
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground">
-              Mức độ hài lòng:
-            </span>
-            <div className="flex items-center gap-1">
-              {[1, 2, 3, 4, 5].map((star) => (
-                <button
-                  key={star}
-                  type="button"
-                  aria-label={`Đánh giá ${star} sao`}
-                  aria-pressed={rating === star}
-                  onClick={() => setRating(star)}
-                  className="p-1 hover:scale-110 transition-transform store-button"
-                >
-                  <Star
-                    size={16}
-                    className={
-                      star <= rating
-                        ? "fill-amber-400 stroke-amber-400"
-                        : "fill-transparent stroke-[#bbb]"
-                    }
-                  />
-                </button>
-              ))}
-            </div>
-            <span className="text-xs font-semibold text-foreground ml-1">
-              {rating} sao
-            </span>
-          </div>
-
-          <textarea
-            aria-label="Nội dung đánh giá sản phẩm"
-            required
-            rows={3}
-            maxLength={1000}
-            value={comment}
-            onChange={(e) => setComment(e.target.value)}
-            placeholder="Chia sẻ cảm nhận chân thực về phom dáng, chất vải và sự vừa vặn…"
-            className="w-full border border-border-strong bg-white p-2.5 text-xs outline-none focus:border-border-strong store-textarea"
-          />
-
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-muted-foreground">
-              {comment.length}/1000 ký tự
-            </span>
-            <button
-              type="submit"
-              disabled={busy || !comment.trim()}
-              className="bg-primary text-white px-4 py-2 text-xs font-semibold hover:bg-primary-hover disabled:opacity-50 store-button"
-            >
-              {busy ? "Đang gửi…" : "Gửi Đánh Giá"}
-            </button>
-          </div>
-
-          {feedback && (
-            <p className="text-xs text-success font-medium pt-1">
-              {feedback}
-            </p>
-          )}
-        </form>
-      )}
-    </div>
-  );
 }

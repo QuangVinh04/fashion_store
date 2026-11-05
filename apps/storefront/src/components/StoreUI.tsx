@@ -265,6 +265,16 @@ export function ProductCard({
           </h3>
         </div>
 
+        {(product.reviewCount ?? 0) > 0 && (
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <StarRating rating={product.ratingAverage ?? 0} size={12} />
+            <span className="font-semibold text-foreground tabular-nums">
+              {(product.ratingAverage ?? 0).toFixed(1)}
+            </span>
+            <span>({product.reviewCount})</span>
+          </div>
+        )}
+
         <div className="flex flex-wrap items-baseline gap-2 tabular-nums">
           <span className="text-sm font-semibold text-foreground">
             {money(effectivePrice)}

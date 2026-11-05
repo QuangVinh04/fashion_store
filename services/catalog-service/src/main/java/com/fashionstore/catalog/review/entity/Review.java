@@ -60,6 +60,9 @@ public class Review extends BaseEntity {
     @Column(name = "reply_comment", columnDefinition = "TEXT")
     String replyComment;
 
+    @Column(name = "edited_at")
+    LocalDateTime editedAt;
+
     @Column(name = "replied_at")
     LocalDateTime repliedAt;
 

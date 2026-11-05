@@ -69,3 +69,21 @@ test('generic image upload uses the shared pipeline and returned server URL', as
   assert.equal(routes[0], '/api/v1/files/presign');
   assert.equal(routes[2], '/api/v1/files/m1/complete');
 });
+
+test('review image upload uses reviews/presign and completes with ACTIVE status', async () => {
+  const routes = [];
+  const store = apiStore(async (url, init) => {
+    routes.push(url);
+    if (url.endsWith('/reviews/presign')) {
+      assert.equal(JSON.parse(init.body).filename, 'avatar.png');
+      return envelope(signed);
+    }
+    if (url === signed.uploadUrl) return new Response(null, { status: 200 });
+    return envelope({ id: 'm1', purpose: 'REVIEW_IMAGE', status: 'ACTIVE', url: '/api/v1/files/m1/content' });
+  });
+  const res = await store.uploadReviewImage(file);
+  assert.equal(res.mediaId, 'm1');
+  assert.equal(res.url, '/api/v1/files/m1/content');
+  assert.equal(routes[0], '/api/v1/files/reviews/presign');
+  assert.equal(routes[2], '/api/v1/files/m1/complete');
+});

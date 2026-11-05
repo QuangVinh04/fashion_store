@@ -34,6 +34,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -104,6 +105,7 @@ public class ReviewServiceImpl implements ReviewService {
         review.setFitRating(request.fitRating());
         review.setCustomerHeight(request.customerHeight());
         review.setCustomerWeight(request.customerWeight());
+        review.setEditedAt(LocalDateTime.now());
         replaceImages(review, images);
         review = reviewRepository.save(review);
         productRatingSync.refresh(productId);

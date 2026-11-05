@@ -192,6 +192,7 @@ class ReviewServiceImplTest {
         assertThat(review.getFitRating()).isEqualTo(FitRating.RUNS_SMALL);
         assertThat(review.getMediaList()).extracting(ReviewMedia::getMediaId).containsExactly("m-2");
         assertThat(response.getMediaUrls()).containsExactly("url-2");
+        assertThat(response.getEditedAt()).isNotNull();
         verify(productRatingSync).refresh("prod-1");
     }
 

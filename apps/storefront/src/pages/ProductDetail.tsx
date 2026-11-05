@@ -17,6 +17,7 @@ import {
   Shirt,
   Sparkles,
   ShieldCheck,
+  X,
 } from "lucide-react";
 import { store } from "../api/store";
 import { media, money } from "../api/client";
@@ -63,6 +64,7 @@ export default function ProductDetail() {
     const [relatedProducts, setRelatedProducts] = useState<ProductSummary[]>([]);
   const actionsRef = useRef<HTMLDivElement>(null);
   const [showStickyBar, setShowStickyBar] = useState(false);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -97,6 +99,7 @@ export default function ProductDetail() {
     setSizeOpen(false);
     setFeedback(null);
     setVariantPrompt(false);
+    setPreviewImage(null);
   }, [id]);
 
   // Wishlist check
@@ -334,8 +337,12 @@ export default function ProductDetail() {
             <p className="pd-meta">{p.brandName || p.categoryName || "LINO"}</p>
             <h1>{p.name}</h1>
             <Link className="pd-rating-link" to={`/products/${id}/reviews`}>
-              <StarRating rating={reviewsLoad.data?.averageRating || 0} size={15} />
-              <span>{reviewsLoad.data ? `${reviewsLoad.data.averageRating.toFixed(1)} (${reviewsLoad.data.totalReviews} đánh giá)` : "Xem đánh giá"}</span>
+              <StarRating rating={p.ratingAverage ?? 0} size={15} />
+              <span>
+                {(p.reviewCount ?? 0) > 0
+                  ? `${(p.ratingAverage ?? 0).toFixed(1)} (${p.reviewCount} đánh giá)`
+                  : "Chưa có đánh giá"}
+              </span>
             </Link>
             <div className="pd-price"><strong>{money(displayPrice)}</strong>{isSale && <del>{money(p.basePrice)}</del>}</div>
             {(allVariantsSoldOut || selectedVariantSoldOut) && <p className="pd-meta" style={{ color: "var(--destructive)", fontWeight: 600 }}>Hết hàng</p>}
@@ -430,7 +437,79 @@ export default function ProductDetail() {
         <section className="pd-section" aria-labelledby="pd-reviews-title">
           <div className="pd-section-title"><h2 id="pd-reviews-title">Đánh giá sản phẩm</h2><Link className="pd-text-link" to={`/products/${id}/reviews`}>Xem thêm đánh giá</Link></div>
           <Status loading={reviewsLoad.loading} error={reviewsLoad.error} retry={() => void reviewsLoad.refresh()} />
-          {!reviewsLoad.loading && !reviewsLoad.error && reviewsLoad.data && <div className="pd-review-preview"><div><strong className="pd-review-score">{reviewsLoad.data.averageRating.toFixed(1)} <small>/ 5</small></strong><StarRating rating={reviewsLoad.data.averageRating} size={16} /><p className="pd-meta">{reviewsLoad.data.totalReviews} đánh giá</p></div><div>{reviewsLoad.data.reviews.items.length ? reviewsLoad.data.reviews.items.slice(0, 3).map(review => <article key={review.id} className="pd-review-excerpt"><StarRating rating={review.rating} size={14} /><p>{review.comment}</p><time dateTime={review.createdAt}>{new Date(review.createdAt).toLocaleDateString("vi-VN")}</time></article>) : <p className="pd-empty">Chưa có đánh giá cho sản phẩm này.</p>}</div></div>}
+          {!reviewsLoad.loading && !reviewsLoad.error && reviewsLoad.data && (
+            <div className="pd-review-preview">
+              <div>
+                <strong className="pd-review-score">{(p.ratingAverage ?? reviewsLoad.data.averageRating).toFixed(1)} <small>/ 5</small></strong>
+                <StarRating rating={p.ratingAverage ?? reviewsLoad.data.averageRating} size={16} />
+                <p className="pd-meta">{p.reviewCount ?? reviewsLoad.data.totalReviews} đánh giá</p>
+              </div>
+              <div>
+                {reviewsLoad.data.reviews.items.length ? (
+                  reviewsLoad.data.reviews.items.slice(0, 3).map(review => {
+                    const isEdited = Boolean(review.editedAt);
+                    return (
+                      <article key={review.id} className="pd-review-excerpt">
+                        <div className="flex items-center justify-between gap-2 mb-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-xs text-foreground">{review.customerName || 'Khách hàng'}</span>
+                            {review.verifiedPurchase && (
+                              <span className="text-[11px] text-emerald-600 inline-flex items-center gap-0.5 font-medium">
+                                <Check size={11} aria-hidden="true" /> Đã mua
+                              </span>
+                            )}
+                          </div>
+                          <time dateTime={review.createdAt} className="text-xs text-muted-foreground">
+                            {new Date(review.createdAt).toLocaleDateString("vi-VN")}
+                            {isEdited && ' (đã sửa)'}
+                          </time>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <StarRating rating={review.rating} size={13} />
+                          {(review.fitRating || review.customerHeight || review.customerWeight) && (
+                            <span className="text-[11px] text-muted-foreground">
+                              {[
+                                review.fitRating === 'TRUE_TO_SIZE' ? 'Chuẩn size' : review.fitRating === 'RUNS_SMALL' ? 'Chật' : review.fitRating === 'RUNS_LARGE' ? 'Rộng' : null,
+                                review.customerHeight ? `${review.customerHeight}cm` : null,
+                                review.customerWeight ? `${review.customerWeight}kg` : null,
+                              ].filter(Boolean).join(' • ')}
+                            </span>
+                          )}
+                        </div>
+                        {review.comment && <p className="text-sm mt-1">{review.comment}</p>}
+                        {review.mediaUrls && review.mediaUrls.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5 mt-2">
+                            {review.mediaUrls.map((url, idx) => (
+                              <button
+                                key={idx}
+                                type="button"
+                                onClick={() => setPreviewImage(url)}
+                                className="w-12 h-12 rounded overflow-hidden border border-border hover:opacity-80 transition-opacity store-button"
+                                aria-label={`Xem ảnh đánh giá ${idx + 1}`}
+                              >
+                                <img src={url} alt={`Ảnh đánh giá ${idx + 1}`} className="w-full h-full object-cover" />
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        {review.replyComment && (
+                          <div className="mt-2 p-2.5 bg-secondary/40 rounded-lg border-l-2 border-primary text-xs space-y-0.5">
+                            <div className="font-semibold text-primary">
+                              Phản hồi từ shop
+                              {review.repliedAt && <span className="font-normal text-muted-foreground ml-1">· {new Date(review.repliedAt).toLocaleDateString('vi-VN')}</span>}
+                            </div>
+                            <p className="text-foreground/90">{review.replyComment}</p>
+                          </div>
+                        )}
+                      </article>
+                    );
+                  })
+                ) : (
+                  <p className="pd-empty">Chưa có đánh giá cho sản phẩm này.</p>
+                )}
+              </div>
+            </div>
+          )}
         </section>
       </SafeBoundary>
       <SafeBoundary>
@@ -445,6 +524,27 @@ export default function ProductDetail() {
           retry={() => void sizeChartLoad.refresh()}
           productId={id}
         />
+
+        {previewImage && (
+          <div
+            role="dialog"
+            aria-modal="true"
+            onClick={() => setPreviewImage(null)}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 cursor-pointer"
+          >
+            <div className="relative max-w-3xl max-h-[90vh] overflow-hidden" onClick={(e) => e.stopPropagation()}>
+              <img src={previewImage} alt="Ảnh đánh giá" className="max-w-full max-h-[85vh] object-contain rounded-xl" />
+              <button
+                type="button"
+                onClick={() => setPreviewImage(null)}
+                className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-black/90 store-button"
+                aria-label="Đóng xem ảnh"
+              >
+                <X size={18} />
+              </button>
+            </div>
+          </div>
+        )}
       </>}
     </div>
   </div>;

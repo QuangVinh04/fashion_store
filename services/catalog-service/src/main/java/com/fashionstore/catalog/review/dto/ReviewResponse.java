@@ -42,4 +42,5 @@ public class ReviewResponse {
     List<String> mediaUrls;
     LocalDateTime createdAt;
     LocalDateTime updatedAt;
+    LocalDateTime editedAt;
 }

@@ -62,6 +62,7 @@ public class ReviewMapper {
                 .customerWeight(review.getCustomerWeight())
                 .mediaUrls(mediaUrls)
                 .createdAt(review.getCreatedAt())
-                .updatedAt(review.getUpdatedAt());
+                .updatedAt(review.getUpdatedAt())
+                .editedAt(review.getEditedAt());
     }
 }
