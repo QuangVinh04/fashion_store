@@ -7,7 +7,7 @@ import com.fashionstore.contracts.notification.InAppNotificationRequested;
 import com.fashionstore.order.shared.client.IdentityClient;
 import com.fashionstore.order.shared.dto.InternalUserDto;
 import com.fashionstore.order.order.entity.Order;
-import com.fashionstore.order.shipment.entity.Shipment;
+import com.fashionstore.order.order.fulfillment.entity.Shipment;
 import com.fashionstore.order.shared.outbox.OutboxEventRecorder;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;

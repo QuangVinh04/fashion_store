@@ -9,15 +9,14 @@ import com.fashionstore.order.dashboard.dto.OperationsDashboardResponse;
 import com.fashionstore.order.order.dto.OrderStatusCountResponse;
 import com.fashionstore.order.order.dto.TopProductResponse;
 import com.fashionstore.order.order.entity.OrderStatus;
-import com.fashionstore.order.order.repository.OrderItemRepository;
-import com.fashionstore.order.order.repository.OrderRepository;
+import com.fashionstore.order.order.api.DailyRevenue;
+import com.fashionstore.order.order.api.OrderStatistics;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.domain.Pageable;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 
@@ -39,10 +38,7 @@ import static org.mockito.Mockito.when;
 class AdminDashboardServiceImplTest {
 
     @Mock
-    private OrderRepository orderRepository;
-
-    @Mock
-    private OrderItemRepository orderItemRepository;
+    private OrderStatistics orderStatistics;
 
     @Mock
     private CatalogClient catalogClient;
@@ -51,25 +47,23 @@ class AdminDashboardServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = new AdminDashboardServiceImpl(orderRepository, orderItemRepository, catalogClient, RedisService.disabled());
+        service = new AdminDashboardServiceImpl(orderStatistics, catalogClient, RedisService.disabled());
     }
 
     @Test
     void getDashboardStats_aggregatesDataCorrectly() {
-        when(orderRepository.calculateTotalRevenue(any())).thenReturn(new BigDecimal("15000000"));
-        when(orderRepository.count()).thenReturn(50L);
-        when(orderRepository.countOrdersByStatus()).thenReturn(List.of(
+        when(orderStatistics.totalRevenue()).thenReturn(new BigDecimal("15000000"));
+        when(orderStatistics.countOrders()).thenReturn(50L);
+        when(orderStatistics.countByStatus()).thenReturn(List.of(
                 new OrderStatusCountResponse(OrderStatus.CONFIRMED, 20L),
                 new OrderStatusCountResponse(OrderStatus.DELIVERED, 30L)
         ));
 
-        Object[] row1 = new Object[]{LocalDate.of(2026, 9, 18), new BigDecimal("5000000"), 10L};
-        List<Object[]> rows = new java.util.ArrayList<>();
-        rows.add(row1);
-        when(orderRepository.findRevenueByDay(any(), any(LocalDateTime.class))).thenReturn(rows);
+        List<DailyRevenue> rows = List.of(new DailyRevenue(LocalDate.of(2026, 9, 18), new BigDecimal("5000000"), 10L));
+        when(orderStatistics.revenueByDay(any(LocalDateTime.class))).thenReturn(rows);
 
         TopProductResponse top1 = new TopProductResponse("var-1", "Áo Polo", 50L, new BigDecimal("10000000"));
-        when(orderItemRepository.findTopSellingProducts(any(), any(Pageable.class))).thenReturn(List.of(top1));
+        when(orderStatistics.topSellingProducts(10)).thenReturn(List.of(top1));
 
         when(catalogClient.getLowStockCount(10)).thenReturn(4L);
 
@@ -86,17 +80,17 @@ class AdminDashboardServiceImplTest {
         assertThat(response.getTopProducts()).hasSize(1);
         assertThat(response.getTopProducts().get(0).getVariantId()).isEqualTo("var-1");
 
-        verify(orderRepository).calculateTotalRevenue(any());
+        verify(orderStatistics).totalRevenue();
         verify(catalogClient).getLowStockCount(10);
     }
 
     @Test
     void getDashboardStats_whenCatalogClientFails_fallbackReturnsZeroLowStock() {
-        when(orderRepository.calculateTotalRevenue(any())).thenReturn(BigDecimal.ZERO);
-        when(orderRepository.count()).thenReturn(0L);
-        when(orderRepository.countOrdersByStatus()).thenReturn(List.of());
-        when(orderRepository.findRevenueByDay(any(), any(LocalDateTime.class))).thenReturn(List.of());
-        when(orderItemRepository.findTopSellingProducts(any(), any(Pageable.class))).thenReturn(List.of());
+        when(orderStatistics.totalRevenue()).thenReturn(BigDecimal.ZERO);
+        when(orderStatistics.countOrders()).thenReturn(0L);
+        when(orderStatistics.countByStatus()).thenReturn(List.of());
+        when(orderStatistics.revenueByDay(any(LocalDateTime.class))).thenReturn(List.of());
+        when(orderStatistics.topSellingProducts(10)).thenReturn(List.of());
         when(catalogClient.getLowStockCount(10)).thenReturn(0L);
 
         AdminDashboardResponse response = service.getDashboardStats(30, 10);
@@ -112,13 +106,13 @@ class AdminDashboardServiceImplTest {
         ValueOperations<String, String> values = mock(ValueOperations.class);
         when(template.opsForValue()).thenReturn(values);
         RedisService redis = new RedisService(template, new ObjectMapper().registerModule(new JavaTimeModule()), "order-service");
-        service = new AdminDashboardServiceImpl(orderRepository, orderItemRepository, catalogClient, redis);
-        when(orderRepository.calculateTotalRevenue(any())).thenReturn(new BigDecimal("15000000"));
-        when(orderRepository.count()).thenReturn(50L);
-        when(orderRepository.countOrdersByStatus()).thenReturn(List.of(new OrderStatusCountResponse(OrderStatus.DELIVERED, 50L)));
-        when(orderRepository.findRevenueByDay(any(), any(LocalDateTime.class)))
-                .thenReturn(List.<Object[]>of(new Object[]{LocalDate.of(2026, 9, 18), new BigDecimal("5000000"), 10L}));
-        when(orderItemRepository.findTopSellingProducts(any(), any(Pageable.class)))
+        service = new AdminDashboardServiceImpl(orderStatistics, catalogClient, redis);
+        when(orderStatistics.totalRevenue()).thenReturn(new BigDecimal("15000000"));
+        when(orderStatistics.countOrders()).thenReturn(50L);
+        when(orderStatistics.countByStatus()).thenReturn(List.of(new OrderStatusCountResponse(OrderStatus.DELIVERED, 50L)));
+        when(orderStatistics.revenueByDay(any(LocalDateTime.class)))
+                .thenReturn(List.of(new DailyRevenue(LocalDate.of(2026, 9, 18), new BigDecimal("5000000"), 10L)));
+        when(orderStatistics.topSellingProducts(10))
                 .thenReturn(List.of(new TopProductResponse("var-1", "Áo Polo", 50L, new BigDecimal("10000000"))));
         when(catalogClient.getLowStockCount(10)).thenReturn(4L);
 
@@ -133,20 +127,20 @@ class AdminDashboardServiceImplTest {
         AdminDashboardResponse second = service.getDashboardStats(30, 10);
 
         assertThat(second).isEqualTo(first);
-        verify(orderRepository, times(1)).count();
+        verify(orderStatistics, times(1)).countOrders();
         verify(catalogClient, times(1)).getLowStockCount(10);
     }
 
     @Test
     void getOperationsStats_matchesDashboardStatsWithoutRevenue() {
-        when(orderRepository.calculateTotalRevenue(any())).thenReturn(new BigDecimal("15000000"));
-        when(orderRepository.count()).thenReturn(50L);
-        when(orderRepository.countOrdersByStatus()).thenReturn(List.of(
+        when(orderStatistics.totalRevenue()).thenReturn(new BigDecimal("15000000"));
+        when(orderStatistics.countOrders()).thenReturn(50L);
+        when(orderStatistics.countByStatus()).thenReturn(List.of(
                 new OrderStatusCountResponse(OrderStatus.CONFIRMED, 20L),
                 new OrderStatusCountResponse(OrderStatus.DELIVERED, 30L)
         ));
-        when(orderRepository.findRevenueByDay(any(), any(LocalDateTime.class))).thenReturn(List.of());
-        when(orderItemRepository.findTopSellingProducts(any(), any(Pageable.class)))
+        when(orderStatistics.revenueByDay(any(LocalDateTime.class))).thenReturn(List.of());
+        when(orderStatistics.topSellingProducts(10))
                 .thenReturn(List.of(new TopProductResponse("var-1", "Áo Polo", 50L, new BigDecimal("10000000"))));
         when(catalogClient.getLowStockCount(10)).thenReturn(4L);
 

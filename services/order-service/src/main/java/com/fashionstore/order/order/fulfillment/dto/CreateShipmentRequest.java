@@ -1,0 +1,27 @@
+package com.fashionstore.order.order.fulfillment.dto;
+
+import com.fashionstore.order.order.fulfillment.entity.ShipmentProvider;
+import jakarta.validation.constraints.Positive;
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.experimental.FieldDefaults;
+
+@Getter
+@Setter
+@Builder
+@AllArgsConstructor
+@NoArgsConstructor
+@FieldDefaults(level = AccessLevel.PRIVATE)
+public class CreateShipmentRequest {
+    @Builder.Default
+    ShipmentProvider provider = ShipmentProvider.GHN;
+    String note;
+
+    /** Cân nặng thực tế sau khi đóng gói. Bỏ trống thì tính từ catalog. */
+    @Positive Integer weightGram;
+}
+

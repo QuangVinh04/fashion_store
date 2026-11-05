@@ -1,6 +1,6 @@
 package com.fashionstore.order.order.dto;
 
-import com.fashionstore.order.saga.dto.OrderCancellationResponse;
+import com.fashionstore.order.order.saga.dto.OrderCancellationResponse;
 import com.fashionstore.order.order.entity.OrderStatus;
 import lombok.*;
 import lombok.experimental.FieldDefaults;

@@ -1,0 +1,100 @@
+package com.fashionstore.order.order.fulfillment.controller;
+
+import com.fashionstore.common.dto.ApiResponse;
+import com.fashionstore.common.exception.AppException;
+import com.fashionstore.common.exception.ErrorCode;
+import com.fashionstore.order.shipment.config.GhnProperties;
+import com.fashionstore.order.order.fulfillment.dto.CreateShipmentRequest;
+import com.fashionstore.order.order.fulfillment.dto.ShipmentResponse;
+import com.fashionstore.order.shipment.dto.GhnWebhookPayload;
+import com.fashionstore.order.order.fulfillment.service.ShipmentService;
+import com.fashionstore.order.order.fulfillment.service.ShipmentSyncService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import lombok.AccessLevel;
+import lombok.RequiredArgsConstructor;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import lombok.experimental.FieldDefaults;
+import com.fashionstore.common.security.PermissionNames;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RestController;
+
+@Tag(name = "Shipment", description = "Quản lý vận đơn và tích hợp giao vận GHN")
+@RestController
+@RequiredArgsConstructor
+@FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
+public class ShipmentController {
+
+    ShipmentService shipmentService;
+    ShipmentSyncService shipmentSyncService;
+    GhnProperties ghnProperties;
+    com.fashionstore.order.order.returns.service.ReturnPickupService returnPickupService;
+
+    @Operation(summary = "Admin tạo vận đơn GHN cho đơn hàng")
+    @PreAuthorize("hasAuthority('" + PermissionNames.SHIPMENT_MANAGE + "')")
+    @PostMapping("/api/v1/orders/{orderId}/shipment")
+    public ApiResponse<ShipmentResponse> createShipment(
+            @PathVariable String orderId,
+            @Valid @RequestBody(required = false) CreateShipmentRequest request
+    ) {
+        return ApiResponse.<ShipmentResponse>builder()
+                .message("Create shipment successfully")
+                .data(shipmentService.createShipment(orderId, request))
+                .build();
+    }
+
+    @Operation(
+            summary = "Đồng bộ trạng thái vận đơn từ GHN (shipment:manage)",
+            description =
+                    "Dùng khi đơn kẹt ở `PACKED`/`SHIPPING` do mất webhook. Lấy trạng thái thật từ GHN"
+                        + " rồi áp như webhook: có thể chuyển đơn sang `SHIPPING`/`DELIVERED`. Lỗi GHN"
+                        + " trả 502.")
+    @PreAuthorize("hasAuthority('" + PermissionNames.SHIPMENT_MANAGE + "')")
+    @PostMapping("/api/v1/admin/orders/{orderId}/shipment/sync")
+    public ApiResponse<ShipmentResponse> syncShipment(@PathVariable String orderId) {
+        return ApiResponse.<ShipmentResponse>builder()
+                .message("Sync shipment successfully")
+                .data(shipmentSyncService.syncFromCarrier(orderId))
+                .build();
+    }
+
+    @Operation(summary = "Khách hàng tra cứu vận đơn theo mã đơn hàng")
+    @GetMapping("/api/v1/orders/{orderId}/shipment")
+    public ApiResponse<ShipmentResponse> getShipment(@PathVariable String orderId) {
+        return ApiResponse.<ShipmentResponse>builder()
+                .message("Get shipment successfully")
+                .data(shipmentService.getShipmentByOrderId(orderId))
+                .build();
+    }
+
+    @Operation(summary = "Webhook tiếp nhận trạng thái từ GHN (public qua gateway, xác thực bằng webhook token)")
+    @PostMapping("/api/v1/shipping/ghn/webhook")
+    public ApiResponse<Void> handleGhnCallback(
+            @RequestHeader(value = "Token", required = false) String token,
+            @RequestHeader(value = "X-Webhook-Token", required = false) String webhookTokenHeader,
+            @RequestBody GhnWebhookPayload payload
+    ) {
+        String expectedToken = ghnProperties.getWebhookToken();
+        String providedToken = (token != null && !token.isBlank()) ? token : webhookTokenHeader;
+
+        if (expectedToken == null || expectedToken.isBlank() || providedToken == null || !MessageDigest.isEqual(expectedToken.getBytes(StandardCharsets.UTF_8), providedToken.getBytes(StandardCharsets.UTF_8))) {
+            throw new AppException(ErrorCode.UNAUTHENTICATED);
+        }
+
+        // Mã GHN của đơn trả hàng (khách -> kho) đi nhánh riêng: cùng chữ "returned" nhưng nghĩa ngược.
+        if (!returnPickupService.handleGhnCallback(payload)) {
+            shipmentService.handleGhnCallback(payload);
+        }
+        return ApiResponse.<Void>builder()
+                .message("Processed GHN callback successfully")
+                .build();
+    }
+}
+

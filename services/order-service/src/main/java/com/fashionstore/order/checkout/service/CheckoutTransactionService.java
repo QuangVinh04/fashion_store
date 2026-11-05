@@ -51,7 +51,7 @@ public class CheckoutTransactionService {
                         .orElseThrow(() -> new AppException(OrderErrorCode.CHECKOUT_NOT_FOUND));
 
         // Kiểm tra trạng thái lúc này (giai đoạn khóa/ghi ngắn)
-        if (isStatusInvalid(current.getStatus()) || current.getOrder() != null) {
+        if (isStatusInvalid(current.getStatus()) || current.getOrderId() != null) {
             throw new AppException(OrderErrorCode.CHECKOUT_STATUS_INVALID);
         }
 

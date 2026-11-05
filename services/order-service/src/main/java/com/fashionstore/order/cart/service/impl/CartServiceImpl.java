@@ -145,7 +145,7 @@ public class CartServiceImpl implements CartService {
      */
     @Override
     @Transactional(propagation = Propagation.NEVER)
-    public Cart revalidateActiveCart() {
+    public CartResponse revalidateActiveCart() {
         String userId = currentUserProvider.getCurrentUserId();
         // Bọc transaction ngắn hạn qua CartTransactionService
         Cart cart = cartTransactionService.getActiveCartSnapshot(userId);
@@ -184,7 +184,7 @@ public class CartServiceImpl implements CartService {
             }
         }
         // Bọc transaction ngắn hạn qua CartTransactionService
-        return cartTransactionService.saveUpdatedCart(cart);
+        return cartMapper.toCartResponse(cartTransactionService.saveUpdatedCart(cart));
     }
 
     private void requireOnSale(ProductVariantDto variant) {

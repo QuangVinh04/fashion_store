@@ -9,39 +9,35 @@ import com.fashionstore.contracts.inventory.command.InventoryItem;
 import com.fashionstore.contracts.inventory.command.ReservationInventoryCommand;
 import com.fashionstore.contracts.order.dto.VerifyPurchaseRequest;
 import com.fashionstore.contracts.order.dto.VerifyPurchaseResponse;
-import com.fashionstore.order.saga.dto.CancelOrderRequest;
+import com.fashionstore.order.order.saga.dto.CancelOrderRequest;
 import com.fashionstore.order.order.dto.OrderPurchaseTab;
 import com.fashionstore.order.order.dto.AdminOrderFilter;
 import com.fashionstore.order.order.dto.OrderResponse;
-import com.fashionstore.order.returns.dto.OrderReturnReference;
-import com.fashionstore.order.saga.dto.OrderSagaResponse;
+import com.fashionstore.order.order.returns.dto.OrderReturnReference;
+import com.fashionstore.order.order.saga.dto.OrderSagaResponse;
 import com.fashionstore.order.order.dto.OrderStatusHistoryResponse;
 import com.fashionstore.order.order.dto.OrderSummaryResponse;
-import com.fashionstore.order.checkout.mapper.PromotionItemMapper;
-import com.fashionstore.order.promotion.dto.PromotionItemDto;
 import com.fashionstore.order.order.dto.UpdateOrderStatusRequest;
-import com.fashionstore.order.checkout.entity.Checkout;
-import com.fashionstore.order.checkout.entity.CheckoutItem;
+import com.fashionstore.order.checkout.api.CheckoutSnapshot;
 import com.fashionstore.order.order.entity.Order;
 import com.fashionstore.order.order.entity.OrderItem;
-import com.fashionstore.order.saga.entity.OrderSaga;
+import com.fashionstore.order.order.saga.entity.OrderSaga;
 import com.fashionstore.order.order.entity.OrderStatusHistory;
-import com.fashionstore.order.order.entity.ShippingAddress;
-import com.fashionstore.order.checkout.entity.CheckoutStatus;
-import com.fashionstore.order.saga.entity.OrderSagaType;
+import com.fashionstore.order.shared.model.ShippingAddress;
+import com.fashionstore.order.order.saga.entity.OrderSagaType;
 import com.fashionstore.order.order.entity.OrderStatus;
 import com.fashionstore.order.shared.outbox.OutboxEventRecorder;
-import com.fashionstore.order.saga.event.SagaOutbox;
+import com.fashionstore.order.order.saga.event.SagaOutbox;
 import com.fashionstore.order.shared.exception.OrderErrorCode;
-import com.fashionstore.order.checkout.repository.CheckoutRepository;
+import com.fashionstore.order.checkout.api.CheckoutOrdering;
 import com.fashionstore.order.order.repository.OrderRepository;
-import com.fashionstore.order.saga.repository.OrderSagaRepository;
+import com.fashionstore.order.order.saga.repository.OrderSagaRepository;
 import com.fashionstore.order.order.repository.OrderStatusHistoryRepository;
 import com.fashionstore.order.order.service.OrderAdminSpecifications;
 import com.fashionstore.order.order.service.OrderNotificationService;
 import com.fashionstore.order.order.service.OrderService;
 import com.fashionstore.order.promotion.service.PromotionService;
-import com.fashionstore.order.saga.service.SagaCancellationService;
+import com.fashionstore.order.order.saga.service.SagaCancellationService;
 
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -66,7 +62,7 @@ import java.util.UUID;
 public class OrderServiceImpl implements OrderService {
 
     OrderRepository orderRepository;
-    CheckoutRepository checkoutRepository;
+    CheckoutOrdering checkoutOrdering;
     OrderSagaRepository orderSagaRepository;
     OutboxEventRecorder outboxEventRecorder;
     SagaOutbox sagaOutbox;
@@ -76,7 +72,7 @@ public class OrderServiceImpl implements OrderService {
     OrderStatusHistoryRepository orderStatusHistoryRepository;
     OrderNotificationService orderNotificationService;
     com.fashionstore.order.order.service.OrderReceiptService orderReceiptService;
-    com.fashionstore.order.saga.service.OrderCancellationViewService cancellationProjection;
+    com.fashionstore.order.order.saga.service.OrderCancellationViewService cancellationProjection;
 
     @Override
     @Transactional
@@ -95,44 +91,43 @@ public class OrderServiceImpl implements OrderService {
             return toResponse(existingOrder, existingOrder.getCheckoutId());
         }
 
-        Checkout checkout =
-                checkoutRepository
-                        .findForUpdateByIdAndUserId(checkoutId, userId)
-                        .orElseThrow(() -> new AppException(OrderErrorCode.CHECKOUT_NOT_FOUND));
+        CheckoutSnapshot checkout = checkoutOrdering.lockForOrder(checkoutId, userId);
 
-        if (checkout.getOrder() != null) {
-            return toResponse(checkout.getOrder(), checkoutId);
+        if (checkout.orderId() != null) {
+            Order existing = orderRepository
+                    .findById(checkout.orderId())
+                    .orElseThrow(() -> new AppException(OrderErrorCode.ORDER_NOT_FOUND));
+            return toResponse(existing, checkoutId);
         }
-        if (checkout.getStatus() == CheckoutStatus.CANCELLED
-                || checkout.getStatus() == CheckoutStatus.EXPIRED) {
+        if (checkout.isClosed()) {
             throw new AppException(OrderErrorCode.CHECKOUT_STATUS_INVALID);
         }
 
-        List<CheckoutItem> checkoutItems = checkout.getItems();
-        if (checkoutItems == null || checkoutItems.isEmpty()) {
+        List<CheckoutSnapshot.Item> checkoutItems = checkout.items();
+        if (checkoutItems.isEmpty()) {
             throw new AppException(OrderErrorCode.CHECKOUT_NOT_FOUND);
         }
 
-        ShippingAddress address = copyAddress(checkout.getShippingAddress());
+        ShippingAddress address = copyAddress(checkout.shippingAddress());
 
         Order order =
                 Order.builder()
                         .orderCode(generateOrderCode())
-                        .paymentMethod(checkout.getPaymentMethod())
-                        .paymentProvider(checkout.getPaymentProvider())
+                        .paymentMethod(checkout.paymentMethod())
+                        .paymentProvider(checkout.paymentProvider())
                         .userId(userId)
                         .idempotencyKey(effectiveIdempotencyKey)
                         .status(OrderStatus.PENDING)
-                        .checkoutId(checkout.getId())
+                        .checkoutId(checkout.id())
                         .clientIp(clientIp)
-                        .recipientEmail(checkout.getRecipientEmail())
+                        .recipientEmail(checkout.recipientEmail())
                         .shippingAddress(fullAddress(address))
                         .address(address)
-                        .subtotalAmount(checkout.getSubtotalAmount())
-                        .discountAmount(checkout.getDiscountAmount())
-                        .shippingFee(checkout.getShippingFee())
-                        .shippingDiscountAmount(checkout.getShippingDiscountAmount())
-                        .totalAmount(checkout.getTotalAmount())
+                        .subtotalAmount(checkout.subtotalAmount())
+                        .discountAmount(checkout.discountAmount())
+                        .shippingFee(checkout.shippingFee())
+                        .shippingDiscountAmount(checkout.shippingDiscountAmount())
+                        .totalAmount(checkout.totalAmount())
                         .build();
 
         List<OrderItem> orderItems =
@@ -148,11 +143,9 @@ public class OrderServiceImpl implements OrderService {
                 userId,
                 "Khách hàng tạo đơn hàng từ checkout");
 
-        reserveCoupons(checkout, checkoutItems, userId, order.getId());
+        reserveCoupons(checkout, userId, order.getId());
 
-        checkout.setOrder(order);
-        checkout.setStatus(CheckoutStatus.COMPLETED);
-        checkoutRepository.save(checkout);
+        checkoutOrdering.markCompleted(checkout.id(), order.getId());
 
         OrderSaga saga = OrderSaga.start(order.getId());
         orderSagaRepository.save(saga);
@@ -170,19 +163,17 @@ public class OrderServiceImpl implements OrderService {
      * checkout snapshot the customer saw; an admin edit in between fails the order (rolling back) instead of silently
      * charging a different total.
      */
-    private void reserveCoupons(Checkout checkout, List<CheckoutItem> checkoutItems, String userId, String orderId) {
-        if (checkout.getCouponCode() != null && !checkout.getCouponCode().isBlank()) {
-            List<PromotionItemDto> promoItems =
-                    checkoutItems.stream().map(PromotionItemMapper::fromCheckoutItem).toList();
+    private void reserveCoupons(CheckoutSnapshot checkout, String userId, String orderId) {
+        if (checkout.couponCode() != null && !checkout.couponCode().isBlank()) {
             BigDecimal discount = promotionService.reserve(
-                    checkout.getCouponCode(), userId, orderId, checkout.getSubtotalAmount(), promoItems);
-            requireSameDiscount(checkout.getDiscountAmount(), discount);
+                    checkout.couponCode(), userId, orderId, checkout.subtotalAmount(), checkout.promotionItems());
+            requireSameDiscount(checkout.discountAmount(), discount);
         }
-        if (checkout.getShippingCouponCode() != null && !checkout.getShippingCouponCode().isBlank()) {
+        if (checkout.shippingCouponCode() != null && !checkout.shippingCouponCode().isBlank()) {
             BigDecimal shippingDiscount = promotionService.reserveShipping(
-                    checkout.getShippingCouponCode(), userId, orderId, checkout.getSubtotalAmount(),
-                    checkout.getShippingFee());
-            requireSameDiscount(checkout.getShippingDiscountAmount(), shippingDiscount);
+                    checkout.shippingCouponCode(), userId, orderId, checkout.subtotalAmount(),
+                    checkout.shippingFee());
+            requireSameDiscount(checkout.shippingDiscountAmount(), shippingDiscount);
         }
     }
 
@@ -421,10 +412,10 @@ public class OrderServiceImpl implements OrderService {
 
     /** correlationId = sagaId ngay từ command đầu tiên, để mọi reply về đúng một saga instance. */
     private EventEnvelope<ReservationInventoryCommand> reserveInventory(
-            Order order, OrderSaga saga, List<CheckoutItem> checkoutItems) {
+            Order order, OrderSaga saga, List<CheckoutSnapshot.Item> checkoutItems) {
         List<InventoryItem> items =
                 checkoutItems.stream()
-                        .map(item -> new InventoryItem(item.getVariantId(), item.getQuantity()))
+                        .map(item -> new InventoryItem(item.variantId(), item.quantity()))
                         .toList();
         return EventEnvelope.v1(
                 EventTypes.INVENTORY_RESERVATION_REQUESTED,
@@ -433,17 +424,17 @@ public class OrderServiceImpl implements OrderService {
                 new ReservationInventoryCommand(order.getId(), order.getUserId(), items));
     }
 
-    private OrderItem buildOrderItem(Order order, CheckoutItem checkoutItem) {
+    private OrderItem buildOrderItem(Order order, CheckoutSnapshot.Item checkoutItem) {
         return OrderItem.builder()
                 .order(order)
-                .cartItemId(checkoutItem.getCartItemId())
-                .variantId(checkoutItem.getVariantId())
-                .productName(checkoutItem.getProductName())
-                .size(checkoutItem.getSize())
-                .color(checkoutItem.getColor())
-                .unitPrice(checkoutItem.getUnitPrice())
-                .quantity(checkoutItem.getQuantity())
-                .lineTotal(checkoutItem.getLineTotal())
+                .cartItemId(checkoutItem.cartItemId())
+                .variantId(checkoutItem.variantId())
+                .productName(checkoutItem.productName())
+                .size(checkoutItem.size())
+                .color(checkoutItem.color())
+                .unitPrice(checkoutItem.unitPrice())
+                .quantity(checkoutItem.quantity())
+                .lineTotal(checkoutItem.lineTotal())
                 .build();
     }
 

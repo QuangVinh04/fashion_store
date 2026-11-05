@@ -25,21 +25,22 @@ com.fashionstore.<service>
 | service | feature |
 |---|---|
 | `catalog-service` | `product`, `inventory`, `media`, `review`, `wishlist` |
-| `order-service` | `cart`, `checkout`, `order`, `saga`, `promotion`, `shipment`, `returns`, `dashboard` |
+| `order-service` | `cart`, `checkout`, `order` (gồm sub-package `saga`, `returns`, `fulfillment`), `promotion`, `shipment` (adapter GHN), `dashboard` |
 | `payment-service` | `payment`, `wallet` |
 
 Quy tắc:
 
 - Mỗi feature là một application module. `shared/package-info.java` khai báo `@ApplicationModule(type = ApplicationModule.Type.OPEN)`.
 - `shared` không phụ thuộc feature nào.
-- Feature chỉ dùng feature khác qua API được expose.
+- Feature chỉ dùng feature khác qua API được expose: package `<feature>/api` (hoặc `dto`/`service`) gắn `@NamedInterface`. Không import `entity`/`repository` của feature khác. Tham chiếu feature khác bằng id, không bằng entity.
+- Value type dùng chung nhiều feature (vd `ShippingAddress`, `ShippingMethod`) đặt ở `shared/model`.
 - Chỉ tạo layer mà feature cần.
 - Listener và scheduler đặt trong `<feature>/event/`. Outbox đặt trong `shared/outbox/`.
 
 ## Kiểm tra ranh giới module
 
 - `src/test/java/com/fashionstore/<service>/ModularityTest.java` verify cấu trúc module.
-- `src/test/resources/modulith-known-violations.txt` liệt kê vi phạm đã có từ trước. Không thêm dòng để build pass. Sửa vi phạm thì xóa dòng tương ứng.
+- `src/test/resources/modulith-known-violations.txt` liệt kê vi phạm đã có từ trước (order-service hiện rỗng). Không thêm dòng để build pass. Sửa vi phạm thì xóa dòng tương ứng.
 
 ## Layer-first
 

@@ -8,14 +8,14 @@ import com.fashionstore.contracts.order.OrderDeliveredEvent;
 import com.fashionstore.order.order.dto.OrderResponse;
 import com.fashionstore.order.order.entity.Order;
 import com.fashionstore.order.order.entity.OrderStatusHistory;
-import com.fashionstore.order.returns.entity.ReturnRequest;
+import com.fashionstore.order.order.returns.entity.ReturnRequest;
 import com.fashionstore.order.order.entity.OrderStatus;
 import com.fashionstore.order.shared.outbox.OutboxEventRecorder;
 import com.fashionstore.order.shared.exception.OrderErrorCode;
 import com.fashionstore.order.order.mapper.OrderResponseMapper;
 import com.fashionstore.order.order.repository.OrderRepository;
 import com.fashionstore.order.order.repository.OrderStatusHistoryRepository;
-import com.fashionstore.order.returns.repository.ReturnRequestRepository;
+import com.fashionstore.order.order.returns.repository.ReturnRequestRepository;
 
 import lombok.RequiredArgsConstructor;
 

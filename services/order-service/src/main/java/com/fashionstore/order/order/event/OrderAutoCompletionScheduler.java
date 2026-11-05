@@ -1,8 +1,8 @@
 package com.fashionstore.order.order.event;
 
 import com.fashionstore.order.order.service.OrderReceiptService;
-import com.fashionstore.order.returns.service.ReturnPickupService;
-import com.fashionstore.order.returns.service.ReturnService;
+import com.fashionstore.order.order.returns.service.ReturnPickupService;
+import com.fashionstore.order.order.returns.service.ReturnService;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

@@ -7,7 +7,7 @@ import com.fashionstore.common.payment.PaymentProvider;
 import com.fashionstore.order.order.dto.AdminOrderFilter;
 import com.fashionstore.order.order.entity.Order;
 import com.fashionstore.order.order.entity.OrderStatus;
-import com.fashionstore.order.order.entity.ShippingAddress;
+import com.fashionstore.order.shared.model.ShippingAddress;
 import com.fashionstore.order.order.service.OrderAdminSpecifications;
 
 import org.junit.jupiter.api.Test;

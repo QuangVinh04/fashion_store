@@ -37,7 +37,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         CheckoutController.class,
         OrderController.class,
         AdminOrderController.class,
-        com.fashionstore.order.returns.controller.AdminReturnController.class
+        com.fashionstore.order.order.returns.controller.AdminReturnController.class
 })
 // Chuỗi security thật không được nạp ở slice này (nó cần JWT decoder + issuer), mà test này kiểm tài liệu
 // chứ không kiểm phân quyền — nên tắt filter để đọc được /v3/api-docs.
@@ -49,7 +49,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         CheckoutController.class,
         OrderController.class,
         AdminOrderController.class,
-        com.fashionstore.order.returns.controller.AdminReturnController.class
+        com.fashionstore.order.order.returns.controller.AdminReturnController.class
 })
 @ImportAutoConfiguration({
         JacksonAutoConfiguration.class,
@@ -61,12 +61,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         SwaggerUiOAuthProperties.class
 })
 class OpenApiDocumentTest {
-    @MockitoBean private com.fashionstore.order.saga.service.OrderCancellationService orderCancellationService;
-    @MockitoBean private com.fashionstore.order.saga.service.OrderSagaTimeoutService orderSagaTimeoutService;
-    @MockitoBean private com.fashionstore.order.returns.service.ReturnPickupService returnPickupService;
+    @MockitoBean private com.fashionstore.order.order.saga.service.OrderCancellationService orderCancellationService;
+    @MockitoBean private com.fashionstore.order.order.saga.service.OrderSagaTimeoutService orderSagaTimeoutService;
+    @MockitoBean private com.fashionstore.order.order.returns.service.ReturnPickupService returnPickupService;
     @MockitoBean private com.fashionstore.order.order.service.OrderReceiptService orderReceiptService;
     @MockitoBean
-    private com.fashionstore.order.shipment.service.ShipmentService shipmentService;
+    private com.fashionstore.order.order.fulfillment.service.ShipmentService shipmentService;
 
     /**
      * Context riêng, không dùng {@code OrderServiceApplication}: các {@code @Enable*} trên đó (outbox
@@ -89,7 +89,7 @@ class OpenApiDocumentTest {
     private OrderService orderService;
 
     @MockitoBean
-    private com.fashionstore.order.returns.service.ReturnService returnService;
+    private com.fashionstore.order.order.returns.service.ReturnService returnService;
 
     @Test
     void publishesTheDocumentWithBearerAuthAndAllFourTags() throws Exception {

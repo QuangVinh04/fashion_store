@@ -7,7 +7,7 @@ import com.fashionstore.order.order.entity.OrderStatus;
 import com.fashionstore.order.shared.outbox.OutboxEventRecorder;
 import com.fashionstore.order.order.repository.OrderRepository;
 import com.fashionstore.order.order.repository.OrderStatusHistoryRepository;
-import com.fashionstore.order.returns.repository.ReturnRequestRepository;
+import com.fashionstore.order.order.returns.repository.ReturnRequestRepository;
 import org.junit.jupiter.api.Test;
 
 import java.time.Clock;

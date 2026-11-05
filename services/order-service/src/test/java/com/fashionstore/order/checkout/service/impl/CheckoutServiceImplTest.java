@@ -15,14 +15,11 @@ import com.fashionstore.order.checkout.dto.CheckoutResponse;
 import com.fashionstore.order.checkout.dto.CreateCheckoutRequest;
 import com.fashionstore.order.checkout.dto.UpdateCheckoutRequest;
 import com.fashionstore.order.shared.dto.UserAddressDto;
-import com.fashionstore.order.cart.entity.Cart;
-import com.fashionstore.order.cart.entity.CartItem;
 import com.fashionstore.order.checkout.entity.Checkout;
 import com.fashionstore.order.order.entity.Order;
-import com.fashionstore.order.order.entity.ShippingAddress;
-import com.fashionstore.order.cart.entity.CartStatus;
+import com.fashionstore.order.shared.model.ShippingAddress;
 import com.fashionstore.order.checkout.entity.CheckoutStatus;
-import com.fashionstore.order.order.entity.ShippingMethod;
+import com.fashionstore.order.shared.model.ShippingMethod;
 import com.fashionstore.order.shared.exception.OrderErrorCode;
 import com.fashionstore.order.checkout.repository.CheckoutRepository;
 import com.fashionstore.order.cart.service.CartService;
@@ -196,9 +193,7 @@ class CheckoutServiceImplTest {
     @Test
     void cannotCancelACheckoutThatAlreadyProducedAnOrder() {
         Checkout checkout = checkout(CheckoutStatus.SUBMITTED);
-        Order order = Order.builder().build();
-        order.setId("order-1");
-        checkout.setOrder(order);
+        checkout.setOrderId("order-1");
         when(checkoutRepository.findByIdAndUserId("checkout-1", "user-1")).thenReturn(Optional.of(checkout));
 
         AppException exception = assertThrows(AppException.class, () -> service.cancelCheckout("checkout-1"));
@@ -231,7 +226,7 @@ class CheckoutServiceImplTest {
      */
     @Test
     void createsCheckoutFromTheCartSnapshotInDatabase() {
-        Cart cart = cart(cartItem("item-1", "variant-1", 2, "100000"));
+        CartResponse cart = cart(cartItem("item-1", "variant-1", 2, "100000"));
         when(cartService.revalidateActiveCart()).thenReturn(cart);
 
         CheckoutResponse response = service.createCheckout(CreateCheckoutRequest.builder()
@@ -250,7 +245,7 @@ class CheckoutServiceImplTest {
     /** Dòng cart_item cũ (tạo trước khi có snapshot) không có tên: báo lỗi rõ, không để DB ném NOT NULL. */
     @Test
     void rejectsCheckoutWhenACartItemHasNoProductSnapshot() {
-        CartItem stale = cartItem("item-1", "variant-1", 1, "100000");
+        CartItemResponse stale = cartItem("item-1", "variant-1", 1, "100000");
         stale.setProductName(null);
         when(cartService.revalidateActiveCart()).thenReturn(cart(stale));
 
@@ -280,7 +275,7 @@ class CheckoutServiceImplTest {
 
     @Test
     void createsCheckoutWithPromotionDiscount() {
-        Cart cart = cart(cartItem("item-1", "variant-1", 2, "100000"));
+        CartResponse cart = cart(cartItem("item-1", "variant-1", 2, "100000"));
         when(cartService.revalidateActiveCart()).thenReturn(cart);
         when(promotionService.previewDiscount(eq("SALE20"), eq("user-1"), eq(new BigDecimal("200000")), any()))
                 .thenReturn(new BigDecimal("40000"));
@@ -300,7 +295,7 @@ class CheckoutServiceImplTest {
 
     @Test
     void createsCheckoutWithEmptyCoupon_returnsZeroDiscount() {
-        Cart cart = cart(cartItem("item-1", "variant-1", 2, "100000"));
+        CartResponse cart = cart(cartItem("item-1", "variant-1", 2, "100000"));
         when(cartService.revalidateActiveCart()).thenReturn(cart);
 
         CheckoutResponse response = service.createCheckout(CreateCheckoutRequest.builder()
@@ -398,7 +393,7 @@ class CheckoutServiceImplTest {
 
     @Test
     void createsCheckout_withoutAddress_hasNoSnapshotAndFlatFee() {
-        Cart cart = cart(cartItem("item-1", "variant-1", 1, "200000"));
+        CartResponse cart = cart(cartItem("item-1", "variant-1", 1, "200000"));
         when(cartService.revalidateActiveCart()).thenReturn(cart);
 
         CheckoutResponse response = service.createCheckout(CreateCheckoutRequest.builder()
@@ -430,7 +425,7 @@ class CheckoutServiceImplTest {
 
     @Test
     void createsCheckout_freeShipping_withAddressLackingGhnCodes_rejectsAtCheckout() {
-        Cart cart = cart(cartItem("item-1", "variant-1", 3, "200000")); // 600k subtotal
+        CartResponse cart = cart(cartItem("item-1", "variant-1", 3, "200000")); // 600k subtotal
         when(cartService.revalidateActiveCart()).thenReturn(cart);
         when(identityClient.getAddress("user-1", "addr-legacy")).thenReturn(legacyAddress());
 
@@ -446,7 +441,7 @@ class CheckoutServiceImplTest {
 
     @Test
     void createsCheckout_freeShipping_withAddressOfAnotherUser_throwsAddressNotFound() {
-        Cart cart = cart(cartItem("item-1", "variant-1", 3, "200000")); // 600k subtotal
+        CartResponse cart = cart(cartItem("item-1", "variant-1", 3, "200000")); // 600k subtotal
         when(cartService.revalidateActiveCart()).thenReturn(cart);
         when(identityClient.getAddress("user-1", "addr-of-b"))
                 .thenThrow(new AppException(OrderErrorCode.ADDRESS_NOT_FOUND));
@@ -523,19 +518,13 @@ class CheckoutServiceImplTest {
                 .districtId(1444).wardCode("20308").build();
     }
 
-    private Cart cart(CartItem... items) {
-        Cart cart = Cart.builder()
-                .userId("user-1")
-                .status(CartStatus.ACTIVE)
-                .items(new ArrayList<>(List.of(items)))
-                .build();
-        cart.setId("cart-1");
-        cart.getItems().forEach(item -> item.setCart(cart));
-        return cart;
+    private CartResponse cart(CartItemResponse... items) {
+        return CartResponse.builder().items(List.of(items)).build();
     }
 
-    private CartItem cartItem(String id, String variantId, int quantity, String unitPrice) {
-        CartItem item = CartItem.builder()
+    private CartItemResponse cartItem(String id, String variantId, int quantity, String unitPrice) {
+        return CartItemResponse.builder()
+                .id(id)
                 .variantId(variantId)
                 .productId("product-1")
                 .productName("Basic Tee")
@@ -544,8 +533,6 @@ class CheckoutServiceImplTest {
                 .quantity(quantity)
                 .unitPrice(new BigDecimal(unitPrice))
                 .build();
-        item.setId(id);
-        return item;
     }
 
     private Checkout checkout(CheckoutStatus status) {
@@ -566,7 +553,7 @@ class CheckoutServiceImplTest {
 
     @Test
     void createsCheckout_withAddressAndCallsGhnFee() {
-        Cart cart = cart(cartItem("item-1", "variant-1", 1, "200000"));
+        CartResponse cart = cart(cartItem("item-1", "variant-1", 1, "200000"));
         when(cartService.revalidateActiveCart()).thenReturn(cart);
 
         UserAddressDto address = UserAddressDto.builder()
@@ -598,7 +585,7 @@ class CheckoutServiceImplTest {
 
     @Test
     void createsCheckout_whenAddressMissingDistrictOrWard_throwsShippingAddressInvalid() {
-        Cart cart = cart(cartItem("item-1", "variant-1", 1, "200000"));
+        CartResponse cart = cart(cartItem("item-1", "variant-1", 1, "200000"));
         when(cartService.revalidateActiveCart()).thenReturn(cart);
 
         UserAddressDto invalidAddress = UserAddressDto.builder()
@@ -619,7 +606,7 @@ class CheckoutServiceImplTest {
 
     @Test
     void createsCheckout_chargesTheCarrierFeeEvenForLargeOrders() {
-        Cart cart = cart(cartItem("item-1", "variant-1", 3, "200000")); // 600k subtotal
+        CartResponse cart = cart(cartItem("item-1", "variant-1", 3, "200000")); // 600k subtotal
         when(cartService.revalidateActiveCart()).thenReturn(cart);
         when(identityClient.getAddress("user-1", "addr-1")).thenReturn(address(1444, "20308"));
         when(ghnClient.calculateFee(any(ShippingAddress.class), any(Integer.class), eq(ShippingMethod.STANDARD)))
@@ -639,7 +626,7 @@ class CheckoutServiceImplTest {
 
     @Test
     void createsCheckout_withShippingCoupon_keepsCarrierFeeAndStoresTheDiscountSeparately() {
-        Cart cart = cart(cartItem("item-1", "variant-1", 1, "200000"));
+        CartResponse cart = cart(cartItem("item-1", "variant-1", 1, "200000"));
         when(cartService.revalidateActiveCart()).thenReturn(cart);
         when(identityClient.getAddress("user-1", "addr-1")).thenReturn(address(1444, "20308"));
         when(ghnClient.calculateFee(any(ShippingAddress.class), any(Integer.class), eq(ShippingMethod.STANDARD)))
@@ -696,7 +683,7 @@ class CheckoutServiceImplTest {
 
     @Test
     void createsCheckout_whenGhnFails_throwsUpstreamServiceError() {
-        Cart cart = cart(cartItem("item-1", "variant-1", 1, "200000"));
+        CartResponse cart = cart(cartItem("item-1", "variant-1", 1, "200000"));
         when(cartService.revalidateActiveCart()).thenReturn(cart);
 
         UserAddressDto address = UserAddressDto.builder()

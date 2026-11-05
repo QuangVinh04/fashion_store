@@ -28,7 +28,7 @@ public interface CheckoutRepository extends JpaRepository<Checkout, String> {
                    c.updatedAt = :now,
                    c.version = c.version + 1
              where c.status in :openStatuses
-               and c.order is null
+               and c.orderId is null
                and c.createdAt < :cutoff
             """)
     int expireOpenCheckoutsCreatedBefore(
@@ -44,7 +44,7 @@ public interface CheckoutRepository extends JpaRepository<Checkout, String> {
     Optional<Checkout> findByIdAndUserId(String id, String userId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @EntityGraph(attributePaths = {"items", "order"})
+    @EntityGraph(attributePaths = {"items"})
     @Query("select c from Checkout c where c.id = :id and c.userId = :userId")
     Optional<Checkout> findForUpdateByIdAndUserId(@Param("id") String id, @Param("userId") String userId);
 

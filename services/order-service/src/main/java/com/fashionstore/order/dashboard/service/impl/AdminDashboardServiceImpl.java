@@ -10,15 +10,13 @@ import com.fashionstore.order.dashboard.dto.TopProductQuantityResponse;
 import com.fashionstore.order.order.dto.OrderStatusCountResponse;
 import com.fashionstore.order.dashboard.dto.RevenueByDayResponse;
 import com.fashionstore.order.order.dto.TopProductResponse;
-import com.fashionstore.order.order.entity.OrderStatus;
-import com.fashionstore.order.order.repository.OrderItemRepository;
-import com.fashionstore.order.order.repository.OrderRepository;
+import com.fashionstore.order.order.api.DailyRevenue;
+import com.fashionstore.order.order.api.OrderStatistics;
 import com.fashionstore.order.dashboard.service.AdminDashboardService;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.PageRequest;
 import com.fashionstore.common.security.PermissionNames;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
@@ -26,11 +24,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Duration;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.Arrays;
 import java.util.List;
-import java.util.Set;
 
 @Slf4j
 @Service
@@ -38,8 +33,7 @@ import java.util.Set;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class AdminDashboardServiceImpl implements AdminDashboardService {
 
-    OrderRepository orderRepository;
-    OrderItemRepository orderItemRepository;
+    OrderStatistics orderStatistics;
     CatalogClient catalogClient;
     RedisService redis;
 
@@ -50,15 +44,6 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
             "dashboard", new TypeReference<AdminDashboardResponse>() {}, Duration.ofMinutes(1));
 
     private static final int TOP_PRODUCT_LIMIT = 10;
-
-    private static final Set<OrderStatus> REVENUE_STATUSES = Set.of(
-            OrderStatus.CONFIRMED,
-            OrderStatus.PROCESSING,
-            OrderStatus.PACKED,
-            OrderStatus.SHIPPING,
-            OrderStatus.DELIVERED,
-            OrderStatus.COMPLETED
-    );
 
     @Override
     @PreAuthorize("hasAuthority('" + PermissionNames.REVENUE_READ + "')")
@@ -82,8 +67,8 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                 .map(top -> new TopProductQuantityResponse(top.getVariantId(), top.getProductName(), top.getTotalQuantitySold()))
                 .toList();
         return new OperationsDashboardResponse(
-                orderRepository.count(),
-                orderRepository.countOrdersByStatus(),
+                orderStatistics.countOrders(),
+                orderStatistics.countByStatus(),
                 catalogClient.getLowStockCount(lowStockThreshold),
                 topProducts);
     }
@@ -93,31 +78,17 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
     }
 
     private List<TopProductResponse> findTopProducts() {
-        return orderItemRepository.findTopSellingProducts(REVENUE_STATUSES, PageRequest.of(0, TOP_PRODUCT_LIMIT));
+        return orderStatistics.topSellingProducts(TOP_PRODUCT_LIMIT);
     }
 
     private AdminDashboardResponse loadDashboardStats(int days, int lowStockThreshold) {
         LocalDateTime startDate = LocalDateTime.now().minusDays(days);
 
-        BigDecimal totalRevenue = orderRepository.calculateTotalRevenue(REVENUE_STATUSES);
-        long totalOrders = orderRepository.count();
-        List<OrderStatusCountResponse> orderByStatus = orderRepository.countOrdersByStatus();
-
-        List<Object[]> rawRevenue = orderRepository.findRevenueByDay(REVENUE_STATUSES, startDate);
-        List<RevenueByDayResponse> revenueByDay = rawRevenue.stream()
-                .map(row -> {
-                    LocalDate date = null;
-                    if (row[0] instanceof LocalDate ld) {
-                        date = ld;
-                    } else if (row[0] instanceof java.sql.Date sd) {
-                        date = sd.toLocalDate();
-                    } else if (row[0] != null) {
-                        date = LocalDate.parse(row[0].toString());
-                    }
-                    BigDecimal rev = row[1] != null ? new BigDecimal(row[1].toString()) : BigDecimal.ZERO;
-                    long count = row[2] != null ? ((Number) row[2]).longValue() : 0L;
-                    return new RevenueByDayResponse(date, rev, count);
-                })
+        BigDecimal totalRevenue = orderStatistics.totalRevenue();
+        long totalOrders = orderStatistics.countOrders();
+        List<OrderStatusCountResponse> orderByStatus = orderStatistics.countByStatus();
+        List<RevenueByDayResponse> revenueByDay = orderStatistics.revenueByDay(startDate).stream()
+                .map(AdminDashboardServiceImpl::toRevenueByDay)
                 .toList();
 
         List<TopProductResponse> topProducts = findTopProducts();
@@ -125,12 +96,16 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
         long lowStockCount = catalogClient.getLowStockCount(lowStockThreshold);
 
         return AdminDashboardResponse.builder()
-                .totalRevenue(totalRevenue != null ? totalRevenue : BigDecimal.ZERO)
+                .totalRevenue(totalRevenue)
                 .totalOrders(totalOrders)
                 .lowStockCount(lowStockCount)
                 .revenueByDay(revenueByDay)
                 .orderByStatus(orderByStatus)
                 .topProducts(topProducts)
                 .build();
+    }
+
+    private static RevenueByDayResponse toRevenueByDay(DailyRevenue daily) {
+        return new RevenueByDayResponse(daily.date(), daily.revenue(), daily.orderCount());
     }
 }

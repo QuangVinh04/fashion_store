@@ -379,7 +379,7 @@ class CartServiceImplTest {
         when(catalogClient.checkStock(anyList())).thenReturn(enoughStock("variant-1", 2));
         when(cartRepository.save(any(Cart.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        Cart revalidated = service.revalidateActiveCart();
+        CartResponse revalidated = service.revalidateActiveCart();
 
         assertThat(revalidated.getItems().get(0).getUnitPrice()).isEqualByComparingTo("25.00");
         assertThat(revalidated.getItems().get(0).getProductName()).isEqualTo("Basic Tee v2");

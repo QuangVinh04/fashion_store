@@ -5,7 +5,7 @@ import com.fashionstore.common.payment.PaymentMethod;
 import com.fashionstore.common.payment.PaymentProvider;
 import com.fashionstore.order.checkout.entity.Checkout;
 import com.fashionstore.order.order.entity.Order;
-import com.fashionstore.order.order.entity.ShippingAddress;
+import com.fashionstore.order.shared.model.ShippingAddress;
 import com.fashionstore.order.checkout.entity.CheckoutStatus;
 import com.fashionstore.order.order.entity.OrderStatus;
 import org.junit.jupiter.api.Test;

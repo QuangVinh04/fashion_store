@@ -5,10 +5,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.fashionstore.common.payment.PaymentMethod;
 import com.fashionstore.common.payment.PaymentProvider;
 import com.fashionstore.order.order.entity.Order;
-import com.fashionstore.order.returns.entity.ReturnRequest;
-import com.fashionstore.order.order.entity.ShippingAddress;
+import com.fashionstore.order.order.returns.entity.ReturnRequest;
+import com.fashionstore.order.shared.model.ShippingAddress;
 import com.fashionstore.order.order.entity.OrderStatus;
-import com.fashionstore.order.returns.entity.ReturnRequestStatus;
+import com.fashionstore.order.order.returns.entity.ReturnRequestStatus;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;

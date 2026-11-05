@@ -5,8 +5,8 @@ import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 
 import com.fashionstore.order.order.service.OrderReceiptService;
-import com.fashionstore.order.returns.service.ReturnPickupService;
-import com.fashionstore.order.returns.service.ReturnService;
+import com.fashionstore.order.order.returns.service.ReturnPickupService;
+import com.fashionstore.order.order.returns.service.ReturnService;
 import org.junit.jupiter.api.Test;
 
 import java.time.Clock;

@@ -1,14 +1,14 @@
 package com.fashionstore.order.order.repository;
 
-import com.fashionstore.order.returns.repository.ReturnRequestRepository;
+import com.fashionstore.order.order.returns.repository.ReturnRequestRepository;
 import com.fashionstore.common.payment.PaymentMethod;
 import com.fashionstore.common.payment.PaymentProvider;
 import com.fashionstore.order.order.dto.OrderPurchaseTab;
 import com.fashionstore.order.order.entity.Order;
 import com.fashionstore.order.order.entity.OrderItem;
-import com.fashionstore.order.returns.entity.ReturnRequest;
+import com.fashionstore.order.order.returns.entity.ReturnRequest;
 import com.fashionstore.order.order.entity.OrderStatus;
-import com.fashionstore.order.returns.entity.ReturnRequestStatus;
+import com.fashionstore.order.order.returns.entity.ReturnRequestStatus;
 import com.fashionstore.order.order.service.OrderPurchaseSpecifications;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -68,7 +68,7 @@ class OrderPurchaseListIntegrationTest {
     void returnTabIncludesCarrierAndLossRefundsAndOnlyReturnsOwnedOrders() {
         var ownIds = new java.util.ArrayList<String>();
         var returnIds = new java.util.ArrayList<String>();
-        for (var kind : com.fashionstore.order.returns.entity.ReturnRequestKind.values()) {
+        for (var kind : com.fashionstore.order.order.returns.entity.ReturnRequestKind.values()) {
             var own = save("user-1", OrderStatus.RETURNED, "Refunded item");
             var ownReturn = returns.saveAndFlush(ReturnRequest.builder().order(own).userId("user-1")
                     .kind(kind).reason("Refund").status(ReturnRequestStatus.REFUNDED).build());
@@ -91,15 +91,15 @@ class OrderPurchaseListIntegrationTest {
     @Test
     void batchReturnLinksIncludeCarrierAndLossRefunds() {
         var ids = new java.util.ArrayList<String>();
-        var references = new java.util.ArrayList<com.fashionstore.order.returns.dto.OrderReturnReference>();
+        var references = new java.util.ArrayList<com.fashionstore.order.order.returns.dto.OrderReturnReference>();
         for (var kind : java.util.List.of(
-                com.fashionstore.order.returns.entity.ReturnRequestKind.CARRIER_RETURN,
-                com.fashionstore.order.returns.entity.ReturnRequestKind.VERIFIED_LOSS)) {
+                com.fashionstore.order.order.returns.entity.ReturnRequestKind.CARRIER_RETURN,
+                com.fashionstore.order.order.returns.entity.ReturnRequestKind.VERIFIED_LOSS)) {
             var order = save("user-1", OrderStatus.REFUNDED, "Refunded item");
             var request = returns.saveAndFlush(ReturnRequest.builder().order(order).userId("user-1")
                     .kind(kind).reason("Refund").status(ReturnRequestStatus.REFUNDED).build());
             ids.add(order.getId());
-            references.add(new com.fashionstore.order.returns.dto.OrderReturnReference(order.getId(), request.getId(),
+            references.add(new com.fashionstore.order.order.returns.dto.OrderReturnReference(order.getId(), request.getId(),
                     request.getStatus(), kind, null, null, null, null, null));
         }
 
@@ -115,12 +115,12 @@ class OrderPurchaseListIntegrationTest {
                 .refundLedgerEntryId("ledger-1").build());
         var summary = orders.findReturnReferences(java.util.List.of(order.getId())).getFirst();
         assertThat(summary.returnStatus()).isEqualTo(ReturnRequestStatus.REFUNDED);
-        assertThat(summary.refundStatus()).isEqualTo(com.fashionstore.order.returns.dto.ReturnRefundStatus.COMPLETED);
+        assertThat(summary.refundStatus()).isEqualTo(com.fashionstore.order.order.returns.dto.ReturnRefundStatus.COMPLETED);
         assertThat(summary.actualRefundAmount()).isEqualByComparingTo("180000");
         request.setRefundLedgerEntryId(null);
         returns.saveAndFlush(request);
         summary = orders.findReturnReferences(java.util.List.of(order.getId())).getFirst();
-        assertThat(summary.refundStatus()).isEqualTo(com.fashionstore.order.returns.dto.ReturnRefundStatus.REVIEW_REQUIRED);
+        assertThat(summary.refundStatus()).isEqualTo(com.fashionstore.order.order.returns.dto.ReturnRefundStatus.REVIEW_REQUIRED);
         assertThat(summary.actualRefundAmount()).isNull();
     }
 

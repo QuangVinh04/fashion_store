@@ -21,12 +21,12 @@ public interface OrderRepository extends JpaRepository<Order, String>, org.sprin
     java.util.List<Order> findWithItemsByIdIn(java.util.Collection<String> ids);
 
     @Query("""
-            select new com.fashionstore.order.returns.dto.OrderReturnReference(r.order.id, r.id,
+            select new com.fashionstore.order.order.returns.dto.OrderReturnReference(r.order.id, r.id,
                 r.status, r.kind, r.approvedRefundAmount, r.refundLedgerEntryId,
                 r.refundFailureReason, r.refundStartedAt, r.closedAt)
             from ReturnRequest r where r.order.id in :ids
             """)
-    java.util.List<com.fashionstore.order.returns.dto.OrderReturnReference> findReturnReferences(
+    java.util.List<com.fashionstore.order.order.returns.dto.OrderReturnReference> findReturnReferences(
             @Param("ids") java.util.Collection<String> ids);
     @Query("""
             select o.id from Order o

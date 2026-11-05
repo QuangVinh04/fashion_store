@@ -2,15 +2,13 @@ package com.fashionstore.order.shipment.client;
 
 import com.fashionstore.common.exception.AppException;
 import com.fashionstore.common.exception.ErrorCode;
-import com.fashionstore.common.payment.PaymentMethod;
 import com.fashionstore.order.shipment.config.GhnProperties;
 import com.fashionstore.order.shared.dto.UserAddressDto;
 import com.fashionstore.order.shipment.dto.GhnCreateOrderRequest;
 import com.fashionstore.order.shipment.dto.GhnCreateOrderResponse;
-import com.fashionstore.order.order.entity.Order;
-import com.fashionstore.order.order.entity.OrderItem;
-import com.fashionstore.order.order.entity.ShippingAddress;
-import com.fashionstore.order.order.entity.ShippingMethod;
+import com.fashionstore.order.shipment.dto.CarrierOrder;
+import com.fashionstore.order.shared.model.ShippingAddress;
+import com.fashionstore.order.shared.model.ShippingMethod;
 import com.fashionstore.order.shared.exception.OrderErrorCode;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -46,11 +44,11 @@ class GhnClientTest {
                 .provinceId(1000001).wardId(1003646).build();
     }
 
-    private com.fashionstore.order.returns.dto.ReturnPickup pickup() {
-        return new com.fashionstore.order.returns.dto.ReturnPickup(
+    private com.fashionstore.order.shipment.dto.ReturnPickup pickup() {
+        return new com.fashionstore.order.shipment.dto.ReturnPickup(
                 "ret-1", "ORD-1", "Nguyen Van A", "0987654321", "123 Le Loi, Phường Sài Gòn, Hồ Chí Minh",
                 "Phường Sài Gòn", "Hồ Chí Minh", 600,
-                List.of(new com.fashionstore.order.returns.dto.ReturnPickup.Item("Áo khoác", "var-1", 1, BigDecimal.valueOf(300000))));
+                List.of(new com.fashionstore.order.shipment.dto.ReturnPickup.Item("Áo khoác", "var-1", 1, BigDecimal.valueOf(300000))));
     }
 
     private void configureWarehouse() {
@@ -106,7 +104,7 @@ class GhnClientTest {
 
     @Test void createReturnOrder_withAnIncompletePickupAddressIsRejected() {
         configureWarehouse();
-        var noWard = new com.fashionstore.order.returns.dto.ReturnPickup(
+        var noWard = new com.fashionstore.order.shipment.dto.ReturnPickup(
                 "ret-1", "ORD-1", "A", "0987654321", "123 Le Loi", " ", "Hồ Chí Minh", 600, List.of());
 
         assertThatThrownBy(() -> client.createReturnOrder(noWard, "RET-ret-1"))
@@ -200,11 +198,8 @@ class GhnClientTest {
     @Test void createOrder_usesNewAddressNames() {
         properties.setToken("token");
         properties.setShopId("42");
-        Order order = Order.builder().orderCode("ORD1").address(address())
-                .shippingAddress("123 Le Loi, Phường Sài Gòn, Hồ Chí Minh")
-                .paymentMethod(PaymentMethod.ONLINE).totalAmount(BigDecimal.valueOf(200000))
-                .items(List.of(OrderItem.builder().productName("Shirt").variantId("var1")
-                        .quantity(1).unitPrice(BigDecimal.valueOf(200000)).build())).build();
+        CarrierOrder order = new CarrierOrder("An", "0900000000", "123 Le Loi, Phường Sài Gòn, Hồ Chí Minh",
+                BigDecimal.ZERO, List.of(new CarrierOrder.Item("Shirt", "var1", 1, BigDecimal.valueOf(200000))));
         UserAddressDto destination = UserAddressDto.builder().provinceId(1000001).wardId(1003646)
                 .province("Hồ Chí Minh").ward("Phường Sài Gòn").build();
         when(ghnApi.createOrder(eq("token"), eq("42"), any())).thenReturn(

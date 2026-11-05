@@ -15,14 +15,12 @@ import com.fashionstore.order.checkout.dto.UpdateCheckoutRequest;
 import com.fashionstore.order.shared.dto.UserAddressDto;
 import com.fashionstore.order.shared.exception.OrderErrorCode;
 import com.fashionstore.common.security.CurrentUserProvider;
-import com.fashionstore.order.cart.entity.Cart;
-import com.fashionstore.order.cart.entity.CartItem;
 import com.fashionstore.order.checkout.entity.Checkout;
 import com.fashionstore.order.checkout.entity.CheckoutItem;
 import com.fashionstore.order.checkout.mapper.PromotionItemMapper;
-import com.fashionstore.order.order.entity.ShippingAddress;
+import com.fashionstore.order.shared.model.ShippingAddress;
 import com.fashionstore.order.checkout.entity.CheckoutStatus;
-import com.fashionstore.order.order.entity.ShippingMethod;
+import com.fashionstore.order.shared.model.ShippingMethod;
 import com.fashionstore.order.checkout.repository.CheckoutRepository;
 import com.fashionstore.order.cart.service.CartService;
 import com.fashionstore.order.checkout.service.CheckoutTransactionService;
@@ -72,8 +70,7 @@ public class CheckoutServiceImpl implements CheckoutService {
     public CheckoutResponse createCheckout(CreateCheckoutRequest request) {
         String userId = currentUserProvider.getCurrentUserId();
         // Giỏ đã được xác nhận lại với catalog (còn bán, giá hiện tại, kho còn đủ) và snapshot đã cập nhật.
-        Cart cart = cartService.revalidateActiveCart();
-        List<CartItem> cartItems = cart.getItems();
+        List<CartItemResponse> cartItems = cartService.revalidateActiveCart().getItems();
 
         BigDecimal subtotal = cartItems.stream()
                 .map(this::toLineTotal)
@@ -84,7 +81,7 @@ public class CheckoutServiceImpl implements CheckoutService {
         ShippingAddress shippingAddress = snapshotAddress(userId, request.getAddressId());
         BigDecimal shippingFee = calculateShippingFee(shippingMethod, shippingAddress, totalWeightGram);
         Map<String, List<String>> categoryIdsByVariant =
-                loadCategoryIds(cartItems.stream().map(CartItem::getVariantId).toList());
+                loadCategoryIds(cartItems.stream().map(CartItemResponse::getVariantId).toList());
         List<PromotionItemDto> promoItems = cartItems.stream()
                 .map(item -> PromotionItemMapper.fromCartItem(
                         item, categoryIdsByVariant.getOrDefault(item.getVariantId(), List.of()), toLineTotal(item)))
@@ -141,7 +138,7 @@ public class CheckoutServiceImpl implements CheckoutService {
         Checkout checkout = checkoutTransactionService.getCheckoutSnapshot(checkoutId, userId);
         Long snapshotVersion = checkout.getVersion();
 
-        if (isStatusInvalid(checkout.getStatus()) || checkout.getOrder() != null) {
+        if (isStatusInvalid(checkout.getStatus()) || checkout.getOrderId() != null) {
             throw new AppException(OrderErrorCode.CHECKOUT_STATUS_INVALID);
         }
         // 2. Tính trên biến cục bộ: identity/catalog/GHN đều chạy ngoài transaction.
@@ -227,7 +224,7 @@ public class CheckoutServiceImpl implements CheckoutService {
             return toResponse(checkout);   // hủy hai lần vẫn ra cùng kết quả
         }
         // Checkout đã sinh đơn thì việc hủy thuộc về đơn, không thuộc về checkout.
-        if (checkout.getStatus() == CheckoutStatus.COMPLETED || checkout.getOrder() != null) {
+        if (checkout.getStatus() == CheckoutStatus.COMPLETED || checkout.getOrderId() != null) {
             throw new AppException(OrderErrorCode.CHECKOUT_STATUS_INVALID);
         }
 
@@ -235,7 +232,7 @@ public class CheckoutServiceImpl implements CheckoutService {
         return toResponse(checkoutRepository.save(checkout));
     }
 
-    private BigDecimal toLineTotal(CartItem item) {
+    private BigDecimal toLineTotal(CartItemResponse item) {
         BigDecimal unitPrice = item.getUnitPrice() == null ? BigDecimal.ZERO : item.getUnitPrice();
         return unitPrice.multiply(BigDecimal.valueOf(item.getQuantity()));
     }
@@ -255,7 +252,7 @@ public class CheckoutServiceImpl implements CheckoutService {
 
         return CheckoutResponse.builder()
                 .id(checkout.getId())
-                .orderId(checkout.getOrder() != null ? checkout.getOrder().getId() : null)
+                .orderId(checkout.getOrderId())
                 .status(checkout.getStatus())
                 .paymentMethod(checkout.getPaymentMethod())
                 .paymentProvider(checkout.getPaymentProvider())
@@ -322,7 +319,7 @@ public class CheckoutServiceImpl implements CheckoutService {
         }
     }
 
-    private CheckoutItem toCheckoutItem(Checkout checkout, CartItem cartItem, List<String> categoryIds) {
+    private CheckoutItem toCheckoutItem(Checkout checkout, CartItemResponse cartItem, List<String> categoryIds) {
         if (cartItem.getProductName() == null || cartItem.getProductName().isBlank()) {
             // Dòng giỏ hàng tạo trước khi cart_item lưu snapshot: báo rõ thay vì để DB ném NOT NULL.
             throw new AppException(OrderErrorCode.CART_ITEM_STALE);
@@ -378,12 +375,12 @@ public class CheckoutServiceImpl implements CheckoutService {
         return ghnClient.calculateFee(address, totalWeightGram, shippingMethod);
     }
 
-    private int calculateTotalWeightFromCartItems(List<CartItem> cartItems) {
+    private int calculateTotalWeightFromCartItems(List<CartItemResponse> cartItems) {
         if (cartItems == null || cartItems.isEmpty()) {
             return 200;
         }
         try {
-            List<String> variantIds = cartItems.stream().map(CartItem::getVariantId).toList();
+            List<String> variantIds = cartItems.stream().map(CartItemResponse::getVariantId).toList();
             Map<String, Integer> weightMap = catalogClient.getVariantsBatch(variantIds).stream()
                     .collect(Collectors.toMap(
                             ProductVariantDto::getVariantId,

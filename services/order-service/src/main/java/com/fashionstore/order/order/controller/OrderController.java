@@ -2,11 +2,11 @@ package com.fashionstore.order.order.controller;
 
 import com.fashionstore.common.dto.ApiResponse;
 import com.fashionstore.common.dto.PageResponse;
-import com.fashionstore.order.saga.dto.CancelOrderRequest;
+import com.fashionstore.order.order.saga.dto.CancelOrderRequest;
 import com.fashionstore.order.order.dto.OrderResponse;
 import com.fashionstore.order.order.dto.OrderStatusHistoryResponse;
 import com.fashionstore.order.order.dto.OrderSummaryResponse;
-import com.fashionstore.order.returns.dto.ReturnOrderRequest;
+import com.fashionstore.order.order.returns.dto.ReturnOrderRequest;
 import com.fashionstore.order.order.dto.UpdateOrderStatusRequest;
 import com.fashionstore.order.order.entity.OrderStatus;
 import com.fashionstore.order.order.service.OrderService;
@@ -17,8 +17,8 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springdoc.core.annotations.ParameterObject;
 import lombok.AccessLevel;
-import com.fashionstore.order.returns.dto.ReturnRequestResponse;
-import com.fashionstore.order.returns.service.ReturnService;
+import com.fashionstore.order.order.returns.dto.ReturnRequestResponse;
+import com.fashionstore.order.order.returns.service.ReturnService;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import org.springframework.data.domain.Pageable;
@@ -50,7 +50,7 @@ public class OrderController {
     ReturnService returnService;
 
     com.fashionstore.order.order.service.OrderReceiptService orderReceiptService;
-    com.fashionstore.order.saga.service.OrderCancellationService orderCancellationService;
+    com.fashionstore.order.order.saga.service.OrderCancellationService orderCancellationService;
 
     @PostMapping("/{id}/confirm-receipt")
     public ApiResponse<OrderResponse> confirmReceipt(@PathVariable String id) {

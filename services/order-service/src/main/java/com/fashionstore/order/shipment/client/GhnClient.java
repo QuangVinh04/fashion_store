@@ -2,19 +2,18 @@ package com.fashionstore.order.shipment.client;
 
 import com.fashionstore.common.exception.AppException;
 import com.fashionstore.common.exception.ErrorCode;
-import com.fashionstore.common.payment.PaymentMethod;
 import com.fashionstore.order.shipment.config.GhnProperties;
 import com.fashionstore.order.shared.dto.UserAddressDto;
 import com.fashionstore.order.shipment.dto.GhnCreateOrderRequest;
-import com.fashionstore.order.returns.dto.ReturnPickup;
+import com.fashionstore.order.shipment.dto.ReturnPickup;
 import com.fashionstore.order.shipment.dto.GhnCreateOrderResponse;
 import com.fashionstore.order.shipment.dto.VerifiedGhnShipment;
 import java.time.Instant;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-import com.fashionstore.order.order.entity.Order;
-import com.fashionstore.order.order.entity.ShippingAddress;
-import com.fashionstore.order.order.entity.ShippingMethod;
+import com.fashionstore.order.shipment.dto.CarrierOrder;
+import com.fashionstore.order.shared.model.ShippingAddress;
+import com.fashionstore.order.shared.model.ShippingMethod;
 import com.fashionstore.order.shared.exception.OrderErrorCode;
 import feign.FeignException;
 
@@ -167,7 +166,7 @@ public class GhnClient {
     /**
      * Tạo vận đơn bên GHN.
      */
-    public String createOrder(Order order, UserAddressDto address, int weightGram, String clientOrderCode) {
+    public String createOrder(CarrierOrder order, UserAddressDto address, int weightGram, String clientOrderCode) {
         if (address == null || address.getProvinceId() == null || address.getWardId() == null
                 || address.getProvince() == null || address.getProvince().isBlank()
                 || address.getWard() == null || address.getWard().isBlank()) {
@@ -189,28 +188,26 @@ public class GhnClient {
             throw new AppException(ErrorCode.UPSTREAM_SERVICE_ERROR);
         }
 
-        List<GhnCreateOrderRequest.GhnItem> items = order.getItems().stream()
+        List<GhnCreateOrderRequest.GhnItem> items = order.items().stream()
                 .map(item -> GhnCreateOrderRequest.GhnItem.builder()
-                        .name(item.getProductName())
-                        .code(item.getVariantId())
-                        .quantity(item.getQuantity())
-                        .price(item.getUnitPrice())
-                        .weight(effectiveWeight / Math.max(1, order.getItems().size()))
+                        .name(item.name())
+                        .code(item.code())
+                        .quantity(item.quantity())
+                        .price(item.price())
+                        .weight(effectiveWeight / Math.max(1, order.items().size()))
                         .build())
                 .toList();
-
-        BigDecimal codAmount = order.getPaymentMethod() == PaymentMethod.COD ? order.getTotalAmount() : BigDecimal.ZERO;
 
         GhnCreateOrderRequest request = GhnCreateOrderRequest.builder()
                 .paymentTypeId(1) // Shop trả cước vận chuyển
                 .clientOrderCode(clientOrderCode)
-                .toName(order.getAddress().getRecipientName())
-                .toPhone(order.getAddress().getRecipientPhone())
-                .toAddress(order.getShippingAddress())
+                .toName(order.recipientName())
+                .toPhone(order.recipientPhone())
+                .toAddress(order.addressLine())
                 .toWardName(address.getWard())
                 .toProvinceName(address.getProvince())
                 .isNewToAddress(true)
-                .codAmount(codAmount)
+                .codAmount(order.codAmount())
                 .weight(effectiveWeight)
                 .length(20)
                 .width(20)

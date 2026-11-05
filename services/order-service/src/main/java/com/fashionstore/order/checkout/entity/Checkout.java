@@ -1,11 +1,10 @@
 package com.fashionstore.order.checkout.entity;
 
-import com.fashionstore.order.order.entity.Order;
-import com.fashionstore.order.order.entity.ShippingAddress;
+import com.fashionstore.order.shared.model.ShippingAddress;
 import com.fashionstore.common.persistence.BaseEntity;
 import com.fashionstore.common.payment.PaymentMethod;
 import com.fashionstore.common.payment.PaymentProvider;
-import com.fashionstore.order.order.entity.ShippingMethod;
+import com.fashionstore.order.shared.model.ShippingMethod;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
@@ -30,9 +29,9 @@ public class Checkout extends BaseEntity {
     @Builder.Default
     Long version = 0L;
 
-    @OneToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "order_id", unique = true)
-    Order order;
+    /** Plain id, not an entity: checkout must not depend on the order module that consumes it. */
+    @Column(name = "order_id", length = 36, unique = true)
+    String orderId;
 
     @Column(name = "user_id", nullable = false)
     String userId;

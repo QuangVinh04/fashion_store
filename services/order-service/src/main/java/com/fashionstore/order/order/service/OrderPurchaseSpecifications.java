@@ -3,7 +3,7 @@ package com.fashionstore.order.order.service;
 import com.fashionstore.order.order.dto.OrderPurchaseTab;
 import com.fashionstore.order.order.entity.Order;
 import com.fashionstore.order.order.entity.OrderItem;
-import com.fashionstore.order.returns.entity.ReturnRequest;
+import com.fashionstore.order.order.returns.entity.ReturnRequest;
 import com.fashionstore.order.order.entity.OrderStatus;
 import org.springframework.data.jpa.domain.Specification;
 import java.util.ArrayList;

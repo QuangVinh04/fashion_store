@@ -1,7 +1,6 @@
 package com.fashionstore.order.checkout.mapper;
 
 import com.fashionstore.order.cart.dto.CartItemResponse;
-import com.fashionstore.order.cart.entity.CartItem;
 import com.fashionstore.order.checkout.entity.CheckoutItem;
 import com.fashionstore.order.promotion.dto.PromotionItemDto;
 
@@ -17,7 +16,7 @@ public final class PromotionItemMapper {
     private PromotionItemMapper() {
     }
 
-    public static PromotionItemDto fromCartItem(CartItem item, List<String> categoryIds, BigDecimal lineTotal) {
+    public static PromotionItemDto fromCartItem(CartItemResponse item, List<String> categoryIds, BigDecimal lineTotal) {
         return PromotionItemDto.builder()
                 .variantId(item.getVariantId())
                 .productId(item.getProductId())

@@ -11,8 +11,8 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Feature modules (cart, checkout, order, saga, returns, shipment, promotion, dashboard) may only use each other's exposed API.
- * Existing coupling is frozen in modulith-known-violations.txt: new violations fail, fixed ones must be removed.
+ * Feature modules (cart, checkout, order, shipment, promotion, dashboard) may only use each other's exposed API.
+ * Coupling is frozen in modulith-known-violations.txt (currently empty): new violations fail, fixed ones must be removed.
  */
 class ModularityTest {
 

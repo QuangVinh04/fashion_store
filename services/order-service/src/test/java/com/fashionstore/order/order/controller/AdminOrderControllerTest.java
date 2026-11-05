@@ -39,16 +39,16 @@ class AdminOrderControllerTest {
     private OrderService orderService;
 
     @Mock
-    private com.fashionstore.order.returns.service.ReturnService returnService;
+    private com.fashionstore.order.order.returns.service.ReturnService returnService;
     @Mock
-    private com.fashionstore.order.shipment.service.ShipmentService shipmentService;
+    private com.fashionstore.order.order.fulfillment.service.ShipmentService shipmentService;
     @Mock
-    private com.fashionstore.order.saga.service.OrderSagaTimeoutService sagaRecovery;
+    private com.fashionstore.order.order.saga.service.OrderSagaTimeoutService sagaRecovery;
 
     @BeforeEach
     void setUp() {
         mockMvc = MockMvcBuilders.standaloneSetup(new AdminOrderController(orderService, returnService, shipmentService,
-                org.mockito.Mockito.mock(com.fashionstore.order.saga.service.OrderCancellationService.class),
+                org.mockito.Mockito.mock(com.fashionstore.order.order.saga.service.OrderCancellationService.class),
                 sagaRecovery))
                 .setCustomArgumentResolvers(new PageableHandlerMethodArgumentResolver())
                 .setControllerAdvice(new GlobalExceptionHandler())
@@ -57,10 +57,10 @@ class AdminOrderControllerTest {
 
     @Test
     void retryCheckoutSaga_restartsTheStuckStepAndReturnsTheSaga() throws Exception {
-        when(orderService.getOrderSaga("ord-1", com.fashionstore.order.saga.entity.OrderSagaType.CHECKOUT))
-                .thenReturn(com.fashionstore.order.saga.dto.OrderSagaResponse.builder()
+        when(orderService.getOrderSaga("ord-1", com.fashionstore.order.order.saga.entity.OrderSagaType.CHECKOUT))
+                .thenReturn(com.fashionstore.order.order.saga.dto.OrderSagaResponse.builder()
                         .orderId("ord-1")
-                        .status(com.fashionstore.order.saga.entity.OrderSagaStatus.COMPENSATING)
+                        .status(com.fashionstore.order.order.saga.entity.OrderSagaStatus.COMPENSATING)
                         .build());
 
         mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders

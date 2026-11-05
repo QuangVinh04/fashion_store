@@ -1,11 +1,11 @@
 package com.fashionstore.order.order.dto;
 
-import com.fashionstore.order.returns.dto.ReturnRefundStatus;
+import com.fashionstore.order.order.returns.dto.ReturnRefundStatus;
 import com.fashionstore.common.payment.PaymentMethod;
 import com.fashionstore.common.payment.PaymentProvider;
 import com.fashionstore.order.order.entity.OrderStatus;
-import com.fashionstore.order.returns.entity.ReturnRequestKind;
-import com.fashionstore.order.returns.entity.ReturnRequestStatus;
+import com.fashionstore.order.order.returns.entity.ReturnRequestKind;
+import com.fashionstore.order.order.returns.entity.ReturnRequestStatus;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;

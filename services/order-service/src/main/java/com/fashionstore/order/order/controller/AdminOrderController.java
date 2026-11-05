@@ -5,13 +5,13 @@ import com.fashionstore.common.dto.PageResponse;
 import com.fashionstore.common.payment.PaymentMethod;
 import com.fashionstore.order.order.dto.AdminOrderFilter;
 import com.fashionstore.order.order.dto.OrderResponse;
-import com.fashionstore.order.saga.dto.OrderSagaResponse;
+import com.fashionstore.order.order.saga.dto.OrderSagaResponse;
 import com.fashionstore.order.order.dto.OrderStatusHistoryResponse;
 import com.fashionstore.order.order.dto.OrderSummaryResponse;
-import com.fashionstore.order.saga.entity.OrderSagaType;
+import com.fashionstore.order.order.saga.entity.OrderSagaType;
 import com.fashionstore.order.order.entity.OrderStatus;
 import com.fashionstore.order.order.service.OrderService;
-import com.fashionstore.order.returns.service.ReturnService;
+import com.fashionstore.order.order.returns.service.ReturnService;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -57,14 +57,14 @@ public class AdminOrderController {
 
     OrderService orderService;
     ReturnService returnService;
-    com.fashionstore.order.shipment.service.ShipmentService shipmentService;
-    com.fashionstore.order.saga.service.OrderCancellationService orderCancellationService;
-    com.fashionstore.order.saga.service.OrderSagaTimeoutService orderSagaTimeoutService;
+    com.fashionstore.order.order.fulfillment.service.ShipmentService shipmentService;
+    com.fashionstore.order.order.saga.service.OrderCancellationService orderCancellationService;
+    com.fashionstore.order.order.saga.service.OrderSagaTimeoutService orderSagaTimeoutService;
 
     @PostMapping("/{orderId}/cancel")
     public ApiResponse<OrderResponse> cancelOrder(
             @PathVariable String orderId,
-            @Valid @RequestBody com.fashionstore.order.saga.dto.CancelOrderRequest request) {
+            @Valid @RequestBody com.fashionstore.order.order.saga.dto.CancelOrderRequest request) {
         return ApiResponse.<OrderResponse>builder()
                 .data(orderCancellationService.requestAdmin(orderId, request))
                 .build();
@@ -73,7 +73,7 @@ public class AdminOrderController {
     @PostMapping("/{orderId}/cancellation/retry")
     public ApiResponse<OrderResponse> retryCancellation(
             @PathVariable String orderId,
-            @Valid @RequestBody com.fashionstore.order.saga.dto.CancelOrderRequest request) {
+            @Valid @RequestBody com.fashionstore.order.order.saga.dto.CancelOrderRequest request) {
         return ApiResponse.<OrderResponse>builder()
                 .data(orderCancellationService.retryAdmin(orderId, request))
                 .build();
@@ -104,16 +104,16 @@ hoặc bước hiện tại không có command để phát lại (409).""")
             @PathVariable String orderId,
             @PathVariable String cancellationId,
             @Valid @RequestBody
-                    com.fashionstore.order.saga.dto.VerifyCancellationCarrierRequest request) {
+                    com.fashionstore.order.order.saga.dto.VerifyCancellationCarrierRequest request) {
         return ApiResponse.<OrderResponse>builder()
                 .data(orderCancellationService.verifyCarrier(orderId, cancellationId, request))
                 .build();
     }
 
     @GetMapping("/{orderId}/shipment")
-    public ApiResponse<com.fashionstore.order.shipment.dto.ShipmentResponse> getShipment(
+    public ApiResponse<com.fashionstore.order.order.fulfillment.dto.ShipmentResponse> getShipment(
             @PathVariable String orderId) {
-        return ApiResponse.<com.fashionstore.order.shipment.dto.ShipmentResponse>builder()
+        return ApiResponse.<com.fashionstore.order.order.fulfillment.dto.ShipmentResponse>builder()
                 .data(shipmentService.getShipmentForAdmin(orderId))
                 .build();
     }

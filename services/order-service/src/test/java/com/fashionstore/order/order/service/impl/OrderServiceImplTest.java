@@ -18,31 +18,32 @@ import com.fashionstore.common.security.CurrentUserProvider;
 import com.fashionstore.contracts.common.EventTypes;
 import com.fashionstore.contracts.order.dto.VerifyPurchaseRequest;
 import com.fashionstore.contracts.order.dto.VerifyPurchaseResponse;
-import com.fashionstore.order.saga.dto.CancelOrderRequest;
+import com.fashionstore.order.order.saga.dto.CancelOrderRequest;
 import com.fashionstore.order.order.dto.OrderResponse;
-import com.fashionstore.order.saga.dto.OrderSagaResponse;
+import com.fashionstore.order.order.saga.dto.OrderSagaResponse;
 import com.fashionstore.order.order.dto.OrderStatusHistoryResponse;
 import com.fashionstore.order.order.dto.OrderSummaryResponse;
-import com.fashionstore.order.saga.dto.SagaCommand;
+import com.fashionstore.order.order.saga.dto.SagaCommand;
 import com.fashionstore.order.order.dto.UpdateOrderStatusRequest;
 import com.fashionstore.order.checkout.entity.Checkout;
 import com.fashionstore.order.checkout.entity.CheckoutItem;
 import com.fashionstore.order.order.entity.Order;
-import com.fashionstore.order.saga.entity.OrderSaga;
+import com.fashionstore.order.order.saga.entity.OrderSaga;
 import com.fashionstore.order.order.entity.OrderStatusHistory;
-import com.fashionstore.order.order.entity.ShippingAddress;
+import com.fashionstore.order.shared.model.ShippingAddress;
 import com.fashionstore.order.checkout.entity.CheckoutStatus;
-import com.fashionstore.order.saga.entity.OrderSagaStatus;
-import com.fashionstore.order.saga.entity.OrderSagaStep;
+import com.fashionstore.order.order.saga.entity.OrderSagaStatus;
+import com.fashionstore.order.order.saga.entity.OrderSagaStep;
 import com.fashionstore.order.order.entity.OrderStatus;
 import com.fashionstore.order.shared.outbox.OutboxEventRecorder;
-import com.fashionstore.order.saga.event.SagaOutbox;
+import com.fashionstore.order.order.saga.event.SagaOutbox;
 import com.fashionstore.order.shared.exception.OrderErrorCode;
-import com.fashionstore.order.checkout.repository.CheckoutRepository;
+import com.fashionstore.order.checkout.api.CheckoutOrdering;
+import com.fashionstore.order.checkout.mapper.CheckoutSnapshotMapper;
 import com.fashionstore.order.order.repository.OrderRepository;
-import com.fashionstore.order.saga.repository.OrderSagaRepository;
+import com.fashionstore.order.order.saga.repository.OrderSagaRepository;
 import com.fashionstore.order.order.repository.OrderStatusHistoryRepository;
-import com.fashionstore.order.saga.service.SagaCancellationService;
+import com.fashionstore.order.order.saga.service.SagaCancellationService;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -67,7 +68,7 @@ class OrderServiceImplTest {
 
     @Mock private OrderRepository orderRepository;
 
-    @Mock private CheckoutRepository checkoutRepository;
+    @Mock private CheckoutOrdering checkoutOrdering;
 
     @Mock private OrderSagaRepository orderSagaRepository;
 
@@ -94,7 +95,7 @@ class OrderServiceImplTest {
                 org.mockito.Mockito.mock(com.fashionstore.order.order.service.OrderReceiptService.class);
         var cancellationProjection =
                 org.mockito.Mockito.mock(
-                        com.fashionstore.order.saga.service.OrderCancellationViewService.class);
+                        com.fashionstore.order.order.saga.service.OrderCancellationViewService.class);
         org.mockito.Mockito.lenient()
                 .when(cancellationProjection.enrich(any(), any()))
                 .thenAnswer(call -> call.getArgument(1));
@@ -108,7 +109,7 @@ class OrderServiceImplTest {
         service =
                 new OrderServiceImpl(
                         orderRepository,
-                        checkoutRepository,
+                        checkoutOrdering,
                         orderSagaRepository,
                         outboxEventRecorder,
                         sagaOutbox,
@@ -151,7 +152,7 @@ class OrderServiceImplTest {
         assertEquals("checkout-1", response.getCheckoutId());
         assertEquals(OrderStatus.PENDING, response.getStatus());
         assertEquals(PaymentMethod.ONLINE, response.getPaymentMethod());
-        verify(checkoutRepository, never()).findForUpdateByIdAndUserId("checkout-1", "user-1");
+        verify(checkoutOrdering, never()).lockForOrder("checkout-1", "user-1");
         verify(orderSagaRepository, never()).save(any());
         verify(outboxEventRecorder, never()).saveMessage(anyString(), anyString(), any());
         verify(promotionService, never()).reserve(any(), any(), any(), any(), any());
@@ -314,8 +315,7 @@ class OrderServiceImplTest {
         assertEquals(
                 0, saved.getItems().getFirst().getUnitPrice().compareTo(new BigDecimal("100000")));
 
-        assertEquals(CheckoutStatus.COMPLETED, checkout.getStatus());
-        assertEquals(saved, checkout.getOrder());
+        verify(checkoutOrdering).markCompleted("checkout-1", saved.getId());
         verify(orderSagaRepository).save(any(OrderSaga.class));
         verify(outboxEventRecorder)
                 .saveMessage(eq("order-1"), eq(EventTypes.INVENTORY_RESERVATION_REQUESTED), any());
@@ -335,7 +335,7 @@ class OrderServiceImplTest {
         OrderResponse response = service.createOrder("checkout-1", " key-1 ", "127.0.0.1");
 
         assertEquals("order-1", response.getId());
-        verify(checkoutRepository, never()).findForUpdateByIdAndUserId(anyString(), anyString());
+        verify(checkoutOrdering, never()).lockForOrder(anyString(), anyString());
     }
 
     /**
@@ -345,9 +345,10 @@ class OrderServiceImplTest {
     @Test
     void createOrder_whenCheckoutAlreadyProducedAnOrder_returnsItWithoutCreatingAnother() {
         Checkout checkout = submittedCheckout(snapshot());
-        checkout.setOrder(order(OrderStatus.PENDING));
+        checkout.setOrderId("order-1");
         checkout.setStatus(CheckoutStatus.COMPLETED);
         stubCreateOrder(checkout);
+        when(orderRepository.findById("order-1")).thenReturn(Optional.of(order(OrderStatus.PENDING)));
 
         OrderResponse response = service.createOrder("checkout-1", "another-key", "127.0.0.1");
 
@@ -378,8 +379,8 @@ class OrderServiceImplTest {
     void createOrder_whenCheckoutNotFoundForCurrentUser_throwsCheckoutNotFound() {
         when(orderRepository.findByUserIdAndIdempotencyKey("user-1", "checkout-of-b"))
                 .thenReturn(Optional.empty());
-        when(checkoutRepository.findForUpdateByIdAndUserId("checkout-of-b", "user-1"))
-                .thenReturn(Optional.empty());
+        when(checkoutOrdering.lockForOrder("checkout-of-b", "user-1"))
+                .thenThrow(new AppException(OrderErrorCode.CHECKOUT_NOT_FOUND));
 
         AppException ex =
                 assertThrows(
@@ -436,8 +437,8 @@ class OrderServiceImplTest {
     private void stubCreateOrder(Checkout checkout) {
         when(orderRepository.findByUserIdAndIdempotencyKey("user-1", "checkout-1"))
                 .thenReturn(Optional.empty());
-        when(checkoutRepository.findForUpdateByIdAndUserId("checkout-1", "user-1"))
-                .thenReturn(Optional.of(checkout));
+        when(checkoutOrdering.lockForOrder("checkout-1", "user-1"))
+                .thenAnswer(inv -> CheckoutSnapshotMapper.toSnapshot(checkout));
         when(orderRepository.save(any(Order.class)))
                 .thenAnswer(
                         inv -> {
@@ -473,9 +474,9 @@ class OrderServiceImplTest {
                 .thenReturn(new PageImpl<>(List.of(order), pageable, 1));
         when(orderRepository.findWithItemsByIdIn(List.of(order.getId()))).thenReturn(List.of(order));
         when(orderRepository.findReturnReferences(List.of(order.getId())))
-                .thenReturn(List.of(new com.fashionstore.order.returns.dto.OrderReturnReference(order.getId(), "return-1",
-                        com.fashionstore.order.returns.entity.ReturnRequestStatus.REFUNDED,
-                        com.fashionstore.order.returns.entity.ReturnRequestKind.CUSTOMER_RETURN,
+                .thenReturn(List.of(new com.fashionstore.order.order.returns.dto.OrderReturnReference(order.getId(), "return-1",
+                        com.fashionstore.order.order.returns.entity.ReturnRequestStatus.REFUNDED,
+                        com.fashionstore.order.order.returns.entity.ReturnRequestKind.CUSTOMER_RETURN,
                         new BigDecimal("180000"), "ledger-1", null, null, null)));
 
         var result = service.getMyOrders(null, pageable).getItems().getFirst();
@@ -483,7 +484,7 @@ class OrderServiceImplTest {
         assertEquals("Áo polo", result.getItems().getFirst().getProductName());
         assertEquals(2, result.getItems().getFirst().getQuantity());
         assertEquals("return-1", result.getReturnRequestId());
-        assertEquals(com.fashionstore.order.returns.dto.ReturnRefundStatus.COMPLETED, result.getReturnRefundStatus());
+        assertEquals(com.fashionstore.order.order.returns.dto.ReturnRefundStatus.COMPLETED, result.getReturnRefundStatus());
         assertEquals(new BigDecimal("180000"), result.getActualRefundAmount());
         assertEquals(new BigDecimal("180000"), result.getExpectedRefundAmount());
         verify(orderRepository, never()).findWithItemsById(any());
@@ -529,7 +530,7 @@ class OrderServiceImplTest {
 
         // Đơn chỉ về CANCELLED khi payment xác nhận huỷ và kho được nhả.
         assertEquals(OrderStatus.PENDING, response.getStatus());
-        assertEquals(com.fashionstore.order.saga.entity.OrderSagaStatus.COMPENSATING, saga.getStatus());
+        assertEquals(com.fashionstore.order.order.saga.entity.OrderSagaStatus.COMPENSATING, saga.getStatus());
         assertEquals(OrderSagaStep.CANCEL_PAYMENT, saga.getCurrentStep());
         verify(sagaOutbox).emit(org.mockito.ArgumentMatchers.eq(saga), any());
     }
@@ -607,7 +608,7 @@ class OrderServiceImplTest {
         saga.fail("STEP_RETRY_EXHAUSTED", "Cạn 5 lần thử ở bước RELEASE_INVENTORY");
         when(orderSagaRepository.findByOrderIdAndType(
                         "order-1",
-                        com.fashionstore.order.saga.entity.OrderSagaType.CHECKOUT))
+                        com.fashionstore.order.order.saga.entity.OrderSagaType.CHECKOUT))
                 .thenReturn(Optional.of(saga));
 
         OrderSagaResponse response = service.getOrderSaga("order-1");
@@ -621,7 +622,7 @@ class OrderServiceImplTest {
     void reportsMissingSagaSeparatelyFromMissingOrder() {
         when(orderSagaRepository.findByOrderIdAndType(
                         "order-1",
-                        com.fashionstore.order.saga.entity.OrderSagaType.CHECKOUT))
+                        com.fashionstore.order.order.saga.entity.OrderSagaType.CHECKOUT))
                 .thenReturn(Optional.empty());
 
         AppException exception =
@@ -635,15 +636,15 @@ class OrderServiceImplTest {
         var saga = OrderSaga.startCancellation("order-1", "op", "payment-1", "reservation-1");
         when(orderSagaRepository.findByOrderIdAndType(
                         "order-1",
-                        com.fashionstore.order.saga.entity.OrderSagaType.CANCELLATION))
+                        com.fashionstore.order.order.saga.entity.OrderSagaType.CANCELLATION))
                 .thenReturn(Optional.of(saga));
         var response =
                 service.getOrderSaga(
                         "order-1",
-                        com.fashionstore.order.saga.entity.OrderSagaType.CANCELLATION);
+                        com.fashionstore.order.order.saga.entity.OrderSagaType.CANCELLATION);
         assertEquals(saga.getId(), response.getSagaId());
         assertEquals(
-                com.fashionstore.order.saga.entity.OrderSagaType.CANCELLATION,
+                com.fashionstore.order.order.saga.entity.OrderSagaType.CANCELLATION,
                 response.getType());
     }
 
@@ -835,7 +836,7 @@ class OrderServiceImplTest {
         when(orderRepository.findByIdForUpdate("order-1")).thenReturn(Optional.of(order));
         when(orderSagaRepository.findByOrderIdAndTypeForUpdate(
                         "order-1",
-                        com.fashionstore.order.saga.entity.OrderSagaType.CHECKOUT))
+                        com.fashionstore.order.order.saga.entity.OrderSagaType.CHECKOUT))
                 .thenReturn(Optional.of(saga));
     }
 

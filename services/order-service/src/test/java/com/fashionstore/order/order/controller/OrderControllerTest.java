@@ -29,13 +29,13 @@ class OrderControllerTest {
     private OrderService orderService;
 
     @Mock
-    private com.fashionstore.order.returns.service.ReturnService returnService;
+    private com.fashionstore.order.order.returns.service.ReturnService returnService;
 
     @BeforeEach
     void setUp() {
         mockMvc = MockMvcBuilders.standaloneSetup(new OrderController(orderService, returnService,
                 org.mockito.Mockito.mock(com.fashionstore.order.order.service.OrderReceiptService.class),
-                org.mockito.Mockito.mock(com.fashionstore.order.saga.service.OrderCancellationService.class)))
+                org.mockito.Mockito.mock(com.fashionstore.order.order.saga.service.OrderCancellationService.class)))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
     }

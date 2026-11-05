@@ -3,7 +3,7 @@ package com.fashionstore.order.checkout.dto;
 import com.fashionstore.common.payment.PaymentMethod;
 import com.fashionstore.common.payment.PaymentProvider;
 import com.fashionstore.order.checkout.entity.CheckoutStatus;
-import com.fashionstore.order.order.entity.ShippingMethod;
+import com.fashionstore.order.shared.model.ShippingMethod;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 

@@ -3,6 +3,7 @@ package com.fashionstore.order.order.entity;
 import com.fashionstore.common.payment.PaymentMethod;
 import com.fashionstore.common.payment.PaymentProvider;
 import com.fashionstore.common.persistence.BaseEntity;
+import com.fashionstore.order.shared.model.ShippingAddress;
 
 import jakarta.persistence.*;
 
