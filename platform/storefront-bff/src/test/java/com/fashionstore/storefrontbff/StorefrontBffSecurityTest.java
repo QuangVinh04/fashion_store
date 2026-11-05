@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.reactive.AutoConfigureWebTestClient;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.client.registration.ClientRegistration;
@@ -25,6 +26,7 @@ import static org.springframework.security.test.web.reactive.server.SecurityMock
 import static org.springframework.security.test.web.reactive.server.SecurityMockServerConfigurers.mockOidcLogin;
 
 // WebSession trong RAM thay cho Redis
+@Import(InMemoryOidcSessionRegistryTestConfig.class)
 @SpringBootTest(properties = "spring.autoconfigure.exclude="
         + "com.fashionstore.common.autoconfigure.CommonRedisAutoConfiguration,"
         + "org.springframework.boot.autoconfigure.session.SessionAutoConfiguration")

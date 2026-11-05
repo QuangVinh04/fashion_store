@@ -49,6 +49,13 @@ instead of relying on `issuer-uri` discovery.
 - Password policy: ≥ 8 ký tự, có chữ hoa, chữ thường, số, không trùng username/email, không dùng lại 3 mật khẩu gần nhất.
 - Events: user event và admin event được ghi (giữ 30 ngày), xem ở Admin console → Events. `eventsListeners` mặc định `jboss-logging`.
 
+### Back-channel logout và registry phiên trong Redis
+
+Khi admin khoá tài khoản hoặc đăng xuất user ở Keycloak, Keycloak POST `logout_token` (có `sid`) tới BFF; BFF tra `sid` → session BFF rồi huỷ.
+Bảng `sid → session` nằm trong Redis (`RedisReactiveOidcSessionRegistry`, common-library, key `<session namespace>:oidc:*`, TTL 7 ngày = SSO max),
+nên BFF restart hoặc chạy nhiều instance vẫn huỷ đúng session. Bản `InMemoryReactiveOidcSessionRegistry` trước đây mất bảng này khi restart.
+ID token thô không được lưu; chỉ lưu issuer, audience, subject, `sid` và header CSRF mà handler logout cần.
+
 ### Backoffice bắt buộc OTP (`keycloak-init`)
 
 Client `backoffice-bff` dùng flow đăng nhập riêng `backoffice-browser` (mật khẩu + OTP, cả hai REQUIRED, **không có bước cookie SSO**):
