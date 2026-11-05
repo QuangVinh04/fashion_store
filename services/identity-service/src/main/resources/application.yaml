@@ -59,6 +59,15 @@ spring:
     publisher-returns: true
     template:
       mandatory: true
+    listener:
+      simple:
+        prefetch: 20
+        default-requeue-rejected: false
+        retry:
+          enabled: true
+          initial-interval: 1000
+          max-attempts: 3
+          multiplier: 2
 
 app:
   keycloak:

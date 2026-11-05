@@ -100,6 +100,38 @@ class UserProvisioningServiceImplTest {
         verify(userRepository, never()).save(any());
     }
 
+    @Test
+    void provisionsFromRawKeycloakEventDataWithoutAToken() {
+        when(userRepository.findById("kc-1")).thenReturn(Optional.empty());
+        when(userRepository.existsByEmail("new@fashion.local")).thenReturn(false);
+
+        provisioningService.provision("kc-1", "new@fashion.local", "An Nguyen", false);
+
+        verify(userRepository).insertProvisionedUser("kc-1", "new@fashion.local", "An Nguyen", false);
+    }
+
+    @Test
+    void rawEventWithoutNameFallsBackToEmail() {
+        when(userRepository.findById("kc-1")).thenReturn(Optional.empty());
+
+        provisioningService.provision("kc-1", "noname@fashion.local", " ", false);
+
+        verify(userRepository).insertProvisionedUser("kc-1", "noname@fashion.local", "noname@fashion.local", false);
+    }
+
+    @Test
+    void rawEventRepeatedAfterTheUserWasProvisionedByTheirFirstRequestChangesNothing() {
+        User user = User.builder().email("same@fashion.local").fullName("Edited in profile").build();
+        user.setId("kc-1");
+        when(userRepository.findById("kc-1")).thenReturn(Optional.of(user));
+
+        provisioningService.provision("kc-1", "same@fashion.local", "Keycloak Name", false);
+
+        assertThat(user.getFullName()).isEqualTo("Edited in profile");
+        verify(userRepository, never()).save(any());
+        verify(userRepository, never()).insertProvisionedUser(any(), any(), any(), anyBoolean());
+    }
+
     private static Jwt jwt(Map<String, Object> claims) {
         Jwt.Builder builder = Jwt.withTokenValue("token").header("alg", "none");
         claims.forEach(builder::claim);
