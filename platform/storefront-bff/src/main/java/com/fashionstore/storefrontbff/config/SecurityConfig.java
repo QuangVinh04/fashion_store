@@ -1,13 +1,15 @@
 package com.fashionstore.storefrontbff.config;
 
 import com.fashionstore.common.security.KeycloakJwtAuthoritiesConverter;
+import com.fashionstore.common.security.RedisReactiveOidcSessionRegistry;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.data.redis.connection.ReactiveRedisConnectionFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.config.web.server.OidcBackChannelServerLogoutHandler;
 import org.springframework.security.config.web.server.ServerHttpSecurity;
-import org.springframework.security.oauth2.client.oidc.server.session.InMemoryReactiveOidcSessionRegistry;
 import org.springframework.security.oauth2.client.oidc.server.session.ReactiveOidcSessionRegistry;
 import org.springframework.security.core.authority.mapping.GrantedAuthoritiesMapper;
 import org.springframework.security.oauth2.client.oidc.web.server.logout.OidcClientInitiatedServerLogoutSuccessHandler;
@@ -25,6 +27,7 @@ import org.springframework.security.web.server.csrf.ServerCsrfTokenRequestAttrib
 import org.springframework.web.server.WebFilter;
 import reactor.core.publisher.Mono;
 
+import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
@@ -63,10 +66,14 @@ public class SecurityConfig {
                 .build();
     }
 
-    // sid Keycloak -> session BFF. Trong RAM: đủ cho một instance mỗi BFF; scale ngang thì cần registry dùng chung
+    // sid Keycloak -> session BFF, trong Redis: sống sót qua restart và dùng chung giữa các instance BFF,
+    // nên back-channel logout (admin khoá tài khoản) luôn huỷ được session. TTL = SSO max lifespan của realm (7 ngày).
     @Bean
-    ReactiveOidcSessionRegistry oidcSessionRegistry() {
-        return new InMemoryReactiveOidcSessionRegistry();
+    ReactiveOidcSessionRegistry oidcSessionRegistry(
+            ReactiveRedisConnectionFactory redisConnectionFactory,
+            ObjectMapper objectMapper,
+            @Value("${spring.session.redis.namespace}") String sessionNamespace) {
+        return RedisReactiveOidcSessionRegistry.create(redisConnectionFactory, objectMapper, sessionNamespace + ":oidc", Duration.ofDays(7));
     }
 
     @Bean

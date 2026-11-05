@@ -10,3 +10,10 @@ spring:
 app:
   keycloak:
     client-secret: ${STOREFRONT_BFF_CLIENT_SECRET}
+server:
+  # Sau reverse proxy TLS: redirect_uri OAuth2 phải là https://<domain>, không phải URL nội bộ
+  forward-headers-strategy: framework
+  reactive:
+    session:
+      cookie:
+        secure: true

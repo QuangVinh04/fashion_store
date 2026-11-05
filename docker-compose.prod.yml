@@ -1,0 +1,87 @@
+# Override production cho phần xác thực (Keycloak + BFF):
+#   docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml up -d
+# Mọi biến `${VAR:?}` là bắt buộc: thiếu thì compose dừng ngay thay vì chạy với giá trị dev.
+# Giả định TLS kết thúc ở reverse proxy trên cùng máy (nginx/Caddy/Traefik), proxy gắn X-Forwarded-*.
+# Xem platform/keycloak/README.md mục "Production".
+
+x-keycloak-issuer: &keycloak-issuer
+  KEYCLOAK_ISSUER: ${KEYCLOAK_HOSTNAME:?KEYCLOAK_HOSTNAME is required}/realms/fashion-store
+
+services:
+  keycloak:
+    # Chế độ production (không phải start-dev): cache theme, kiểm hostname chặt
+    command: start --import-realm
+    environment:
+      KC_HOSTNAME: ${KEYCLOAK_HOSTNAME:?KEYCLOAK_HOSTNAME is required}
+      # HTTP chỉ giữa proxy và Keycloak; browser luôn đi HTTPS qua proxy
+      KC_HTTP_ENABLED: "true"
+      KC_PROXY_HEADERS: xforwarded
+      KC_DB_USERNAME: ${KEYCLOAK_DB_USERNAME:?KEYCLOAK_DB_USERNAME is required}
+      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?KEYCLOAK_DB_PASSWORD is required}
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USERNAME:?KEYCLOAK_ADMIN_USERNAME is required}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?KEYCLOAK_ADMIN_PASSWORD is required}
+      STOREFRONT_BFF_CLIENT_SECRET: ${STOREFRONT_BFF_CLIENT_SECRET:?STOREFRONT_BFF_CLIENT_SECRET is required}
+      BACKOFFICE_BFF_CLIENT_SECRET: ${BACKOFFICE_BFF_CLIENT_SECRET:?BACKOFFICE_BFF_CLIENT_SECRET is required}
+      ORDER_SERVICE_CLIENT_SECRET: ${ORDER_SERVICE_CLIENT_SECRET:?ORDER_SERVICE_CLIENT_SECRET is required}
+      CATALOG_SERVICE_CLIENT_SECRET: ${CATALOG_SERVICE_CLIENT_SECRET:?CATALOG_SERVICE_CLIENT_SECRET is required}
+      IDENTITY_SERVICE_CLIENT_SECRET: ${IDENTITY_SERVICE_CLIENT_SECRET:?IDENTITY_SERVICE_CLIENT_SECRET is required}
+      PAYMENT_SERVICE_CLIENT_SECRET: ${PAYMENT_SERVICE_CLIENT_SECRET:?PAYMENT_SERVICE_CLIENT_SECRET is required}
+      # Event Listener SPI: tài khoản RabbitMQ thật, không rơi về mặc định dev của docker-compose.yml
+      KC_SPI_EVENTS_LISTENER__FASHION_RABBIT__USERNAME: ${RABBITMQ_USERNAME:?RABBITMQ_USERNAME is required}
+      KC_SPI_EVENTS_LISTENER__FASHION_RABBIT__PASSWORD: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD is required}
+      # Dev user được import ở trạng thái disabled
+      DEV_USERS_ENABLED: "false"
+      SWAGGER_UI_CLIENT_ENABLED: "false"
+      # Redirect / post-logout URI của client BFF trong realm
+      STOREFRONT_BFF_PUBLIC_URL: ${STOREFRONT_BFF_PUBLIC_URL:?STOREFRONT_BFF_PUBLIC_URL is required}
+      BACKOFFICE_BFF_PUBLIC_URL: ${BACKOFFICE_BFF_PUBLIC_URL:?BACKOFFICE_BFF_PUBLIC_URL is required}
+      # Không có SMTP thì user tự đăng ký không nhận được email xác minh
+      MAIL_HOST: ${MAIL_HOST:?MAIL_HOST is required}
+      MAIL_PORT: ${MAIL_PORT:?MAIL_PORT is required}
+      MAIL_FROM: ${MAIL_FROM:?MAIL_FROM is required}
+      MAIL_USERNAME: ${MAIL_USERNAME:?MAIL_USERNAME is required}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:?MAIL_PASSWORD is required}
+    # Chỉ reverse proxy trên máy host được gọi tới (HTTP thuần)
+    ports: !override
+      - "127.0.0.1:8180:8080"
+
+  keycloak-postgres:
+    environment:
+      POSTGRES_USER: ${KEYCLOAK_DB_USERNAME:?KEYCLOAK_DB_USERNAME is required}
+      POSTGRES_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?KEYCLOAK_DB_PASSWORD is required}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
+
+  storefront-bff:
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      KEYCLOAK_PUBLIC_URL: ${KEYCLOAK_HOSTNAME:?KEYCLOAK_HOSTNAME is required}/realms/fashion-store
+      STOREFRONT_UI_URL: ${STOREFRONT_UI_URL:?STOREFRONT_UI_URL is required}
+      STOREFRONT_BFF_CLIENT_SECRET: ${STOREFRONT_BFF_CLIENT_SECRET:?STOREFRONT_BFF_CLIENT_SECRET is required}
+      REDIS_PASSWORD: ${REDIS_PASSWORD?REDIS_PASSWORD must be declared (may be empty)}
+    ports: !override
+      - "127.0.0.1:8083:8083"
+
+  backoffice-bff:
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      KEYCLOAK_PUBLIC_URL: ${KEYCLOAK_HOSTNAME:?KEYCLOAK_HOSTNAME is required}/realms/fashion-store
+      BACKOFFICE_UI_URL: ${BACKOFFICE_UI_URL:?BACKOFFICE_UI_URL is required}
+      BACKOFFICE_BFF_CLIENT_SECRET: ${BACKOFFICE_BFF_CLIENT_SECRET:?BACKOFFICE_BFF_CLIENT_SECRET is required}
+      REDIS_PASSWORD: ${REDIS_PASSWORD?REDIS_PASSWORD must be declared (may be empty)}
+    ports: !override
+      - "127.0.0.1:8084:8084"
+
+  # iss của token = KC_HOSTNAME; mọi resource server phải chờ đúng issuer đó
+  api-gateway:
+    environment: *keycloak-issuer
+  identity-service:
+    environment: *keycloak-issuer
+  notification-service:
+    environment: *keycloak-issuer
+  catalog-service:
+    environment: *keycloak-issuer
+  order-service:
+    environment: *keycloak-issuer
+  payment-service:
+    environment: *keycloak-issuer

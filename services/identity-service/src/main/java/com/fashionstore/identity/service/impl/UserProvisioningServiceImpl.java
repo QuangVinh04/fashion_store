@@ -20,26 +20,32 @@ public class UserProvisioningServiceImpl implements UserProvisioningService {
 
     private final UserRepository userRepository;
 
-    // Transaction riêng: được gọi cả từ các luồng readOnly (xem hồ sơ, địa chỉ)
+    // Transaction riêng: được gọi cả từ các luồng readOnly (xem hồ sơ, địa chỉ).
+    // Cả hai method công khai đều cần annotation: gọi this.provision(...) không đi qua proxy.
     @Override
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void provision(Jwt jwt) {
         String email = jwt.getClaimAsString(StandardClaimNames.EMAIL);
         boolean emailVerified = Boolean.TRUE.equals(jwt.getClaimAsBoolean(StandardClaimNames.EMAIL_VERIFIED));
-        userRepository.findById(jwt.getSubject()).ifPresentOrElse(
-                user -> syncEmail(user, email, emailVerified),
-                () -> create(jwt, email, emailVerified));
+        provision(jwt.getSubject(), email, jwt.getClaimAsString(StandardClaimNames.NAME), emailVerified);
     }
 
-    private void create(Jwt jwt, String email, boolean emailVerified) {
+    @Override
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void provision(String subject, String email, String name, boolean emailVerified) {
+        userRepository.findById(subject).ifPresentOrElse(
+                user -> syncEmail(user, email, emailVerified),
+                () -> create(subject, email, name, emailVerified));
+    }
+
+    private void create(String subject, String email, String name, boolean emailVerified) {
         // Token service account (client_credentials) không có email — không phải khách hàng, không tạo user
         if (email == null || email.isBlank()) {
             throw new AppException(IdentityErrorCode.USER_NOT_FOUND);
         }
         ensureEmailFree(email);
-        String name = jwt.getClaimAsString(StandardClaimNames.NAME);
-        userRepository.insertProvisionedUser(jwt.getSubject(), email, name != null ? name : email, emailVerified);
-        log.info("Provisioned identity user {} from Keycloak", jwt.getSubject());
+        userRepository.insertProvisionedUser(subject, email, name != null && !name.isBlank() ? name : email, emailVerified);
+        log.info("Provisioned identity user {} from Keycloak", subject);
     }
 
     // Email do Keycloak quản lý; họ tên/điện thoại sửa trong hồ sơ identity nên không ghi đè

@@ -253,7 +253,10 @@ services:
       - fashion-network
 
   keycloak:
-    image: quay.io/keycloak/keycloak:26.7.4
+    # Image Keycloak + Event Listener SPI (platform/keycloak/Dockerfile); cần build jar provider trước, xem platform/keycloak/README.md
+    build:
+      context: platform/keycloak
+    image: fashion-store/keycloak:26.7.4
     command: start-dev --import-realm
     environment:
       KC_DB: postgres
@@ -282,6 +285,11 @@ services:
       MAIL_FROM: ${MAIL_FROM:-no-reply@fashion.local}
       MAIL_USERNAME: ${MAIL_USERNAME:-}
       MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      # Event Listener SPI `fashion-rabbit`: gửi REGISTER / UPDATE_EMAIL tới RabbitMQ cho identity-service
+      KC_SPI_EVENTS_LISTENER__FASHION_RABBIT__HOST: rabbitmq
+      KC_SPI_EVENTS_LISTENER__FASHION_RABBIT__PORT: 5672
+      KC_SPI_EVENTS_LISTENER__FASHION_RABBIT__USERNAME: ${RABBITMQ_USERNAME:-fashion}
+      KC_SPI_EVENTS_LISTENER__FASHION_RABBIT__PASSWORD: ${RABBITMQ_PASSWORD:-fashion-dev-password}
     healthcheck:
       test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/9000 && printf 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q UP <&3"]
       interval: 10s
@@ -297,6 +305,23 @@ services:
       - ./platform/keycloak/realm-fashion-store.json:/opt/keycloak/data/import/realm-fashion-store.json:ro
       - ./platform/keycloak/themes/lino:/opt/keycloak/themes/lino:ro
       - ./platform/keycloak/themes/backoffice:/opt/keycloak/themes/backoffice:ro
+    networks:
+      - fashion-network
+
+  # Cấu hình xác thực mà import realm không làm được (flow OTP backoffice, events, password policy); idempotent, chạy xong thoát
+  keycloak-init:
+    image: quay.io/keycloak/keycloak:26.7.4
+    entrypoint: ["/bin/bash", "/opt/keycloak/init/sync-realm-auth.sh"]
+    environment:
+      KEYCLOAK_URL: http://keycloak:8080
+      KEYCLOAK_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USERNAME:-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+    depends_on:
+      keycloak:
+        condition: service_healthy
+    restart: "no"
+    volumes:
+      - ./platform/keycloak/init:/opt/keycloak/init:ro
     networks:
       - fashion-network
 

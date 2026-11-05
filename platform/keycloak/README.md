@@ -46,18 +46,94 @@ instead of relying on `issuer-uri` discovery.
 - Every client adds `fashion-api` to `aud`. The two BFF clients also put `realm_access.roles` and
   `resource_access.fashion-api.roles` into the ID token (read by the BFF `GrantedAuthoritiesMapper`).
 - Access token 5 min · SSO idle 30 min · SSO max 7 days · refresh token rotation (reuse revokes the session) · brute force lockout after 5 failures · email verification required.
+- Password policy: ≥ 8 ký tự, có chữ hoa, chữ thường, số, không trùng username/email, không dùng lại 3 mật khẩu gần nhất.
+- Events: user event và admin event được ghi (giữ 30 ngày), xem ở Admin console → Events. `eventsListeners` mặc định `jboss-logging`.
+
+### Back-channel logout và registry phiên trong Redis
+
+Khi admin khoá tài khoản hoặc đăng xuất user ở Keycloak, Keycloak POST `logout_token` (có `sid`) tới BFF; BFF tra `sid` → session BFF rồi huỷ.
+Bảng `sid → session` nằm trong Redis (`RedisReactiveOidcSessionRegistry`, common-library, key `<session namespace>:oidc:*`, TTL 7 ngày = SSO max),
+nên BFF restart hoặc chạy nhiều instance vẫn huỷ đúng session. Bản `InMemoryReactiveOidcSessionRegistry` trước đây mất bảng này khi restart.
+ID token thô không được lưu; chỉ lưu issuer, audience, subject, `sid` và header CSRF mà handler logout cần.
+
+### Backoffice bắt buộc OTP (`keycloak-init`)
+
+Client `backoffice-bff` dùng flow đăng nhập riêng `backoffice-browser` (mật khẩu + OTP, cả hai REQUIRED, **không có bước cookie SSO**):
+phiên đăng nhập storefront không bỏ qua được OTP. Lần đầu vào backoffice, tài khoản chưa có OTP bị buộc quét QR (Google Authenticator, Authy…).
+Dev user `admin@fashion.local` cũng vậy.
+
+Flow này **không nằm trong `realm-fashion-store.json`**: import tạo client trước flow nên `authenticationFlowBindingOverrides` bị bỏ qua im lặng.
+Service `keycloak-init` (`platform/keycloak/init/sync-realm-auth.sh`) tạo flow, gán override, và đồng bộ lại password policy + events.
+Nó chạy sau mỗi lần `docker compose up`, idempotent, nên realm đã import từ trước cũng nhận.
+
+Kiểm tra bằng kcadm: `--fields authenticationFlowBindingOverrides` luôn in `{}` (kcadm cắt nội dung map); đọc cả client (không `--fields`) mới thấy giá trị.
 
 Client secrets and SMTP come from env (placeholders `${VAR:default}` in the realm file),
 defaults are dev-only: `STOREFRONT_BFF_CLIENT_SECRET`, `BACKOFFICE_BFF_CLIENT_SECRET`, `ORDER_SERVICE_CLIENT_SECRET`,
 `CATALOG_SERVICE_CLIENT_SECRET`, `IDENTITY_SERVICE_CLIENT_SECRET`, `PAYMENT_SERVICE_CLIENT_SECRET`, `MAIL_*`.
 Without SMTP credentials, self-registered users cannot receive the verification email.
 
+## Event Listener SPI: Keycloak báo cho hệ thống (`event-listener/`)
+
+Keycloak là nơi tạo user, nên identity-service chỉ biết user ở request đầu tiên (JIT). Provider `fashion-rabbit`
+(`platform/keycloak/event-listener`, jar chạy bên trong Keycloak) đẩy event sang RabbitMQ để identity tạo / đồng bộ dòng `users` ngay.
+
+| Keycloak | Routing key (`EventTypes`) | identity-service |
+|---|---|---|
+| user event `REGISTER` | `keycloak.user.registered` | tạo `users` (id = `sub`, tên = họ + tên, email chưa xác minh) |
+| admin sửa user (admin event `USER`/`UPDATE`), user event `UPDATE_EMAIL` | `keycloak.user.email-updated` | đồng bộ email nếu khác |
+
+Vì sao đổi email chỉ đến từ admin: realm đặt `registrationEmailAsUsername` và `editUsernameAllowed=false`, user không tự sửa email được
+(Account API trả 204 nhưng email không đổi; đã thử trên Keycloak thật). `UPDATE_PROFILE` không mang email nên bị bỏ qua.
+Admin event cũng không mang email: provider đọc email hiện tại từ user, nên event này có thể phát cả khi email không đổi (consumer idempotent).
+
+```bash
+./mvnw -pl platform/keycloak/event-listener -am package -DskipTests   # tạo target/keycloak-rabbit-event-listener.jar
+docker compose up -d --build keycloak                                 # platform/keycloak/Dockerfile copy jar vào /opt/keycloak/providers
+```
+
+- Cấu hình RabbitMQ qua biến môi trường Keycloak `KC_SPI_EVENTS_LISTENER__FASHION_RABBIT__{HOST,PORT,USERNAME,PASSWORD,VHOST}` (đã có trong compose; prod bắt buộc `RABBITMQ_USERNAME`/`RABBITMQ_PASSWORD`).
+- Listener được bật trong realm (`eventsListeners`) và được `keycloak-init` giữ lại. Chưa build jar thì Keycloak chỉ log cảnh báo, vẫn chạy.
+- Event chỉ được gửi **sau khi transaction của Keycloak commit** và ở thread riêng: RabbitMQ chậm hay chết không làm chậm / lỗi đăng nhập.
+- **At-most-once**: Keycloak không có outbox, event mất nếu RabbitMQ chết lúc đó. JIT ở request đầu tiên của user là đường dự phòng.
+- `emailVerified` từ event luôn là `false` (event không mang cờ này). Identity chỉ ghi cờ khi tạo user hoặc khi email đổi.
+- Sai tham số exchange làm RabbitMQ trả `PRECONDITION_FAILED` cho mọi service, nên provider khai báo `fashion.events` y hệt `RabbitTopology`; test đối chiếu hai bên.
+- API của SPI (`eventsListener` là SPI nội bộ) có thể đổi giữa các bản Keycloak: nâng cấp image thì đổi `keycloak.version` trong pom của module và build lại.
+
 ## Dev users (dev only)
 
-**Production:** set `DEV_USERS_ENABLED=false` (all dev users are imported disabled) and override every
-`*_CLIENT_SECRET`; passwords can be changed with `DEV_ADMIN_PASSWORD` / `DEV_CUSTOMER_PASSWORD` /
+**Production:** `docker-compose.prod.yml` sets `DEV_USERS_ENABLED=false` (all dev users are imported disabled);
+see [Production](#production). Dev passwords can be changed with `DEV_ADMIN_PASSWORD` / `DEV_CUSTOMER_PASSWORD` /
 `DEV_USER_PASSWORD` / `DEV_STAFF_PASSWORD` (the 10 seeded `*@fashion.local` customers).
 Create real admins in Keycloak afterwards. A realm is imported only once, so change an existing realm in the admin console.
+
+## Production
+
+```bash
+cp .env.prod.example .env.prod   # fill in; never commit
+docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml up -d
+```
+
+`docker-compose.prod.yml` covers authentication only (Keycloak, its database, the two BFFs, the token issuer of
+every resource server). Every value it needs is `${VAR:?}`: a missing variable stops compose instead of
+falling back to a dev default.
+
+- **Keycloak** runs `start` (not `start-dev`) behind a TLS-terminating reverse proxy on the same host:
+  `KC_HOSTNAME=$KEYCLOAK_HOSTNAME` (public `https://` URL, also the token `iss`), `KC_HTTP_ENABLED=true`,
+  `KC_PROXY_HEADERS=xforwarded`, port published on `127.0.0.1:8180` only. The proxy must send
+  `X-Forwarded-For/Proto/Host/Port` and must not expose `/admin` publicly unless intended.
+- **BFFs** run profile `prod`: session cookie `Secure`, `server.forward-headers-strategy=framework` (so the
+  OAuth2 `redirect_uri` is the public `https://` URL), ports on `127.0.0.1` for the proxy.
+- **Realm placeholders** (only applied on first import): `STOREFRONT_BFF_PUBLIC_URL` / `BACKOFFICE_BFF_PUBLIC_URL`
+  build the BFF redirect and post-logout URIs; `SWAGGER_UI_CLIENT_ENABLED=false` disables the public
+  `swagger-ui` client; `DEV_USERS_ENABLED=false`; client secrets and `MAIL_*` come from `.env.prod`.
+- **SMTP** is required: without it self-registration is stuck at email verification. Use a transactional
+  provider and a `MAIL_FROM` domain with SPF/DKIM/DMARC.
+
+**Existing realm** (imported earlier with dev values): the JSON is not re-applied. In the admin console update
+Clients → `storefront-bff` / `backoffice-bff` → Valid redirect URIs, Valid post logout redirect URIs, Root/Home URL;
+Clients → `swagger-ui` → Enabled off; Clients → each confidential client → Credentials → regenerate the secret;
+disable or delete every `*@fashion.local` user; Realm settings → Email → SMTP.
 
 | email | password | roles |
 |---|---|---|
@@ -121,7 +197,13 @@ It also grants `realm-management` `view-clients` to `service-account-identity-se
 `fashion-api` client roles with it). On a realm imported earlier this grant is otherwise manual: Admin console → Users →
 `service-account-identity-service` → Role mapping → Assign role → `realm-management` → `view-clients`.
 
-### Manual verification checklist (not yet run against a live Keycloak)
+### Manual verification checklist
+
+Đã chạy trên Keycloak 26.7.4 thật (2026-11-05): `sync-rbac.ps1` chạy hai lần không lỗi, lần hai không đổi gì; realm có 22 permission + `internal-caller`
+và 3 group; qua identity-service với token admin: `GET /permissions` (22, `group:manage` không gán được), tạo nhóm `Nhân viên kho` (tên tiếng Việt giữ nguyên dấu),
+thêm rồi bớt permission (`DELETE` kèm body hoạt động), tạo nhân viên, liệt kê thành viên và quyền của nhóm; token customer nhận 403.
+**Chưa chạy**: bước 4–6 (đăng nhập qua backoffice-bff, đổi quyền thì staff bị logout), vì cần gateway + BFF + UI.
+Các bước cũ bên dưới giữ nguyên để chạy lại khi cần.
 
 The scripts and the Keycloak client were only verified statically and with mocks. Run this once on a dev stack:
 
