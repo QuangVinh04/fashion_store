@@ -54,10 +54,38 @@ Without SMTP credentials, self-registered users cannot receive the verification 
 
 ## Dev users (dev only)
 
-**Production:** set `DEV_USERS_ENABLED=false` (all dev users are imported disabled) and override every
-`*_CLIENT_SECRET`; passwords can be changed with `DEV_ADMIN_PASSWORD` / `DEV_CUSTOMER_PASSWORD` /
+**Production:** `docker-compose.prod.yml` sets `DEV_USERS_ENABLED=false` (all dev users are imported disabled);
+see [Production](#production). Dev passwords can be changed with `DEV_ADMIN_PASSWORD` / `DEV_CUSTOMER_PASSWORD` /
 `DEV_USER_PASSWORD` / `DEV_STAFF_PASSWORD` (the 10 seeded `*@fashion.local` customers).
 Create real admins in Keycloak afterwards. A realm is imported only once, so change an existing realm in the admin console.
+
+## Production
+
+```bash
+cp .env.prod.example .env.prod   # fill in; never commit
+docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml up -d
+```
+
+`docker-compose.prod.yml` covers authentication only (Keycloak, its database, the two BFFs, the token issuer of
+every resource server). Every value it needs is `${VAR:?}`: a missing variable stops compose instead of
+falling back to a dev default.
+
+- **Keycloak** runs `start` (not `start-dev`) behind a TLS-terminating reverse proxy on the same host:
+  `KC_HOSTNAME=$KEYCLOAK_HOSTNAME` (public `https://` URL, also the token `iss`), `KC_HTTP_ENABLED=true`,
+  `KC_PROXY_HEADERS=xforwarded`, port published on `127.0.0.1:8180` only. The proxy must send
+  `X-Forwarded-For/Proto/Host/Port` and must not expose `/admin` publicly unless intended.
+- **BFFs** run profile `prod`: session cookie `Secure`, `server.forward-headers-strategy=framework` (so the
+  OAuth2 `redirect_uri` is the public `https://` URL), ports on `127.0.0.1` for the proxy.
+- **Realm placeholders** (only applied on first import): `STOREFRONT_BFF_PUBLIC_URL` / `BACKOFFICE_BFF_PUBLIC_URL`
+  build the BFF redirect and post-logout URIs; `SWAGGER_UI_CLIENT_ENABLED=false` disables the public
+  `swagger-ui` client; `DEV_USERS_ENABLED=false`; client secrets and `MAIL_*` come from `.env.prod`.
+- **SMTP** is required: without it self-registration is stuck at email verification. Use a transactional
+  provider and a `MAIL_FROM` domain with SPF/DKIM/DMARC.
+
+**Existing realm** (imported earlier with dev values): the JSON is not re-applied. In the admin console update
+Clients → `storefront-bff` / `backoffice-bff` → Valid redirect URIs, Valid post logout redirect URIs, Root/Home URL;
+Clients → `swagger-ui` → Enabled off; Clients → each confidential client → Credentials → regenerate the secret;
+disable or delete every `*@fashion.local` user; Realm settings → Email → SMTP.
 
 | email | password | roles |
 |---|---|---|
