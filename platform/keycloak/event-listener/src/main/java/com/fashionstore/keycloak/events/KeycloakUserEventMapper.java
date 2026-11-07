@@ -13,7 +13,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * Event của Keycloak -> EventEnvelope (event-contracts) dạng JSON. Phát REGISTER, UPDATE_EMAIL (user event) và việc admin sửa user (qua {@link #userEmailChanged}).
+ * Event của Keycloak -> EventEnvelope (event-contracts) dạng JSON. Phát REGISTER, UPDATE_EMAIL, VERIFY_EMAIL (user event) và việc admin sửa user (qua {@link #userEmailChanged}).
  * <p>
  * Envelope dựng bằng Map thay vì record {@code EventEnvelope}: Keycloak không có module jackson-jsr310 để ghi {@code Instant},
  * nên {@code occurredAt} được ghi sẵn dạng ISO-8601. Test đọc ngược JSON này thành chính record của event-contracts
@@ -36,6 +36,7 @@ final class KeycloakUserEventMapper {
             case REGISTER -> build(event, EventTypes.KEYCLOAK_USER_REGISTERED, detail(event, "email"),
                     detail(event, "first_name"), detail(event, "last_name"));
             case UPDATE_EMAIL -> build(event, EventTypes.KEYCLOAK_USER_EMAIL_UPDATED, detail(event, "updated_email"), null, null);
+            case VERIFY_EMAIL -> build(event, EventTypes.KEYCLOAK_USER_EMAIL_VERIFIED, detail(event, "email"), null, null);
             default -> Optional.empty();
         };
     }

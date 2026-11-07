@@ -13,6 +13,7 @@ import org.springframework.amqp.AmqpRejectAndDontRequeueException;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.stereotype.Component;
 
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -26,20 +27,23 @@ import java.util.stream.Stream;
 @RequiredArgsConstructor
 public class KeycloakUserEventListener {
 
+    private static final Set<String> SUPPORTED_EVENT_TYPES = Set.of(EventTypes.KEYCLOAK_USER_REGISTERED,
+            EventTypes.KEYCLOAK_USER_EMAIL_UPDATED, EventTypes.KEYCLOAK_USER_EMAIL_VERIFIED);
+
     private final UserProvisioningService provisioningService;
     private final ObjectMapper objectMapper;
 
     @RabbitListener(queues = RabbitMQConfig.KEYCLOAK_USER_EVENTS_QUEUE)
     public void onKeycloakUserEvent(EventEnvelope<?> envelope) {
-        if (!EventTypes.KEYCLOAK_USER_REGISTERED.equals(envelope.eventType())
-                && !EventTypes.KEYCLOAK_USER_EMAIL_UPDATED.equals(envelope.eventType())) {
+        if (!SUPPORTED_EVENT_TYPES.contains(envelope.eventType())) {
             // Lỗi vĩnh viễn: retry không giúp gì, chuyển thẳng sang DLQ
             throw new AmqpRejectAndDontRequeueException("Unsupported eventType on Keycloak user queue: " + envelope.eventType());
         }
         KeycloakUserEvent event = objectMapper.convertValue(envelope.payload(), KeycloakUserEvent.class);
         try {
-            // Email mới đăng ký / vừa đổi luôn cần xác minh lại, nên emailVerified = false
-            provisioningService.provision(event.userId(), event.email(), fullName(event), false);
+            // Email mới đăng ký / vừa đổi luôn cần xác minh lại; chỉ VERIFY_EMAIL mới mang trạng thái đã xác minh
+            boolean isEmailVerified = EventTypes.KEYCLOAK_USER_EMAIL_VERIFIED.equals(envelope.eventType());
+            provisioningService.provision(event.userId(), event.email(), fullName(event), isEmailVerified);
         } catch (AppException e) {
             // Vd email đã thuộc user khác (ACCOUNT_LINK_CONFLICT): cần người xử lý, không phải lỗi tạm thời
             log.warn("Keycloak event {} for user {} rejected: {}", envelope.eventType(), event.userId(), e.getMessage());

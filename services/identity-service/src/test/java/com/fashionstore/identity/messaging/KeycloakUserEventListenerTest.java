@@ -57,6 +57,14 @@ class KeycloakUserEventListenerTest {
     }
 
     @Test
+    void verifiedEmailReachesProvisioningAsVerified() {
+        listener.onKeycloakUserEvent(envelope(EventTypes.KEYCLOAK_USER_EMAIL_VERIFIED,
+                new KeycloakUserEvent("kc-1", "an@fashion.local", null, null)));
+
+        verify(provisioningService).provision("kc-1", "an@fashion.local", null, true);
+    }
+
+    @Test
     void unknownEventTypeIsDeadLetteredInsteadOfRetriedForever() {
         assertThatThrownBy(() -> listener.onKeycloakUserEvent(envelope("keycloak.user.deleted",
                 new KeycloakUserEvent("kc-1", "an@fashion.local", null, null))))

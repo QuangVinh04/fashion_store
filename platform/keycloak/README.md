@@ -83,6 +83,7 @@ Keycloak là nơi tạo user, nên identity-service chỉ biết user ở reques
 |---|---|---|
 | user event `REGISTER` | `keycloak.user.registered` | tạo `users` (id = `sub`, tên = họ + tên, email chưa xác minh) |
 | admin sửa user (admin event `USER`/`UPDATE`), user event `UPDATE_EMAIL` | `keycloak.user.email-updated` | đồng bộ email nếu khác |
+| user event `VERIFY_EMAIL` (khách bấm link xác minh) | `keycloak.user.email-verified` | đặt `is_email_verified = true` |
 
 Vì sao đổi email chỉ đến từ admin: realm đặt `registrationEmailAsUsername` và `editUsernameAllowed=false`, user không tự sửa email được
 (Account API trả 204 nhưng email không đổi; đã thử trên Keycloak thật). `UPDATE_PROFILE` không mang email nên bị bỏ qua.
@@ -97,7 +98,7 @@ docker compose up -d --build keycloak                                 # platform
 - Listener được bật trong realm (`eventsListeners` của `realm-fashion-store.json`). Chưa build jar thì Keycloak chỉ log cảnh báo, vẫn chạy.
 - Event chỉ được gửi **sau khi transaction của Keycloak commit** và ở thread riêng: RabbitMQ chậm hay chết không làm chậm / lỗi đăng nhập.
 - **At-most-once**: Keycloak không có outbox, event mất nếu RabbitMQ chết lúc đó. JIT ở request đầu tiên của user là đường dự phòng.
-- `emailVerified` từ event luôn là `false` (event không mang cờ này). Identity chỉ ghi cờ khi tạo user hoặc khi email đổi.
+- Cờ `is_email_verified` của identity chỉ được nâng `false → true` khi email không đổi (từ `VERIFY_EMAIL`, hoặc từ claim `email_verified` của token ở request đầu tiên nếu event mất). `REGISTER` / sửa user phát lại mang `false` nhưng không hạ cờ. Email đổi thì lấy đúng giá trị mới (thường là chưa xác minh).
 - Sai tham số exchange làm RabbitMQ trả `PRECONDITION_FAILED` cho mọi service, nên provider khai báo `fashion.events` y hệt `RabbitTopology`; test đối chiếu hai bên.
 - API của SPI (`eventsListener` là SPI nội bộ) có thể đổi giữa các bản Keycloak: nâng cấp image thì đổi `keycloak.version` trong pom của module và build lại.
 

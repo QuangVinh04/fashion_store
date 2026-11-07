@@ -101,6 +101,30 @@ class UserProvisioningServiceImplTest {
     }
 
     @Test
+    void verificationWithTheSameEmailMarksTheUserVerified() {
+        User user = User.builder().email("same@fashion.local").fullName("Customer").build();
+        user.setId("kc-1");
+        when(userRepository.findById("kc-1")).thenReturn(Optional.of(user));
+
+        provisioningService.provision(jwt(Map.of("sub", "kc-1", "email", "same@fashion.local", "email_verified", true)));
+
+        assertThat(user.getIsEmailVerified()).isTrue();
+        verify(userRepository).save(user);
+    }
+
+    @Test
+    void unverifiedEventNeverDowngradesAVerifiedUser() {
+        User user = User.builder().email("same@fashion.local").fullName("Customer").isEmailVerified(true).build();
+        user.setId("kc-1");
+        when(userRepository.findById("kc-1")).thenReturn(Optional.of(user));
+
+        provisioningService.provision("kc-1", "same@fashion.local", null, false);
+
+        assertThat(user.getIsEmailVerified()).isTrue();
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
     void provisionsFromRawKeycloakEventDataWithoutAToken() {
         when(userRepository.findById("kc-1")).thenReturn(Optional.empty());
         when(userRepository.existsByEmail("new@fashion.local")).thenReturn(false);

@@ -61,6 +61,11 @@ public class RabbitMQConfig {
         return RabbitTopology.bind(keycloakUserEventsQueue, fashionEventsExchange, EventTypes.KEYCLOAK_USER_EMAIL_UPDATED);
     }
 
+    @Bean
+    Binding keycloakUserEmailVerifiedBinding(Queue keycloakUserEventsQueue, DirectExchange fashionEventsExchange) {
+        return RabbitTopology.bind(keycloakUserEventsQueue, fashionEventsExchange, EventTypes.KEYCLOAK_USER_EMAIL_VERIFIED);
+    }
+
     /** Payload là JSON; kiểu đích suy ra từ tham số của @RabbitListener, không cần header __TypeId__. */
     @Bean
     MessageConverter jsonMessageConverter() {

@@ -50,12 +50,25 @@ public class UserProvisioningServiceImpl implements UserProvisioningService {
 
     // Email do Keycloak quản lý; họ tên/điện thoại sửa trong hồ sơ identity nên không ghi đè
     private void syncEmail(User user, String email, boolean emailVerified) {
-        if (email == null || email.equalsIgnoreCase(user.getEmail())) {
+        if (email == null) {
+            return;
+        }
+        if (email.equalsIgnoreCase(user.getEmail())) {
+            markVerified(user, emailVerified);
             return;
         }
         ensureEmailFree(email);
         user.setEmail(email);
         user.setIsEmailVerified(emailVerified);
+        userRepository.save(user);
+    }
+
+    // Chỉ nâng false -> true: REGISTER / sửa user phát lại luôn mang false, không được hạ cờ đã xác minh
+    private void markVerified(User user, boolean emailVerified) {
+        if (!emailVerified || Boolean.TRUE.equals(user.getIsEmailVerified())) {
+            return;
+        }
+        user.setIsEmailVerified(true);
         userRepository.save(user);
     }
 

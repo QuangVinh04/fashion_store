@@ -48,6 +48,16 @@ class KeycloakUserEventMapperTest {
     }
 
     @Test
+    void verifyEmailIsPublishedWithTheVerifiedAddress() throws IOException {
+        Optional<OutgoingEvent> mapped = KeycloakUserEventMapper.map(event(EventType.VERIFY_EMAIL, "kc-1",
+                Map.of("email", "an@fashion.local")));
+
+        assertThat(mapped).isPresent();
+        assertThat(mapped.get().routingKey()).isEqualTo(EventTypes.KEYCLOAK_USER_EMAIL_VERIFIED);
+        assertThat(read(mapped.get()).payload()).isEqualTo(new KeycloakUserEvent("kc-1", "an@fashion.local", null, null));
+    }
+
+    @Test
     void anEmailChangeIsPublishedWithTheCurrentEmail() throws IOException {
         Optional<OutgoingEvent> mapped = KeycloakUserEventMapper.userEmailChanged("kc-1", "current@fashion.local");
 

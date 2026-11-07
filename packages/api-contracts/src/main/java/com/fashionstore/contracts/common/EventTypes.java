@@ -37,6 +37,7 @@ public final class EventTypes {
     // EMAIL_UPDATED = "user vừa được sửa, đây là email hiện tại": có thể phát cả khi email không đổi, consumer phải idempotent.
     public static final String KEYCLOAK_USER_REGISTERED = "keycloak.user.registered";
     public static final String KEYCLOAK_USER_EMAIL_UPDATED = "keycloak.user.email-updated";
+    public static final String KEYCLOAK_USER_EMAIL_VERIFIED = "keycloak.user.email-verified";
 
     private EventTypes() {
     }
