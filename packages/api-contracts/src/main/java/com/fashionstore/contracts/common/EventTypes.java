@@ -38,6 +38,8 @@ public final class EventTypes {
     public static final String KEYCLOAK_USER_REGISTERED = "keycloak.user.registered";
     public static final String KEYCLOAK_USER_EMAIL_UPDATED = "keycloak.user.email-updated";
     public static final String KEYCLOAK_USER_EMAIL_VERIFIED = "keycloak.user.email-verified";
+    // Mọi service phát khi nhân viên thực hiện thao tác nhạy cảm, identity-service lưu thành audit log.
+    public static final String AUDIT_RECORDED = "audit.recorded";
 
     private EventTypes() {
     }

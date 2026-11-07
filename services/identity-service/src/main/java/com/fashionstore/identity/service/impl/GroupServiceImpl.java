@@ -19,6 +19,7 @@ import com.fashionstore.identity.service.SystemGroups;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
+import java.util.TreeSet;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -33,8 +34,11 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class GroupServiceImpl implements GroupService {
 
+    private static final String GROUP_ENTITY = "GROUP";
+
     private final KeycloakGroupClient groupClient;
     private final KeycloakAdminClient adminClient;
+    private final IdentityAuditRecorder auditRecorder;
 
     @Override
     @PreAuthorize(GROUP_MANAGE)
@@ -66,6 +70,8 @@ public class GroupServiceImpl implements GroupService {
             deleteQuietly(groupId, permissionFailure);
             throw permissionFailure;
         }
+        auditRecorder.record(IdentityAuditRecorder.GROUP_CREATE, GROUP_ENTITY, groupId,
+                "Tạo nhóm " + name + " (quyền: " + describe(permissions) + ")");
         return new GroupChangeResponse(response(groupId, name, permissions, 0), List.of());
     }
 
@@ -78,14 +84,20 @@ public class GroupServiceImpl implements GroupService {
         String name = request.name().trim();
         requireNameAvailable(name, groupId);
 
-        if (!name.equals(current.name())) {
+        boolean isRenamed = !name.equals(current.name());
+        boolean isPermissionChanged = !permissions.equals(permissionsOf(current));
+        if (isRenamed) {
             groupClient.renameGroup(groupId, name);
         }
         List<String> memberIds = groupClient.listMemberIds(groupId);
         List<String> notLoggedOut = List.of();
-        if (!permissions.equals(permissionsOf(current))) {
+        if (isPermissionChanged) {
             groupClient.setGroupPermissions(groupId, permissions);
             notLoggedOut = MemberLogout.logoutAll(adminClient, memberIds);
+        }
+        if (isRenamed || isPermissionChanged) {
+            auditRecorder.record(IdentityAuditRecorder.GROUP_UPDATE, GROUP_ENTITY, groupId,
+                    "Sửa nhóm " + name + " (quyền: " + describe(permissions) + ")");
         }
         return new GroupChangeResponse(response(groupId, name, permissions, memberIds.size()), notLoggedOut);
     }
@@ -93,11 +105,17 @@ public class GroupServiceImpl implements GroupService {
     @Override
     @PreAuthorize(GROUP_MANAGE)
     public List<String> deleteGroup(String groupId) {
-        requireEditable(groupClient.getGroup(groupId));
+        KeycloakGroupRepresentation group = groupClient.getGroup(groupId);
+        requireEditable(group);
         // Lấy danh sách trước: xoá nhóm xong thì không còn biết ai từng là thành viên.
         List<String> memberIds = groupClient.listMemberIds(groupId);
         groupClient.deleteGroup(groupId);
+        auditRecorder.record(IdentityAuditRecorder.GROUP_DELETE, GROUP_ENTITY, groupId, "Xoá nhóm " + group.name());
         return MemberLogout.logoutAll(adminClient, memberIds);
+    }
+
+    private static String describe(Set<String> permissions) {
+        return String.join(", ", new TreeSet<>(permissions));
     }
 
     @Override

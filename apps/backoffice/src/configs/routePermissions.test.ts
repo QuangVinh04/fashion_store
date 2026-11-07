@@ -26,6 +26,8 @@ describe('routePermissions', () => {
     expect(requiredPermissionsFor('/customers')).toEqual([Permission.CUSTOMER_READ])
     expect(requiredPermissionsFor('/reviews')).toEqual([Permission.REVIEW_READ])
     expect(requiredPermissionsFor('/groups')).toEqual([Permission.GROUP_MANAGE])
+    expect(requiredPermissionsFor('/audit-logs')).toEqual([Permission.GROUP_MANAGE])
+    expect(requiredPermissionsFor('/audit-logs/detail')).toEqual([Permission.GROUP_MANAGE])
   })
 
   it('returns null for unregistered routes', () => {
@@ -45,5 +47,6 @@ describe('routePermissions', () => {
     expect(prefixes).toContain('/customers')
     expect(prefixes).toContain('/reviews')
     expect(prefixes).toContain('/groups')
+    expect(prefixes).toContain('/audit-logs')
   })
 })

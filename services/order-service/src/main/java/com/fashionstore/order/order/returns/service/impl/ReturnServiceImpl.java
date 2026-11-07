@@ -89,6 +89,7 @@ public class ReturnServiceImpl implements ReturnService {
     OrderNotificationService notifications;
     ReturnShipmentRepository returnShipmentRepository;
     ReturnPickupService returnPickupService;
+    ReturnAuditRecorder returnAuditRecorder;
 
     @Override
     @Transactional(propagation = Propagation.NEVER)
@@ -807,7 +808,8 @@ public class ReturnServiceImpl implements ReturnService {
                             } catch (ArithmeticException invalidAmount) {
                                 throw new AppException(OrderErrorCode.RETURN_REFUND_AMOUNT_INVALID);
                             }
-                            if (returned.getRefundStartedAt() == null) {
+                            boolean isFirstStart = returned.getRefundStartedAt() == null;
+                            if (isFirstStart) {
                                 returned.setRefundStartedAt(clock.instant());
                                 returned.setReviewedAt(LocalDateTime.now(clock));
                                 returned.setReviewedBy(adminId);
@@ -818,6 +820,10 @@ public class ReturnServiceImpl implements ReturnService {
                             returned.setApprovedRefundAmount(fullAmount);
                             returned.setRefundFailureReason(null);
                             returnRequestRepository.saveAndFlush(returned);
+                            if (isFirstStart) {
+                                returnAuditRecorder.refundStarted(
+                                        adminId, orderId, returnRequestId, fullAmount);
+                            }
                             String reasonType =
                                     returned.getKind() == ReturnRequestKind.CUSTOMER_RETURN
                                             ? "RETURN_REFUND"

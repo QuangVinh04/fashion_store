@@ -50,6 +50,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -74,6 +75,9 @@ class AdminUserServiceImplTest {
     @Mock
     KeycloakGroupClient groupClient;
 
+    @Mock
+    IdentityAuditRecorder auditRecorder;
+
     AdminUserServiceImpl service;
 
     User customer;
@@ -81,7 +85,8 @@ class AdminUserServiceImplTest {
     @BeforeEach
     void setUp() {
         service = new AdminUserServiceImpl(userRepository, userAddressRepository, keycloakAdminClient,
-                currentUserProvider, new UserMapperImpl(), new UserAddressMapperImpl(), groupService, groupClient);
+                currentUserProvider, new UserMapperImpl(), new UserAddressMapperImpl(), groupService, groupClient,
+                auditRecorder);
         customer = User.builder().email("customer@fashion.local").fullName("Nguyen Van A").phone("0901234567").build();
         customer.setId("kc-customer");
         when(currentUserProvider.getCurrentUserId()).thenReturn("kc-admin");
@@ -183,6 +188,31 @@ class AdminUserServiceImplTest {
     }
 
     @Test
+    void lockingRecordsAudit() {
+        service.updateStatus("kc-customer", false);
+
+        verify(auditRecorder).record(eq(IdentityAuditRecorder.USER_LOCK), eq("USER"), eq("kc-customer"), anyString());
+    }
+
+    @Test
+    void lockingAnAlreadyLockedAccountRecordsNothing() {
+        customer.setIsActive(false);
+
+        service.updateStatus("kc-customer", false);
+
+        verifyNoInteractions(auditRecorder);
+    }
+
+    @Test
+    void unlockingRecordsAudit() {
+        customer.setIsActive(false);
+
+        service.updateStatus("kc-customer", true);
+
+        verify(auditRecorder).record(eq(IdentityAuditRecorder.USER_UNLOCK), eq("USER"), eq("kc-customer"), anyString());
+    }
+
+    @Test
     void unlockingReEnablesInKeycloakWithoutLoggingOut() {
         customer.setIsActive(false);
 
@@ -206,6 +236,7 @@ class AdminUserServiceImplTest {
                 .isEqualTo(ErrorCode.UPSTREAM_SERVICE_ERROR);
         assertThat(customer.getIsActive()).isTrue();
         verify(userRepository, never()).save(any(User.class));
+        verifyNoInteractions(auditRecorder);
     }
 
     @Test

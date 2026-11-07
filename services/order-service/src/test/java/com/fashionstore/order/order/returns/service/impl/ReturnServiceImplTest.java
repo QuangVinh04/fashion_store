@@ -58,6 +58,7 @@ class ReturnServiceImplTest {
     @Mock private com.fashionstore.order.order.service.OrderNotificationService notifications;
     @Mock private com.fashionstore.order.order.returns.repository.ReturnShipmentRepository returnShipmentRepository;
     @Mock private com.fashionstore.order.order.returns.service.ReturnPickupService returnPickupService;
+    @Mock private ReturnAuditRecorder returnAuditRecorder;
 
     private ObjectMapper objectMapper;
     private ReturnServiceImpl service;
@@ -80,7 +81,8 @@ class ReturnServiceImplTest {
                         outboxEventRecorder,
                         notifications,
                         returnShipmentRepository,
-                        returnPickupService);
+                        returnPickupService,
+                        returnAuditRecorder);
         org.mockito.Mockito.lenient()
                 .when(transactionManager.getTransaction(any()))
                 .thenReturn(new org.springframework.transaction.support.SimpleTransactionStatus());

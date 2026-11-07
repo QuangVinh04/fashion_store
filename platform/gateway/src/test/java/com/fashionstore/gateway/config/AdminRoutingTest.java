@@ -33,6 +33,7 @@ class AdminRoutingTest {
             "PUT,/api/v1/admin/groups/g1,identity-service",
             "GET,/api/v1/admin/groups/g1/members,identity-service",
             "POST,/api/v1/admin/staff,identity-service",
+            "GET,/api/v1/admin/audit-logs,identity-service",
             "GET,/api/v1/admin/dashboard/operations,order-service",
             "GET,/api/v1/admin/reviews,catalog-service",
             "GET,/admin/inventory,catalog-service",

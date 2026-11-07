@@ -29,6 +29,7 @@ import com.fashionstore.order.shared.outbox.OutboxEventRecorder;
 import com.fashionstore.order.order.service.OrderNotificationService;
 import com.fashionstore.order.order.service.OrderReceiptService;
 import com.fashionstore.order.order.returns.service.ReturnService;
+import com.fashionstore.order.order.returns.service.impl.ReturnAuditRecorder;
 import com.fashionstore.order.order.returns.service.impl.ReturnServiceImpl;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -66,6 +67,7 @@ import java.util.concurrent.TimeUnit;
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({
     ReturnServiceImpl.class,
+    ReturnAuditRecorder.class,
     OrderReceiptService.class,
     com.fashionstore.order.order.fulfillment.service.impl.ShipmentServiceImpl.class,
     ReturnWorkflowPostgresIntegrationTest.Configuration.class

@@ -32,7 +32,7 @@ afterEach(() => {
 })
 
 describe('VerticalMenu', () => {
-  it('displays "Nhóm & phân quyền" for admin with group:manage permission', () => {
+  it('displays "Nhóm & phân quyền" and "Nhật ký thao tác" for admin with group:manage permission', () => {
     act(() => {
       root.render(
         <MockAuthProvider permissions={[Permission.GROUP_MANAGE, Permission.DASHBOARD_READ]}>
@@ -42,11 +42,12 @@ describe('VerticalMenu', () => {
     })
 
     expect(document.body.textContent).toContain('Nhóm & phân quyền')
+    expect(document.body.textContent).toContain('Nhật ký thao tác')
     expect(document.body.textContent).toContain('Quản trị')
     expect(document.body.textContent).toContain('Tổng quan')
   })
 
-  it('hides "Nhóm & phân quyền" when user lacks group:manage permission', () => {
+  it('hides "Nhóm & phân quyền" and "Nhật ký thao tác" when user lacks group:manage permission', () => {
     act(() => {
       root.render(
         <MockAuthProvider permissions={[Permission.ORDER_READ]}>
@@ -56,6 +57,7 @@ describe('VerticalMenu', () => {
     })
 
     expect(document.body.textContent).not.toContain('Nhóm & phân quyền')
+    expect(document.body.textContent).not.toContain('Nhật ký thao tác')
     expect(document.body.textContent).not.toContain('Quản trị')
     expect(document.body.textContent).toContain('Bán hàng')
     expect(document.body.textContent).toContain('Danh sách đơn hàng')

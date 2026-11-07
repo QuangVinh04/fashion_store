@@ -40,6 +40,7 @@ import java.util.concurrent.*;
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({
     ReturnServiceImpl.class,
+    ReturnAuditRecorder.class,
     OutboxEventRecorder.class,
     ReturnRefundTransactionIntegrationTest.Configuration.class
 })

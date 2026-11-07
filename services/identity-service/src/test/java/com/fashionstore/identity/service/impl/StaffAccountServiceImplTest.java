@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.assertj.core.api.Assertions.catchThrowableOfType;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
@@ -53,6 +54,9 @@ class StaffAccountServiceImplTest {
     @Mock
     UserRepository userRepository;
 
+    @Mock
+    IdentityAuditRecorder auditRecorder;
+
     StaffAccountServiceImpl service;
 
     KeycloakGroupRepresentation customer = group("g-customer", "Customer");
@@ -61,7 +65,7 @@ class StaffAccountServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = new StaffAccountServiceImpl(groupClient, groupService, userRepository);
+        service = new StaffAccountServiceImpl(groupClient, groupService, userRepository, auditRecorder);
         for (KeycloakGroupRepresentation each : List.of(customer, sales, stock)) {
             when(groupClient.getGroup(each.id())).thenReturn(each);
             when(groupClient.countMembers(each.id())).thenReturn(1);
@@ -120,6 +124,26 @@ class StaffAccountServiceImplTest {
             assertThat(group.memberCount()).isEqualTo(1);
         });
         verify(groupClient, never()).deleteUser(any());
+    }
+
+    @Test
+    void createStaffRecordsAuditWithoutTheEmail() {
+        service.createStaff(request("g-sales"));
+
+        ArgumentCaptor<String> summary = ArgumentCaptor.forClass(String.class);
+        verify(auditRecorder).record(eq(IdentityAuditRecorder.STAFF_CREATE), eq("USER"), eq(NEW_USER_ID),
+                summary.capture());
+        assertThat(summary.getValue()).contains("Bán hàng").doesNotContain(EMAIL);
+    }
+
+    @Test
+    void failedStaffCreationRecordsNothing() {
+        doThrow(new AppException(ErrorCode.UPSTREAM_SERVICE_ERROR))
+                .when(groupClient).addUserToGroup(NEW_USER_ID, "g-sales");
+
+        catchThrowable(() -> service.createStaff(request("g-sales")));
+
+        verifyNoInteractions(auditRecorder);
     }
 
     /** Keycloak lưu email chữ thường; users.email phải khớp để existsByEmail không lọt trùng khác hoa thường. */

@@ -14,6 +14,7 @@ import com.fashionstore.identity.dto.group.KeycloakGroupRepresentation;
 import com.fashionstore.identity.repository.UserRepository;
 import com.fashionstore.identity.service.GroupService;
 import com.fashionstore.identity.service.StaffAccountService;
+import com.fashionstore.identity.service.impl.IdentityAuditRecorder;
 import com.fashionstore.identity.service.impl.StaffAccountServiceImpl;
 import java.util.List;
 import java.util.Map;
@@ -55,6 +56,9 @@ class AdminStaffControllerTest {
 
     @MockitoBean
     UserRepository userRepository;
+
+    @MockitoBean
+    IdentityAuditRecorder auditRecorder;
 
     @Autowired
     StaffAccountService staffAccountService;

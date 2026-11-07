@@ -5,9 +5,12 @@ import static org.assertj.core.api.Assertions.catchThrowableOfType;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.contains;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.fashionstore.common.dto.PageResponse;
@@ -42,6 +45,7 @@ import java.util.stream.IntStream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -70,6 +74,9 @@ class GroupMembershipServiceImplTest {
     @Mock
     CurrentUserProvider currentUserProvider;
 
+    @Mock
+    IdentityAuditRecorder auditRecorder;
+
     GroupMembershipServiceImpl service;
 
     KeycloakGroupRepresentation admin = group("g-admin", "Admin", PermissionNames.GROUP_MANAGE);
@@ -79,7 +86,8 @@ class GroupMembershipServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = new GroupMembershipServiceImpl(groupClient, adminClient, userRepository, currentUserProvider);
+        service = new GroupMembershipServiceImpl(groupClient, adminClient, userRepository, currentUserProvider,
+                auditRecorder);
         when(currentUserProvider.getCurrentUserId()).thenReturn(CALLER_ID);
         when(groupClient.listGroups()).thenReturn(List.of(admin, customer, staff, sales));
         for (KeycloakGroupRepresentation each : List.of(admin, customer, staff, sales)) {
@@ -228,6 +236,59 @@ class GroupMembershipServiceImplTest {
                 Collections.emptyMap(), null, StandardCharsets.UTF_8, new RequestTemplate());
         return FeignException.errorStatus("addUserToGroup", Response.builder()
                 .status(status).reason("x").request(request).headers(Collections.emptyMap()).build());
+    }
+
+    @Test
+    void addMembersRecordsAuditOnlyForUsersActuallyAdded() {
+        when(groupClient.listMemberIds("g-sales")).thenReturn(List.of("u-already"));
+
+        service.addMembers("g-sales",
+                new GroupMembersRequest(new LinkedHashSet<>(List.of("u-new", "u-already"))));
+
+        ArgumentCaptor<String> summary = ArgumentCaptor.forClass(String.class);
+        verify(auditRecorder).record(eq(IdentityAuditRecorder.GROUP_MEMBERS_ADD), eq("GROUP"), eq("g-sales"),
+                summary.capture());
+        assertThat(summary.getValue()).contains("u-new").doesNotContain("u-already");
+    }
+
+    @Test
+    void addMembersRecordsNothingWhenNobodyChanged() {
+        when(groupClient.listMemberIds("g-sales")).thenReturn(List.of("u-already"));
+
+        service.addMembers("g-sales", new GroupMembersRequest(Set.of("u-already")));
+
+        verifyNoInteractions(auditRecorder);
+    }
+
+    @Test
+    void removeMembersRecordsAudit() {
+        when(groupClient.listMemberIds("g-sales")).thenReturn(List.of("u1", "u2"));
+
+        service.removeMembers("g-sales", new GroupMembersRequest(Set.of("u1")));
+
+        verify(auditRecorder).record(eq(IdentityAuditRecorder.GROUP_MEMBERS_REMOVE), eq("GROUP"), eq("g-sales"),
+                contains("u1"));
+    }
+
+    @Test
+    void updateUserGroupsRecordsAuditWhenGroupsChanged() {
+        when(groupClient.listUserGroups("u1")).thenReturn(List.of(customer, staff));
+
+        service.updateUserGroups("u1", new UpdateUserGroupsRequest(Set.of("g-sales")));
+
+        ArgumentCaptor<String> summary = ArgumentCaptor.forClass(String.class);
+        verify(auditRecorder).record(eq(IdentityAuditRecorder.USER_GROUPS_UPDATE), eq("USER"), eq("u1"),
+                summary.capture());
+        assertThat(summary.getValue()).contains("Bán hàng", "Nhân viên").doesNotContain("g-sales", "g-staff");
+    }
+
+    @Test
+    void updateUserGroupsRecordsNothingWhenGroupsUnchanged() {
+        when(groupClient.listUserGroups("u1")).thenReturn(List.of(customer, staff));
+
+        service.updateUserGroups("u1", new UpdateUserGroupsRequest(Set.of("g-staff")));
+
+        verifyNoInteractions(auditRecorder);
     }
 
     @Test

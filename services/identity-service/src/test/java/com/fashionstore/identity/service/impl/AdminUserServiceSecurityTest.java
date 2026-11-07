@@ -64,6 +64,9 @@ class AdminUserServiceSecurityTest {
     @MockitoBean
     KeycloakGroupClient groupClient;
 
+    @MockitoBean
+    IdentityAuditRecorder auditRecorder;
+
     @Autowired
     AdminUserService adminUserService;
 

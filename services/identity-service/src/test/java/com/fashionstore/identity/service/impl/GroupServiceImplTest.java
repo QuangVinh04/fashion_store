@@ -1,14 +1,18 @@
 package com.fashionstore.identity.service.impl;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.assertj.core.api.Assertions.catchThrowableOfType;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.contains;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.fashionstore.common.exception.AppException;
@@ -48,6 +52,9 @@ class GroupServiceImplTest {
     @Mock
     KeycloakAdminClient adminClient;
 
+    @Mock
+    IdentityAuditRecorder auditRecorder;
+
     GroupServiceImpl service;
 
     KeycloakGroupRepresentation admin = group("g-admin", "Admin", PermissionNames.GROUP_MANAGE);
@@ -57,7 +64,7 @@ class GroupServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = new GroupServiceImpl(groupClient, adminClient);
+        service = new GroupServiceImpl(groupClient, adminClient, auditRecorder);
         when(groupClient.listGroups()).thenReturn(List.of(admin, customer, staff, sales));
         for (KeycloakGroupRepresentation each : List.of(admin, customer, staff, sales)) {
             when(groupClient.getGroup(each.id())).thenReturn(each);
@@ -142,6 +149,28 @@ class GroupServiceImplTest {
         assertThat(response.group().isEditable()).isTrue();
         assertThat(response.group().memberCount()).isZero();
         assertThat(response.notLoggedOutUserIds()).isEmpty();
+    }
+
+    @Test
+    void createGroupRecordsAudit() {
+        when(groupClient.createGroup("Kho")).thenReturn("g-kho");
+
+        service.createGroup(new GroupRequest("Kho", Set.of(PermissionNames.INVENTORY_READ)));
+
+        verify(auditRecorder).record(eq(IdentityAuditRecorder.GROUP_CREATE), eq("GROUP"), eq("g-kho"),
+                contains("Kho"));
+    }
+
+    @Test
+    void createGroupRecordsNothingWhenItFails() {
+        when(groupClient.createGroup("Kho")).thenReturn("g-kho");
+        doThrow(new AppException(ErrorCode.UPSTREAM_SERVICE_ERROR))
+                .when(groupClient).setGroupPermissions(anyString(), any());
+
+        assertThatThrownBy(() -> service.createGroup(new GroupRequest("Kho", Set.of(PermissionNames.INVENTORY_READ))))
+                .isInstanceOf(AppException.class);
+
+        verifyNoInteractions(auditRecorder);
     }
 
     @ParameterizedTest
@@ -252,6 +281,33 @@ class GroupServiceImplTest {
         verify(adminClient).logout("u2");
         assertThat(response.group().memberCount()).isEqualTo(2);
         assertThat(response.notLoggedOutUserIds()).isEmpty();
+    }
+
+    @Test
+    void updateGroupRecordsAudit() {
+        when(groupClient.listMemberIds("g-sales")).thenReturn(List.of("u1"));
+
+        service.updateGroup("g-sales", new GroupRequest("Bán hàng", Set.of(PermissionNames.PRODUCT_READ)));
+
+        verify(auditRecorder).record(eq(IdentityAuditRecorder.GROUP_UPDATE), eq("GROUP"), eq("g-sales"),
+                contains("Bán hàng"));
+    }
+
+    @Test
+    void updateGroupWithoutChangesRecordsNothing() {
+        when(groupClient.listMemberIds("g-sales")).thenReturn(List.of("u1"));
+
+        service.updateGroup("g-sales", new GroupRequest("Bán hàng", Set.of(PermissionNames.ORDER_READ)));
+
+        verifyNoInteractions(auditRecorder);
+    }
+
+    @Test
+    void deleteGroupRecordsAudit() {
+        service.deleteGroup("g-sales");
+
+        verify(auditRecorder).record(eq(IdentityAuditRecorder.GROUP_DELETE), eq("GROUP"), eq("g-sales"),
+                contains("Bán hàng"));
     }
 
     @Test

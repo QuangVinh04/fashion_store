@@ -108,13 +108,23 @@ const CustomerSection = ({ canView }: { canView: CanViewFn }) => {
 }
 
 const AdminSection = ({ canView }: { canView: CanViewFn }) => {
-  if (!canView('/groups')) return null
+  const canGroups = canView('/groups')
+  const canAuditLogs = canView('/audit-logs')
+
+  if (!canGroups && !canAuditLogs) return null
 
   return (
     <MenuSection label='Quản trị'>
-      <MenuItem href='/groups' icon={<i className='ri-shield-user-line' />}>
-        Nhóm & phân quyền
-      </MenuItem>
+      {canGroups && (
+        <MenuItem href='/groups' icon={<i className='ri-shield-user-line' />}>
+          Nhóm & phân quyền
+        </MenuItem>
+      )}
+      {canAuditLogs && (
+        <MenuItem href='/audit-logs' icon={<i className='ri-file-list-3-line' />}>
+          Nhật ký thao tác
+        </MenuItem>
+      )}
     </MenuSection>
   )
 }

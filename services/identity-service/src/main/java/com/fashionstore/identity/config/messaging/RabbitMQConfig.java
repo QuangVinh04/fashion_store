@@ -19,6 +19,7 @@ import org.springframework.context.annotation.Configuration;
 public class RabbitMQConfig {
 
     public static final String KEYCLOAK_USER_EVENTS_QUEUE = "identity.keycloak-user-events";
+    public static final String AUDIT_EVENTS_QUEUE = "identity.audit-events";
     public static final String IDENTITY_DEAD_LETTER_QUEUE = "identity.dlq";
 
     @Bean
@@ -64,6 +65,16 @@ public class RabbitMQConfig {
     @Bean
     Binding keycloakUserEmailVerifiedBinding(Queue keycloakUserEventsQueue, DirectExchange fashionEventsExchange) {
         return RabbitTopology.bind(keycloakUserEventsQueue, fashionEventsExchange, EventTypes.KEYCLOAK_USER_EMAIL_VERIFIED);
+    }
+
+    @Bean
+    Queue auditEventsQueue() {
+        return RabbitTopology.consumerQueue(AUDIT_EVENTS_QUEUE, IDENTITY_DEAD_LETTER_QUEUE);
+    }
+
+    @Bean
+    Binding auditRecordedBinding(Queue auditEventsQueue, DirectExchange fashionEventsExchange) {
+        return RabbitTopology.bind(auditEventsQueue, fashionEventsExchange, EventTypes.AUDIT_RECORDED);
     }
 
     /** Payload là JSON; kiểu đích suy ra từ tham số của @RabbitListener, không cần header __TypeId__. */

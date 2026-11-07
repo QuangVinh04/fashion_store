@@ -45,6 +45,7 @@ import java.util.List;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class AdminUserServiceImpl implements AdminUserService {
 
+    private static final String USER_ENTITY = "USER";
     private static final String ADMIN_ACCOUNT_EDIT_DENIED =
             "Chỉ người có quyền quản lý nhóm mới được sửa tài khoản quản trị viên";
 
@@ -56,6 +57,7 @@ public class AdminUserServiceImpl implements AdminUserService {
     UserAddressMapper userAddressMapper;
     GroupService groupService;
     KeycloakGroupClient groupClient;
+    IdentityAuditRecorder auditRecorder;
 
     @Override
     @PreAuthorize(CUSTOMER_READ)
@@ -121,9 +123,15 @@ public class AdminUserServiceImpl implements AdminUserService {
             keycloakAdminClient.logout(userId);
         }
 
+        boolean isChanged = !Boolean.valueOf(active).equals(user.getIsActive());
         user.setIsActive(active);
         log.info("[AdminUser] user {} {} by {}", userId, active ? "unlocked" : "locked", currentUserProvider.getCurrentUserId());
-        return userMapper.toAdminUserResponse(userRepository.save(user));
+        AdminUserResponse response = userMapper.toAdminUserResponse(userRepository.save(user));
+        if (isChanged) {
+            auditRecorder.record(active ? IdentityAuditRecorder.USER_UNLOCK : IdentityAuditRecorder.USER_LOCK,
+                    USER_ENTITY, userId, active ? "Mở khoá tài khoản" : "Khoá tài khoản");
+        }
+        return response;
     }
 
     /**

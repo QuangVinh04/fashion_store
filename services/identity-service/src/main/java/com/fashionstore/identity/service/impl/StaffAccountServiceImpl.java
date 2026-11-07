@@ -16,6 +16,7 @@ import com.fashionstore.identity.service.StaffAccountService;
 import com.fashionstore.identity.service.SystemGroups;
 import java.util.List;
 import java.util.Locale;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -31,10 +32,12 @@ import org.springframework.stereotype.Service;
 public class StaffAccountServiceImpl implements StaffAccountService {
 
     private static final String FULL_NAME_SEPARATOR = " ";
+    private static final String USER_ENTITY = "USER";
 
     private final KeycloakGroupClient groupClient;
     private final GroupService groupService;
     private final UserRepository userRepository;
+    private final IdentityAuditRecorder auditRecorder;
 
     @Override
     @PreAuthorize(GROUP_MANAGE)
@@ -50,18 +53,26 @@ public class StaffAccountServiceImpl implements StaffAccountService {
         String fullName = request.firstName() + FULL_NAME_SEPARATOR + request.lastName();
         String userId = groupClient.createUser(KeycloakNewUserRepresentation.withTemporaryPassword(
                 email, request.firstName(), request.lastName(), request.temporaryPassword()));
+        StaffResponse response;
         try {
             groups.forEach(group -> groupClient.addUserToGroup(userId, group.id()));
             groupService.addToGroupByName(userId, SystemGroups.CUSTOMER);
-            StaffResponse response = new StaffResponse(userId, email, fullName, describe(groups));
+            response = new StaffResponse(userId, email, fullName, describe(groups));
             // Bước cuối có thể lỗi: insert commit ngay nên không được đứng trước bước nào còn có thể ném lỗi.
             userRepository.insertProvisionedUser(userId, email, fullName, true);
-            return response;
         } catch (RuntimeException failure) {
             // Cố ý bắt rộng: mọi lỗi sau khi tạo user đều phải dọn user, rồi ném lại đúng lỗi gốc.
             deleteOrphan(userId);
             throw failure;
         }
+        // Ngoài try: user đã commit, lỗi ghi audit không được kích hoạt bước dọn user ở trên.
+        auditRecorder.record(IdentityAuditRecorder.STAFF_CREATE, USER_ENTITY, userId,
+                "Tạo nhân viên, nhóm: " + groupNames(groups));
+        return response;
+    }
+
+    private static String groupNames(List<KeycloakGroupRepresentation> groups) {
+        return groups.stream().map(KeycloakGroupRepresentation::name).collect(Collectors.joining(", "));
     }
 
     private List<KeycloakGroupRepresentation> loadAssignableGroups(CreateStaffRequest request) {

@@ -21,6 +21,7 @@ import com.fashionstore.identity.service.CurrentUserProvider;
 import com.fashionstore.identity.service.GroupMembershipService;
 import com.fashionstore.identity.service.GroupService;
 import com.fashionstore.identity.service.impl.GroupMembershipServiceImpl;
+import com.fashionstore.identity.service.impl.IdentityAuditRecorder;
 import com.fashionstore.identity.service.impl.GroupServiceImpl;
 import java.lang.reflect.Method;
 import java.util.List;
@@ -69,6 +70,9 @@ class AdminGroupControllerTest {
 
     @MockitoBean
     CurrentUserProvider currentUserProvider;
+
+    @MockitoBean
+    IdentityAuditRecorder auditRecorder;
 
     @Autowired
     GroupService groupService;

@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 import com.fashionstore.common.security.CurrentUserProvider;
+import com.fashionstore.contracts.common.AuditEvent;
 import com.fashionstore.contracts.common.EventEnvelope;
 import com.fashionstore.contracts.common.EventTypes;
 import com.fashionstore.contracts.payment.command.RefundOrderFundsCommand;
@@ -65,7 +66,8 @@ class ReturnRefundMessagingTest {
                         outbox,
                         notifications,
                         mock(com.fashionstore.order.order.returns.repository.ReturnShipmentRepository.class),
-                        mock(com.fashionstore.order.order.returns.service.ReturnPickupService.class));
+                        mock(com.fashionstore.order.order.returns.service.ReturnPickupService.class),
+                        new ReturnAuditRecorder(outbox));
         order =
                 Order.builder()
                         .userId("buyer")
@@ -109,6 +111,25 @@ class ReturnRefundMessagingTest {
         assertThat(returned.getClosedAt()).isNull();
         assertThat(order.getStatus()).isEqualTo(OrderStatus.DELIVERED);
         verifyNoInteractions(history);
+    }
+
+    @Test
+    void refundReturnRecordsAuditOnFirstStart() {
+        service.refundReturn("return-1", null);
+
+        var envelope = ArgumentCaptor.forClass(EventEnvelope.class);
+        verify(outbox).saveMessage(eq("order-1"), eq(EventTypes.AUDIT_RECORDED), envelope.capture());
+        var event = (AuditEvent) envelope.getValue().payload();
+        assertThat(event.actorId()).isEqualTo("admin");
+        assertThat(event.entityId()).isEqualTo("return-1");
+    }
+
+    @Test
+    void refundReturnRetryDoesNotRecordAuditAgain() {
+        service.refundReturn("return-1", null);
+        service.refundReturn("return-1", new BigDecimal("100000"));
+
+        verify(outbox, times(1)).saveMessage(eq("order-1"), eq(EventTypes.AUDIT_RECORDED), any());
     }
 
     @Test

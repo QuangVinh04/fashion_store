@@ -33,6 +33,7 @@ import java.util.function.Function;
 import java.util.function.IntSupplier;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Pageable;
@@ -52,11 +53,14 @@ public class GroupMembershipServiceImpl implements GroupMembershipService {
     private static final int CANDIDATE_SEARCH_PAGE_SIZE = 100;
     // Giới hạn số lần gọi Keycloak cho một lần gõ phím: quét tối đa 1000 người khớp từ khóa.
     private static final int CANDIDATE_SEARCH_MAX_PAGES = 10;
+    private static final String GROUP_ENTITY = "GROUP";
+    private static final String USER_ENTITY = "USER";
 
     private final KeycloakGroupClient groupClient;
     private final KeycloakAdminClient adminClient;
     private final UserRepository userRepository;
     private final CurrentUserProvider currentUserProvider;
+    private final IdentityAuditRecorder auditRecorder;
 
     @Override
     @PreAuthorize(GROUP_MANAGE)
@@ -115,7 +119,7 @@ public class GroupMembershipServiceImpl implements GroupMembershipService {
     public GroupMembersChangeResponse addMembers(String groupId, GroupMembersRequest request) {
         requireMembershipEditable(groupId);
         Set<String> members = new HashSet<>(groupClient.listMemberIds(groupId));
-        return changeMembers(request, userId -> {
+        return changeMembers(request, groupId, IdentityAuditRecorder.GROUP_MEMBERS_ADD, userId -> {
             if (members.contains(userId)) {
                 return false;
             }
@@ -129,7 +133,7 @@ public class GroupMembershipServiceImpl implements GroupMembershipService {
     public GroupMembersChangeResponse removeMembers(String groupId, GroupMembersRequest request) {
         boolean isAdminGroup = SystemGroups.ADMIN.equals(requireMembershipEditable(groupId).name());
         Set<String> members = new HashSet<>(groupClient.listMemberIds(groupId));
-        return changeMembers(request, userId -> {
+        return changeMembers(request, groupId, IdentityAuditRecorder.GROUP_MEMBERS_REMOVE, userId -> {
             if (!members.contains(userId)) {
                 return false;
             }
@@ -162,7 +166,8 @@ public class GroupMembershipServiceImpl implements GroupMembershipService {
      * Áp {@code applyChange} cho từng người trong request ({@code true} = có thay đổi thật). Người đã ở đúng trạng thái
      * yêu cầu tính là thành công nhưng không bị đăng xuất.
      */
-    private GroupMembersChangeResponse changeMembers(GroupMembersRequest request, Predicate<String> applyChange) {
+    private GroupMembersChangeResponse changeMembers(GroupMembersRequest request, String groupId, String auditAction,
+                                                     Predicate<String> applyChange) {
         List<String> succeeded = new ArrayList<>();
         List<String> changed = new ArrayList<>();
         List<MemberChangeFailure> failures = new ArrayList<>();
@@ -179,6 +184,11 @@ public class GroupMembershipServiceImpl implements GroupMembershipService {
                 log.warn("[Group] Keycloak answered {} when changing membership of {}", rejected.status(), userId);
                 failures.add(failureOf(userId, new AppException(ErrorCode.UPSTREAM_SERVICE_ERROR, rejected)));
             }
+        }
+        if (!changed.isEmpty()) {
+            // shortcut: summary cắt ở 500 ký tự nên thao tác trên ~13 người trở lên mất phần cuối danh sách, nâng cấp bằng một event mỗi người khi cần
+            auditRecorder.record(auditAction, GROUP_ENTITY, groupId,
+                    changed.size() + " người: " + String.join(", ", changed));
         }
         return new GroupMembersChangeResponse(succeeded, failures, MemberLogout.logoutAll(adminClient, changed));
     }
@@ -208,12 +218,21 @@ public class GroupMembershipServiceImpl implements GroupMembershipService {
         removed.keySet().forEach(groupId -> groupClient.removeUserFromGroup(userId, groupId));
 
         boolean isChanged = !added.isEmpty() || !removed.isEmpty();
+        if (isChanged) {
+            auditRecorder.record(IdentityAuditRecorder.USER_GROUPS_UPDATE, USER_ENTITY, userId,
+                    "Thêm nhóm [" + names(added.stream().map(requested::get)) + "], gỡ nhóm ["
+                            + names(removed.values().stream()) + "]");
+        }
         List<String> notLoggedOut = isChanged ? MemberLogout.logoutAll(adminClient, List.of(userId)) : List.of();
         // Bản đầy đủ (có quyền) của nhóm được yêu cầu đè lên bản brief lấy từ listUserGroups
         Map<String, KeycloakGroupRepresentation> finalGroups = new LinkedHashMap<>(kept);
         finalGroups.putAll(requested);
         return new UserGroupsResponse(
                 finalGroups.values().stream().map(GroupServiceImpl::toResponseWithoutCount).toList(), notLoggedOut);
+    }
+
+    private static String names(Stream<KeycloakGroupRepresentation> groups) {
+        return groups.map(KeycloakGroupRepresentation::name).collect(Collectors.joining(", "));
     }
 
     // shortcut: hai request song song cùng gỡ hai admin cuối vẫn lọt qua (Keycloak không có thao tác có điều kiện)

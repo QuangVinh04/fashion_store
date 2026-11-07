@@ -22,7 +22,8 @@ export const ROUTE_PERMISSIONS: ReadonlyArray<RoutePermissionMapping> = [
   { prefix: '/inventory', anyOf: [Permission.INVENTORY_READ] },
   { prefix: '/customers', anyOf: [Permission.CUSTOMER_READ] },
   { prefix: '/reviews', anyOf: [Permission.REVIEW_READ] },
-  { prefix: '/groups', anyOf: [Permission.GROUP_MANAGE] }
+  { prefix: '/groups', anyOf: [Permission.GROUP_MANAGE] },
+  { prefix: '/audit-logs', anyOf: [Permission.GROUP_MANAGE] }
 ]
 
 export function requiredPermissionsFor(pathname: string): readonly PermissionName[] | null {
